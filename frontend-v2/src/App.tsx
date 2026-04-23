@@ -165,12 +165,35 @@ function App() {
       onEvent: (event: ServerEvent) => {
         if (event.type === 'assistant.message') {
           const msg = 'message' in event ? (event as any).message : event
-          addMessage({
-            id: msg.id || crypto.randomUUID(),
-            role: 'assistant',
-            content: msg.content || '',
-            ts: Date.now(),
-          })
+          const finalContent: string = msg.content || ''
+          // Check if the last message is a streaming placeholder; if so, replace it
+          // to avoid duplicating content that was already streamed via chunk events.
+          const msgs = useAppStore.getState().messages
+          const last = msgs[msgs.length - 1]
+          if (last && last.role === 'assistant' && last.id?.startsWith('stream-')) {
+            // Grab any extra content streamed after assistant.message was sent
+            const currentContent = useAppStore.getState().messages[msgs.length - 1]?.content || ''
+            const hasNewerStreamContent = currentContent.length > (last.content?.length || 0)
+            useAppStore.setState({
+              messages: msgs.map((m, idx) =>
+                idx === msgs.length - 1
+                  ? {
+                      id: msg.id || crypto.randomUUID(),
+                      role: 'assistant',
+                      content: hasNewerStreamContent ? currentContent : finalContent,
+                      ts: Date.now(),
+                    }
+                  : m
+              ),
+            })
+          } else {
+            addMessage({
+              id: msg.id || crypto.randomUUID(),
+              role: 'assistant',
+              content: finalContent,
+              ts: Date.now(),
+            })
+          }
         } else if (event.type === 'voice.state') {
           setVoiceState(event.state)
         } else if (event.type === 'safe_mode.changed') {

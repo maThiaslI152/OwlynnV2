@@ -32,6 +32,7 @@ export function Composer({ onSend, disabled, compact }: ComposerProps) {
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Shift+Enter inserts a newline; plain Enter sends
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       const form = (e.target as HTMLTextAreaElement).closest('form')

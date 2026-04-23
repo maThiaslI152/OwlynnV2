@@ -296,6 +296,22 @@ fn reject_action_proposal(
   Err(format!("proposal not found: {}", id))
 }
 
+#[tauri::command]
+fn set_window_size(
+  app: tauri::AppHandle,
+  width: f64,
+  height: f64,
+) -> Result<String, String> {
+  let window = app.get_window("main").ok_or("main window not found")?;
+  window
+    .set_size(tauri::Size::Physical(tauri::PhysicalSize {
+      width: width as u32,
+      height: height as u32,
+    }))
+    .map_err(|e| format!("set_size failed: {}", e))?;
+  Ok(format!("window resized to {}x{}", width, height))
+}
+
 fn main() {
   tauri::Builder::default()
     .manage(Mutex::new(NativeRuntimeState {
@@ -311,7 +327,8 @@ fn main() {
       stop_screen_preview,
       create_action_proposal,
       approve_action_proposal,
-      reject_action_proposal
+      reject_action_proposal,
+      set_window_size
     ])
     .setup(|app| {
       let window = app.get_window("main").unwrap();

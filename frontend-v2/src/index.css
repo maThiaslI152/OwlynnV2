@@ -509,6 +509,95 @@ body {
   font-size: 0.65rem;
   color: var(--text-muted);
   padding: 0 4px;
+  white-space: nowrap;
+}
+
+/* ── Message Inline Code ───────────────────────────────── */
+
+.msg-inline-code {
+  font-family: var(--font-mono);
+  font-size: 0.8em;
+  background: var(--bg-base);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 1px 5px;
+  color: var(--accent);
+}
+
+/* ── Message Code Block ────────────────────────────────── */
+
+.msg-code-block {
+  margin: 6px 0;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-base);
+  overflow-x: auto;
+  position: relative;
+}
+
+.msg-code-lang {
+  display: block;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-family: var(--font);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.msg-code-block code {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  padding: 8px 10px;
+  color: var(--text-secondary);
+  white-space: pre;
+}
+
+/* ── Message Link ──────────────────────────────────────── */
+
+.msg-link {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.msg-link:hover {
+  color: var(--accent-hover);
+}
+
+/* ── Messages Suggestion Buttons ───────────────────────── */
+
+.messages-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 14px;
+  align-items: center;
+}
+
+.messages-suggestion-btn {
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 6px 16px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.messages-suggestion-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+
+.messages-suggestion-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .message-user .message-timestamp {
