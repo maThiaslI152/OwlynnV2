@@ -122,6 +122,7 @@ body {
   font-size: 0.7rem;
   cursor: pointer;
   transition: all 0.15s;
+  -webkit-app-region: no-drag;
 }
 
 .workspace-refresh:hover {
@@ -316,6 +317,15 @@ body {
   --max-chat-width: 620px;
 }
 
+/* Dedicated drag strip for reliable Tauri dragging + traffic light clearance */
+.window-drag-strip {
+  height: 34px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--bg-surface) 96%, transparent);
+  -webkit-app-region: drag;
+}
+
 /* ── Topbar ────────────────────────────────────────────── */
 
 .topbar {
@@ -350,7 +360,7 @@ body {
 .topbar-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
   -webkit-app-region: no-drag;
 }
 
@@ -359,11 +369,12 @@ body {
   background: var(--bg-elevated);
   color: var(--text-muted);
   border-radius: var(--radius-sm);
-  padding: 3px 7px;
+  padding: 5px 10px;
   font-size: 0.85rem;
   cursor: pointer;
   transition: all 0.15s;
   line-height: 1;
+  -webkit-app-region: no-drag;
 }
 
 .topbar-btn:hover {
@@ -748,6 +759,10 @@ body {
 
 .center-panel-compact .topbar {
   padding: 8px 14px;
+}
+
+.center-panel-compact .window-drag-strip {
+  height: 38px;
 }
 
 .center-panel-compact .topbar h1 {

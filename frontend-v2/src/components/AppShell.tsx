@@ -128,6 +128,7 @@ export function AppShell({
       {/* ── Left Panel (full mode only) ── */}
       {!isCompact && (
         <aside className="panel left-panel">
+          <div className="window-drag-strip" data-tauri-drag-region />
           <div className="workspace-section">
             <div className="workspace-header">
               <h2>Workspace</h2>
@@ -163,7 +164,8 @@ export function AppShell({
 
       {/* ── Center Panel ── */}
       <main className={`panel center-panel${isCompact ? ' center-panel-compact' : ''}`}>
-        <header className="topbar">
+        <div className="window-drag-strip" data-tauri-drag-region />
+        <header className="topbar" data-tauri-drag-region>
           <h1>
             <span className="logo-dot" />
             Owlynn
@@ -248,14 +250,15 @@ export function AppShell({
       {/* ── Right Panel ── */}
       {showInspector && (
         <aside className={`panel right-panel${isCompact ? ' right-panel-overlay' : ''}`}>
+          <div className="window-drag-strip" data-tauri-drag-region />
           {isCompact && (
-            <div className="inspector-header">
+            <div className="inspector-header" data-tauri-drag-region>
               <h2>Inspector</h2>
               <button type="button" className="topbar-btn" onClick={() => setInspectorOpen(false)}>✕</button>
             </div>
           )}
           {!isCompact && (
-            <div className="inspector-header">
+            <div className="inspector-header" data-tauri-drag-region>
               <h2>Inspector</h2>
             </div>
           )}

@@ -12,6 +12,9 @@
     "macOSPrivateApi": true,
     "allowlist": {
       "all": false,
+      "window": {
+        "startDragging": true
+      },
       "shell": {
         "open": true
       }
