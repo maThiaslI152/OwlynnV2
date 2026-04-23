@@ -3,6 +3,15 @@ import { tauriBridge } from '../lib/tauriBridge'
 
 const VOICE_SEQUENCE: VoiceState[] = ['recording', 'transcribing', 'speaking', 'interrupted', 'approval_pending', 'idle']
 
+const VOICE_LABELS: Record<VoiceState, string> = {
+  idle: 'Idle',
+  recording: 'Recording',
+  transcribing: 'Transcribing',
+  speaking: 'Speaking',
+  interrupted: 'Interrupted',
+  approval_pending: 'Approval pending',
+}
+
 export function LiveTalkControls() {
   const voiceState = useAppStore((s) => s.voiceState)
   const setVoiceState = useAppStore((s) => s.setVoiceState)
@@ -20,7 +29,7 @@ export function LiveTalkControls() {
       setOperatorNote(`Live Talk error: ${result.error}`)
       return
     }
-    setOperatorNote(`Live Talk: ${result.data ?? 'push-to-talk start requested'}`)
+    setOperatorNote(`Push-to-talk started`)
     setVoiceState('recording')
   }
 
@@ -30,7 +39,7 @@ export function LiveTalkControls() {
       setOperatorNote(`Live Talk error: ${result.error}`)
       return
     }
-    setOperatorNote(`Live Talk: ${result.data ?? 'push-to-talk stop requested'}`)
+    setOperatorNote(`Push-to-talk stopped`)
     setVoiceState('transcribing')
   }
 
@@ -40,15 +49,16 @@ export function LiveTalkControls() {
       setOperatorNote(`Live Talk error: ${result.error}`)
       return
     }
-    setOperatorNote(`Live Talk: ${result.data ?? 'voice stop requested'}`)
+    setOperatorNote(`Voice stopped`)
     setVoiceState('interrupted')
   }
 
   return (
-    <section className="live-talk">
-      <h3>Live Talk</h3>
+    <div>
       <div className="row">
-        <span className={`badge voice-${voiceState}`}>{voiceState.replace('_', ' ')}</span>
+        <span className={`badge badge-${voiceState === 'idle' || voiceState === 'interrupted' ? 'success' : 'running'}`}>
+          {VOICE_LABELS[voiceState]}
+        </span>
         <button type="button" onClick={hardStop}>
           Hard Stop
         </button>
@@ -61,9 +71,9 @@ export function LiveTalkControls() {
           Release
         </button>
         <button type="button" onClick={cycleState}>
-          Simulate Next State
+          Simulate
         </button>
       </div>
-    </section>
+    </div>
   )
 }

@@ -22,7 +22,7 @@ describe('Composer', () => {
   it('renders textarea and send button', () => {
     render(<Composer onSend={() => {}} />)
     expect(screen.getByPlaceholderText('Ask Owlynn...')).toBeTruthy()
-    expect(screen.getByText('Send')).toBeTruthy()
+    expect(screen.getByTitle('Send (Enter)')).toBeTruthy()
   })
 
   it('calls onSend with trimmed content on submit', () => {
@@ -31,7 +31,7 @@ describe('Composer', () => {
 
     const textarea = screen.getByPlaceholderText('Ask Owlynn...')
     fireEvent.change(textarea, { target: { value: '  Hello world  ' } })
-    fireEvent.click(screen.getByText('Send'))
+    fireEvent.submit(textarea.closest('form')!)
 
     expect(onSend).toHaveBeenCalledWith('Hello world')
   })
@@ -40,7 +40,7 @@ describe('Composer', () => {
     const onSend = vi.fn()
     render(<Composer onSend={onSend} />)
 
-    fireEvent.click(screen.getByText('Send'))
+    fireEvent.submit(screen.getByPlaceholderText('Ask Owlynn...').closest('form')!)
     expect(onSend).not.toHaveBeenCalled()
   })
 
@@ -48,11 +48,11 @@ describe('Composer', () => {
     const onSend = vi.fn()
     render(<Composer onSend={onSend} />)
 
-    const textarea = screen.getByPlaceholderText('Ask Owlynn...')
+    const textarea = screen.getByPlaceholderText('Ask Owlynn...') as HTMLTextAreaElement
     fireEvent.change(textarea, { target: { value: 'Hello' } })
-    fireEvent.click(screen.getByText('Send'))
+    fireEvent.submit(textarea.closest('form')!)
 
-    expect((textarea as HTMLTextAreaElement).value).toBe('')
+    expect(textarea.value).toBe('')
   })
 
   it('submits on Enter key via form submit', () => {
@@ -70,9 +70,9 @@ describe('Composer', () => {
 // ── OrchestrationPanel ──────────────────────────────────────────────────
 
 describe('OrchestrationPanel', () => {
-  it('renders with heading', () => {
+  it('renders empty state when no data', () => {
     render(<OrchestrationPanel />)
-    expect(screen.getByText('Orchestration')).toBeTruthy()
+    expect(screen.getByText('No routing information yet.')).toBeTruthy()
   })
 
   it('displays model badge when modelInfo is set', () => {
@@ -128,7 +128,7 @@ describe('OrchestrationPanel', () => {
   it('shows memory indicator when memoryUpdatedAt is set', () => {
     useAppStore.getState().setMemoryUpdatedAt(Date.now())
     render(<OrchestrationPanel />)
-    expect(screen.getByText(/saved/)).toBeTruthy()
+    expect(screen.getByText(/Saved/)).toBeTruthy()
   })
 })
 
@@ -137,9 +137,8 @@ describe('OrchestrationPanel', () => {
 describe('SafeModePanel', () => {
   it('renders safe mode and execution policy sections', () => {
     render(<SafeModePanel />)
-    expect(screen.getByText('Safe Mode')).toBeTruthy()
-    expect(screen.getByText(/Execution policy/)).toBeTruthy()
     expect(screen.getByText(/Active mode/)).toBeTruthy()
+    expect(screen.getByText(/Execution policy/)).toBeTruthy()
   })
 
   it('renders the safe mode dropdown with current value', () => {
@@ -156,14 +155,12 @@ describe('SafeModePanel', () => {
   })
 
   it('sets operator note on tauri bridge failure', async () => {
-    // Mock tauriBridge to fail
     vi.mock('../../lib/tauriBridge', () => ({
       tauriBridge: {
         setSafeMode: vi.fn().mockResolvedValue({ ok: false, error: 'Bridge not available' }),
       },
     }))
 
-    // Re-import needed since we mocked
     const { SafeModePanel: FreshPanel } = await import('../SafeModePanel')
     render(<FreshPanel />)
 
@@ -180,14 +177,9 @@ describe('SafeModePanel', () => {
 // ── LiveTalkControls ────────────────────────────────────────────────────
 
 describe('LiveTalkControls', () => {
-  it('renders live talk controls heading', () => {
-    render(<LiveTalkControls />)
-    expect(screen.getByText('Live Talk')).toBeTruthy()
-  })
-
   it('shows current voice state', () => {
     render(<LiveTalkControls />)
-    expect(screen.getByText(/idle/)).toBeTruthy()
+    expect(screen.getByText(/Idle/)).toBeTruthy()
   })
 
   it('shows push-to-talk and hard stop buttons', () => {
@@ -200,13 +192,13 @@ describe('LiveTalkControls', () => {
     render(<LiveTalkControls />)
     const simulateBtn = screen.getByText(/Simulate/i)
     fireEvent.click(simulateBtn)
-    expect(screen.getByText(/recording/)).toBeTruthy()
+    expect(screen.getByText(/Recording/)).toBeTruthy()
   })
 
   it('updates voice state on cycle', () => {
     useAppStore.getState().setVoiceState('recording')
     render(<LiveTalkControls />)
-    expect(screen.getByText(/recording/)).toBeTruthy()
+    expect(screen.getByText(/Recording/)).toBeTruthy()
   })
 })
 
@@ -214,12 +206,10 @@ describe('LiveTalkControls', () => {
 
 describe('ProjectKnowledgePanel', () => {
   it('shows loading indicator during fetch', () => {
-    // Mock fetch to never resolve
     vi.spyOn(globalThis, 'fetch').mockImplementation(
       () => new Promise(() => {}) as Promise<Response>
     )
     render(<ProjectKnowledgePanel activeProjectId="proj-1" />)
-    // The refresh button shows "..." while loading
     const refreshButton = screen.getByRole('button', { name: '...' })
     expect(refreshButton).toBeTruthy()
     expect((refreshButton as HTMLButtonElement).disabled).toBe(true)
@@ -282,7 +272,7 @@ describe('ProjectKnowledgePanel', () => {
     })
 
     fetchSpy.mockClear()
-    fireEvent.click(screen.getByText(/Refresh/))
+    fireEvent.click(screen.getByRole('button', { name: /Refresh/ }))
 
     await waitFor(() => {
       expect(fetchSpy).toHaveBeenCalled()
@@ -317,18 +307,21 @@ describe('AppShell', () => {
   })
 
   it('passes onSend to Composer', () => {
+    // Set connection to connected so composer is enabled
+    useAppStore.getState().setConnectionState('connected')
     render(<AppShell {...defaultProps} />)
 
-    const textarea = screen.getByPlaceholderText('Ask Owlynn...')
+    const textarea = screen.getByPlaceholderText('Ask Owlynn...') as HTMLTextAreaElement
     fireEvent.change(textarea, { target: { value: 'Test message' } })
-    fireEvent.click(screen.getByText('Send'))
+    fireEvent.submit(textarea.closest('form')!)
 
     expect(defaultProps.onSend).toHaveBeenCalledWith('Test message')
   })
 
   it('renders the project list', () => {
     render(<AppShell {...defaultProps} />)
-    expect(screen.getByText('Default')).toBeTruthy()
+    // May find multiple elements with "Default" (active project + list item)
+    expect(screen.getAllByText('Default').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('Project One')).toBeTruthy()
   })
 })

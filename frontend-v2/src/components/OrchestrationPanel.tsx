@@ -10,10 +10,14 @@ export function OrchestrationPanel() {
   const confidence = routerMetadata?.confidence as number | undefined
   const classificationSource = routerMetadata?.classification_source as string | undefined
 
-  return (
-    <section>
-      <h3>Orchestration</h3>
+  const hasData = modelInfo || route || contextCompression || memoryUpdatedAt
 
+  if (!hasData) {
+    return <p className="orchestration-empty">No routing information yet.</p>
+  }
+
+  return (
+    <div>
       {modelInfo && (
         <div className="orchestration-row">
           <span className="orchestration-label">Model</span>
@@ -24,34 +28,26 @@ export function OrchestrationPanel() {
           </span>
         </div>
       )}
-
       {route && (
         <div className="orchestration-row">
           <span className="orchestration-label">Route</span>
           <span className="orchestration-value">
-            <span className={`route-badge route-${route.replace('complex-', '')}`}>
-              {route}
-            </span>
+            <span className="route-badge">{route}</span>
           </span>
         </div>
       )}
-
       {confidence !== undefined && (
         <div className="orchestration-row">
           <span className="orchestration-label">Confidence</span>
-          <span className="orchestration-value">
-            {(confidence * 100).toFixed(0)}%
-          </span>
+          <span className="orchestration-value">{(confidence * 100).toFixed(0)}%</span>
         </div>
       )}
-
       {classificationSource && (
         <div className="orchestration-row">
           <span className="orchestration-label">Source</span>
           <span className="orchestration-value">{classificationSource}</span>
         </div>
       )}
-
       {contextCompression && (
         <div className="orchestration-compression">
           <span className="orchestration-label">Compressed</span>
@@ -60,17 +56,12 @@ export function OrchestrationPanel() {
           </p>
         </div>
       )}
-
       {memoryUpdatedAt && (
         <div className="orchestration-row">
           <span className="orchestration-label">Memory</span>
-          <span className="orchestration-value orchestration-memory-ok">saved</span>
+          <span className="orchestration-value orchestration-memory-ok">Saved</span>
         </div>
       )}
-
-      {!modelInfo && !route && !contextCompression && !memoryUpdatedAt && (
-        <p className="orchestration-empty">No routing information yet.</p>
-      )}
-    </section>
+    </div>
   )
 }

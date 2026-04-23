@@ -3,6 +3,13 @@ import { tauriBridge } from '../lib/tauriBridge'
 
 const SAFE_MODES: SafeModeLevel[] = ['normal', 'safe_readonly', 'safe_confirmed_exec', 'safe_isolated']
 
+const MODE_LABELS: Record<SafeModeLevel, string> = {
+  normal: 'Normal',
+  safe_readonly: 'Read-only',
+  safe_confirmed_exec: 'Confirmed Exec',
+  safe_isolated: 'Isolated',
+}
+
 export function SafeModePanel() {
   const safeMode = useAppStore((s) => s.safeMode)
   const executionPolicy = useAppStore((s) => s.executionPolicy)
@@ -17,7 +24,7 @@ export function SafeModePanel() {
       return
     }
     setSafeMode(mode)
-    setOperatorNote(`Safe Mode: ${result.data ?? `mode set to ${mode}`}`)
+    setOperatorNote(`Safe Mode set to ${mode}`)
   }
 
   const onPolicyChange = (policy: ExecutionPolicy) => {
@@ -40,7 +47,7 @@ export function SafeModePanel() {
         setExecutionPolicy(policy)
         setOperatorNote(
           policy === 'auto_approve'
-            ? 'Execution policy: auto-approve (no HITL)'
+            ? 'Execution policy: auto-approve'
             : 'Execution policy: manual HITL approval'
         )
       } catch (error) {
@@ -50,14 +57,13 @@ export function SafeModePanel() {
   }
 
   return (
-    <section className="safe-mode">
-      <h3>Safe Mode</h3>
+    <div>
       <label>
         Active mode
         <select value={safeMode} onChange={(e) => onModeChange(e.target.value as SafeModeLevel)}>
           {SAFE_MODES.map((mode) => (
             <option key={mode} value={mode}>
-              {mode}
+              {MODE_LABELS[mode]}
             </option>
           ))}
         </select>
@@ -68,10 +74,19 @@ export function SafeModePanel() {
           value={executionPolicy}
           onChange={(e) => onPolicyChange(e.target.value as ExecutionPolicy)}
         >
-          <option value="auto_approve">auto_approve (no HITL)</option>
-          <option value="hitl">hitl (manual approval)</option>
+          <option value="auto_approve">Auto-approve</option>
+          <option value="hitl">Manual approval (HITL)</option>
         </select>
       </label>
-    </section>
+      <p className="safe-mode-info">
+        {safeMode === 'normal'
+          ? 'All tools allowed'
+          : safeMode === 'safe_readonly'
+            ? 'Read-only operations only'
+            : safeMode === 'safe_confirmed_exec'
+              ? 'Requires confirmation for exec'
+              : 'Isolated sandbox execution'}
+      </p>
+    </div>
   )
 }

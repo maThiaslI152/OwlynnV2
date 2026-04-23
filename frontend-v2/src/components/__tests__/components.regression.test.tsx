@@ -39,7 +39,6 @@ describe('ActionProposalQueue regression', () => {
 
     expect(screen.getByText('Approve delete_workspace_file execution')).toBeTruthy()
     expect(screen.getByText((content) => content.includes('destructive_action'))).toBeTruthy()
-    expect(screen.getByText((content) => content.includes('backup first'))).toBeTruthy()
     expect(screen.getByText('Approve')).toBeTruthy()
     expect(screen.getByText('Reject')).toBeTruthy()
   })
@@ -61,7 +60,6 @@ describe('ActionProposalQueue regression', () => {
 
     render(<ActionProposalQueue />)
     expect(screen.getByText(/read_workspace_file/)).toBeTruthy()
-    expect(screen.getByText(/README/)).toBeTruthy()
   })
 
   it('hides approve/reject buttons for non-pending proposals', () => {
@@ -175,9 +173,10 @@ describe('ActionProposalQueue regression', () => {
 describe('ScreenAssistPanel regression', () => {
   it('renders default off state', () => {
     render(<ScreenAssistPanel />)
-    expect(screen.getByText('Screen Assist')).toBeTruthy()
-    expect(screen.getByText((content) => content.includes('Mode:') && content.includes('off'))).toBeTruthy()
-    expect(screen.getByText('Start Preview')).toBeTruthy()
+    expect(screen.getByText('Source')).toBeTruthy()
+    expect(screen.getByText((content) => content.includes('Mode:') && content.includes('Off'))).toBeTruthy()
+    expect(screen.getByText('Capture')).toBeTruthy()
+    expect(screen.getByText('Preview')).toBeTruthy()
     expect(screen.getByText('Annotate')).toBeTruthy()
     expect(screen.getByText('Stop')).toBeTruthy()
   })
@@ -196,8 +195,14 @@ describe('ScreenAssistPanel regression', () => {
     useAppStore.getState().setScreenAssistMode('preview')
     useAppStore.getState().setScreenAssistPreviewPath('/tmp/test.png')
 
-    render(<ScreenAssistPanel />)
-    expect(screen.getByText(/tmp\/test.png/)).toBeTruthy()
+    const mockBridge = {
+      startScreenPreview: vi.fn().mockResolvedValue({ ok: true }),
+      stopScreenPreview: vi.fn().mockResolvedValue({ ok: true }),
+      convertFileSrc: vi.fn((path: string) => `asset://${path}`),
+    }
+
+    render(<ScreenAssistPanel bridge={mockBridge} />)
+    expect(screen.getByAltText('screen capture')).toBeTruthy()
   })
 
   it('calls startPreview through injected bridge', async () => {
@@ -208,7 +213,7 @@ describe('ScreenAssistPanel regression', () => {
     }
 
     render(<ScreenAssistPanel bridge={mockBridge} />)
-    fireEvent.click(screen.getByText('Start Preview'))
+    fireEvent.click(screen.getByText('Preview'))
 
     expect(mockBridge.startScreenPreview).toHaveBeenCalledWith('screen')
 
@@ -246,7 +251,7 @@ describe('ScreenAssistPanel regression', () => {
     }
 
     render(<ScreenAssistPanel bridge={mockBridge} />)
-    fireEvent.click(screen.getByText('Start Preview'))
+    fireEvent.click(screen.getByText('Preview'))
 
     await vi.waitFor(() => {
       expect(useAppStore.getState().operatorNote).toContain('Tauri unavailable')

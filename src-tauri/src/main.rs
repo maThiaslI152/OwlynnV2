@@ -19,21 +19,21 @@ struct NativeRuntimeState {
   proposals: Vec<ActionProposal>,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 struct VoiceStatePayload {
   #[serde(rename = "type")]
   event_type: &'static str,
   state: String,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 struct SafeModePayload {
   #[serde(rename = "type")]
   event_type: &'static str,
   mode: String,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 struct ScreenAssistPayload {
   #[serde(rename = "type")]
   event_type: &'static str,
@@ -51,14 +51,14 @@ struct ActionProposal {
   status: String,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 struct ActionProposalPayload {
   #[serde(rename = "type")]
   event_type: &'static str,
   proposal: ActionProposal,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 struct ActionProposalResultPayload {
   #[serde(rename = "type")]
   event_type: &'static str,

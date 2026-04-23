@@ -24,7 +24,7 @@ export function ScreenAssistPanel({ bridge }: ScreenAssistPanelProps) {
       return
     }
     setMode('preview')
-    setOperatorNote(`Screen Assist: ${result.data ?? 'preview requested'}`)
+    setOperatorNote(`Screen preview started`)
   }
 
   const startAnnotating = async () => {
@@ -34,7 +34,7 @@ export function ScreenAssistPanel({ bridge }: ScreenAssistPanelProps) {
       return
     }
     setMode('annotating')
-    setOperatorNote(`Screen Assist: ${result.data ?? 'annotate requested'}`)
+    setOperatorNote(`Screen annotate started`)
   }
 
   const stopPreview = async () => {
@@ -44,12 +44,24 @@ export function ScreenAssistPanel({ bridge }: ScreenAssistPanelProps) {
       return
     }
     setMode('off')
-    setOperatorNote(`Screen Assist: ${result.data ?? 'stop requested'}`)
+    setOperatorNote(`Screen preview stopped`)
+  }
+
+  // Capture and send to backend for analysis
+  const captureAndAnalyze = async () => {
+    const result = await activeBridge.startScreenPreview(screenAssist.source)
+    if (!result.ok) {
+      setOperatorNote(`Capture error: ${result.error}`)
+      return
+    }
+    setMode('preview')
+    if (result.data) {
+      setOperatorNote(`Captured ${screenAssist.source}. Ask Owlynn about it.`)
+    }
   }
 
   return (
-    <section className="screen-assist">
-      <h3>Screen Assist</h3>
+    <div>
       <label>
         Source
         <select value={screenAssist.source} onChange={(e) => setSource(e.target.value as 'screen' | 'window' | 'region')}>
@@ -59,8 +71,11 @@ export function ScreenAssistPanel({ bridge }: ScreenAssistPanelProps) {
         </select>
       </label>
       <div className="row">
+        <button type="button" onClick={captureAndAnalyze} title={`Capture ${screenAssist.source}`}>
+          Capture
+        </button>
         <button type="button" onClick={startPreview}>
-          Start Preview
+          Preview
         </button>
         <button type="button" onClick={startAnnotating}>
           Annotate
@@ -69,13 +84,15 @@ export function ScreenAssistPanel({ bridge }: ScreenAssistPanelProps) {
           Stop
         </button>
       </div>
-      <p className="meta">Mode: {screenAssist.mode}</p>
+      <p className="meta">
+        Mode: {screenAssist.mode === 'off' ? 'Off' : screenAssist.mode}
+        {screenAssist.source && ` · ${screenAssist.source}`}
+      </p>
       {screenAssist.previewPath ? (
         <div className="preview-box">
-          <p className="meta">Preview file: {screenAssist.previewPath}</p>
-          {previewSrc ? <img src={previewSrc} alt="screen preview" /> : null}
+          {previewSrc ? <img src={previewSrc} alt="screen capture" /> : null}
         </div>
       ) : null}
-    </section>
+    </div>
   )
 }

@@ -17,79 +17,50 @@ export function ActionProposalQueue({ onApprove, onReject, bridge }: ActionPropo
   const activeBridge = bridge ?? defaultBridge
 
   const approve = async (id: string) => {
-    if (onApprove) {
-      await onApprove(id)
-      updateStatus(id, 'approved')
-      return
-    }
+    if (onApprove) { await onApprove(id); updateStatus(id, 'approved'); return }
     const result = await activeBridge.approveActionProposal(id)
-    if (!result.ok) {
-      setOperatorNote(`Proposal error: ${result.error}`)
-      return
-    }
+    if (!result.ok) { setOperatorNote(`Proposal error: ${result.error}`); return }
     updateStatus(id, 'approved')
-    setOperatorNote(`Proposal ${id} approved`)
+    setOperatorNote(`Proposal approved`)
   }
 
   const reject = async (id: string) => {
-    if (onReject) {
-      await onReject(id)
-      updateStatus(id, 'rejected')
-      return
-    }
+    if (onReject) { await onReject(id); updateStatus(id, 'rejected'); return }
     const result = await activeBridge.rejectActionProposal(id)
-    if (!result.ok) {
-      setOperatorNote(`Proposal error: ${result.error}`)
-      return
-    }
+    if (!result.ok) { setOperatorNote(`Proposal error: ${result.error}`); return }
     updateStatus(id, 'rejected')
-    setOperatorNote(`Proposal ${id} rejected`)
+    setOperatorNote(`Proposal rejected`)
   }
 
   return (
-    <section className="proposal-queue">
-      <h3>Action Proposals</h3>
+    <div>
       {proposals.length === 0 ? (
-        <p className="meta">No pending proposals.</p>
+        <p className="empty">No pending proposals.</p>
       ) : (
         <div className="proposal-list">
           {proposals.map((proposal) => (
-            <article key={proposal.id} className="proposal-item">
-              <p>
-                <strong>{proposal.summary}</strong>
-              </p>
-              <p className="meta">
-                {proposal.source} · {proposal.status}
-              </p>
+            <div key={proposal.id} className="proposal-item">
+              <p><strong>{proposal.summary}</strong></p>
+              <p className="meta">{proposal.source} · {proposal.status}</p>
               {proposal.toolContext ? (
-                <>
-                  <p className="meta">Tool: {proposal.toolContext.toolName}</p>
-                  {proposal.toolContext.input ? (
-                    <p className="meta">Input: {proposal.toolContext.input.slice(0, 160)}</p>
-                  ) : null}
-                </>
+                <p className="meta">Tool: {proposal.toolContext.toolName}</p>
               ) : null}
               {proposal.riskHint ? <p className="meta">Risk: {proposal.riskHint}</p> : null}
-              {proposal.riskRationale ? (
-                <p className="meta">Rationale: {proposal.riskRationale}</p>
-              ) : null}
-              {proposal.remediationHint ? (
-                <p className="meta">Mitigation: {proposal.remediationHint}</p>
-              ) : null}
+              {proposal.riskRationale ? <p className="meta">Rationale: {proposal.riskRationale}</p> : null}
               {proposal.status === 'pending' ? (
-                <div className="row">
-                  <button type="button" onClick={() => approve(proposal.id)}>
+                <div className="proposal-actions">
+                  <button type="button" className="btn-approve" onClick={() => approve(proposal.id)}>
                     Approve
                   </button>
-                  <button type="button" onClick={() => reject(proposal.id)}>
+                  <button type="button" className="btn-reject" onClick={() => reject(proposal.id)}>
                     Reject
                   </button>
                 </div>
               ) : null}
-            </article>
+            </div>
           ))}
         </div>
       )}
-    </section>
+    </div>
   )
 }

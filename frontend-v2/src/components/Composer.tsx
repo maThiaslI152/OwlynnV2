@@ -1,29 +1,67 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 interface ComposerProps {
   onSend: (content: string) => void
+  disabled?: boolean
+  compact?: boolean
 }
 
-export function Composer({ onSend }: ComposerProps) {
+export function Composer({ onSend, disabled, compact }: ComposerProps) {
   const [value, setValue] = useState('')
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Auto-resize textarea
+  useEffect(() => {
+    const el = textareaRef.current
+    if (el) {
+      el.style.height = 'auto'
+      el.style.height = Math.min(el.scrollHeight, compact ? 80 : 200) + 'px'
+    }
+  }, [value, compact])
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (disabled) return
     const content = value.trim()
     if (!content) return
     onSend(content)
     setValue('')
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto'
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      const form = (e.target as HTMLTextAreaElement).closest('form')
+      if (form) form.requestSubmit()
+    }
   }
 
   return (
-    <form className="composer" onSubmit={handleSubmit}>
-      <textarea
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder="Ask Owlynn..."
-        rows={3}
-      />
-      <button type="submit">Send</button>
-    </form>
+    <div className={`composer-wrapper${compact ? ' composer-wrapper-compact' : ''}`}>
+      <form className="composer" onSubmit={handleSubmit}>
+        <div className="composer-input-wrap">
+          <textarea
+            ref={textareaRef}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={compact ? "Ask..." : "Ask Owlynn..."}
+            rows={1}
+            disabled={disabled}
+          />
+        </div>
+        <button
+          type="submit"
+          className="composer-send"
+          disabled={disabled || !value.trim()}
+          title="Send (Enter)"
+        >
+          ↑
+        </button>
+      </form>
+    </div>
   )
 }

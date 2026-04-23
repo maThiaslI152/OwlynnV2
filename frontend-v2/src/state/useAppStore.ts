@@ -20,6 +20,7 @@ export type VoiceState =
 
 export type SafeModeLevel = 'normal' | 'safe_readonly' | 'safe_confirmed_exec' | 'safe_isolated'
 export type ExecutionPolicy = 'hitl' | 'auto_approve'
+export type WindowMode = 'full' | 'compact'
 
 interface ScreenAssistState {
   mode: 'off' | 'preview' | 'annotating'
@@ -66,6 +67,7 @@ interface AppState {
   voiceState: VoiceState
   safeMode: SafeModeLevel
   executionPolicy: ExecutionPolicy
+  windowMode: WindowMode
   screenAssist: ScreenAssistState
   actionProposals: ActionProposal[]
   latestToolExecution: ToolExecutionSnapshot | null
@@ -81,6 +83,7 @@ interface AppState {
   setVoiceState: (state: VoiceState) => void
   setSafeMode: (mode: SafeModeLevel) => void
   setExecutionPolicy: (policy: ExecutionPolicy) => void
+  setWindowMode: (mode: WindowMode) => void
   setScreenAssistMode: (mode: ScreenAssistState['mode']) => void
   setScreenAssistSource: (source: ScreenAssistState['source']) => void
   setScreenAssistPreviewPath: (previewPath: string | null) => void
@@ -102,6 +105,7 @@ export const useAppStore = create<AppState>((set) => ({
   voiceState: 'idle',
   safeMode: 'normal',
   executionPolicy: 'auto_approve',
+  windowMode: 'full',
   screenAssist: {
     mode: 'off',
     source: 'screen',
@@ -139,6 +143,7 @@ export const useAppStore = create<AppState>((set) => ({
   setVoiceState: (voiceState) => set({ voiceState }),
   setSafeMode: (safeMode) => set({ safeMode }),
   setExecutionPolicy: (executionPolicy) => set({ executionPolicy }),
+  setWindowMode: (windowMode) => set({ windowMode }),
   setScreenAssistMode: (mode) =>
     set((state) => ({
       screenAssist: {

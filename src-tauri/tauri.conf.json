@@ -11,7 +11,10 @@
   "tauri": {
     "macOSPrivateApi": true,
     "allowlist": {
-      "all": false
+      "all": false,
+      "shell": {
+        "open": true
+      }
     },
     "bundle": {
       "active": true,
@@ -27,17 +30,17 @@
       "targets": "all"
     },
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: http://127.0.0.1:8000; connect-src 'self' ws://127.0.0.1:8000 http://127.0.0.1:8000; font-src 'self';"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: http://127.0.0.1:8000 asset: https://asset.localhost; connect-src 'self' ws://127.0.0.1:8000 http://127.0.0.1:8000; font-src 'self';"
     },
     "windows": [
       {
         "fullscreen": false,
-        "height": 800,
+        "height": 720,
         "resizable": true,
         "title": "Owlynn",
-        "width": 1200,
-        "minWidth": 800,
-        "minHeight": 600,
+        "width": 1100,
+        "minWidth": 680,
+        "minHeight": 480,
         "transparent": true,
         "decorations": true,
         "fileDropEnabled": false,
