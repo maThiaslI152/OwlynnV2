@@ -697,21 +697,21 @@ body {
 
 .composer-wrapper {
   flex-shrink: 0;
-  padding: 10px 16px 14px;
+  padding: 8px 16px 10px;
   border-top: 1px solid var(--border-subtle);
   background: var(--bg-surface);
 }
 
 .composer-wrapper-compact .composer textarea {
-  min-height: 36px;
-  padding: 7px 12px;
+  min-height: 34px;
+  padding: 6px 10px;
   font-size: 0.82rem;
 }
 
 .composer-wrapper-compact .composer-send {
-  width: 36px;
-  height: 36px;
-  font-size: 0.95rem;
+  width: 34px;
+  height: 34px;
+  font-size: 0.9rem;
 }
 
 .composer {
@@ -727,13 +727,13 @@ body {
 .composer textarea {
   width: 100%;
   resize: none;
-  min-height: 44px;
-  max-height: 200px;
+  min-height: 38px;
+  max-height: 40vh;
   border: 1px solid var(--border-default);
   background: var(--bg-base);
   color: var(--text-primary);
   border-radius: var(--radius-md);
-  padding: 10px 14px;
+  padding: 8px 12px;
   font-family: var(--font);
   font-size: 0.85rem;
   line-height: 1.5;
@@ -756,8 +756,8 @@ body {
 }
 
 .composer-send {
-  width: 44px;
-  height: 44px;
+  width: 38px;
+  height: 38px;
   border: 1px solid var(--accent);
   border-radius: var(--radius-md);
   background: var(--accent);

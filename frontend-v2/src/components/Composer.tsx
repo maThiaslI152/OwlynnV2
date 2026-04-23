@@ -10,12 +10,13 @@ export function Composer({ onSend, disabled, compact }: ComposerProps) {
   const [value, setValue] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  // Auto-resize textarea
+  // Auto-resize textarea dynamically based on viewport
   useEffect(() => {
     const el = textareaRef.current
     if (el) {
       el.style.height = 'auto'
-      el.style.height = Math.min(el.scrollHeight, compact ? 80 : 200) + 'px'
+      const maxH = compact ? 80 : Math.round(window.innerHeight * 0.4)
+      el.style.height = Math.min(el.scrollHeight, maxH) + 'px'
     }
   }, [value, compact])
 

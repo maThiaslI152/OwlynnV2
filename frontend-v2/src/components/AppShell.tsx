@@ -123,11 +123,11 @@ export function AppShell({
 
   const handleToggleMode = useCallback(async (targetMode: 'compact' | 'full') => {
     if (targetMode === 'compact') {
-      // Resize to compact chat size: ~420px wide, ~500px tall
-      void tauriBridge.setWindowSize(420, 500)
+      // Compact mode: single chat panel with room for inspector overlay
+      void tauriBridge.setWindowSize(680, 620)
     } else {
-      // Restore to a comfortable full workspace size
-      void tauriBridge.setWindowSize(960, 720)
+      // Full mode: comfortable three-panel workspace (260px left + center + 300px right)
+      void tauriBridge.setWindowSize(2400, 1600)
     }
     setWindowMode(targetMode)
     // Close the inspector overlay when entering compact mode
