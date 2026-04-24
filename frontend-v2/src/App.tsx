@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { AppShell } from './components/AppShell'
 import { WsClient } from './lib/wsClient'
 import { useAppStore } from './state/useAppStore'
+import { tauriBridge } from './lib/tauriBridge'
 import {
   buildAutoApproveInterruptResponse,
   buildInterruptProposal,
@@ -61,6 +62,11 @@ function App() {
   const setModelInfo = useAppStore((s) => s.setModelInfo)
   const setContextCompression = useAppStore((s) => s.setContextCompression)
   const setMemoryUpdatedAt = useAppStore((s) => s.setMemoryUpdatedAt)
+  const setInterimTranscript = useAppStore((s) => s.setInterimTranscript)
+  const setVoiceError = useAppStore((s) => s.setVoiceError)
+  const setWakeWordListening = useAppStore((s) => s.setWakeWordListening)
+  const setTtsSpeaking = useAppStore((s) => s.setTtsSpeaking)
+  const wakeWordListening = useAppStore((s) => s.wakeWordListening)
   const appendStreamChunk = useAppStore((s) => s.appendStreamChunk)
   const clearSession = useAppStore((s) => s.clearSession)
   const [projects, setProjects] = useState<ProjectSummary[]>([])
@@ -230,8 +236,38 @@ function App() {
               ts: Date.now(),
             })
           }
+          if (wakeWordListening && finalContent.trim()) {
+            void tauriBridge.speakText(finalContent.trim())
+          }
         } else if (event.type === 'voice.state') {
           setVoiceState(event.state)
+        } else if (event.type === 'voice.transcript') {
+          setInterimTranscript(event.text)
+          if (event.is_final && event.text.trim()) {
+            const voiceMsg: ChatMessage = {
+              id: crypto.randomUUID(),
+              role: 'user',
+              content: event.text.trim(),
+              ts: Date.now(),
+            }
+            addMessage(voiceMsg)
+            wsClientRef.current?.send({
+              type: 'user.message',
+              id: voiceMsg.id,
+              content: voiceMsg.content,
+              message: voiceMsg.content,
+              project_id: activeProjectId,
+              source: 'voice',
+            })
+          }
+        } else if (event.type === 'voice.wake_word') {
+          setVoiceState('recording')
+          setOperatorNote(`Wake-word detected: ${event.phrase}`)
+        } else if (event.type === 'voice.error') {
+          setVoiceError(event.message)
+          setOperatorNote(`Live Talk error: ${event.message}`)
+        } else if (event.type === 'voice.tts_state') {
+          setTtsSpeaking(event.speaking)
         } else if (event.type === 'safe_mode.changed') {
           setSafeMode(event.mode)
         } else if (event.type === 'screen_assist.state') {
@@ -275,7 +311,7 @@ function App() {
       disconnect()
       wsClientRef.current = null
     }
-  }, [addMessage, appendStreamChunk, currentThreadId, executionPolicy, handleInterrupt, latestToolExecution, loadProjects, pushToolExecution, setConnection, setLatestToolExecution, setMemoryUpdatedAt, setModelInfo, setContextCompression, setOperatorNote, setRouterMetadata, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setVoiceState, upsertActionProposal, updateActionProposalStatus, wsBaseUrl])
+  }, [activeProjectId, addMessage, appendStreamChunk, currentThreadId, executionPolicy, handleInterrupt, latestToolExecution, loadProjects, pushToolExecution, setConnection, setLatestToolExecution, setMemoryUpdatedAt, setModelInfo, setContextCompression, setInterimTranscript, setOperatorNote, setRouterMetadata, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setTtsSpeaking, setVoiceError, setVoiceState, upsertActionProposal, updateActionProposalStatus, wakeWordListening, wsBaseUrl])
 
   useEffect(() => {
     let unlisten: (() => void) | undefined
@@ -287,6 +323,35 @@ function App() {
       const payload = event.payload
       if (payload.type === 'voice.state') {
         setVoiceState(payload.state)
+      } else if (payload.type === 'voice.transcript') {
+        setInterimTranscript(payload.text)
+        if (payload.is_final && payload.text.trim()) {
+          const voiceMsg: ChatMessage = {
+            id: crypto.randomUUID(),
+            role: 'user',
+            content: payload.text.trim(),
+            ts: Date.now(),
+          }
+          addMessage(voiceMsg)
+          wsClientRef.current?.send({
+            type: 'user.message',
+            id: voiceMsg.id,
+            content: voiceMsg.content,
+            message: voiceMsg.content,
+            project_id: activeProjectId,
+            source: 'voice',
+          })
+        }
+      } else if (payload.type === 'voice.wake_word') {
+        setVoiceState('recording')
+        setOperatorNote(`Wake-word detected: ${payload.phrase}`)
+      } else if (payload.type === 'voice.error') {
+        setVoiceError(payload.message)
+        setOperatorNote(`Live Talk error: ${payload.message}`)
+      } else if (payload.type === 'voice.tts_state') {
+        setTtsSpeaking(payload.speaking)
+      } else if (payload.type === 'voice.started') {
+        setWakeWordListening(payload.mode === 'wake_word')
       } else if (payload.type === 'safe_mode.changed') {
         setSafeMode(payload.mode)
       } else if (payload.type === 'screen_assist.state') {
@@ -311,7 +376,7 @@ function App() {
     return () => {
       if (unlisten) unlisten()
     }
-  }, [executionPolicy, handleInterrupt, latestToolExecution, pushToolExecution, setLatestToolExecution, setOperatorNote, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setVoiceState, upsertActionProposal, updateActionProposalStatus])
+  }, [activeProjectId, addMessage, executionPolicy, handleInterrupt, latestToolExecution, pushToolExecution, setInterimTranscript, setLatestToolExecution, setOperatorNote, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setTtsSpeaking, setVoiceError, setVoiceState, setWakeWordListening, upsertActionProposal, updateActionProposalStatus])
 
   const handleSend = useCallback((content: string) => {
     const message: ChatMessage = {

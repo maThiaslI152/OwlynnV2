@@ -6,13 +6,18 @@
 use serde::Serialize;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::sync::Mutex;
+use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Manager;
 
+mod voice;
+
 #[derive(Default)]
 struct NativeRuntimeState {
-  voice_recording: bool,
+  voice: voice::VoiceEngine,
   safe_mode: String,
   screen_preview_active: bool,
   last_preview_path: Option<String>,
@@ -20,10 +25,10 @@ struct NativeRuntimeState {
 }
 
 #[derive(Clone, Serialize)]
-struct VoiceStatePayload {
+struct VoiceStartedPayload {
   #[serde(rename = "type")]
   event_type: &'static str,
-  state: String,
+  mode: String,
 }
 
 #[derive(Clone, Serialize)]
@@ -69,9 +74,32 @@ struct ActionProposalResultPayload {
 fn emit_voice_state(app: &tauri::AppHandle, state: &str) {
   let _ = app.emit_all(
     "owlynn://runtime-event",
-    VoiceStatePayload {
+    voice::VoiceStatePayload {
       event_type: "voice.state",
       state: state.to_string(),
+    },
+  );
+}
+
+fn emit_voice_error(app: &tauri::AppHandle, message: &str, code: &str) {
+  let _ = app.emit_all(
+    "owlynn://runtime-event",
+    voice::VoiceErrorPayload {
+      event_type: "voice.error",
+      message: message.to_string(),
+      code: code.to_string(),
+    },
+  );
+}
+
+fn emit_voice_transcript(app: &tauri::AppHandle, text: &str, is_final: bool, confidence: f32) {
+  let _ = app.emit_all(
+    "owlynn://runtime-event",
+    voice::VoiceTranscriptPayload {
+      event_type: "voice.transcript",
+      text: text.to_string(),
+      is_final,
+      confidence,
     },
   );
 }
@@ -120,10 +148,64 @@ fn start_push_to_talk(
   state: tauri::State<Mutex<NativeRuntimeState>>,
 ) -> Result<String, String> {
   let mut locked = state.lock().map_err(|_| "native runtime state lock failed".to_string())?;
-  if locked.voice_recording {
+  if locked.voice.recording {
     return Ok("push-to-talk already recording".to_string());
   }
-  locked.voice_recording = true;
+  if locked.voice.tts_speaking {
+    locked.voice.tts_speaking = false;
+    let _ = app.emit_all(
+      "owlynn://runtime-event",
+      voice::VoiceTtsStatePayload {
+        event_type: "voice.tts_state",
+        speaking: false,
+        utterance_id: "barge-in".to_string(),
+      },
+    );
+  }
+  locked.voice.recording = true;
+
+  // Create a stop flag and channel for real-time transcription
+  let ptt_stop = Arc::new(AtomicBool::new(false));
+  let (ptt_tx, ptt_rx) = crossbeam_channel::unbounded::<voice::VoiceEvent>();
+
+  // Spawn emitter thread for this PTT session
+  let app_emit = app.clone();
+  thread::spawn(move || {
+    while let Ok(event) = ptt_rx.recv() {
+      match event {
+        voice::VoiceEvent::Transcript(text, is_final, confidence) => {
+          let _ = app_emit.emit_all(
+            "owlynn://runtime-event",
+            voice::VoiceTranscriptPayload {
+              event_type: "voice.transcript",
+              text,
+              is_final,
+              confidence,
+            },
+          );
+          if is_final || confidence > 0.9 {
+            // Signal that final transcription arrived
+          }
+        }
+        voice::VoiceEvent::Error(message, code) => {
+          let _ = app_emit.emit_all(
+            "owlynn://runtime-event",
+            voice::VoiceErrorPayload {
+              event_type: "voice.error",
+              message,
+              code,
+            },
+          );
+        }
+        _ => {}
+      }
+    }
+  });
+
+  // Start real speech recognition in background
+  voice::start_recording(ptt_tx, ptt_stop.clone(), locked.voice.wake_word_phrase.clone());
+  locked.voice.wake_stop = Some(ptt_stop);
+  locked.voice.recording = true;
   emit_voice_state(&app, "recording");
   Ok("push-to-talk started".to_string())
 }
@@ -134,13 +216,22 @@ fn stop_push_to_talk(
   state: tauri::State<Mutex<NativeRuntimeState>>,
 ) -> Result<String, String> {
   let mut locked = state.lock().map_err(|_| "native runtime state lock failed".to_string())?;
-  if !locked.voice_recording {
+  if !locked.voice.recording {
     emit_voice_state(&app, "idle");
     return Ok("push-to-talk was not recording".to_string());
   }
-  locked.voice_recording = false;
+  locked.voice.recording = false;
   emit_voice_state(&app, "transcribing");
-  Ok("push-to-talk stopped".to_string())
+
+  // Signal the recording thread to stop
+  if let Some(stop_flag) = locked.voice.wake_stop.take() {
+    stop_flag.store(true, Ordering::SeqCst);
+    // Give recognition a brief moment to finalize (non-blocking for UX)
+    thread::sleep(std::time::Duration::from_millis(300));
+  }
+
+  emit_voice_state(&app, "idle");
+  Ok("push-to-talk stopped — transcription in progress".to_string())
 }
 
 #[tauri::command]
@@ -149,9 +240,110 @@ fn hard_stop_voice(
   state: tauri::State<Mutex<NativeRuntimeState>>,
 ) -> Result<String, String> {
   let mut locked = state.lock().map_err(|_| "native runtime state lock failed".to_string())?;
-  locked.voice_recording = false;
+  locked.voice.recording = false;
+  locked.voice.listening = false;
+  locked.voice.tts_speaking = false;
+  if let Some(stop_flag) = locked.voice.wake_stop.take() {
+    stop_flag.store(true, Ordering::SeqCst);
+  }
+  let _ = app.emit_all(
+    "owlynn://runtime-event",
+    voice::VoiceTtsStatePayload {
+      event_type: "voice.tts_state",
+      speaking: false,
+      utterance_id: "hard-stop".to_string(),
+    },
+  );
   emit_voice_state(&app, "interrupted");
   Ok("voice interrupted".to_string())
+}
+
+#[tauri::command]
+fn set_wake_word_phrase(
+  state: tauri::State<Mutex<NativeRuntimeState>>,
+  phrase: String,
+) -> Result<String, String> {
+  let mut locked = state.lock().map_err(|_| "native runtime state lock failed".to_string())?;
+  locked.voice.wake_word_phrase = phrase.trim().to_string();
+  Ok("wake word updated".to_string())
+}
+
+#[tauri::command]
+fn get_wake_word_phrase(
+  state: tauri::State<Mutex<NativeRuntimeState>>,
+) -> Result<String, String> {
+  let locked = state.lock().map_err(|_| "native runtime state lock failed".to_string())?;
+  let phrase = locked.voice.wake_word_phrase.clone();
+  if phrase.is_empty() {
+    Ok("Hey Owlynn".to_string())
+  } else {
+    Ok(phrase)
+  }
+}
+
+#[tauri::command]
+fn start_voice_listening(
+  app: tauri::AppHandle,
+  state: tauri::State<Mutex<NativeRuntimeState>>,
+) -> Result<String, String> {
+  let mut locked = state.lock().map_err(|_| "native runtime state lock failed".to_string())?;
+  if !voice::speech_framework_available() {
+    emit_voice_error(&app, "macOS Speech framework unavailable", "speech_unavailable");
+  }
+  if locked.voice.listening {
+    return Ok("wake-word listening already active".to_string());
+  }
+  let phrase = if locked.voice.wake_word_phrase.is_empty() {
+    "Hey Owlynn".to_string()
+  } else {
+    locked.voice.wake_word_phrase.clone()
+  };
+  let stop_flag = Arc::new(AtomicBool::new(false));
+  voice::start_wake_loop(app.clone(), phrase.clone(), stop_flag.clone());
+  locked.voice.wake_stop = Some(stop_flag);
+  locked.voice.listening = true;
+  emit_voice_state(&app, "idle");
+  let _ = app.emit_all(
+    "owlynn://runtime-event",
+    VoiceStartedPayload {
+      event_type: "voice.started",
+      mode: "wake_word".to_string(),
+    },
+  );
+  Ok(format!("wake-word listening started ({})", phrase))
+}
+
+#[tauri::command]
+fn stop_voice_listening(
+  app: tauri::AppHandle,
+  state: tauri::State<Mutex<NativeRuntimeState>>,
+) -> Result<String, String> {
+  let mut locked = state.lock().map_err(|_| "native runtime state lock failed".to_string())?;
+  if let Some(stop_flag) = locked.voice.wake_stop.take() {
+    stop_flag.store(true, Ordering::SeqCst);
+  }
+  locked.voice.listening = false;
+  emit_voice_state(&app, "idle");
+  Ok("wake-word listening stopped".to_string())
+}
+
+#[tauri::command]
+fn speak_text(
+  app: tauri::AppHandle,
+  state: tauri::State<Mutex<NativeRuntimeState>>,
+  text: String,
+) -> Result<String, String> {
+  let locked = state.lock().map_err(|_| "native runtime state lock failed".to_string())?;
+  // Wrap the engine state in Arc<Mutex> for the voice engine's speak_text which needs
+  // to share & modify tts_speaking from a background thread.
+  let engine = Arc::new(Mutex::new(locked.voice.clone()));
+  let _utterance_id = voice::speak_text(app, text, engine);
+  // voice::speak_text spawns a thread; the listener in voice/mod.rs handles state,
+  // but our NativeRuntimeState.voice.tts_speaking will be managed via the Arc<Mutex> copy.
+  // For `locked` to reflect it we'd need a more sophisticated bridge; for now the
+  // Arc<Mutex> inside the voice module handles it independently.
+  drop(locked);
+  Ok("speech queued".to_string())
 }
 
 #[tauri::command]
@@ -315,13 +507,22 @@ fn set_window_size(
 fn main() {
   tauri::Builder::default()
     .manage(Mutex::new(NativeRuntimeState {
+      voice: voice::VoiceEngine {
+        wake_word_phrase: "Hey Owlynn".to_string(),
+        ..voice::VoiceEngine::default()
+      },
       safe_mode: "normal".to_string(),
       ..NativeRuntimeState::default()
     }))
     .invoke_handler(tauri::generate_handler![
+      start_voice_listening,
+      stop_voice_listening,
       start_push_to_talk,
       stop_push_to_talk,
       hard_stop_voice,
+      speak_text,
+      set_wake_word_phrase,
+      get_wake_word_phrase,
       set_safe_mode,
       start_screen_preview,
       stop_screen_preview,

@@ -33,9 +33,14 @@ async function invokeOrResult<T>(command: string, args?: Record<string, unknown>
 }
 
 export const tauriBridge = {
+  startVoiceListening: () => invokeOrResult<string>('start_voice_listening', {}),
+  stopVoiceListening: () => invokeOrResult<string>('stop_voice_listening', {}),
+  setWakeWordPhrase: (phrase: string) => invokeOrResult<string>('set_wake_word_phrase', { phrase }),
+  getWakeWordPhrase: () => invokeOrResult<string>('get_wake_word_phrase', {}),
   startPushToTalk: () => invokeOrResult<string>('start_push_to_talk', {}),
   stopPushToTalk: () => invokeOrResult<string>('stop_push_to_talk', {}),
   hardStopVoice: () => invokeOrResult<string>('hard_stop_voice', {}),
+  speakText: (text: string) => invokeOrResult<string>('speak_text', { text }),
   setSafeMode: (mode: string) => invokeOrResult<string>('set_safe_mode', { mode }),
   startScreenPreview: (source: string) =>
     invokeOrResult<string>('start_screen_preview', { source }),

@@ -188,14 +188,14 @@ describe('LiveTalkControls', () => {
     expect(screen.getByText(/Hard Stop/)).toBeTruthy()
   })
 
-  it('cycles voice state on simulate button click', () => {
+  it('shows wake-word controls and transcript preview', () => {
     render(<LiveTalkControls />)
-    const simulateBtn = screen.getByText(/Simulate/i)
-    fireEvent.click(simulateBtn)
-    expect(screen.getByText(/Recording/)).toBeTruthy()
+    expect(screen.getByLabelText(/Wake-word phrase/)).toBeTruthy()
+    expect(screen.getByText(/Enable Wake-word/i)).toBeTruthy()
+    expect(screen.getByText(/Transcript preview/i)).toBeTruthy()
   })
 
-  it('updates voice state on cycle', () => {
+  it('updates voice state from store', () => {
     useAppStore.getState().setVoiceState('recording')
     render(<LiveTalkControls />)
     expect(screen.getByText(/Recording/)).toBeTruthy()

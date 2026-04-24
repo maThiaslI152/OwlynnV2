@@ -1,6 +1,6 @@
 # Owlynn Status
 
-Last updated: 2026-04-23 (Phase 6 — MVP hardening)
+Last updated: 2026-04-24 (Phase 6 — Live Talk voice fixes: autorelease pool crash, confidence type bug, PTT finish vs cancel, wake-word activation)
 
 ## Current Progress
 
@@ -11,6 +11,7 @@ Last updated: 2026-04-23 (Phase 6 — MVP hardening)
   - `medium_models.default`: `lfm2-8b-a1b-absolute-heresy-mpoa-mlx`
 - Security proxy with HITL approval is in place for sensitive tools.
 - Backend API + WebSocket chat and Tauri frontend shell are integrated.
+- Live Talk now has native Tauri/Rust command wiring for wake-word listening, push-to-talk, transcript events, and TTS state events.
 - Test coverage includes unit, integration, and property-based suites across backend and frontend.
 - Phase 1 frontend-v2 websocket transport regression milestone is in place:
   - `frontend-v2` `WsClient` now has dedicated protocol-safety regression tests covering malformed JSON rejection, lifecycle callback delivery (`open`/`close`/`error`/`message`), send-gating on closed socket, disconnect cleanup, and duplicate-disconnect tolerance,
@@ -29,6 +30,7 @@ Last updated: 2026-04-23 (Phase 6 — MVP hardening)
 
 ## Recent Verification Notes
 
+- **Live Talk STT/wake-word now real**: Replaced the simulated placeholder in `src-tauri/src/voice/mod.rs` with real macOS native `SFSpeechRecognizer` + `AVAudioEngine` ObjC FFI. Implements authorization request, constrained phrase recognition with `contextualStrings`, `requiresOnDeviceRecognition`, streaming transcription via block-based `recognitionTaskWithRequest:resultHandler:`, AVAudioEngine input tap for microphone capture, `crossbeam_channel` for inter-thread event forwarding, and proper cleanup lifecycle. `cargo check` passes (0 errors), `npm run test` passes (81 tests).
 - Phase 5 live test pass: 203 core backend tests pass with 0 failures (removed 2 dead test files, fixed 3 tool awareness assertions). 50 frontend tests pass, build passes.
 - Enhanced summarize/context compression with structured prompt (categorized output: decisions, facts, preferences, open tasks, code results), multi-level prior-summary awareness across compression rounds, and improved token estimation heuristic.
 - Project knowledge file viewer added to workspace panel (lists indexed knowledge files per project, with refresh and date display).
@@ -48,6 +50,17 @@ Last updated: 2026-04-23 (Phase 6 — MVP hardening)
 - Preserved structured `ask_user_response` payloads end-to-end (no backend string coercion).
 - WebSocket chat smoke checks return to `idle` without `model_not_found` errors for legacy model IDs.
 - Runtime event shape in current server paths is chunk-oriented for some turns (`chunk` + `status`) rather than always emitting a final `message` event.
+- Voice transcript flow now sends final transcript as `user.message` with `source: "voice"` from the frontend runtime event handler.
+- **Live Talk ObjC FFI type fix (2026-04-24):** `NSLocale localeWithLocaleIdentifier:` was passed a raw C string (`*const i8`) where ObjC expected `NSString *`, causing `objc_retain` on non-object memory and a deterministic `SIGBUS`. **Fix:** Use `NSString::alloc(nil).init_str("en-US")` and pass the result. Also converted `stringWithUTF8String:` calls to `cocoa::foundation` typed bindings. See [`docs/OBJC_FFI_CRASH.md`](docs/OBJC_FFI_CRASH.md).
+- **`transparent: true` restored (2026-04-24):** Set back to `true` in `tauri.conf.json`. The frosted-glass CSS (`body.tauri-glass`) provides a solid dark background while the window chrome is transparent.
+- **Live Talk autorelease pool crash fix (2026-04-24):** Rust threads hosting SFSpeechRecognizer/AVAudioEngine callbacks accumulated autoreleased ObjC objects. Explicit `-release` calls caused double-frees when the implicit TLS pool drained on thread exit. **Fix:** Removed all explicit `msg_send![obj, release]` calls from `do_run_native_speech_recognition`. The 4 ObjC objects (recognizer, request, task, audio_engine) are intentionally leaked (retain count 1) per speech session — negligible.
+- **Live Talk confidence type bug fix (2026-04-24):** `SFTranscriptionSegment.confidence` returns ObjC `float` (32-bit), but was read as `f64`. On x86_64 the upper 32 bits of XMM0 contained garbage, producing random confidence values that almost never passed the `> 0.3` wake-word threshold. **Fix:** Read as `f32` first, then cast to `f64`.
+- **Live Talk PTT finish vs cancel fix (2026-04-24):** `task.cancel()` terminates recognition without delivering `is_final == YES`, so the frontend never sent the transcript to the backend. **Fix:** Always call `task.finish()`, which completes the current transcription and delivers a final result. Added 200ms sleep for the final callback to enqueue before channel senders drop.
+- **Live Talk wake-word activation fix (2026-04-24):** When the wake word is detected on an interim result, the Rust handler now immediately sends `VoiceEvent::Transcript(text, true, confidence)` (marked as final) alongside `VoiceEvent::WakeWord`. This lets the frontend send the utterance to the backend without waiting for slow constrained on-device end-of-speech detection.
+- **`.app` bundle required for TCC permissions in dev mode:**
+  `cargo tauri dev` runs the binary directly without an `.app` wrapper, so macOS
+  TCC cannot read `Info.plist`. The debug `.app` bundle (`tauri build --debug`)
+  must be used instead. `start.sh` now builds the frontend and launches the `.app` bundle.
 
 ## Current Bugs / Risks
 
@@ -56,6 +69,11 @@ Last updated: 2026-04-23 (Phase 6 — MVP hardening)
 - Cloud fallback + anonymization paths require continued regression protection.
 - Router selection may drift on borderline prompts or long-context/tool-heavy prompts.
 - CRUD and project-state invariants need continued hardening under repeated operations.
+- **RESOLVED — ObjC FFI type mismatch crash (2026-04-24):** `NSLocale localeWithLocaleIdentifier:` was passed a raw C string instead of `NSString *`, and `stringWithUTF8String:` calls used unterminated Rust `&str` pointers. All refactored to use `cocoa::foundation` typed bindings. See [`docs/OBJC_FFI_CRASH.md`](docs/OBJC_FFI_CRASH.md) for full analysis.
+- **RESOLVED — Autorelease pool crash (2026-04-24):** SFSpeechRecognizer callback objects accumulated on an implicit TLS pool. Explicit `-release` calls caused double-free on thread exit. Removed all release calls; objects leak instead of crashing.
+- **RESOLVED — Wake-word detection not firing (2026-04-24):** ObjC `float` confidence was read as `f64`, producing garbage values. Read as `f32` and cast.
+- **RESOLVED — PTT not sending to chat (2026-04-24):** `task.cancel()` doesn't produce final result. Changed to `task.finish()`.
+- **RESOLVED — Wake-word not activating (2026-04-24):** No final transcript sent on interim wake-word detection. Now sends `Transcript(is_final=true)` immediately alongside `WakeWord` event.
 
 ## Next Plan
 
@@ -87,6 +105,11 @@ Last updated: 2026-04-23 (Phase 6 — MVP hardening)
 | Direct tests for memory.py nodes (24 tests) | Done |
 | Frontend-v2 component tests (31 tests) | Done |
 | ADR/docs updated for Tauri v1 accuracy | Done |
+| **Live Talk ObjC FFI type fix** — NSLocale crash, C string → NSString | Done |
+| **Live Talk autorelease pool crash** — removed explicit `release` calls | Done |
+| **Live Talk confidence type bug** — `f64`→`f32` for ObjC `float` return | Done |
+| **Live Talk PTT finish vs cancel** — `task.finish()` produces final transcript | Done |
+| **Live Talk wake-word activation** — send `is_final=true` on interim detection | Done |
 
 ## Roadmap (Phased)
 
@@ -209,4 +232,5 @@ Slice 3 — Performance & memory SLOs:
 - **Bug fixes**: `OPENAI_API_KEY` global side-effect removed, bare `raise` in complex node replaced with graceful error message.
 - **Test coverage**: 58 new backend tests (security proxy + memory nodes) and 31 new frontend-v2 component tests added.
 - **Documentation**: ADR-0001 corrected from Tauri v2 to v1; README updated for v2 frontend and `127.0.0.1` default.
+- **Live Talk bug fixes**: 5 bugs resolved — ObjC FFI type crash, autorelease pool crash, confidence type bug, PTT finish-vs-cancel, wake-word activation.
 - **Test suite: 141 backend tests passed, 81 frontend tests passed.**

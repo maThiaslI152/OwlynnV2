@@ -35,9 +35,11 @@ This document allows any AI coding assistant (Cursor, PearAI, Antigravity, or ot
 
 1. Read this file first.
 2. Read `docs/STATUS.md` and align with active reality.
-3. Confirm active phase (A, B, or C) and choose one concrete objective.
-4. Execute only tasks that map to current phase acceptance criteria.
-5. Update this file before ending session:
+3. If working on Live Talk (voice/STT/TTS), read `docs/OBJC_FFI_CRASH.md` for
+   the canonical crash analysis and FFI safety patterns.
+4. Confirm active phase (A, B, or C) and choose one concrete objective.
+5. Execute only tasks that map to current phase acceptance criteria.
+6. Update this file before ending session:
    - last updated timestamp,
    - what changed,
    - current blockers,

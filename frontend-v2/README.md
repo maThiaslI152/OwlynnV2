@@ -90,6 +90,34 @@ New endpoints added to `src/api/server.py`:
 - `POST /api/mem0/clear` — clear all memories for a user
 - `POST /api/mem0/reset` — reset all memories (global)
 
+## Live Talk (Tauri Runtime)
+
+Live Talk uses Tauri runtime commands and events (not browser Web Speech APIs):
+
+- Controls: `src/components/LiveTalkControls.tsx`
+- Runtime bridge: `src/lib/tauriBridge.ts`
+- Event handling / WS relay: `src/App.tsx`
+- Voice store state: `src/state/useAppStore.ts`
+
+### Runtime Commands
+
+- `start_voice_listening` / `stop_voice_listening`
+- `set_wake_word_phrase` / `get_wake_word_phrase`
+- `start_push_to_talk` / `stop_push_to_talk`
+- `hard_stop_voice`
+- `speak_text`
+
+### Runtime Events
+
+- `voice.state`
+- `voice.transcript`
+- `voice.wake_word`
+- `voice.error`
+- `voice.tts_state`
+- `voice.started`
+
+Final transcript events are converted to normal chat payloads (`type: "user.message"`) with `source: "voice"` so the backend graph processes voice and typed inputs through the same route.
+
 ## Key Files
 
 - `src/App.tsx`: project loading, workspace/chat handlers, WebSocket lifecycle

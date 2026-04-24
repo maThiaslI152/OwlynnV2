@@ -210,3 +210,53 @@ with structured categorized output and prior-summary awareness.
 - Protected messages (tool results, pinned, system) are never compressed.
 - `context_summarized` WebSocket event emitted on compression.
 - Graceful degradation — LLM failure results in no-op (keep full context).
+
+---
+
+## ADR-0012: macOS-Native Live Talk Runtime via Tauri Events
+
+**Date:** 2026-04-24
+
+**Context:** Live Talk needed to move from UI placeholders to a desktop-native voice runtime
+for personal assistant workflows (wake-word style listening, push-to-talk, and TTS response playback),
+without introducing a separate backend voice service.
+
+**Decision:** Implement Live Talk in the Tauri Rust layer and forward voice lifecycle events through
+`owlynn://runtime-event`, while keeping agent input unified as normal `user.message` chat events.
+
+**Consequences:**
+- New Tauri commands: `start_voice_listening`, `stop_voice_listening`, `set_wake_word_phrase`,
+  `start_push_to_talk`, `stop_push_to_talk`, `hard_stop_voice`, `speak_text`.
+- New runtime voice events: `voice.state`, `voice.transcript`, `voice.wake_word`,
+  `voice.error`, `voice.tts_state`, `voice.started`.
+- Frontend listens to runtime events and submits final transcript as `user.message`
+  with `source: "voice"` so the Python/LangGraph backend remains unchanged.
+- macOS permission assets required: `Entitlements.plist` and `Info.plist`
+  entries for microphone/speech recognition.
+- Real ObjC FFI implementation replaces initial simulation: SFSpeechRecognizer streaming
+  with AVAudioEngine mic capture (`installTapOnBus:bufferSize:format:block:`),
+  block-based result handler (`recognitionTaskWithRequest:resultHandler:`), constrained
+  phrase detection for wake-word, per-segment confidence extraction, and cleanup lifecycle
+  (stop engine, remove tap, cancel/finish task, release ObjC objects). TTS via
+  NSSpeechSynthesizer (ObjC FFI polling loop) with `say` command fallback.
+- **Critical bug — non-null-terminated C strings passed to ObjC FFI (2026-04-24 fix):**
+  Three `msg_send![class!(NSString), stringWithUTF8String: ...]` calls passed
+  Rust `&str` pointers directly without null terminators. `stringWithUTF8String:`
+  reads until a `\0` byte, so unterminated reads corrupt adjacent ObjC runtime
+  memory (class metadata, string caches). This caused a deterministic `SIGBUS`/`EXC_BAD_ACCESS`
+  crash at address `0x53552d6e80` in WebKit's `WKContentWorld` via `_CFRelease` → `_xzm_free`
+  — an apparently unrelated subsystem but actually the victim of prior memory corruption.
+  **Fix:** All three call sites changed to use `CString::new(str)` which guarantees
+  null-terminated UTF-8. See `src-tauri/src/voice/mod.rs` lines 287, 338, 662.
+- **Debug .app bundle requirement:** `tauri dev` runs the binary directly without
+  an `.app` wrapper, so macOS TCC cannot read `Info.plist`. A debug `.app` bundle must
+  be built via `tauri build --debug` and launched via `open`. `start.sh` handles this
+  automatically.
+- **macOS 26.4 WebKit transparent window crash:** `transparent: true` with
+  `titleBarStyle: "Overlay"` / `hiddenTitle: true` triggers a WebKit GPU compositing
+  crash on macOS Sequoia 26.4. The opaque window workaround (`transparent: false`,
+  no overlay title bar) is required. Frontend CSS was updated so `body.tauri-glass`
+  uses a dark gradient instead of `background: transparent`.
+- **Full crash analysis:** See [`docs/OBJC_FFI_CRASH.md`](docs/OBJC_FFI_CRASH.md) for
+  the complete root-cause analysis of the non-null-terminated C string crash and the
+  macOS 26.4 transparent window crash.

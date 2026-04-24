@@ -34,7 +34,8 @@ The client sends a JSON *text* message (via `socket.send(JSON.stringify(...))`) 
   "mode": "tools_on | tools_off",
   "web_search_enabled": true | false,
   "response_style": "normal | learning | concise | explanatory | formal",
-  "project_id": "string"
+  "project_id": "string",
+  "source": "text | voice"
 }
 ```
 
@@ -44,6 +45,7 @@ Defaults applied by the server:
 - `web_search_enabled` defaults to `true`
 - `response_style` defaults to `normal`
 - `project_id` defaults to `default`
+- `source` defaults to `text` (voice-triggered transcripts should send `source: "voice"`)
 
 ### 2) Stop generation
 
@@ -473,4 +475,18 @@ Notes:
 - WebSocket forwarding and serialization: `src/api/server.py` (`websocket_endpoint()`, `serialize_message()`)
 - Streaming sources: `src/agent/nodes/simple.py`, `src/agent/nodes/complex.py`, and their tool calling behavior
 - Tool-call payload content: `serialize_message()` output consumed by `renderMessage()`
+
+## Tauri Runtime Voice Events (Desktop channel)
+
+In addition to the backend WebSocket stream, desktop voice features emit runtime events on
+`owlynn://runtime-event` from `src-tauri/src/main.rs`.
+
+These events are consumed in `frontend-v2/src/App.tsx`:
+
+- `voice.state`: `{ "type": "voice.state", "state": "idle|recording|transcribing|speaking|interrupted|approval_pending" }`
+- `voice.transcript`: `{ "type": "voice.transcript", "text": "string", "is_final": true|false, "confidence": 0.0..1.0 }`
+- `voice.wake_word`: `{ "type": "voice.wake_word", "phrase": "string", "confidence": 0.0..1.0 }`
+- `voice.error`: `{ "type": "voice.error", "message": "string", "code": "string" }`
+- `voice.tts_state`: `{ "type": "voice.tts_state", "speaking": true|false, "utterance_id": "string" }`
+- `voice.started`: `{ "type": "voice.started", "mode": "wake_word|ptt" }`
 
