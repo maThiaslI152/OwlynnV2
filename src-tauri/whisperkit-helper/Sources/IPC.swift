@@ -13,6 +13,17 @@ struct OutgoingEvent: Encodable {
     let text: String?
     let is_final: Bool?
     let message: String?
+
+    /// Minimal initializer — only requires `event`. All optional fields default to nil.
+    init(event: String, label: String? = nil, confidence: Double? = nil,
+         text: String? = nil, is_final: Bool? = nil, message: String? = nil) {
+        self.event = event
+        self.label = label
+        self.confidence = confidence
+        self.text = text
+        self.is_final = is_final
+        self.message = message
+    }
 }
 
 final class IPC {

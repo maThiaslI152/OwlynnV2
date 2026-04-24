@@ -1,10 +1,11 @@
 # Owlynn Status
 
-Last updated: 2026-04-24 (Phase 6 — Tauri v2 migration + SoundAnalysis/WhisperKit wake-word pipeline)
+Last updated: 2026-04-25 (Phase 6 complete; Live Talk feedback-loop hardening in progress)
 
 ## Current Progress
 
-- Live Talk wake-word model integration (SoundAnalysis CoreML) is in progress but intentionally deferred while other higher-priority features are implemented first.
+- **Phase 6 (MVP Hardening) is complete.** All checklist items remain closed, including CoreML wake-word integration.
+- Live Talk wake-word CoreML model (Athena) is now integrated via `SNAudioStreamAnalyzer` + `SNClassifySoundRequest` using `AthenaSoundClassifier.mlmodelc` bundled in the whisperkit-helper Swift package. Falls back to text-matching if model is unavailable.
 - Core LangGraph flow is active: memory inject, routing, complex tool loop, and memory writeback.
 - Hybrid model routing (small/medium/cloud) and medium-model swap logic are implemented.
 - Active runtime profile now uses LM Studio model keys compatible with local inventory:
@@ -31,6 +32,13 @@ Last updated: 2026-04-24 (Phase 6 — Tauri v2 migration + SoundAnalysis/Whisper
 
 ## Recent Verification Notes
 
+- **Live Talk wake-word/transcription debug pass (2026-04-25):**
+  - CoreML wake-word detection is triggering and transitions to transcription mode are now consistent,
+  - helper architecture now preloads WhisperKit (`preload_whisper`) and keeps helper process alive across normal start/stop cycles to reduce repeated cold starts,
+  - transcript output sanitization added in WhisperKit engine (`skipSpecialTokens: true` + `<|...|>` token stripping),
+  - input normalization added toward 16k model input path before transcription windows are decoded,
+  - frontend suppression guard added while `voice.tts_state.speaking == true` plus short post-TTS cooldown to reduce self-transcription.
+- **Current blocker (2026-04-25):** intermittent **TTS feedback loop** still occurs in real usage despite frontend suppression guard; additional backend/helper-level gating is still needed before calling Live Talk stable.
 - **Live Talk helper stability + mic runtime pass (2026-04-24):**
   - fixed stale helper lifecycle causing `helper stdout unavailable` on re-enable (stop now performs full helper shutdown and next start respawns cleanly),
   - bundled `whisperkit-helper` into app resources and resolved runtime helper path in Rust (`.app` launch no longer depends on inherited env vars),
@@ -71,6 +79,7 @@ must be used instead. `start.sh` now builds the frontend and launches the `.app`
 
 ## Current Bugs / Risks
 
+- **Live Talk TTS feedback loop (ACTIVE):** assistant speech is intermittently re-captured by microphone and re-submitted as user transcript. Frontend suppression guard is in place but not sufficient in all paths.
 - Workspace switching can still cause stale UI state in edge transitions.
 - Frontend/backend event payload mismatches can surface in integration paths.
 - Cloud fallback + anonymization paths require continued regression protection.
@@ -84,25 +93,16 @@ must be used instead. `start.sh` now builds the frontend and launches the `.app`
 
 ## Next Plan
 
-- Phase 5 complete. Phase 6 (MVP Hardening) in progress.
-  - Created `.env.example` with all configurable env vars.
-  - Setup script fixed: Qdrant replaces ChromaDB, matching docker-compose.yml.
-  - Server default host changed from `0.0.0.0` to `127.0.0.1` (local-first security). HOST and PORT now env-configurable.
-  - All 27 `print()` calls in server.py replaced with proper logger calls. Centralized `logging_config.py` created.
-  - All dependencies pinned with safe version ranges in requirements.txt.
-  - Global `OPENAI_API_KEY` env var side effect removed from long_term.py.
-  - Bare `raise` in complex.py:800 replaced with graceful error return.
-  - Added 58 direct unit tests for security_proxy.py and memory.py nodes.
-  - Added 31 frontend-v2 component tests (Composer, OrchestrationPanel, SafeModePanel, LiveTalkControls, ProjectKnowledgePanel, AppShell).
-  - ADR-0001 updated to reflect Tauri v2.10.3 migration (see ADR-0013).
-  - **Test suite snapshot retained from hardening slice:** backend 58 new + 83 existing = 141 passed; frontend 31 new + 50 existing = 81 passed across 6 files (historical slice count, superseded by later Phase 5 totals shown above).
+- **Phase 6 (MVP Hardening) is complete.**
+- All items in the Phase 6 checklist are resolved, including CoreML wake-word model integration.
+- **Recommended next phase**: Phase 7 — Post-MVP polish, covering bug fixes for known risks, performance optimization against SLOs, broader integration testing, and user-facing documentation for release.
 
-### Phase 6: MVP Hardening (Current)
+### Phase 6: MVP Hardening (Complete)
 
 
 | Item                                                                           | Status |
 | ------------------------------------------------------------------------------ | ------ |
-| Live Talk wake-word CoreML model integration (Athena)                          | In progress (deferred while other features are prioritized) |
+| Live Talk wake-word CoreML model integration (Athena)                     | Done   |
 | `.env.example` with all env vars                                               | Done   |
 | Setup script aligned with docker-compose (Qdrant)                              | Done   |
 | `HOST`/`PORT` env-configurable, default `127.0.0.1`                            | Done   |
@@ -249,10 +249,12 @@ All Phase 5 milestones are closed. Work completed:
 - Core test suite: **203 passed, 0 failed**. Frontend: 50 passed, build passes.
 - Remaining pre-existing failures: `test_sentence_routing_and_response.py` (model_used assertion mismatch), `test_skill_matcher.py` (semantic scorer returns 0 results), `test_prompt_regression.py` (hangs — needs Docker services), web tests (network sandbox). None are regressions from Phase 4/5 changes.
 
-### Phase 6: MVP Hardening (Current)
+### Phase 6: MVP Hardening (Complete)
 
-  
-Hardening the project for MVP release by addressing operational gaps identified in a full audit:
+
+Hardening the project for MVP release by addressing operational gaps identified in a full audit.
+
+All items resolved. See table above for full checklist.
 
 - **Configuration & setup**: `.env.example` created, `setup.sh` aligned with Qdrant (matching docker-compose.yml), `HOST`/`PORT` env-configurable with secure `127.0.0.1` default.
 - **Logging**: All `print()` calls replaced with structured logging via centralized `logging_config.py`.
@@ -261,5 +263,5 @@ Hardening the project for MVP release by addressing operational gaps identified 
 - **Test coverage**: 58 new backend tests (security proxy + memory nodes) and 31 new frontend-v2 component tests added.
 - **Documentation**: ADR-0001 corrected to reflect Tauri v2 migration status; README updated for v2 frontend and `127.0.0.1` default.
 - **Live Talk bug fixes**: 5 bugs resolved — ObjC FFI type crash, autorelease pool crash, confidence type bug, PTT finish-vs-cancel, wake-word activation.
-- **Test suite: 141 backend tests passed, 81 frontend tests passed.**
+- **Deferred post-MVP**: ~~Live Talk wake-word CoreML model.~~ Resolved — CoreML model is now integrated.
 

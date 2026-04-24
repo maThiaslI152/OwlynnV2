@@ -178,8 +178,11 @@ fn start_voice_listening(app: tauri::AppHandle, state: tauri::State<Mutex<Native
 #[tauri::command]
 fn stop_voice_listening(app: tauri::AppHandle, state: tauri::State<Mutex<NativeRuntimeState>>) -> Result<String, String> {
   let mut locked = state.lock().map_err(|_| "native runtime state lock failed".to_string())?;
+  // Don't kill the helper process — just set the stop flag so the
+  // run_helper_pipeline loop exits. The helper stays alive with
+  // WhisperKit loaded in memory, so next start is instant.
   if let Some(stop_flag) = locked.voice.wake_stop.take() {
-    voice::hard_stop_voice(stop_flag, locked.helper.clone());
+    stop_flag.store(true, std::sync::atomic::Ordering::SeqCst);
   }
   locked.voice.listening = false;
   emit_voice_state(&app, "idle");

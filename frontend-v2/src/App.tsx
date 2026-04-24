@@ -65,8 +65,12 @@ function App() {
   const [currentThreadId, setCurrentThreadId] = useState('default')
   const projectThreadsRef = useRef<Record<string, string>>({ default: 'default' })
   const wsClientRef = useRef<WsClient | null>(null)
+  const ttsSpeakingRef = useRef(false)
+  const ttsSuppressionUntilRef = useRef(0)
 
   const makeThreadId = () => `thread-${crypto.randomUUID()}`
+  const shouldSuppressVoiceTranscript = () =>
+    ttsSpeakingRef.current || Date.now() < ttsSuppressionUntilRef.current
 
   const loadProjects = useCallback(async () => {
     try {
@@ -232,6 +236,9 @@ function App() {
         } else if (event.type === 'voice.state') {
           setVoiceState(event.state)
         } else if (event.type === 'voice.transcript') {
+          if (shouldSuppressVoiceTranscript()) {
+            return
+          }
           setInterimTranscript(event.text)
           if (event.is_final && event.text.trim()) {
             const voiceMsg: ChatMessage = {
@@ -257,6 +264,9 @@ function App() {
           setVoiceError(event.message)
           setOperatorNote(`Live Talk error: ${event.message}`)
         } else if (event.type === 'voice.tts_state') {
+          ttsSpeakingRef.current = event.speaking
+          // Keep a short cooldown after TTS stops to avoid speaker/mic echo.
+          ttsSuppressionUntilRef.current = event.speaking ? Date.now() : Date.now() + 1200
           setTtsSpeaking(event.speaking)
         } else if (event.type === 'safe_mode.changed') {
           setSafeMode(event.mode)
@@ -310,6 +320,9 @@ function App() {
       if (payload.type === 'voice.state') {
         setVoiceState(payload.state)
       } else if (payload.type === 'voice.transcript') {
+        if (shouldSuppressVoiceTranscript()) {
+          return
+        }
         setInterimTranscript(payload.text)
         if (payload.is_final && payload.text.trim()) {
           const voiceMsg: ChatMessage = {
@@ -335,6 +348,9 @@ function App() {
         setVoiceError(payload.message)
         setOperatorNote(`Live Talk error: ${payload.message}`)
       } else if (payload.type === 'voice.tts_state') {
+        ttsSpeakingRef.current = payload.speaking
+        // Keep a short cooldown after TTS stops to avoid speaker/mic echo.
+        ttsSuppressionUntilRef.current = payload.speaking ? Date.now() : Date.now() + 1200
         setTtsSpeaking(payload.speaking)
       } else if (payload.type === 'voice.started') {
         setWakeWordListening(payload.mode === 'wake_word')

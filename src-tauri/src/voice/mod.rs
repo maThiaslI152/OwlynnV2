@@ -65,11 +65,19 @@ pub enum VoiceEvent {
   Error(String, String),
 }
 
-#[derive(Debug, Default)]
+/// Manages the whisperkit-helper subprocess lifecycle.
+///
+/// The helper owns stdin/stdout pipes permanently until `shutdown()` is
+/// called. This lets us send commands and read events across multiple
+/// on/off cycles without respawning the process (and losing the in-memory
+/// WhisperKit model singleton).
+#[derive(Debug)]
 pub struct WhisperKitHelper {
   pub process: Option<Child>,
   pub stdin: Option<ChildStdin>,
-  pub stdout: Option<ChildStdout>,
+  /// The helper's stdout wrapped in BufReader for line-based JSON reading.
+  /// Taken out during pipeline runs and restored afterward.
+  pub reader: Option<BufReader<ChildStdout>>,
 }
 
 impl WhisperKitHelper {
@@ -87,7 +95,7 @@ impl WhisperKitHelper {
     Ok(Self {
       process: Some(child),
       stdin: Some(stdin),
-      stdout: Some(stdout),
+      reader: Some(BufReader::new(stdout)),
     })
   }
 
@@ -100,10 +108,6 @@ impl WhisperKitHelper {
     Ok(())
   }
 
-  pub fn take_stdout(&mut self) -> Option<ChildStdout> {
-    self.stdout.take()
-  }
-
   pub fn shutdown(&mut self) {
     let _ = self.send_command(r#"{"command":"shutdown"}"#);
     if let Some(child) = self.process.as_mut() {
@@ -111,8 +115,18 @@ impl WhisperKitHelper {
       let _ = child.wait();
     }
     self.stdin = None;
-    self.stdout = None;
+    self.reader = None;
     self.process = None;
+  }
+}
+
+impl Default for WhisperKitHelper {
+  fn default() -> Self {
+    Self {
+      process: None,
+      stdin: None,
+      reader: None,
+    }
   }
 }
 
@@ -121,11 +135,9 @@ pub fn speech_framework_available() -> bool {
 }
 
 pub fn helper_binary_path(app: Option<&tauri::AppHandle>) -> String {
-  // 1. Env var override (used by start.sh in development)
   if let Ok(path) = std::env::var("WHISPERKIT_HELPER_PATH") {
     return path;
   }
-  // 2. Bundled inside .app/Contents/Resources/ (production)
   if let Some(app) = app {
     if let Ok(resource_dir) = app.path().resource_dir() {
       let bundled = resource_dir.join("whisperkit-helper");
@@ -134,12 +146,15 @@ pub fn helper_binary_path(app: Option<&tauri::AppHandle>) -> String {
       }
     }
   }
-  // 3. Fallback for development (running via cargo)
-  let dev_path = std::path::Path::new("src-tauri/whisperkit-helper/.build/release/whisperkit-helper");
-  if dev_path.exists() {
-    return dev_path.to_string_lossy().to_string();
+  let cwd_relative = std::env::current_dir()
+    .unwrap_or_default()
+    .join("whisperkit-helper")
+    .join(".build")
+    .join("release")
+    .join("whisperkit-helper");
+  if cwd_relative.exists() {
+    return cwd_relative.to_string_lossy().to_string();
   }
-  // 4. Last resort: relative to current dir
   "whisperkit-helper".to_string()
 }
 
@@ -181,10 +196,7 @@ pub fn start_wake_listen(
             },
           );
         }
-        VoiceEvent::AudioLevel(_level) => {
-          // Audio level events are used internally; can be forwarded
-          // to the frontend for a waveform visualization later.
-        }
+        VoiceEvent::AudioLevel(_level) => {}
         VoiceEvent::Error(message, code) => {
           let _ = app_for_emit.emit(
             "owlynn://runtime-event",
@@ -199,9 +211,10 @@ pub fn start_wake_listen(
     }
   });
 
-  let app_for_pipeline = app.clone();
+  let _app_for_pipeline = app.clone();
+  let helper_path = helper_binary_path(Some(&app));
   thread::spawn(move || {
-    run_helper_pipeline(&tx, &stop_flag, helper_state, &app_for_pipeline);
+    run_helper_pipeline(&tx, &stop_flag, helper_state, &helper_path);
     let _ = app.emit(
       "owlynn://runtime-event",
       VoiceStatePayload {
@@ -216,69 +229,104 @@ fn run_helper_pipeline(
   tx: &crossbeam_channel::Sender<VoiceEvent>,
   stop_flag: &AtomicBool,
   helper_state: Arc<Mutex<WhisperKitHelper>>,
-  app: &tauri::AppHandle,
+  helper_path: &str,
 ) {
-  let helper_path = helper_binary_path(Some(app));
-  let stdout = {
+  let mut is_fresh_spawn = false;
+
+  // Spawn or reuse the helper
+  {
     let mut helper = helper_state.lock().unwrap();
-    // If a stale process exists with consumed pipes, shut it down and respawn
-    if helper.process.is_some() && helper.stdout.is_none() {
-      helper.shutdown();
-    }
-    if helper.process.is_none() {
-      match WhisperKitHelper::spawn(&helper_path) {
-        Ok(new_helper) => *helper = new_helper,
+    if helper.process.is_none() || helper.stdin.is_none() {
+      if helper.process.is_some() {
+        helper.shutdown();
+      }
+      match WhisperKitHelper::spawn(helper_path) {
+        Ok(new_helper) => {
+          is_fresh_spawn = true;
+          *helper = new_helper;
+        }
         Err(err) => {
           let _ = tx.send(VoiceEvent::Error(err, "helper_spawn_failed".to_string()));
           return;
         }
       }
     }
-    let _ = helper.send_command(r#"{"command":"start_wakeword","model":"AthenaSoundClassifier","threshold":0.3}"#);
-    let _ = helper.send_command(r#"{"command":"transcribe_start","audio_format":{"sample_rate":16000}}"#);
-    helper.take_stdout()
-  };
-
-  let Some(stdout) = stdout else {
-    let _ = tx.send(VoiceEvent::Error(
-      "helper stdout unavailable".to_string(),
-      "helper_io_failed".to_string(),
-    ));
-    return;
-  };
-
-  let reader = BufReader::new(stdout);
-  for line in reader.lines() {
-    if stop_flag.load(Ordering::SeqCst) {
-      break;
-    }
-    let Ok(payload) = line else {
-      continue;
-    };
-    if payload.contains("\"wakeword_detected\"") {
-      let _ = tx.send(VoiceEvent::WakeWord("Athena".to_string(), 0.9));
-      continue;
-    }
-    if payload.contains("\"transcript\"") {
-      let text = extract_json_string_field(&payload, "text").unwrap_or_default();
-      let is_final = payload.contains("\"is_final\":true");
-      let confidence = extract_json_number_field(&payload, "confidence").unwrap_or(0.5);
-      let _ = tx.send(VoiceEvent::Transcript(text, is_final, confidence));
-      continue;
-    }
-    if payload.contains("\"audio_level\"") {
-      if let Some(level) = extract_json_number_field(&payload, "level") {
-        let _ = tx.send(VoiceEvent::AudioLevel(level as f64));
-      }
-      continue;
-    }
-    if payload.contains("\"error\"") {
-      let message = extract_json_string_field(&payload, "message")
-        .unwrap_or_else(|| "unknown helper error".to_string());
-      let _ = tx.send(VoiceEvent::Error(message, "helper_error".to_string()));
+    let _ = helper.send_command(
+      r#"{"command":"start_wakeword","model":"AthenaSoundClassifier","threshold":0.3}"#,
+    );
+    if is_fresh_spawn {
+      let _ = helper.send_command(r#"{"command":"preload_whisper"}"#);
     }
   }
 
+  // Take the BufReader out of the helper for the pipeline duration.
+  let mut reader = {
+    let mut helper = helper_state.lock().unwrap();
+    helper.reader.take()
+  };
+
+  let mut line = String::new();
+  loop {
+    if stop_flag.load(Ordering::SeqCst) {
+      break;
+    }
+    if reader.is_none() {
+      // was restored in a previous iteration (shouldn't happen but guard)
+      break;
+    }
+    let r = reader.as_mut().unwrap();
+    line.clear();
+    match r.read_line(&mut line) {
+      Ok(0) => break,
+      Ok(_) => {
+        let payload = line.trim();
+        if payload.is_empty() {
+          continue;
+        }
+        if payload.contains("\"wakeword_detected\"") {
+          let mut helper = helper_state.lock().unwrap();
+          let _ = helper.send_command(r#"{"command":"stop_wakeword"}"#);
+          let _ = helper.send_command(r#"{"command":"transcribe_start"}"#);
+          drop(helper);
+          let _ = tx.send(VoiceEvent::WakeWord("Athena".to_string(), 0.9));
+          continue;
+        }
+        if payload.contains("\"transcript\"") {
+          let text = extract_json_string_field(payload, "text").unwrap_or_default();
+          let is_final = payload.contains("\"is_final\":true");
+          let confidence = extract_json_number_field(payload, "confidence").unwrap_or(0.5);
+          let _ = tx.send(VoiceEvent::Transcript(text, is_final, confidence));
+          continue;
+        }
+        if payload.contains("\"audio_level\"") {
+          if let Some(level) = extract_json_number_field(payload, "level") {
+            let _ = tx.send(VoiceEvent::AudioLevel(level as f64));
+          }
+          continue;
+        }
+        if payload.contains("\"error\"") {
+          let message = extract_json_string_field(payload, "message")
+            .unwrap_or_else(|| "unknown helper error".to_string());
+          let _ = tx.send(VoiceEvent::Error(message, "helper_error".to_string()));
+        }
+      }
+      Err(e) => {
+        let _ = tx.send(VoiceEvent::Error(
+          format!("helper stdout read error: {e}"),
+          "helper_io_failed".to_string(),
+        ));
+        break;
+      }
+    }
+  }
+
+  // Restore the BufReader for the next pipeline cycle
+  {
+    let mut helper = helper_state.lock().unwrap();
+    helper.reader = reader.take();
+  }
+
+  // Cleanup: stop transcription and wake-word (but keep helper alive)
   let mut helper = helper_state.lock().unwrap();
   let _ = helper.send_command(r#"{"command":"transcribe_stop"}"#);
   let _ = helper.send_command(r#"{"command":"stop_wakeword"}"#);
@@ -314,19 +362,11 @@ pub fn speak_text(app: AppHandle, text: String, engine: Arc<Mutex<VoiceEngineSta
       .map(|d| d.as_millis())
       .unwrap_or(0)
   );
-
+  let text_for_tts = text.clone();
   {
-    let mut eng = engine.lock().unwrap();
-    eng.tts_speaking = true;
+    let mut engine = engine.lock().unwrap();
+    engine.tts_speaking = true;
   }
-
-  let _ = app.emit(
-    "owlynn://runtime-event",
-    VoiceStatePayload {
-      event_type: "voice.state",
-      state: "speaking".to_string(),
-    },
-  );
   let _ = app.emit(
     "owlynn://runtime-event",
     VoiceTtsStatePayload {
@@ -336,41 +376,42 @@ pub fn speak_text(app: AppHandle, text: String, engine: Arc<Mutex<VoiceEngineSta
     },
   );
 
-  let app_clone = app.clone();
-  let uid = utterance_id.clone();
-  thread::spawn(move || {
-    #[cfg(target_os = "macos")]
-    let tts_result = Command::new("say").arg(&text).status();
-    #[cfg(not(target_os = "macos"))]
-    let tts_result: Result<std::process::ExitStatus, std::io::Error> =
-      Err(std::io::Error::new(std::io::ErrorKind::Unsupported, "tts unsupported"));
+  let korean_voice = if text.chars().any(|c| {
+    ('\u{AC00}'..='\u{D7AF}').contains(&c) || ('\u{1100}'..='\u{11FF}').contains(&c)
+  }) {
+    if !Command::new("say")
+      .arg("-v")
+      .arg("Yuna")
+      .arg("test")
+      .output()
+      .map(|o| o.status.success())
+      .unwrap_or(false)
+    {
+      "Yuna"
+    } else {
+      ""
+    }
+  } else {
+    ""
+  };
 
-    let _ = app_clone.emit(
+  thread::spawn(move || {
+    let mut cmd = Command::new("say");
+    if !korean_voice.is_empty() {
+      cmd.arg("-v").arg(korean_voice);
+    }
+    cmd.arg(&text_for_tts).output().ok();
+    let mut engine = engine.lock().unwrap();
+    engine.tts_speaking = false;
+    let _ = app.emit(
       "owlynn://runtime-event",
       VoiceTtsStatePayload {
         event_type: "voice.tts_state",
         speaking: false,
-        utterance_id: uid,
+        utterance_id,
       },
     );
-    let _ = app_clone.emit(
-      "owlynn://runtime-event",
-      VoiceStatePayload {
-        event_type: "voice.state",
-        state: "idle".to_string(),
-      },
-    );
-    if let Err(err) = tts_result {
-      let _ = app_clone.emit(
-        "owlynn://runtime-event",
-        VoiceErrorPayload {
-          event_type: "voice.error",
-          message: format!("tts failed: {err}"),
-          code: "tts_failed".to_string(),
-        },
-      );
-    }
   });
 
-  utterance_id
+  text
 }

@@ -18,7 +18,7 @@ let package = Package(
             dependencies: ["WhisperKit"],
             path: "Sources",
             resources: [
-                .copy("Resources")
+                .copy("Resources/AthenaSoundClassifier.mlmodelc")
             ]
         )
     ]

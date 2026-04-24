@@ -4,7 +4,7 @@ let ipc = IPC()
 let soundAnalysis = SoundAnalysisEngine()
 let whisper = WhisperKitEngine()
 
-ipc.emit(OutgoingEvent(event: "ready", label: nil, confidence: nil, text: nil, is_final: nil, message: nil))
+ipc.emit(OutgoingEvent(event: "ready"))
 
 while let line = readLine() {
     guard let data = line.data(using: .utf8) else { continue }
@@ -20,47 +20,42 @@ while let line = readLine() {
             ipc.emit(OutgoingEvent(
                 event: "wakeword_detected",
                 label: "Athena",
-                confidence: 0.9,
-                text: nil, is_final: nil, message: nil
+                confidence: 0.9
             ))
         }
         ipc.emit(OutgoingEvent(
             event: "transcript",
-            label: nil, confidence: 0.8,
-            text: line, is_final: false, message: nil
+            confidence: 0.8,
+            text: line,
+            is_final: false
         ))
         ipc.emit(OutgoingEvent(
             event: "transcript",
-            label: nil, confidence: 0.9,
-            text: line, is_final: true, message: nil
+            confidence: 0.9,
+            text: line,
+            is_final: true
         ))
         continue
     }
 
     switch command.command {
     case "start_wakeword":
-        soundAnalysis.startWakeWord(threshold: command.threshold ?? 0.3)
-        ipc.emit(OutgoingEvent(
-            event: "wakeword_started",
-            label: nil, confidence: nil, text: nil, is_final: nil, message: nil
-        ))
+        soundAnalysis.startWakeWord(threshold: command.threshold ?? 0.3, ipc: ipc)
     case "stop_wakeword":
         soundAnalysis.stopWakeWord()
+    case "preload_whisper":
+        whisper.preload(ipc: ipc)
     case "transcribe_start":
         whisper.start(ipc: ipc)
     case "transcribe_stop":
         whisper.stop()
     case "shutdown":
         whisper.stop()
-        ipc.emit(OutgoingEvent(
-            event: "shutdown", label: nil, confidence: nil,
-            text: nil, is_final: nil, message: nil
-        ))
+        ipc.emit(OutgoingEvent(event: "shutdown"))
         exit(0)
     default:
         ipc.emit(OutgoingEvent(
-            event: "error", label: nil, confidence: nil,
-            text: nil, is_final: nil,
+            event: "error",
             message: "unknown command: \(command.command)"
         ))
     }

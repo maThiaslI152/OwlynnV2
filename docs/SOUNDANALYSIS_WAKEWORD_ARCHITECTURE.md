@@ -1,8 +1,8 @@
 # SoundAnalysis + Tauri v2 + Swift Wake-Word Architecture Plan
 
-## Status: Plan
+## Status: Implemented (stabilization ongoing)
 
-Date: 2026-04-24
+Date: 2026-04-25
 
 ## Architecture Overview
 
@@ -294,3 +294,4 @@ This won't detect "Athena" specifically, but validates the full pipeline. Swap i
 | SoundAnalysis custom model accuracy with few samples | Use built-in classifier for MVP, refine custom model. |
 | Tauri v2 permission system complexity | Create capabilities/default.json with minimal permissions. |
 | CoreML model for "Athena" not yet trained | Start with built-in classifier, guide user through CreateML. |
+| TTS feedback loop (assistant self-transcription) | Add suppression at frontend + enforce backend/helper hard gate while TTS speaking, with post-TTS cooldown. |
