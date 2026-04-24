@@ -109,6 +109,12 @@ body {
   margin-bottom: 10px;
 }
 
+.workspace-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .workspace-header h2 {
   font-size: 0.76rem;
   font-weight: 700;
@@ -219,6 +225,11 @@ body {
   background: var(--accent);
   border-color: var(--accent);
   color: white;
+}
+
+.workspace-project-item:hover .chat-list-item-actions,
+.workspace-project-item-active .chat-list-item-actions {
+  opacity: 1;
 }
 
 /* ── Knowledge Panel (left) ────────────────────────────── */
@@ -1443,4 +1454,202 @@ body.tauri-glass .message-assistant .message-bubble {
 
 body.tauri-glass .message-user .message-bubble {
   background: linear-gradient(180deg, rgba(118, 195, 255, 0.8), rgba(95, 176, 255, 0.74));
+}
+
+/* ── Chat List (left panel) ─────────────────────────────── */
+
+.chat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.chat-list-empty {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  margin: 4px 0;
+}
+
+.chat-list-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  padding: 5px 8px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.chat-list-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.chat-list-item-active {
+  background: var(--accent-glow);
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.chat-list-item-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.78rem;
+}
+
+.chat-list-item-actions {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.12s;
+  flex-shrink: 0;
+}
+
+.chat-list-item:hover .chat-list-item-actions {
+  opacity: 1;
+}
+
+.chat-list-item-active .chat-list-item-actions {
+  opacity: 1;
+}
+
+.chat-list-action {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  cursor: pointer;
+  padding: 1px 4px;
+  border-radius: 3px;
+  line-height: 1;
+  transition: color 0.12s;
+}
+
+.chat-list-action:hover {
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+}
+
+.chat-list-action-delete:hover {
+  color: var(--red);
+}
+
+.chat-rename-input {
+  width: 100%;
+  border: 1px solid var(--accent);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: 3px 6px;
+  font-size: 0.78rem;
+  outline: none;
+  font-family: var(--font);
+}
+
+.inspector-section-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── Memory Panel ───────────────────────────────────────── */
+
+.memory-section {
+  margin-bottom: 8px;
+}
+
+.memory-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.memory-tag {
+  display: inline-block;
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.65rem;
+  white-space: nowrap;
+  cursor: default;
+  transition: all 0.12s;
+}
+
+.memory-tag:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+
+.memory-tag-interest {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.memory-tag-more {
+  border-style: dashed;
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.memory-context-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.memory-context-toggle {
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  font-size: 0.65rem;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.memory-context-toggle:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+
+.memory-context-content {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-base);
+  padding: 6px 8px;
+}
+
+.memory-interests-text {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  line-height: 1.5;
+  margin-top: 4px;
+}
+
+.memory-context-pre {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  line-height: 1.4;
 }

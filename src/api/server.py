@@ -467,14 +467,24 @@ async def api_get_project(project_id: str):
 
 @app.post("/api/projects/{project_id}/chats")
 async def api_add_project_chat(project_id: str, body: dict):
-    # body: {id, name}
+    # body: {id, name?}
     import time
+    chat_id = body["id"]
+    name = body.get("name", "")
+    # Generate a title from the first message if one was provided
+    if not name and body.get("first_message"):
+        try:
+            title = await generate_chat_title_router_llm(body["first_message"])
+            if title:
+                name = title
+        except Exception:
+            pass
     project_manager.add_chat_to_project(project_id, {
-        "id": body["id"],
-        "name": body.get("name", "New Chat"),
+        "id": chat_id,
+        "name": name or "New Chat",
         "created_at": time.time()
     })
-    return {"status": "ok"}
+    return {"status": "ok", "chat": {"id": chat_id, "name": name or "New Chat"}}
 
 @app.delete("/api/projects/{project_id}/chats/{chat_id}")
 async def api_delete_project_chat(project_id: str, chat_id: str):
@@ -1428,6 +1438,22 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                         logger.info("Saved file to %s", filepath)
                     except Exception as e:
                         logger.error("Failed to save file %s: %s", name, e)
+
+            # On first user message in a thread, register the chat in the project
+            if thread_id not in sessions or not sessions[thread_id].event_buffer:
+                chat_id = thread_id
+                file_names = [f.get("name", "") for f in files if f.get("name")]
+                try:
+                    title = await generate_chat_title_router_llm(user_input[:1000], file_names=file_names)
+                except Exception:
+                    title = ""
+                # Register chat in project manager (idempotent — dedups by chat_id)
+                import time as time_module
+                project_manager.add_chat_to_project(project_id, {
+                    "id": chat_id,
+                    "name": title or "New Chat",
+                    "created_at": time_module.time(),
+                })
 
             message_content = await build_message_content(user_input, files)
             if not message_content:
