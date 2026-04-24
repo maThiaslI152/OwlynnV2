@@ -294,33 +294,25 @@ The agent graph has two memory nodes:
 
 Live Talk runs through the Tauri Rust layer for desktop-first personal assistant usage:
 
-- **Wake-word mode**: `start_voice_listening`/`stop_voice_listening` commands with a configurable phrase (`set_wake_word_phrase`, `get_wake_word_phrase`). Uses SFSpeechRecognizer with constrained phrase detection for low-latency wake-word activation.
-- **Push-to-talk**: `start_push_to_talk` and `stop_push_to_talk` start/stop real SFSpeechRecognizer + AVAudioEngine microphone capture with streaming transcription.
-- **Speech output (TTS)**: `speak_text` command with real NSSpeechSynthesizer ObjC FFI (falls back to macOS `say` command).
+- **Wake-word mode**: `start_voice_listening`/`stop_voice_listening` with fixed wake phrase `Athena` (`get_wake_word_phrase` returns `Athena`).
+- **Two-stage pipeline**:
+  - Stage 1: SoundAnalysis wake-word detection through a Swift helper process.
+  - Stage 2: WhisperKit (`distil-large-v3`) transcription after wake-word activation.
+- **Speech output (TTS)**: `speak_text` command uses local macOS `say` for now.
 - **Runtime events**: `voice.state`, `voice.transcript`, `voice.wake_word`, `voice.error`, `voice.tts_state`, `voice.started`.
 
 Frontend wiring:
 
-- `LiveTalkControls.tsx` exposes wake-word toggle + phrase input with independent Save button, push-to-talk, hard-stop, transcript preview, and error badges
+- `LiveTalkControls.tsx` exposes wake-word toggle, fixed `Athena` display, hard-stop, transcript preview, and error badges
 - `App.tsx` listens to Tauri runtime voice events and forwards final transcript text as a normal `user.message` event with `source: "voice"`
 - `AppShell.tsx` shows inline interim transcript feedback above the composer
-- Wake-word phrase is stored in Zustand and loaded from Rust on mount via `get_wake_word_phrase`; persists across restarts
+- Wake-word phrase is fixed to `Athena` in both frontend and backend
 
 macOS permission assets are included at `src-tauri/Entitlements.plist` and `src-tauri/Info.plist` for microphone and speech recognition usage descriptions.
 
-**Implementation detail:** `src-tauri/src/voice/mod.rs` contains the full ObjC FFI implementation using the `objc` and `block` crates:
-- `SFSpeechRecognizer.requestAuthorization()` for permission grant
-- `SFSpeechRecognizer` + `SFSpeechAudioBufferRecognitionRequest` for streaming recognition
-- `AVAudioEngine` input node tap for microphone capture (`installTapOnBus:bufferSize:format:block:`)
-- Block-based result handler (`recognitionTaskWithRequest:resultHandler:`) that extracts interim/final transcript text and per-segment confidence
-- Wake-word detection by matching the constrained phrase against the best transcription
-- Inter-thread communication via `crossbeam_channel::unbounded<VoiceEvent>` from recognition callbacks to Tauri event emission
-- `NSSpeechSynthesizer` for TTS with polling loop and 60-second timeout
-
-**⚠️ Critical FFI safety note:** See [`docs/OBJC_FFI_CRASH.md`](docs/OBJC_FFI_CRASH.md) for the
-full root-cause analysis of a prior deterministic crash caused by passing non-null-terminated
-Rust `&str` slices to `NSString::stringWithUTF8String:` via the ObjC FFI. All new
-Rust ↔ ObjC FFI text-passing code **must** use `std::ffi::CString` for null-terminated strings.
+**Implementation detail:** `src-tauri/src/voice/mod.rs` now orchestrates a Swift helper subprocess
+(`src-tauri/whisperkit-helper`) over line-delimited JSON stdin/stdout. This removes direct ObjC
+FFI coupling from Rust while preserving local-only voice processing.
 
 ## Testing
 

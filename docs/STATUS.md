@@ -1,6 +1,6 @@
 # Owlynn Status
 
-Last updated: 2026-04-24 (Phase 6 — Live Talk voice fixes: autorelease pool crash, confidence type bug, PTT finish vs cancel, wake-word activation)
+Last updated: 2026-04-24 (Phase 6 — Tauri v2 migration + SoundAnalysis/WhisperKit wake-word pipeline)
 
 ## Current Progress
 
@@ -11,7 +11,7 @@ Last updated: 2026-04-24 (Phase 6 — Live Talk voice fixes: autorelease pool cr
   - `medium_models.default`: `lfm2-8b-a1b-absolute-heresy-mpoa-mlx`
 - Security proxy with HITL approval is in place for sensitive tools.
 - Backend API + WebSocket chat and Tauri frontend shell are integrated.
-- Live Talk now has native Tauri/Rust command wiring for wake-word listening, push-to-talk, transcript events, and TTS state events.
+- Live Talk now targets Tauri v2 + Swift helper orchestration for two-stage wake-word/transcription (`Athena` + WhisperKit distil-large-v3); push-to-talk removed.
 - Test coverage includes unit, integration, and property-based suites across backend and frontend.
 - Phase 1 frontend-v2 websocket transport regression milestone is in place:
   - `frontend-v2` `WsClient` now has dedicated protocol-safety regression tests covering malformed JSON rejection, lifecycle callback delivery (`open`/`close`/`error`/`message`), send-gating on closed socket, disconnect cleanup, and duplicate-disconnect tolerance,
@@ -30,7 +30,7 @@ Last updated: 2026-04-24 (Phase 6 — Live Talk voice fixes: autorelease pool cr
 
 ## Recent Verification Notes
 
-- **Live Talk STT/wake-word now real**: Replaced the simulated placeholder in `src-tauri/src/voice/mod.rs` with real macOS native `SFSpeechRecognizer` + `AVAudioEngine` ObjC FFI. Implements authorization request, constrained phrase recognition with `contextualStrings`, `requiresOnDeviceRecognition`, streaming transcription via block-based `recognitionTaskWithRequest:resultHandler:`, AVAudioEngine input tap for microphone capture, `crossbeam_channel` for inter-thread event forwarding, and proper cleanup lifecycle. `cargo check` passes (0 errors), `npm run test` passes (81 tests).
+- **Live Talk architecture update (2026-04-24):** migrated toward Tauri v2 command/event model and replaced direct Rust ObjC STT wiring with a Swift helper process contract for SoundAnalysis wake-word + WhisperKit transcription. Wake-word is now fixed to `Athena`; push-to-talk commands/UI removed.
 - Phase 5 live test pass: 203 core backend tests pass with 0 failures (removed 2 dead test files, fixed 3 tool awareness assertions). 50 frontend tests pass, build passes.
 - Enhanced summarize/context compression with structured prompt (categorized output: decisions, facts, preferences, open tasks, code results), multi-level prior-summary awareness across compression rounds, and improved token estimation heuristic.
 - Project knowledge file viewer added to workspace panel (lists indexed knowledge files per project, with refresh and date display).

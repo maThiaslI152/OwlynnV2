@@ -1,46 +1,23 @@
 {
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Owlynn",
+  "version": "0.2.0",
+  "identifier": "com.owlynn.app",
   "build": {
-    "distDir": "../frontend-v2/dist",
-    "devPath": "http://127.0.0.1:5173",
-    "withGlobalTauri": true
+    "frontendDist": "../frontend-v2/dist",
+    "devUrl": "http://127.0.0.1:5173",
+    "beforeDevCommand": "npm --prefix ../frontend-v2 run dev",
+    "beforeBuildCommand": "npm --prefix ../frontend-v2 run build"
   },
-  "package": {
-    "version": "0.1.0",
-    "productName": "Owlynn"
-  },
-  "tauri": {
+  "app": {
+    "withGlobalTauri": true,
     "macOSPrivateApi": true,
-    "allowlist": {
-      "all": false,
-      "window": {
-        "startDragging": true
-      },
-      "shell": {
-        "open": true
-      }
-    },
-    "bundle": {
-      "active": true,
-      "category": "DeveloperTool",
-      "identifier": "com.owlynn.app",
-    "macOS": {
-      "minimumSystemVersion": "10.15",
-      "entitlements": "Entitlements.plist"
-    },
-      "icon": [
-        "icons/32x32.png",
-        "icons/128x128.png",
-        "icons/128x128@2x.png",
-        "icons/icon.icns",
-        "icons/icon.ico"
-      ],
-      "targets": "all"
-    },
     "security": {
       "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: http://127.0.0.1:8000 asset: https://asset.localhost; connect-src 'self' ws://127.0.0.1:8000 http://127.0.0.1:8000; font-src 'self';"
     },
     "windows": [
       {
+        "label": "main",
         "fullscreen": false,
         "height": 720,
         "resizable": true,
@@ -50,8 +27,24 @@
         "minHeight": 480,
         "transparent": true,
         "decorations": true,
-        "fileDropEnabled": false
+        "dragDropEnabled": false
       }
     ]
+  },
+  "bundle": {
+    "active": true,
+    "category": "DeveloperTool",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "targets": "all",
+    "macOS": {
+      "minimumSystemVersion": "14.0",
+      "entitlements": "Entitlements.plist"
+    }
   }
 }

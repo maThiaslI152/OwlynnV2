@@ -113,6 +113,16 @@ _LOCAL_TAURI="./frontend-v2/node_modules/.bin/tauri"
 if [ -x "$_LOCAL_TAURI" ]; then
     echo "      Launching Tauri desktop app..."
 
+    # Build the Swift helper for SoundAnalysis + WhisperKit
+    if [ -d "src-tauri/whisperkit-helper" ]; then
+        echo "      Building whisperkit-helper..."
+        (cd src-tauri/whisperkit-helper && swift build -c release >/dev/null 2>&1) &
+        _HELPER_BUILD_PID=$!
+        wait $_HELPER_BUILD_PID 2>/dev/null
+        export WHISPERKIT_HELPER_PATH="$(pwd)/src-tauri/whisperkit-helper/.build/release/whisperkit-helper"
+        echo "      Helper ready."
+    fi
+
     # Build the frontend first for the .app bundle
     (cd frontend-v2 && npm run build >/dev/null 2>&1) &
     _BUILD_PID=$!

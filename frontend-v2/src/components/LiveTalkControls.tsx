@@ -23,9 +23,7 @@ export function LiveTalkControls() {
   const setVoiceError = useAppStore((s) => s.setVoiceError)
   const setWakeWordPhrase = useAppStore((s) => s.setWakeWordPhrase)
   const voiceActive = !['idle', 'interrupted'].includes(voiceState)
-
-  // Local draft for the input field — synced from the store on mount
-  const [draftPhrase, setDraftPhrase] = useState(storedPhrase)
+  const [draftPhrase, setDraftPhrase] = useState('Athena')
 
   // Load the persisted phrase from Rust on mount
   useEffect(() => {
@@ -44,45 +42,6 @@ export function LiveTalkControls() {
     void load()
     return () => { cancelled = true }
   }, [setWakeWordPhrase])
-
-  const saveWakeWordPhrase = async () => {
-    const trimmed = draftPhrase.trim()
-    if (!trimmed) {
-      setVoiceError('Wake-word phrase cannot be empty')
-      return
-    }
-    const result = await tauriBridge.setWakeWordPhrase(trimmed)
-    if (!result.ok) {
-      setVoiceError(result.error ?? 'Failed to save wake-word phrase')
-      setOperatorNote(`Live Talk error: ${result.error}`)
-      return
-    }
-    setWakeWordPhrase(trimmed)
-    setVoiceError(null)
-    setOperatorNote(`Wake-word phrase saved: "${trimmed}"`)
-  }
-
-  const startPtt = async () => {
-    const result = await tauriBridge.startPushToTalk()
-    if (!result.ok) {
-      setVoiceError(result.error ?? 'Failed to start push-to-talk')
-      setOperatorNote(`Live Talk error: ${result.error}`)
-      return
-    }
-    setVoiceError(null)
-    setOperatorNote('Push-to-talk started')
-  }
-
-  const stopPtt = async () => {
-    const result = await tauriBridge.stopPushToTalk()
-    if (!result.ok) {
-      setVoiceError(result.error ?? 'Failed to stop push-to-talk')
-      setOperatorNote(`Live Talk error: ${result.error}`)
-      return
-    }
-    setVoiceError(null)
-    setOperatorNote('Push-to-talk stopped')
-  }
 
   const hardStop = async () => {
     const result = await tauriBridge.hardStopVoice()
@@ -109,11 +68,6 @@ export function LiveTalkControls() {
       return
     }
 
-    // Sync the current store phrase to Rust before starting
-    if (storedPhrase.trim()) {
-      await tauriBridge.setWakeWordPhrase(storedPhrase.trim())
-    }
-
     const result = await tauriBridge.startVoiceListening()
     if (!result.ok) {
       setVoiceError(result.error ?? 'Failed to start wake-word listener')
@@ -122,7 +76,7 @@ export function LiveTalkControls() {
     }
     setVoiceError(null)
     setWakeWordListening(true)
-    setOperatorNote(`Wake-word listening started (${storedPhrase.trim() || 'Hey Owlynn'})`)
+    setOperatorNote('Wake-word listening started (Athena)')
   }
 
   return (
@@ -153,12 +107,13 @@ export function LiveTalkControls() {
           type="text"
           className="memory-search-input"
           value={draftPhrase}
-          onChange={(e) => setDraftPhrase(e.target.value)}
+          onChange={() => {}}
           placeholder="Wake word phrase"
           aria-label="Wake-word phrase"
+          disabled
         />
-        <button type="button" onClick={saveWakeWordPhrase}>
-          Save
+        <button type="button" disabled>
+          Fixed
         </button>
       </div>
       <div className="row row-status">
@@ -167,14 +122,6 @@ export function LiveTalkControls() {
         </span>
         <button type="button" onClick={toggleWakeWord}>
           {wakeWordListening ? 'Disable Wake-word' : 'Enable Wake-word'}
-        </button>
-      </div>
-      <div className="row">
-        <button type="button" onClick={startPtt}>
-          Push-to-Talk
-        </button>
-        <button type="button" onClick={stopPtt}>
-          Release
         </button>
       </div>
       <div className="tool-empty-preview">

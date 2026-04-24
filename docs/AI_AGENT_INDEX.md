@@ -73,6 +73,7 @@ Use it to locate the right source files, contracts, and tests before making chan
 - Active status and risks: `docs/STATUS.md`
 - Architecture decisions: `docs/ADR.md`
 - ObjC FFI crash analysis: `docs/OBJC_FFI_CRASH.md`
+- SoundAnalysis + WhisperKit migration plan: `docs/SOUNDANALYSIS_WAKEWORD_ARCHITECTURE.md`
 - Linear workflow (issue/PR conventions): `docs/LINEAR_WORKFLOW.md`
 - Performance & memory SLOs: `docs/PERFORMANCE_SLOS.md`
 

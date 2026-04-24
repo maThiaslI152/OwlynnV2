@@ -73,7 +73,7 @@ SEARXNG_URL = (os.getenv("SEARXNG_URL", "") or "").strip()  # e.g. "http://local
 # ─── Redis & DeepSeek ──────────────────────────────────────────────────────
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 DEEPSEEK_API_KEY = (os.getenv("DEEPSEEK_API_KEY", "") or "").strip()
-VOICE_WAKE_WORD = (os.getenv("VOICE_WAKE_WORD", "Hey Owlynn") or "Hey Owlynn").strip()
+VOICE_WAKE_WORD = (os.getenv("VOICE_WAKE_WORD", "Athena") or "Athena").strip()
 VOICE_AUTO_TTS = os.getenv("VOICE_AUTO_TTS", "true").strip().lower() in {"1", "true", "yes", "on"}
 
 # Context windows per model tier

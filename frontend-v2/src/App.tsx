@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { listen } from '@tauri-apps/api/event'
 import { AppShell } from './components/AppShell'
 import { WsClient } from './lib/wsClient'
 import { useAppStore } from './state/useAppStore'
@@ -29,17 +30,6 @@ interface ProjectCreateResponse {
 }
 
 type TauriEventPayload = ServerEvent
-
-type TauriEventWindow = {
-  __TAURI__?: {
-    event?: {
-      listen?: (
-        event: string,
-        handler: (payload: { payload: TauriEventPayload }) => void
-      ) => Promise<() => void>
-    }
-  }
-}
 
 function App() {
   const wsBaseUrl = import.meta.env.VITE_WS_BASE_URL ?? 'ws://127.0.0.1:8000/ws/chat'
@@ -315,11 +305,7 @@ function App() {
 
   useEffect(() => {
     let unlisten: (() => void) | undefined
-    const maybeWindow = window as unknown as TauriEventWindow
-    const listen = maybeWindow.__TAURI__?.event?.listen
-    if (!listen) return
-
-    listen('owlynn://runtime-event', (event) => {
+    void listen<TauriEventPayload>('owlynn://runtime-event', (event) => {
       const payload = event.payload
       if (payload.type === 'voice.state') {
         setVoiceState(payload.state)
@@ -371,6 +357,8 @@ function App() {
       }
     }).then((fn) => {
       unlisten = fn
+    }).catch(() => {
+      // Non-Tauri browser preview mode
     })
 
     return () => {

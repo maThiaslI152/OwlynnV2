@@ -102,8 +102,7 @@ Live Talk uses Tauri runtime commands and events (not browser Web Speech APIs):
 ### Runtime Commands
 
 - `start_voice_listening` / `stop_voice_listening`
-- `set_wake_word_phrase` / `get_wake_word_phrase`
-- `start_push_to_talk` / `stop_push_to_talk`
+- `get_wake_word_phrase` (fixed to `Athena`)
 - `hard_stop_voice`
 - `speak_text`
 

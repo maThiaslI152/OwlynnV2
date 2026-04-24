@@ -260,3 +260,28 @@ without introducing a separate backend voice service.
 - **Full crash analysis:** See [`docs/OBJC_FFI_CRASH.md`](docs/OBJC_FFI_CRASH.md) for
   the complete root-cause analysis of the non-null-terminated C string crash and the
   macOS 26.4 transparent window crash.
+
+---
+
+## ADR-0013: Tauri v2 + Swift Helper for Two-Stage Voice Pipeline
+
+**Date:** 2026-04-24
+
+**Context:** The previous Live Talk implementation used direct ObjC FFI from Rust with
+`SFSpeechRecognizer` for both wake-word and transcription, and exposed push-to-talk controls.
+The new target stack requires a two-stage architecture with SoundAnalysis wake-word detection,
+WhisperKit transcription optimized for Apple Neural Engine, and a migration to current stable
+Tauri APIs.
+
+**Decision:** Migrate desktop runtime to Tauri v2 and orchestrate voice through a Swift helper
+subprocess (`whisperkit-helper`) using line-delimited JSON over stdin/stdout:
+- Stage 1: SoundAnalysis + CoreML wake-word model (`Athena`)
+- Stage 2: WhisperKit `distil-large-v3` transcription
+- Push-to-talk removed from command surface and UI
+
+**Consequences:**
+- Rust command/event APIs updated for Tauri v2 (`emit`, `get_webview_window`, capabilities).
+- Frontend bridge updated to `@tauri-apps/api` v2 imports.
+- Wake-word phrase is fixed to `Athena` (`get_wake_word_phrase` remains for compatibility).
+- macOS minimum runtime target raised to 14.0 for stable ANE execution profile.
+- Direct Rust ObjC voice coupling is reduced; Swift-native frameworks live in the helper process.

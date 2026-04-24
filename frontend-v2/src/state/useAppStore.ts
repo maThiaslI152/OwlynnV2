@@ -133,7 +133,7 @@ export const useAppStore = create<AppState>((set) => ({
   voiceError: null,
   wakeWordListening: false,
   ttsSpeaking: false,
-  wakeWordPhrase: 'Hey Owlynn',
+  wakeWordPhrase: 'Athena',
   setConnectionState: (connectionState) => set({ connectionState }),
   addMessage: (message) =>
     set((state) => ({

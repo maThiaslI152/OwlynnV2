@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
   <key>NSMicrophoneUsageDescription</key>
-  <string>Owlynn uses your microphone for wake-word and push-to-talk voice input.</string>
+  <string>Owlynn uses your microphone for Athena wake-word detection and voice command transcription.</string>
   <key>NSSpeechRecognitionUsageDescription</key>
   <string>Owlynn uses speech recognition to transcribe voice commands locally.</string>
 </dict>
