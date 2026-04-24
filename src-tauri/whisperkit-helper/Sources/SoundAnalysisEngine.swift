@@ -2,6 +2,11 @@ import Foundation
 import SoundAnalysis
 import AVFoundation
 
+/// Stage 1 Wake-Word Detector
+///
+/// In MVP fallback mode, this just enables/disables a flag.
+/// Real CoreML inference (via SNAudioStreamAnalyzer + SNClassifySoundRequest)
+/// should replace this when the AthenaSoundClassifier model is bundled.
 final class SoundAnalysisEngine {
     private(set) var running = false
     private var threshold: Double = 0.3
@@ -15,10 +20,10 @@ final class SoundAnalysisEngine {
         self.running = false
     }
 
-    func triggerWakeWordIfNeeded(_ text: String, ipc: IPC) {
-        guard running else { return }
-        if text.lowercased().contains("athena") {
-            ipc.emit(OutgoingEvent(event: "wakeword_detected", label: "Athena", confidence: max(threshold, 0.9), text: nil, is_final: nil, message: nil))
-        }
+    /// Called by main.swift whenever a new transcript chunk arrives.
+    /// Returns true if the chunk contains the wake word.
+    func triggerWakeWordIfNeeded(_ text: String) -> Bool {
+        guard running else { return false }
+        return text.lowercased().contains("athena")
     }
 }

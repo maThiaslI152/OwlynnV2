@@ -19,7 +19,7 @@ Owlynn is a desktop AI assistant that keeps your data local. It uses a stateful 
 | Checkpointing | Redis (falls back to in-memory `MemorySaver`) |
 | Search | Multi-tier: SearXNG (self-hosted) → Brave/Serper/Tavily → DuckDuckGo → Playwright |
 | Testing | pytest + hypothesis (backend), vitest + @testing-library/react (frontend) |
-| Desktop | Tauri v1 (Rust, macOS vibrancy) |
+| Desktop | Tauri v2.10 (Rust, macOS vibrancy) |
 
 ## Architecture
 
@@ -96,6 +96,14 @@ frontend-v2/          React 19 + TypeScript frontend (active)
   │   └── lib/           tauriBridge, wsClient
   └── package.json
 
+src-tauri/            Tauri v2 desktop runtime
+  ├── src/main.rs       Tauri command/event runtime
+  ├── src/voice/mod.rs  Swift helper orchestration + voice event bridge
+  ├── tauri.conf.json   Tauri v2 config + bundled helper resource
+  └── whisperkit-helper/
+      ├── Package.swift
+      └── Sources/       Swift helper (SoundAnalysis + WhisperKit pipeline)
+
 frontend/             Legacy v1 frontend (HTML/CSS/JS, vendored deps)
   ├── index.html       Main HTML shell
   ├── script.js        StateManager + LeftPane + app init
@@ -136,7 +144,10 @@ cp .env.example .env
 # - Small key: gemma-4-e2b-heretic-uncensored-mlx
 # - Medium key: lfm2-8b-a1b-absolute-heresy-mpoa-mlx
 
-# 4. Start services + backend + desktop app
+# 4. Build the Swift helper (required for Live Talk)
+(cd src-tauri/whisperkit-helper && swift build -c release)
+
+# 5. Start services + backend + desktop app
 ./start.sh
 
 # Run just the backend (without frontend):
@@ -144,6 +155,10 @@ cp .env.example .env
 ```
 
 The app opens at `http://127.0.0.1:8000` or as a Tauri desktop window.
+
+For macOS microphone/speech permissions in development, run the debug `.app` bundle
+path (`tauri build --debug` + `open`) instead of raw `tauri dev`, so TCC can read
+the app `Info.plist`.
 
 ## Configuration
 

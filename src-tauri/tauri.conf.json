@@ -45,6 +45,9 @@
     "macOS": {
       "minimumSystemVersion": "14.0",
       "entitlements": "Entitlements.plist"
+    },
+    "resources": {
+      "whisperkit-helper/.build/release/whisperkit-helper": "whisperkit-helper"
     }
   }
 }

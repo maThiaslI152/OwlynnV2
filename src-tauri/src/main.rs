@@ -179,7 +179,7 @@ fn start_voice_listening(app: tauri::AppHandle, state: tauri::State<Mutex<Native
 fn stop_voice_listening(app: tauri::AppHandle, state: tauri::State<Mutex<NativeRuntimeState>>) -> Result<String, String> {
   let mut locked = state.lock().map_err(|_| "native runtime state lock failed".to_string())?;
   if let Some(stop_flag) = locked.voice.wake_stop.take() {
-    stop_flag.store(true, Ordering::SeqCst);
+    voice::hard_stop_voice(stop_flag, locked.helper.clone());
   }
   locked.voice.listening = false;
   emit_voice_state(&app, "idle");

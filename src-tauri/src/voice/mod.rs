@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 #[derive(Default, Clone)]
 pub struct VoiceEngineState {
@@ -61,6 +61,7 @@ pub struct VoiceTtsStatePayload {
 pub enum VoiceEvent {
   Transcript(String, bool, f32),
   WakeWord(String, f32),
+  AudioLevel(f64),
   Error(String, String),
 }
 
@@ -119,9 +120,27 @@ pub fn speech_framework_available() -> bool {
   cfg!(target_os = "macos")
 }
 
-pub fn helper_binary_path() -> String {
-  std::env::var("WHISPERKIT_HELPER_PATH")
-    .unwrap_or_else(|_| "src-tauri/whisperkit-helper/.build/release/whisperkit-helper".to_string())
+pub fn helper_binary_path(app: Option<&tauri::AppHandle>) -> String {
+  // 1. Env var override (used by start.sh in development)
+  if let Ok(path) = std::env::var("WHISPERKIT_HELPER_PATH") {
+    return path;
+  }
+  // 2. Bundled inside .app/Contents/Resources/ (production)
+  if let Some(app) = app {
+    if let Ok(resource_dir) = app.path().resource_dir() {
+      let bundled = resource_dir.join("whisperkit-helper");
+      if bundled.exists() {
+        return bundled.to_string_lossy().to_string();
+      }
+    }
+  }
+  // 3. Fallback for development (running via cargo)
+  let dev_path = std::path::Path::new("src-tauri/whisperkit-helper/.build/release/whisperkit-helper");
+  if dev_path.exists() {
+    return dev_path.to_string_lossy().to_string();
+  }
+  // 4. Last resort: relative to current dir
+  "whisperkit-helper".to_string()
 }
 
 pub fn start_wake_listen(
@@ -162,6 +181,10 @@ pub fn start_wake_listen(
             },
           );
         }
+        VoiceEvent::AudioLevel(_level) => {
+          // Audio level events are used internally; can be forwarded
+          // to the frontend for a waveform visualization later.
+        }
         VoiceEvent::Error(message, code) => {
           let _ = app_for_emit.emit(
             "owlynn://runtime-event",
@@ -176,8 +199,9 @@ pub fn start_wake_listen(
     }
   });
 
+  let app_for_pipeline = app.clone();
   thread::spawn(move || {
-    run_helper_pipeline(&tx, &stop_flag, helper_state);
+    run_helper_pipeline(&tx, &stop_flag, helper_state, &app_for_pipeline);
     let _ = app.emit(
       "owlynn://runtime-event",
       VoiceStatePayload {
@@ -192,10 +216,15 @@ fn run_helper_pipeline(
   tx: &crossbeam_channel::Sender<VoiceEvent>,
   stop_flag: &AtomicBool,
   helper_state: Arc<Mutex<WhisperKitHelper>>,
+  app: &tauri::AppHandle,
 ) {
-  let helper_path = helper_binary_path();
-  {
+  let helper_path = helper_binary_path(Some(app));
+  let stdout = {
     let mut helper = helper_state.lock().unwrap();
+    // If a stale process exists with consumed pipes, shut it down and respawn
+    if helper.process.is_some() && helper.stdout.is_none() {
+      helper.shutdown();
+    }
     if helper.process.is_none() {
       match WhisperKitHelper::spawn(&helper_path) {
         Ok(new_helper) => *helper = new_helper,
@@ -207,10 +236,6 @@ fn run_helper_pipeline(
     }
     let _ = helper.send_command(r#"{"command":"start_wakeword","model":"AthenaSoundClassifier","threshold":0.3}"#);
     let _ = helper.send_command(r#"{"command":"transcribe_start","audio_format":{"sample_rate":16000}}"#);
-  }
-
-  let stdout = {
-    let mut helper = helper_state.lock().unwrap();
     helper.take_stdout()
   };
 
@@ -239,6 +264,12 @@ fn run_helper_pipeline(
       let is_final = payload.contains("\"is_final\":true");
       let confidence = extract_json_number_field(&payload, "confidence").unwrap_or(0.5);
       let _ = tx.send(VoiceEvent::Transcript(text, is_final, confidence));
+      continue;
+    }
+    if payload.contains("\"audio_level\"") {
+      if let Some(level) = extract_json_number_field(&payload, "level") {
+        let _ = tx.send(VoiceEvent::AudioLevel(level as f64));
+      }
       continue;
     }
     if payload.contains("\"error\"") {

@@ -5,9 +5,9 @@ Use it to locate the right source files, contracts, and tests before making chan
 
 ## Current Delivery Status
 
-- **Roadmap phase:** Phase 1 (Stabilization)
-- **Phase 1 verdict:** Not passed yet
-- **Reason:** Open stabilization risks remain in workspace/state regressions, cloud fallback safety hardening, router drift resilience, and CRUD/project-state invariants.
+- **Roadmap phase:** Phase 6 (MVP Hardening)
+- **Current verdict:** In progress
+- **Reason:** Core platform migration and voice runtime are in place (Tauri v2 + Swift helper), while wake-word quality still depends on replacing the temporary text-matching fallback with a trained CoreML model.
 
 ## Start Here By Task
 
@@ -27,7 +27,8 @@ Use it to locate the right source files, contracts, and tests before making chan
 - `docs/CHAT_PROTOCOL.md`
 - `docs/API_REFERENCE.md`
 - Frontend consumer:
-  - `frontend/script.js`
+  - `frontend-v2/src/App.tsx`
+  - `frontend-v2/src/lib/tauriBridge.ts`
 - Tests:
   - `tests/test_websocket_event_contract.py`
   - `tests/test_websocket_model_key_updates.py`
@@ -36,14 +37,14 @@ Use it to locate the right source files, contracts, and tests before making chan
 ### Project/workspace state and CRUD
 - `src/memory/project.py`
 - `src/config/settings.py` (workspace roots and project path rules)
-- `frontend/script.js`
-- `frontend/modules/explorer.js`
+- `frontend-v2/src/state/useAppStore.ts`
+- `frontend-v2/src/components/MemoryPanel.tsx`
+- `frontend-v2/src/components/AppShell.tsx`
 - Tests:
   - `tests/test_crud_operations.py`
   - `tests/test_crud_properties.py`
   - `tests/test_project_context_isolation_properties.py`
-  - `frontend/tests/project-state.property.test.js`
-  - `frontend/tests/workspace-switching-integration.test.js`
+  - `frontend-v2/src/components/__tests__/components.extended.test.tsx`
 
 ### Cloud fallback and anonymization
 - `src/agent/anonymization.py`
@@ -63,7 +64,6 @@ Use it to locate the right source files, contracts, and tests before making chan
 ## Canonical Documentation Map
 
 - Project overview and setup: `README.md`
-- Full architecture and roadmap: `docs/PROJECT_DOCUMENTATION.md`
 - Human workflow guide: `docs/HUMAN_PROJECT_GUIDE.md`
 - AI execution guide: `docs/AI_AGENT_PROJECT_GUIDE.md`
 - Rebuild canonical handoff: `docs/AI_REBUILD_MASTER_PLAN.md`
@@ -74,6 +74,7 @@ Use it to locate the right source files, contracts, and tests before making chan
 - Architecture decisions: `docs/ADR.md`
 - ObjC FFI crash analysis: `docs/OBJC_FFI_CRASH.md`
 - SoundAnalysis + WhisperKit migration plan: `docs/SOUNDANALYSIS_WAKEWORD_ARCHITECTURE.md`
+- Athena CoreML training guide: `docs/COREML_ATHENA_MODEL_GUIDE.md`
 - Linear workflow (issue/PR conventions): `docs/LINEAR_WORKFLOW.md`
 - Performance & memory SLOs: `docs/PERFORMANCE_SLOS.md`
 

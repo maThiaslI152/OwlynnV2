@@ -16,7 +16,10 @@ let package = Package(
         .executableTarget(
             name: "whisperkit-helper",
             dependencies: ["WhisperKit"],
-            path: "Sources"
+            path: "Sources",
+            resources: [
+                .copy("Resources")
+            ]
         )
     ]
 )
