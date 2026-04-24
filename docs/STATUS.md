@@ -4,6 +4,7 @@ Last updated: 2026-04-24 (Phase 6 — Tauri v2 migration + SoundAnalysis/Whisper
 
 ## Current Progress
 
+- Live Talk wake-word model integration (SoundAnalysis CoreML) is in progress but intentionally deferred while other higher-priority features are implemented first.
 - Core LangGraph flow is active: memory inject, routing, complex tool loop, and memory writeback.
 - Hybrid model routing (small/medium/cloud) and medium-model swap logic are implemented.
 - Active runtime profile now uses LM Studio model keys compatible with local inventory:
@@ -101,6 +102,7 @@ must be used instead. `start.sh` now builds the frontend and launches the `.app`
 
 | Item                                                                           | Status |
 | ------------------------------------------------------------------------------ | ------ |
+| Live Talk wake-word CoreML model integration (Athena)                          | In progress (deferred while other features are prioritized) |
 | `.env.example` with all env vars                                               | Done   |
 | Setup script aligned with docker-compose (Qdrant)                              | Done   |
 | `HOST`/`PORT` env-configurable, default `127.0.0.1`                            | Done   |

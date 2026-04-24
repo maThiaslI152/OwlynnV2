@@ -309,6 +309,8 @@ The agent graph has two memory nodes:
 
 Live Talk runs through the Tauri Rust layer for desktop-first personal assistant usage:
 
+Status note: Live Talk/wake-word model quality work is currently in progress but intentionally deferred while other product features are prioritized.
+
 - **Wake-word mode**: `start_voice_listening`/`stop_voice_listening` with fixed wake phrase `Athena` (`get_wake_word_phrase` returns `Athena`).
 - **Two-stage pipeline**:
   - Stage 1: SoundAnalysis wake-word detection through a Swift helper process.

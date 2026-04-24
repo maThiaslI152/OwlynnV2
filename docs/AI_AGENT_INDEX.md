@@ -8,6 +8,7 @@ Use it to locate the right source files, contracts, and tests before making chan
 - **Roadmap phase:** Phase 6 (MVP Hardening)
 - **Current verdict:** In progress
 - **Reason:** Core platform migration and voice runtime are in place (Tauri v2 + Swift helper), while wake-word quality still depends on replacing the temporary text-matching fallback with a trained CoreML model.
+- **Priority note:** Live Talk wake-word model work is intentionally deferred while other product features are prioritized.
 
 ## Start Here By Task
 
