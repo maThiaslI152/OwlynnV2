@@ -1373,6 +1373,24 @@ body {
   50% { height: 20px; opacity: 1; }
 }
 
+.voice-interim-transcript {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: rgba(33, 60, 97, 0.2);
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  max-height: 72px;
+  overflow-y: auto;
+}
+
+.badge-muted {
+  border-color: var(--border-subtle);
+  background: rgba(120, 143, 170, 0.18);
+  color: var(--text-muted);
+}
+
 .tool-empty-preview {
   margin-top: 8px;
   border: 1px dashed var(--border-default);
@@ -1411,7 +1429,10 @@ body {
 /* ── Tauri Frosted Glass Mode ───────────────────────────── */
 
 body.tauri-glass {
-  background: transparent;
+  background:
+    radial-gradient(1200px 700px at 15% -10%, rgba(130, 198, 255, 0.22), transparent 65%),
+    radial-gradient(1000px 650px at 80% 0%, rgba(149, 222, 255, 0.18), transparent 60%),
+    linear-gradient(180deg, #060d18 0%, #081122 100%);
 }
 
 body.tauri-glass #root {

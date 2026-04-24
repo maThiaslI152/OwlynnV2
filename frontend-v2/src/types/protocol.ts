@@ -13,6 +13,7 @@ export interface UserMessageEvent {
   content: string
   message?: string
   project_id?: string
+  source?: 'text' | 'voice'
 }
 
 export interface SecurityApprovalClientEvent {
@@ -39,6 +40,36 @@ export interface AssistantMessageEvent {
 export interface VoiceStateEvent {
   type: 'voice.state'
   state: 'idle' | 'recording' | 'transcribing' | 'speaking' | 'interrupted' | 'approval_pending'
+}
+
+export interface VoiceTranscriptEvent {
+  type: 'voice.transcript'
+  text: string
+  is_final: boolean
+  confidence?: number
+}
+
+export interface VoiceWakeWordEvent {
+  type: 'voice.wake_word'
+  phrase: string
+  confidence?: number
+}
+
+export interface VoiceErrorEvent {
+  type: 'voice.error'
+  message: string
+  code?: string
+}
+
+export interface VoiceTtsStateEvent {
+  type: 'voice.tts_state'
+  speaking: boolean
+  utterance_id?: string
+}
+
+export interface VoiceStartedEvent {
+  type: 'voice.started'
+  mode: 'wake_word' | 'ptt'
 }
 
 export interface SafeModeChangedEvent {
@@ -117,6 +148,11 @@ export type ServerEvent =
   | ChunkEvent
   | StatusEvent
   | VoiceStateEvent
+  | VoiceTranscriptEvent
+  | VoiceWakeWordEvent
+  | VoiceErrorEvent
+  | VoiceTtsStateEvent
+  | VoiceStartedEvent
   | SafeModeChangedEvent
   | ScreenAssistStateEvent
   | ActionProposalEvent

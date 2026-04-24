@@ -113,7 +113,6 @@ export function MemoryPanel() {
   }
 
   const hasTopicsOrInterests = topics.length > 0 || interestsStr || memoryUpdatedAt
-  const hasMem0Memories = mem0Memories.length > 0
   const [contextOpen, setContextOpen] = useState(false)
   const [mem0Open, setMem0Open] = useState(false)
 

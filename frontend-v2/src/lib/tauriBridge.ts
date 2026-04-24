@@ -1,11 +1,4 @@
-type TauriWindow = {
-  __TAURI__?: {
-    invoke?: <T = unknown>(command: string, args?: Record<string, unknown>) => Promise<T>
-    tauri?: {
-      convertFileSrc?: (path: string) => string
-    }
-  }
-}
+import { convertFileSrc, invoke } from '@tauri-apps/api/core'
 
 interface BridgeResult<T = string> {
   ok: boolean
@@ -13,16 +6,7 @@ interface BridgeResult<T = string> {
   error?: string
 }
 
-function getInvoke() {
-  const maybeWindow = window as unknown as TauriWindow
-  return maybeWindow.__TAURI__?.invoke
-}
-
 async function invokeOrResult<T>(command: string, args?: Record<string, unknown>): Promise<BridgeResult<T>> {
-  const invoke = getInvoke()
-  if (!invoke) {
-    return { ok: false, error: 'Tauri invoke bridge unavailable' }
-  }
   try {
     const data = await invoke<T>(command, args)
     return { ok: true, data }
@@ -33,9 +17,11 @@ async function invokeOrResult<T>(command: string, args?: Record<string, unknown>
 }
 
 export const tauriBridge = {
-  startPushToTalk: () => invokeOrResult<string>('start_push_to_talk', {}),
-  stopPushToTalk: () => invokeOrResult<string>('stop_push_to_talk', {}),
+  startVoiceListening: () => invokeOrResult<string>('start_voice_listening', {}),
+  stopVoiceListening: () => invokeOrResult<string>('stop_voice_listening', {}),
+  getWakeWordPhrase: async (): Promise<BridgeResult<string>> => ({ ok: true, data: 'Athena' }),
   hardStopVoice: () => invokeOrResult<string>('hard_stop_voice', {}),
+  speakText: (text: string) => invokeOrResult<string>('speak_text', { text }),
   setSafeMode: (mode: string) => invokeOrResult<string>('set_safe_mode', { mode }),
   startScreenPreview: (source: string) =>
     invokeOrResult<string>('start_screen_preview', { source }),
@@ -56,11 +42,8 @@ export const tauriBridge = {
     invokeOrResult<string>('set_window_size', { width, height }),
 
   convertFileSrc: (path: string) => {
-    const maybeWindow = window as unknown as TauriWindow
-    const convert = maybeWindow.__TAURI__?.tauri?.convertFileSrc
-    if (!convert) return ''
     try {
-      return convert(path)
+      return convertFileSrc(path)
     } catch {
       return ''
     }

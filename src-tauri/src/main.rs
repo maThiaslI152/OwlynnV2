@@ -1,18 +1,19 @@
-#![cfg_attr(
-  all(not(debug_assertions), target_os = "windows"),
-  windows_subsystem = "windows"
-)]
+#![cfg_attr(all(not(debug_assertions), target_os = "windows"), windows_subsystem = "windows")]
 
 use serde::Serialize;
 use std::path::PathBuf;
 use std::process::Command;
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
+
+mod voice;
 
 #[derive(Default)]
 struct NativeRuntimeState {
-  voice_recording: bool,
+  voice: voice::VoiceEngine,
+  helper: Arc<Mutex<voice::WhisperKitHelper>>,
   safe_mode: String,
   screen_preview_active: bool,
   last_preview_path: Option<String>,
@@ -20,10 +21,10 @@ struct NativeRuntimeState {
 }
 
 #[derive(Clone, Serialize)]
-struct VoiceStatePayload {
+struct VoiceStartedPayload {
   #[serde(rename = "type")]
   event_type: &'static str,
-  state: String,
+  mode: String,
 }
 
 #[derive(Clone, Serialize)]
@@ -67,17 +68,28 @@ struct ActionProposalResultPayload {
 }
 
 fn emit_voice_state(app: &tauri::AppHandle, state: &str) {
-  let _ = app.emit_all(
+  let _ = app.emit(
     "owlynn://runtime-event",
-    VoiceStatePayload {
+    voice::VoiceStatePayload {
       event_type: "voice.state",
       state: state.to_string(),
     },
   );
 }
 
+fn emit_voice_error(app: &tauri::AppHandle, message: &str, code: &str) {
+  let _ = app.emit(
+    "owlynn://runtime-event",
+    voice::VoiceErrorPayload {
+      event_type: "voice.error",
+      message: message.to_string(),
+      code: code.to_string(),
+    },
+  );
+}
+
 fn emit_safe_mode(app: &tauri::AppHandle, mode: &str) {
-  let _ = app.emit_all(
+  let _ = app.emit(
     "owlynn://runtime-event",
     SafeModePayload {
       event_type: "safe_mode.changed",
@@ -87,7 +99,7 @@ fn emit_safe_mode(app: &tauri::AppHandle, mode: &str) {
 }
 
 fn emit_screen_state(app: &tauri::AppHandle, mode: &str, source: &str, preview_path: Option<String>) {
-  let _ = app.emit_all(
+  let _ = app.emit(
     "owlynn://runtime-event",
     ScreenAssistPayload {
       event_type: "screen_assist.state",
@@ -115,57 +127,76 @@ fn now_millis() -> u128 {
 }
 
 #[tauri::command]
-fn start_push_to_talk(
-  app: tauri::AppHandle,
-  state: tauri::State<Mutex<NativeRuntimeState>>,
-) -> Result<String, String> {
+fn hard_stop_voice(app: tauri::AppHandle, state: tauri::State<Mutex<NativeRuntimeState>>) -> Result<String, String> {
   let mut locked = state.lock().map_err(|_| "native runtime state lock failed".to_string())?;
-  if locked.voice_recording {
-    return Ok("push-to-talk already recording".to_string());
+  locked.voice.listening = false;
+  if let Some(stop_flag) = locked.voice.wake_stop.take() {
+    voice::hard_stop_voice(stop_flag, locked.helper.clone());
   }
-  locked.voice_recording = true;
-  emit_voice_state(&app, "recording");
-  Ok("push-to-talk started".to_string())
-}
-
-#[tauri::command]
-fn stop_push_to_talk(
-  app: tauri::AppHandle,
-  state: tauri::State<Mutex<NativeRuntimeState>>,
-) -> Result<String, String> {
-  let mut locked = state.lock().map_err(|_| "native runtime state lock failed".to_string())?;
-  if !locked.voice_recording {
-    emit_voice_state(&app, "idle");
-    return Ok("push-to-talk was not recording".to_string());
-  }
-  locked.voice_recording = false;
-  emit_voice_state(&app, "transcribing");
-  Ok("push-to-talk stopped".to_string())
-}
-
-#[tauri::command]
-fn hard_stop_voice(
-  app: tauri::AppHandle,
-  state: tauri::State<Mutex<NativeRuntimeState>>,
-) -> Result<String, String> {
-  let mut locked = state.lock().map_err(|_| "native runtime state lock failed".to_string())?;
-  locked.voice_recording = false;
+  let _ = app.emit(
+    "owlynn://runtime-event",
+    voice::VoiceTtsStatePayload {
+      event_type: "voice.tts_state",
+      speaking: false,
+      utterance_id: "hard-stop".to_string(),
+    },
+  );
   emit_voice_state(&app, "interrupted");
   Ok("voice interrupted".to_string())
 }
 
 #[tauri::command]
-fn set_safe_mode(
-  app: tauri::AppHandle,
-  state: tauri::State<Mutex<NativeRuntimeState>>,
-  mode: String,
-) -> Result<String, String> {
-  let allowed = [
-    "normal",
-    "safe_readonly",
-    "safe_confirmed_exec",
-    "safe_isolated",
-  ];
+fn get_wake_word_phrase() -> Result<String, String> {
+  Ok("Athena".to_string())
+}
+
+#[tauri::command]
+fn start_voice_listening(app: tauri::AppHandle, state: tauri::State<Mutex<NativeRuntimeState>>) -> Result<String, String> {
+  let mut locked = state.lock().map_err(|_| "native runtime state lock failed".to_string())?;
+  if !voice::speech_framework_available() {
+    emit_voice_error(&app, "Voice helper unavailable on this platform", "speech_unavailable");
+  }
+  if locked.voice.listening {
+    return Ok("wake-word listening already active".to_string());
+  }
+  let stop_flag = Arc::new(AtomicBool::new(false));
+  voice::start_wake_listen(app.clone(), stop_flag.clone(), locked.helper.clone());
+  locked.voice.wake_stop = Some(stop_flag);
+  locked.voice.wake_word_phrase = "Athena".to_string();
+  locked.voice.listening = true;
+  emit_voice_state(&app, "idle");
+  let _ = app.emit(
+    "owlynn://runtime-event",
+    VoiceStartedPayload {
+      event_type: "voice.started",
+      mode: "wake_word".to_string(),
+    },
+  );
+  Ok("wake-word listening started (Athena)".to_string())
+}
+
+#[tauri::command]
+fn stop_voice_listening(app: tauri::AppHandle, state: tauri::State<Mutex<NativeRuntimeState>>) -> Result<String, String> {
+  let mut locked = state.lock().map_err(|_| "native runtime state lock failed".to_string())?;
+  if let Some(stop_flag) = locked.voice.wake_stop.take() {
+    voice::hard_stop_voice(stop_flag, locked.helper.clone());
+  }
+  locked.voice.listening = false;
+  emit_voice_state(&app, "idle");
+  Ok("wake-word listening stopped".to_string())
+}
+
+#[tauri::command]
+fn speak_text(app: tauri::AppHandle, state: tauri::State<Mutex<NativeRuntimeState>>, text: String) -> Result<String, String> {
+  let locked = state.lock().map_err(|_| "native runtime state lock failed".to_string())?;
+  let engine = Arc::new(Mutex::new(locked.voice.clone()));
+  let _ = voice::speak_text(app, text, engine);
+  Ok("speech queued".to_string())
+}
+
+#[tauri::command]
+fn set_safe_mode(app: tauri::AppHandle, state: tauri::State<Mutex<NativeRuntimeState>>, mode: String) -> Result<String, String> {
+  let allowed = ["normal", "safe_readonly", "safe_confirmed_exec", "safe_isolated"];
   if !allowed.contains(&mode.as_str()) {
     return Err(format!("invalid safe mode '{}'", mode));
   }
@@ -185,9 +216,7 @@ fn start_screen_preview(
   if !allowed.contains(&source.as_str()) {
     return Err(format!("invalid screen source '{}'", source));
   }
-
   let preview_path = make_preview_path(&source);
-
   #[cfg(target_os = "macos")]
   {
     let status = Command::new("screencapture")
@@ -197,12 +226,10 @@ fn start_screen_preview(
       .arg(&preview_path)
       .status()
       .map_err(|err| format!("failed to execute screencapture: {}", err))?;
-
     if !status.success() {
       return Err("screencapture failed".to_string());
     }
   }
-
   let path_string = preview_path.to_string_lossy().to_string();
   let mut locked = state.lock().map_err(|_| "native runtime state lock failed".to_string())?;
   locked.screen_preview_active = true;
@@ -212,10 +239,7 @@ fn start_screen_preview(
 }
 
 #[tauri::command]
-fn stop_screen_preview(
-  app: tauri::AppHandle,
-  state: tauri::State<Mutex<NativeRuntimeState>>,
-) -> Result<String, String> {
+fn stop_screen_preview(app: tauri::AppHandle, state: tauri::State<Mutex<NativeRuntimeState>>) -> Result<String, String> {
   let mut locked = state.lock().map_err(|_| "native runtime state lock failed".to_string())?;
   locked.screen_preview_active = false;
   emit_screen_state(&app, "off", "screen", locked.last_preview_path.clone());
@@ -235,20 +259,17 @@ fn create_action_proposal(
     created_at: now_millis(),
     status: "pending".to_string(),
   };
-
   {
     let mut locked = state.lock().map_err(|_| "native runtime state lock failed".to_string())?;
     locked.proposals.push(proposal.clone());
   }
-
-  let _ = app.emit_all(
+  let _ = app.emit(
     "owlynn://runtime-event",
     ActionProposalPayload {
       event_type: "action.proposal",
       proposal: proposal.clone(),
     },
   );
-
   Ok(proposal)
 }
 
@@ -261,7 +282,7 @@ fn approve_action_proposal(
   let mut locked = state.lock().map_err(|_| "native runtime state lock failed".to_string())?;
   if let Some(p) = locked.proposals.iter_mut().find(|p| p.id == id) {
     p.status = "approved".to_string();
-    let _ = app.emit_all(
+    let _ = app.emit(
       "owlynn://runtime-event",
       ActionProposalResultPayload {
         event_type: "action.proposal.result",
@@ -283,7 +304,7 @@ fn reject_action_proposal(
   let mut locked = state.lock().map_err(|_| "native runtime state lock failed".to_string())?;
   if let Some(p) = locked.proposals.iter_mut().find(|p| p.id == id) {
     p.status = "rejected".to_string();
-    let _ = app.emit_all(
+    let _ = app.emit(
       "owlynn://runtime-event",
       ActionProposalResultPayload {
         event_type: "action.proposal.result",
@@ -297,12 +318,8 @@ fn reject_action_proposal(
 }
 
 #[tauri::command]
-fn set_window_size(
-  app: tauri::AppHandle,
-  width: f64,
-  height: f64,
-) -> Result<String, String> {
-  let window = app.get_window("main").ok_or("main window not found")?;
+fn set_window_size(app: tauri::AppHandle, width: f64, height: f64) -> Result<String, String> {
+  let window = app.get_webview_window("main").ok_or("main window not found")?;
   window
     .set_size(tauri::Size::Physical(tauri::PhysicalSize {
       width: width as u32,
@@ -314,14 +331,23 @@ fn set_window_size(
 
 fn main() {
   tauri::Builder::default()
+    .plugin(tauri_plugin_shell::init())
+    .plugin(tauri_plugin_opener::init())
     .manage(Mutex::new(NativeRuntimeState {
+      voice: voice::VoiceEngine {
+        wake_word_phrase: "Athena".to_string(),
+        ..voice::VoiceEngine::default()
+      },
+      helper: Arc::new(Mutex::new(voice::WhisperKitHelper::default())),
       safe_mode: "normal".to_string(),
       ..NativeRuntimeState::default()
     }))
     .invoke_handler(tauri::generate_handler![
-      start_push_to_talk,
-      stop_push_to_talk,
+      start_voice_listening,
+      stop_voice_listening,
       hard_stop_voice,
+      speak_text,
+      get_wake_word_phrase,
       set_safe_mode,
       start_screen_preview,
       stop_screen_preview,
@@ -331,31 +357,22 @@ fn main() {
       set_window_size
     ])
     .setup(|app| {
-      let window = app.get_window("main").unwrap();
-
-      // ── macOS: Apply native vibrancy (frosted glass) ──
+      let window = app.get_webview_window("main").ok_or("main window not found")?;
       #[cfg(target_os = "macos")]
       {
         use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
-
-        // Use a brighter frosted material and force active state for stronger
-        // blur/translucency while this app is in front.
-        apply_vibrancy(
+        let _ = apply_vibrancy(
           &window,
           NSVisualEffectMaterial::Sidebar,
           Some(NSVisualEffectState::Active),
           None,
-        )
-        .expect("Failed to apply macOS vibrancy");
+        );
       }
-
-      // ── Windows: Apply acrylic/mica if available ──
       #[cfg(target_os = "windows")]
       {
         use window_vibrancy::apply_acrylic;
         let _ = apply_acrylic(&window, Some((18, 18, 18, 200)));
       }
-
       Ok(())
     })
     .run(tauri::generate_context!())

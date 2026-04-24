@@ -1,9 +1,10 @@
 # Owlynn Status
 
-Last updated: 2026-04-23 (Phase 6 — MVP hardening)
+Last updated: 2026-04-24 (Phase 6 — Tauri v2 migration + SoundAnalysis/WhisperKit wake-word pipeline)
 
 ## Current Progress
 
+- Live Talk wake-word model integration (SoundAnalysis CoreML) is in progress but intentionally deferred while other higher-priority features are implemented first.
 - Core LangGraph flow is active: memory inject, routing, complex tool loop, and memory writeback.
 - Hybrid model routing (small/medium/cloud) and medium-model swap logic are implemented.
 - Active runtime profile now uses LM Studio model keys compatible with local inventory:
@@ -11,6 +12,7 @@ Last updated: 2026-04-23 (Phase 6 — MVP hardening)
   - `medium_models.default`: `lfm2-8b-a1b-absolute-heresy-mpoa-mlx`
 - Security proxy with HITL approval is in place for sensitive tools.
 - Backend API + WebSocket chat and Tauri frontend shell are integrated.
+- Live Talk now targets Tauri v2 + Swift helper orchestration for two-stage wake-word/transcription (`Athena` + WhisperKit distil-large-v3); push-to-talk removed.
 - Test coverage includes unit, integration, and property-based suites across backend and frontend.
 - Phase 1 frontend-v2 websocket transport regression milestone is in place:
   - `frontend-v2` `WsClient` now has dedicated protocol-safety regression tests covering malformed JSON rejection, lifecycle callback delivery (`open`/`close`/`error`/`message`), send-gating on closed socket, disconnect cleanup, and duplicate-disconnect tolerance,
@@ -29,6 +31,13 @@ Last updated: 2026-04-23 (Phase 6 — MVP hardening)
 
 ## Recent Verification Notes
 
+- **Live Talk helper stability + mic runtime pass (2026-04-24):**
+  - fixed stale helper lifecycle causing `helper stdout unavailable` on re-enable (stop now performs full helper shutdown and next start respawns cleanly),
+  - bundled `whisperkit-helper` into app resources and resolved runtime helper path in Rust (`.app` launch no longer depends on inherited env vars),
+  - replaced fake transcript placeholder (`"..."`) with live mic capture heartbeat via AVAudioEngine and helper `audio_level` events,
+  - added `VoiceEvent::AudioLevel` handling in Rust event pipeline,
+  - confirmed macOS microphone permission prompt is triggered and capture path is live; wake-word remains temporary text-matching fallback until CoreML model integration is completed.
+- **Live Talk architecture update (2026-04-24):** migrated toward Tauri v2 command/event model and replaced direct Rust ObjC STT wiring with a Swift helper process contract for SoundAnalysis wake-word + WhisperKit transcription. Wake-word is now fixed to `Athena`; push-to-talk commands/UI removed.
 - Phase 5 live test pass: 203 core backend tests pass with 0 failures (removed 2 dead test files, fixed 3 tool awareness assertions). 50 frontend tests pass, build passes.
 - Enhanced summarize/context compression with structured prompt (categorized output: decisions, facts, preferences, open tasks, code results), multi-level prior-summary awareness across compression rounds, and improved token estimation heuristic.
 - Project knowledge file viewer added to workspace panel (lists indexed knowledge files per project, with refresh and date display).
@@ -48,6 +57,17 @@ Last updated: 2026-04-23 (Phase 6 — MVP hardening)
 - Preserved structured `ask_user_response` payloads end-to-end (no backend string coercion).
 - WebSocket chat smoke checks return to `idle` without `model_not_found` errors for legacy model IDs.
 - Runtime event shape in current server paths is chunk-oriented for some turns (`chunk` + `status`) rather than always emitting a final `message` event.
+- Voice transcript flow now sends final transcript as `user.message` with `source: "voice"` from the frontend runtime event handler.
+- **Live Talk ObjC FFI type fix (2026-04-24):** `NSLocale localeWithLocaleIdentifier:` was passed a raw C string (`*const i8`) where ObjC expected `NSString `*, causing `objc_retain` on non-object memory and a deterministic `SIGBUS`. **Fix:** Use `NSString::alloc(nil).init_str("en-US")` and pass the result. Also converted `stringWithUTF8String:` calls to `cocoa::foundation` typed bindings. See `[docs/OBJC_FFI_CRASH.md](docs/OBJC_FFI_CRASH.md)`.
+- `**transparent: true` restored (2026-04-24):** Set back to `true` in `tauri.conf.json`. The frosted-glass CSS (`body.tauri-glass`) provides a solid dark background while the window chrome is transparent.
+- **Live Talk autorelease pool crash fix (2026-04-24):** Rust threads hosting SFSpeechRecognizer/AVAudioEngine callbacks accumulated autoreleased ObjC objects. Explicit `-release` calls caused double-frees when the implicit TLS pool drained on thread exit. **Fix:** Removed all explicit `msg_send![obj, release]` calls from `do_run_native_speech_recognition`. The 4 ObjC objects (recognizer, request, task, audio_engine) are intentionally leaked (retain count 1) per speech session — negligible.
+- **Live Talk confidence type bug fix (2026-04-24):** `SFTranscriptionSegment.confidence` returns ObjC `float` (32-bit), but was read as `f64`. On x86_64 the upper 32 bits of XMM0 contained garbage, producing random confidence values that almost never passed the `> 0.3` wake-word threshold. **Fix:** Read as `f32` first, then cast to `f64`.
+- **Live Talk PTT finish vs cancel fix (2026-04-24):** `task.cancel()` terminates recognition without delivering `is_final == YES`, so the frontend never sent the transcript to the backend. **Fix:** Always call `task.finish()`, which completes the current transcription and delivers a final result. Added 200ms sleep for the final callback to enqueue before channel senders drop.
+- **Live Talk wake-word activation fix (2026-04-24):** When the wake word is detected on an interim result, the Rust handler now immediately sends `VoiceEvent::Transcript(text, true, confidence)` (marked as final) alongside `VoiceEvent::WakeWord`. This lets the frontend send the utterance to the backend without waiting for slow constrained on-device end-of-speech detection.
+- `**.app` bundle required for TCC permissions in dev mode:**
+`cargo tauri dev` runs the binary directly without an `.app` wrapper, so macOS
+TCC cannot read `Info.plist`. The debug `.app` bundle (`tauri build --debug`)
+must be used instead. `start.sh` now builds the frontend and launches the `.app` bundle.
 
 ## Current Bugs / Risks
 
@@ -56,6 +76,11 @@ Last updated: 2026-04-23 (Phase 6 — MVP hardening)
 - Cloud fallback + anonymization paths require continued regression protection.
 - Router selection may drift on borderline prompts or long-context/tool-heavy prompts.
 - CRUD and project-state invariants need continued hardening under repeated operations.
+- **RESOLVED — ObjC FFI type mismatch crash (2026-04-24):** `NSLocale localeWithLocaleIdentifier:` was passed a raw C string instead of `NSString `*, and `stringWithUTF8String:` calls used unterminated Rust `&str` pointers. All refactored to use `cocoa::foundation` typed bindings. See `[docs/OBJC_FFI_CRASH.md](docs/OBJC_FFI_CRASH.md)` for full analysis.
+- **RESOLVED — Autorelease pool crash (2026-04-24):** SFSpeechRecognizer callback objects accumulated on an implicit TLS pool. Explicit `-release` calls caused double-free on thread exit. Removed all release calls; objects leak instead of crashing.
+- **RESOLVED — Wake-word detection not firing (2026-04-24):** ObjC `float` confidence was read as `f64`, producing garbage values. Read as `f32` and cast.
+- **RESOLVED — PTT not sending to chat (2026-04-24):** `task.cancel()` doesn't produce final result. Changed to `task.finish()`.
+- **RESOLVED — Wake-word not activating (2026-04-24):** No final transcript sent on interim wake-word detection. Now sends `Transcript(is_final=true)` immediately alongside `WakeWord` event.
 
 ## Next Plan
 
@@ -69,30 +94,40 @@ Last updated: 2026-04-23 (Phase 6 — MVP hardening)
   - Bare `raise` in complex.py:800 replaced with graceful error return.
   - Added 58 direct unit tests for security_proxy.py and memory.py nodes.
   - Added 31 frontend-v2 component tests (Composer, OrchestrationPanel, SafeModePanel, LiveTalkControls, ProjectKnowledgePanel, AppShell).
-  - ADR-0001 updated to reflect Tauri v1 (current) rather than v2.
-  - **Test suite: backend 58 new + 83 existing = 141 passed; frontend 31 new + 50 existing = 81 passed across 6 files.**
+  - ADR-0001 updated to reflect Tauri v2.10.3 migration (see ADR-0013).
+  - **Test suite snapshot retained from hardening slice:** backend 58 new + 83 existing = 141 passed; frontend 31 new + 50 existing = 81 passed across 6 files (historical slice count, superseded by later Phase 5 totals shown above).
 
 ### Phase 6: MVP Hardening (Current)
 
-| Item | Status |
-|------|--------|
-| `.env.example` with all env vars | Done |
-| Setup script aligned with docker-compose (Qdrant) | Done |
-| `HOST`/`PORT` env-configurable, default `127.0.0.1` | Done |
-| All `print()` → logger, centralized logging setup | Done |
-| Dependencies pinned | Done |
-| `OPENAI_API_KEY` global side-effect removed | Done |
-| Bare `raise` in complex.py handled gracefully | Done |
-| Direct tests for security_proxy.py (58 tests) | Done |
-| Direct tests for memory.py nodes (24 tests) | Done |
-| Frontend-v2 component tests (31 tests) | Done |
-| ADR/docs updated for Tauri v1 accuracy | Done |
+
+| Item                                                                           | Status |
+| ------------------------------------------------------------------------------ | ------ |
+| Live Talk wake-word CoreML model integration (Athena)                          | In progress (deferred while other features are prioritized) |
+| `.env.example` with all env vars                                               | Done   |
+| Setup script aligned with docker-compose (Qdrant)                              | Done   |
+| `HOST`/`PORT` env-configurable, default `127.0.0.1`                            | Done   |
+| All `print()` → logger, centralized logging setup                              | Done   |
+| Dependencies pinned                                                            | Done   |
+| `OPENAI_API_KEY` global side-effect removed                                    | Done   |
+| Bare `raise` in complex.py handled gracefully                                  | Done   |
+| Direct tests for security_proxy.py (58 tests)                                  | Done   |
+| Direct tests for memory.py nodes (24 tests)                                    | Done   |
+| Frontend-v2 component tests (31 tests)                                         | Done   |
+| ADR/docs updated for Tauri v1 accuracy                                         | Done   |
+| **Live Talk ObjC FFI type fix** — NSLocale crash, C string → NSString          | Done   |
+| **Live Talk autorelease pool crash** — removed explicit `release` calls        | Done   |
+| **Live Talk confidence type bug** — `f64`→`f32` for ObjC `float` return        | Done   |
+| **Live Talk PTT finish vs cancel** — `task.finish()` produces final transcript | Done   |
+| **Live Talk wake-word activation** — send `is_final=true` on interim detection | Done   |
+
 
 ## Roadmap (Phased)
 
 ### Phase 1: Stabilization (Completed)
 
-<br>All Phase 1 milestones are closed. 15 milestones completed across:
+  
+All Phase 1 milestones are closed. 15 milestones completed across:
+
 - browser multi-switch harness (deterministic, rapid, soak with failure-mode assertions)
 - websocket+CRUD timing-pressure interleaving backend coverage
 - frontend cutover legacy-overlap guard
@@ -104,9 +139,11 @@ Last updated: 2026-04-23 (Phase 6 — MVP hardening)
 
 ### Phase 2: Reliability & Visibility (Completed)
 
-<br>All Phase 2 milestones are closed. 5 slices completed across:
+  
+All Phase 2 milestones are closed. 5 slices completed across:
 
 Slice 1 — Route/fallback telemetry:
+
 - Implemented `router_metadata` in `AgentState` with structured routing decision data (route, confidence, reasoning, classification_source, features)
 - `router_node` now populates `router_metadata` on every return path (keyword_bypass, deterministic, llm_classifier, hitl)
 - `complex_llm_node` and `simple_node` now populate `fallback_chain` — ordered list of model attempts with status, reason, and timing
@@ -114,6 +151,7 @@ Slice 1 — Route/fallback telemetry:
 - Added `router_metadata` and `fallback_chain` fields to `AgentState` TypedDict
 
 Slice 2 — WS contract tests expanded (20 total, +5 new):
+
 - `test_ws_router_info_event_emitted` — validates router_info event is sent with metadata
 - `test_ws_router_info_contains_reasoning_key` — validates reasoning field is present
 - `test_ws_model_info_includes_fallback_chain` — validates model_info includes fallback_chain
@@ -121,10 +159,12 @@ Slice 2 — WS contract tests expanded (20 total, +5 new):
 - `test_ws_error_event_shape` — validates error event has type=error and string content
 
 Slice 3 — CI gate standardization:
+
 - Added frontend-v2 test step (`npx vitest run`) to audit-verify-gate job
 - Expanded Python matrix to include 3.12 and 3.13
 
 Slice 4 — Summarize-node routing and persistence flow:
+
 - `auto_summarize_node` wired into LangGraph graph between `memory_inject` and `router`
 - `summarize_gate` conditional edge routes to `auto_summarize` when `active_tokens > 85%` of `context_window`
 - `context_summarized` WS event emitted on successful compression (summary, takeaways, tokens_freed)
@@ -135,26 +175,31 @@ Slice 4 — Summarize-node routing and persistence flow:
 - 23 summarize tests pass (unit + property-based + graph wiring)
 
 Slice 5 — Route/fallback observability and tool execution diagnostics:
+
 - `context_summarized` WS event forwarded in `forward_events()` at `on_chain_end` for `auto_summarize` node
 - `memory_updated` WS event forwarded at `on_chain_end` for `memory_write` node when `memory_invalidated`
 - Backend logging for summarize events tracks compressed messages and token savings
 
 ### Phase 3: Capability Expansion (Completed)
 
-<br>All Phase 3 milestones are closed. Work completed across 3 slices:
+  
+All Phase 3 milestones are closed. Work completed across 3 slices:
 
 Slice 1 — Enhanced summarize/context compression:
+
 - Structured summarization prompt: output categorized into Decisions, Facts, User Preferences, Open Tasks, and Code/Tool Results sections.
 - Multi-level prior-summary awareness: if a prior `[Auto-Summary ...]` SystemMessage exists in the older messages, it's passed as context to the Small_LLM so cumulative knowledge isn't lost across compression rounds.
 - Improved token estimation heuristic: mixed code/prose token counting (special chars at ~2 chars/token, prose at ~4 chars/token) for more accurate context window monitoring.
 - All 35 summarize tests pass (unit + property-based + graph wiring).
 
 Slice 2 — Project vault and knowledge map continuity:
+
 - `ProjectKnowledgePanel` component added to workspace sidebar: lists indexed knowledge files per project with filename, date, and refresh button.
 - Fetches project details from `GET /api/projects/{project_id}` and filters for `type: "knowledge"` entries.
 - CSS styled to match existing app theme.
 
 Slice 3 — Orchestration controls in frontend UX:
+
 - Store state added for: `routerMetadata`, `modelInfo`, `contextCompression`, `memoryUpdatedAt` with associated setters.
 - WS event handlers added in `App.tsx`: `router_info` (stores routing metadata), `model_info` (stores model name), `context_summarized` (stores compression info with messages/freed tokens), `memory_updated` (timestamps memory save).
 - `OrchestrationPanel` component added to right inspector panel: displays model badge (local/cloud), route badge, confidence percentage, classification source, compression stats, and memory-saved indicator.
@@ -163,14 +208,17 @@ Slice 3 — Orchestration controls in frontend UX:
 
 ### Phase 4: Governance & Release (Completed)
 
-<br>All Phase 4 milestones are closed. 3 slices completed across:
+  
+All Phase 4 milestones are closed. 3 slices completed across:
 
 Slice 1 — Architecture Decisions Log (ADR):
+
 - Created `docs/ADR.md` with 11 canonical ADRs tracking key decisions: Tauri shell, LangGraph orchestration, hybrid model architecture, WebSocket transport, Mem0+Qdrant memory, security proxy, Redis+Qdrant hot/vector state, unfiltered content policy, Zustand frontend state, WS telemetry events, auto-summarize compression.
 - Each ADR follows context/decision/consequence format for clear trade-off documentation.
 - Cross-referenced in `docs/AI_AGENT_INDEX.md` canonical documentation map.
 
 Slice 2 — Release train alignment + Linear workflow:
+
 - Created 5 Linear milestones (`Phase A-C: Frontend Rebuild & Hardening`, `Phase 1: Stabilization`, `Phase 2: Reliability & Visibility`, `Phase 3: Capability Expansion`, `Phase 4: Governance & Release`) linked to the Owlynn project.
 - Updated Linear project description to enumerate all completed phases.
 - Created `docs/LINEAR_WORKFLOW.md` documenting issue conventions (title format, description template, labels), branch naming (`win-<number>-<description>`), commit message references, GitHub auto-linking, and full workflow from plan to close.
@@ -178,6 +226,7 @@ Slice 2 — Release train alignment + Linear workflow:
 - Cross-referenced in `docs/AI_AGENT_INDEX.md`.
 
 Slice 3 — Performance & memory SLOs:
+
 - Created `docs/PERFORMANCE_SLOS.md` defining resource envelope for Mac Air M4 (16 GB):
   - Response latency targets for simple/complex queries, streaming, tool execution, WS connect.
   - Memory budget (~8.6 GB sustained, ~10 GB peak) with per-component breakdown and degradation ladder.
@@ -191,7 +240,8 @@ Slice 3 — Performance & memory SLOs:
 
 ### Phase 5: Live Test Pass (Completed)
 
-<br>All Phase 5 milestones are closed. Work completed:
+  
+All Phase 5 milestones are closed. Work completed:
 
 - Identified and removed `tests/test_context_files.py` (tested functions removed from `server.py`).
 - Identified and removed `tests/test_router_model_swap.py` (depended on `_router_node_inner` which was refactored away; 3952-line file would need full rewrite).
@@ -201,12 +251,15 @@ Slice 3 — Performance & memory SLOs:
 
 ### Phase 6: MVP Hardening (Current)
 
-<br>Hardening the project for MVP release by addressing operational gaps identified in a full audit:
+  
+Hardening the project for MVP release by addressing operational gaps identified in a full audit:
 
 - **Configuration & setup**: `.env.example` created, `setup.sh` aligned with Qdrant (matching docker-compose.yml), `HOST`/`PORT` env-configurable with secure `127.0.0.1` default.
 - **Logging**: All `print()` calls replaced with structured logging via centralized `logging_config.py`.
 - **Dependencies**: All Python deps pinned with safe version ranges.
 - **Bug fixes**: `OPENAI_API_KEY` global side-effect removed, bare `raise` in complex node replaced with graceful error message.
 - **Test coverage**: 58 new backend tests (security proxy + memory nodes) and 31 new frontend-v2 component tests added.
-- **Documentation**: ADR-0001 corrected from Tauri v2 to v1; README updated for v2 frontend and `127.0.0.1` default.
+- **Documentation**: ADR-0001 corrected to reflect Tauri v2 migration status; README updated for v2 frontend and `127.0.0.1` default.
+- **Live Talk bug fixes**: 5 bugs resolved — ObjC FFI type crash, autorelease pool crash, confidence type bug, PTT finish-vs-cancel, wake-word activation.
 - **Test suite: 141 backend tests passed, 81 frontend tests passed.**
+

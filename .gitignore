@@ -21,6 +21,7 @@ Thumbs.db
 .vscode/
 .cursor/
 .antigravity/
+openclaw-*/
 
 # Project-specific logs and data
 graph_error.log
@@ -40,6 +41,9 @@ workspace/
 
 # Rust / Tauri
 src-tauri/target/
+src-tauri/whisperkit-helper/.build/
+*.mlmodelc/
+.whisperkit-cache/
 
 # ChromaDB local data
 src/tools/glossaries/chroma_db/

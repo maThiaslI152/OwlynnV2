@@ -19,7 +19,7 @@ Owlynn is a desktop AI assistant that keeps your data local. It uses a stateful 
 | Checkpointing | Redis (falls back to in-memory `MemorySaver`) |
 | Search | Multi-tier: SearXNG (self-hosted) → Brave/Serper/Tavily → DuckDuckGo → Playwright |
 | Testing | pytest + hypothesis (backend), vitest + @testing-library/react (frontend) |
-| Desktop | Tauri v1 (Rust, macOS vibrancy) |
+| Desktop | Tauri v2.10 (Rust, macOS vibrancy) |
 
 ## Architecture
 
@@ -96,6 +96,14 @@ frontend-v2/          React 19 + TypeScript frontend (active)
   │   └── lib/           tauriBridge, wsClient
   └── package.json
 
+src-tauri/            Tauri v2 desktop runtime
+  ├── src/main.rs       Tauri command/event runtime
+  ├── src/voice/mod.rs  Swift helper orchestration + voice event bridge
+  ├── tauri.conf.json   Tauri v2 config + bundled helper resource
+  └── whisperkit-helper/
+      ├── Package.swift
+      └── Sources/       Swift helper (SoundAnalysis + WhisperKit pipeline)
+
 frontend/             Legacy v1 frontend (HTML/CSS/JS, vendored deps)
   ├── index.html       Main HTML shell
   ├── script.js        StateManager + LeftPane + app init
@@ -136,7 +144,10 @@ cp .env.example .env
 # - Small key: gemma-4-e2b-heretic-uncensored-mlx
 # - Medium key: lfm2-8b-a1b-absolute-heresy-mpoa-mlx
 
-# 4. Start services + backend + desktop app
+# 4. Build the Swift helper (required for Live Talk)
+(cd src-tauri/whisperkit-helper && swift build -c release)
+
+# 5. Start services + backend + desktop app
 ./start.sh
 
 # Run just the backend (without frontend):
@@ -144,6 +155,10 @@ cp .env.example .env
 ```
 
 The app opens at `http://127.0.0.1:8000` or as a Tauri desktop window.
+
+For macOS microphone/speech permissions in development, run the debug `.app` bundle
+path (`tauri build --debug` + `open`) instead of raw `tauri dev`, so TCC can read
+the app `Info.plist`.
 
 ## Configuration
 
@@ -290,9 +305,31 @@ The agent graph has two memory nodes:
 1. **memory_inject_node** (pre-reasoning): Builds memory context from Mem0 + profile + topics + project instructions
 2. **memory_write_node** (post-reasoning): Extracts topics/interests, saves enriched facts to Mem0, invalidates cache
 
-### Live Talk (TTS/STT) — Placeholder
+### Live Talk (TTS/STT) — macOS-native (Tauri/Rust)
 
-The Live Talk feature is structured as a state machine placeholder for future push-to-talk with TTS and STT. The frontend (`LiveTalkControls.tsx`) and Tauri bridge (`tauriBridge.ts`) have the control flow and state transitions wired up, but actual audio capture/transcription/synthesis is not implemented. The Rust side (`src-tauri/src/main.rs`) exposes `start_push_to_talk`, `stop_push_to_talk`, and `hard_stop_voice` commands that toggle a `voice_recording` boolean.
+Live Talk runs through the Tauri Rust layer for desktop-first personal assistant usage:
+
+Status note: Live Talk/wake-word model quality work is currently in progress but intentionally deferred while other product features are prioritized.
+
+- **Wake-word mode**: `start_voice_listening`/`stop_voice_listening` with fixed wake phrase `Athena` (`get_wake_word_phrase` returns `Athena`).
+- **Two-stage pipeline**:
+  - Stage 1: SoundAnalysis wake-word detection through a Swift helper process.
+  - Stage 2: WhisperKit (`distil-large-v3`) transcription after wake-word activation.
+- **Speech output (TTS)**: `speak_text` command uses local macOS `say` for now.
+- **Runtime events**: `voice.state`, `voice.transcript`, `voice.wake_word`, `voice.error`, `voice.tts_state`, `voice.started`.
+
+Frontend wiring:
+
+- `LiveTalkControls.tsx` exposes wake-word toggle, fixed `Athena` display, hard-stop, transcript preview, and error badges
+- `App.tsx` listens to Tauri runtime voice events and forwards final transcript text as a normal `user.message` event with `source: "voice"`
+- `AppShell.tsx` shows inline interim transcript feedback above the composer
+- Wake-word phrase is fixed to `Athena` in both frontend and backend
+
+macOS permission assets are included at `src-tauri/Entitlements.plist` and `src-tauri/Info.plist` for microphone and speech recognition usage descriptions.
+
+**Implementation detail:** `src-tauri/src/voice/mod.rs` now orchestrates a Swift helper subprocess
+(`src-tauri/whisperkit-helper`) over line-delimited JSON stdin/stdout. This removes direct ObjC
+FFI coupling from Rust while preserving local-only voice processing.
 
 ## Testing
 

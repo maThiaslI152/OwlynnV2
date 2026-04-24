@@ -187,6 +187,7 @@ export function AppShell({
   const windowMode = useAppStore((s) => s.windowMode)
   const setWindowMode = useAppStore((s) => s.setWindowMode)
   const voiceState = useAppStore((s) => s.voiceState)
+  const interimTranscript = useAppStore((s) => s.interimTranscript)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const [streamActive, setStreamActive] = useState(false)
@@ -508,6 +509,9 @@ export function AppShell({
             </span>
           </div>
         )}
+        {interimTranscript ? (
+          <div className="voice-interim-transcript">{interimTranscript}</div>
+        ) : null}
         <Composer onSend={onSend} disabled={connectionState !== 'connected'} compact={isCompact} />
       </main>
 
