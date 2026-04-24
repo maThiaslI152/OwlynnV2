@@ -336,13 +336,14 @@ fn main() {
       // ── macOS: Apply native vibrancy (frosted glass) ──
       #[cfg(target_os = "macos")]
       {
-        use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
+        use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
 
-        // HudWindow = dark translucent material, perfect for dark-mode apps
+        // Use a brighter frosted material and force active state for stronger
+        // blur/translucency while this app is in front.
         apply_vibrancy(
           &window,
-          NSVisualEffectMaterial::HudWindow,
-          None,
+          NSVisualEffectMaterial::Sidebar,
+          Some(NSVisualEffectState::Active),
           None,
         )
         .expect("Failed to apply macOS vibrancy");

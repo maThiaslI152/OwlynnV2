@@ -88,7 +88,7 @@ function CollapsibleSection({
         <h3>{icon ? `${icon} ${title}` : title}</h3>
         <span className={`inspector-toggle ${open ? 'inspector-toggle-open' : ''}`}>▶</span>
       </div>
-      {open && <div className="inspector-section-body">{children}</div>}
+      <div className={`inspector-section-body ${open ? 'inspector-section-body-open' : ''}`}>{children}</div>
     </div>
   )
 }
@@ -218,42 +218,30 @@ export function AppShell({
             <span className="logo-dot" />
             Owlynn
           </h1>
-          <div className="topbar-actions">
-            {isCompact && (
-              <>
-                <button
-                  type="button"
-                  className="topbar-btn"
-                  onClick={() => setInspectorOpen(!inspectorOpen)}
-                  title="Toggle inspector"
-                >
-                  {inspectorOpen ? '✕' : '☰'}
-                </button>
-                <button
-                  type="button"
-                  className="topbar-btn"
-                  onClick={() => handleToggleMode('full')}
-                  title="Full workspace"
-                >
-                  ⛶
-                </button>
-              </>
-            )}
-            {!isCompact && (
+          {isCompact && (
+            <div className="topbar-actions">
               <button
                 type="button"
                 className="topbar-btn"
-                onClick={() => handleToggleMode('compact')}
-                title="Compact mode"
+                onClick={() => setInspectorOpen(!inspectorOpen)}
+                title="Toggle inspector"
               >
-                ⊟
+                {inspectorOpen ? '✕' : '☰'}
               </button>
-            )}
-            <span className={`connection-status`}>
-              <span className={`connection-dot connection-dot-${connectionState}`} />
-              <span className="connection-label">{connectionState}</span>
-            </span>
-          </div>
+              <button
+                type="button"
+                className="topbar-btn"
+                onClick={() => handleToggleMode('full')}
+                title="Full workspace"
+              >
+                ⛶
+              </button>
+              <span className={`connection-status`}>
+                <span className={`connection-dot connection-dot-${connectionState}`} />
+                <span className="connection-label">{connectionState}</span>
+              </span>
+            </div>
+          )}
         </header>
         {operatorNote ? <p className="operator-note">ⓘ {operatorNote}</p> : null}
         <div className="messages-container" ref={messagesContainerRef}>
@@ -322,6 +310,20 @@ export function AppShell({
           ) : (
             <div className="inspector-header" data-tauri-drag-region>
               <h2>Inspector</h2>
+              <div className="inspector-header-actions">
+                <button
+                  type="button"
+                  className="topbar-btn"
+                  onClick={() => handleToggleMode('compact')}
+                  title="Compact mode"
+                >
+                  ⊟
+                </button>
+                <span className={`connection-status`}>
+                  <span className={`connection-dot connection-dot-${connectionState}`} />
+                  <span className="connection-label">{connectionState}</span>
+                </span>
+              </div>
             </div>
           )}
           <CollapsibleSection title="Orchestration" icon="⚙" defaultOpen>

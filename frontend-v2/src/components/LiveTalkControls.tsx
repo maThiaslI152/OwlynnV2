@@ -16,6 +16,7 @@ export function LiveTalkControls() {
   const voiceState = useAppStore((s) => s.voiceState)
   const setVoiceState = useAppStore((s) => s.setVoiceState)
   const setOperatorNote = useAppStore((s) => s.setOperatorNote)
+  const voiceActive = !['idle', 'interrupted'].includes(voiceState)
 
   const cycleState = () => {
     const idx = VOICE_SEQUENCE.indexOf(voiceState)
@@ -55,6 +56,13 @@ export function LiveTalkControls() {
 
   return (
     <div>
+      <div className={`live-talk-wave ${voiceActive ? 'live-talk-wave-active' : ''}`} aria-hidden="true">
+        <span />
+        <span />
+        <span />
+        <span />
+        <span />
+      </div>
       <div className="row">
         <span className={`badge badge-${voiceState === 'idle' || voiceState === 'interrupted' ? 'success' : 'running'}`}>
           {VOICE_LABELS[voiceState]}

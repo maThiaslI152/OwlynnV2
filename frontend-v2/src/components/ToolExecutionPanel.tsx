@@ -188,7 +188,14 @@ console.log('Verification OK')`
         <button type="button" onClick={()=>void exportAuditJsonl()}>Export</button>
       </div>
       {!tool && history.length === 0 ? (
-        <p className="empty">No tool activity yet.</p>
+        <div>
+          <p className="empty">No tool activity yet.</p>
+          <div className="tool-empty-preview">
+            <p className="tool-empty-title">Waiting for agent tool calls</p>
+            <p className="tool-empty-row"><code>workspace_search</code> · pending</p>
+            <p className="tool-empty-row"><code>browser_snapshot</code> · queued</p>
+          </div>
+        </div>
       ) : tool ? (
         <div className="tool-exec-item">
           <div className="tool-exec-header">

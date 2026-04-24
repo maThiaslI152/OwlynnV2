@@ -59,7 +59,10 @@ export function ProjectKnowledgePanel({ activeProjectId }: ProjectKnowledgePanel
       </div>
       {error && <p className="knowledge-error">{error}</p>}
       {!loading && !error && files.length === 0 && (
-        <p className="knowledge-empty">No knowledge files indexed for this project.</p>
+        <div className="knowledge-empty-wrap">
+          <p className="knowledge-empty">No knowledge files indexed for this project.</p>
+          <p className="knowledge-empty-hint">Try adding docs like README.md, ADR.md, or API notes.</p>
+        </div>
       )}
       {files.length > 0 && (
         <ul className="knowledge-list">

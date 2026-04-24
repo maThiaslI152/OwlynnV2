@@ -8,6 +8,7 @@ export function OrchestrationPanel() {
 
   const route = routerMetadata?.route as string | undefined
   const confidence = routerMetadata?.confidence as number | undefined
+  const confidencePct = confidence !== undefined ? Math.max(0, Math.min(100, Math.round(confidence * 100))) : null
   const classificationSource = routerMetadata?.classification_source as string | undefined
 
   const hasData = modelInfo || route || contextCompression || memoryUpdatedAt
@@ -36,10 +37,17 @@ export function OrchestrationPanel() {
           </span>
         </div>
       )}
-      {confidence !== undefined && (
-        <div className="orchestration-row">
-          <span className="orchestration-label">Confidence</span>
-          <span className="orchestration-value">{(confidence * 100).toFixed(0)}%</span>
+      {confidencePct !== null && (
+        <div className="orchestration-gauge-wrap">
+          <div
+            className="orchestration-gauge"
+            style={{ background: `conic-gradient(var(--accent) ${confidencePct}%, var(--bg-base) ${confidencePct}% 100%)` }}
+          >
+            <div className="orchestration-gauge-inner">
+              <span className="orchestration-gauge-value">{confidencePct}%</span>
+              <span className="orchestration-gauge-label">Confidence</span>
+            </div>
+          </div>
         </div>
       )}
       {classificationSource && (
