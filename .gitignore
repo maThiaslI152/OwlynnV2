@@ -21,6 +21,7 @@ Thumbs.db
 .vscode/
 .cursor/
 .antigravity/
+openclaw-*/
 
 # Project-specific logs and data
 graph_error.log
