@@ -114,11 +114,30 @@ See `docs/CHAT_PROTOCOL.md` for the payload and event contract.
 
 ## Memory & personal assistant data
 
+### JSON-based memories (short-term)
+
 - `GET /api/memories` -> list raw stored memories (from memory manager)
 - `POST /api/memories`
   - Body: `{ "fact": "..." }`
 - `DELETE /api/memories`
   - Body: `{ "fact": "..." }`
+
+### Mem0 vector memories (long-term)
+
+- `GET /api/mem0/search?query=<string>&limit=<int>&project_id=<string>`
+  - Searches Mem0/Qdrant vector store. If `project_id` is provided, scopes to that project's memory space. Returns `{ "status": "ok", "memories": [...], "count": <int> }`
+- `GET /api/mem0/count?project_id=<string>`
+  - Returns memory count: `{ "status": "ok", "count": <int>, "user_id": "..." }`
+- `POST /api/mem0/delete`
+  - Body: `{ "memory_id": "..." }`
+  - Deletes a specific memory by its ID.
+- `POST /api/mem0/clear`
+  - Body: `{ "user_id": "owner" }` (default "owner")
+  - Clears all memories for a user_id.
+- `POST /api/mem0/reset`
+  - Resets ALL Mem0 memories (global). Use with caution.
+
+### Personal assistant data
 
 Personal assistant/topic endpoints:
 - `GET /api/topics` -> `{ "status": "ok", "topics": [...] }`

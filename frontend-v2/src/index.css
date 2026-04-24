@@ -888,8 +888,9 @@ body {
 }
 
 .inspector-section-body-open {
-  max-height: 420px;
+  max-height: 600px;
   opacity: 1;
+  overflow-y: auto;
   transform: translateY(0);
 }
 
@@ -1652,4 +1653,82 @@ body.tauri-glass .message-user .message-bubble {
   white-space: pre-wrap;
   word-wrap: break-word;
   line-height: 1.4;
+}
+
+/* ── Memory List (Mem0 items) ──────────────────────────── */
+
+.memory-search-input {
+  flex: 1;
+  border: 1px solid var(--border-default);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  font-size: 0.7rem;
+  outline: none;
+  transition: border-color 0.12s;
+}
+
+.memory-search-input:focus {
+  border-color: var(--accent);
+}
+
+.memory-search-input::placeholder {
+  color: var(--text-muted);
+}
+
+.memory-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.memory-list-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  padding: 5px 6px;
+  transition: border-color 0.12s;
+}
+
+.memory-list-item:hover {
+  border-color: var(--border-default);
+}
+
+.memory-list-item-text {
+  flex: 1;
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.memory-list-delete {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.95rem;
+  line-height: 1;
+  padding: 4px 8px;
+  margin: -4px -4px -4px 0;
+  border-radius: 4px;
+  opacity: 0.5;
+  transition: opacity 0.12s, color 0.12s, background 0.12s;
+}
+
+.memory-list-delete:hover {
+  opacity: 1;
+  color: var(--red);
+  background: rgba(255, 60, 60, 0.08);
+}
+
+.memory-list-delete:active {
+  background: rgba(255, 60, 60, 0.18);
 }

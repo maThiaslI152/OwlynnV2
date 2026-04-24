@@ -1,9 +1,17 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useAppStore } from '../state/useAppStore'
 
 interface TopicTuple {
   category: string
   topic: string
+}
+
+interface Mem0Item {
+  id: string
+  memory: string
+  text: string
+  created_at: string
+  user_id: string
 }
 
 export function MemoryPanel() {
@@ -14,6 +22,13 @@ export function MemoryPanel() {
   const [contextLoading, setContextLoading] = useState(false)
   const [loading, setLoading] = useState(true)
 
+  // Mem0 state
+  const [mem0Memories, setMem0Memories] = useState<Mem0Item[]>([])
+  const [mem0Loading, setMem0Loading] = useState(false)
+  const [mem0SearchQuery, setMem0SearchQuery] = useState('')
+  const [mem0Error, setMem0Error] = useState('')
+
+  // Fetch topics and interests
   useEffect(() => {
     let disposed = false
     const fetchData = async () => {
@@ -48,6 +63,60 @@ export function MemoryPanel() {
     return () => { disposed = true }
   }, [memoryUpdatedAt])
 
+  // Fetch Mem0 memories
+  const loadMem0Memories = useCallback(async (query = '') => {
+    setMem0Loading(true)
+    setMem0Error('')
+    try {
+      const params = new URLSearchParams()
+      if (query) params.set('query', query)
+      params.set('limit', '50')
+      const res = await fetch(`/api/mem0/search?${params.toString()}`)
+      if (res.ok) {
+        const data = await res.json()
+        if (data.status === 'ok') {
+          setMem0Memories(data.memories ?? [])
+        } else {
+          setMem0Error(data.message ?? 'Failed to load memories')
+        }
+      } else {
+        setMem0Error('Failed to fetch memories')
+      }
+    } catch {
+      setMem0Error('Network error')
+    } finally {
+      setMem0Loading(false)
+    }
+  }, [])
+
+  // Initial load of Mem0 memories
+  useEffect(() => {
+    void loadMem0Memories()
+  }, [memoryUpdatedAt, loadMem0Memories])
+
+  // Delete a Mem0 memory
+  const handleDeleteMemory = async (e: React.MouseEvent, memoryId: string) => {
+    e.stopPropagation()
+    try {
+      const res = await fetch('/api/mem0/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ memory_id: memoryId }),
+      })
+      if (res.ok) {
+        // Refresh the list
+        void loadMem0Memories(mem0SearchQuery)
+      }
+    } catch {
+      // non-critical
+    }
+  }
+
+  const hasTopicsOrInterests = topics.length > 0 || interestsStr || memoryUpdatedAt
+  const hasMem0Memories = mem0Memories.length > 0
+  const [contextOpen, setContextOpen] = useState(false)
+  const [mem0Open, setMem0Open] = useState(false)
+
   const loadContext = async () => {
     setContextLoading(true)
     try {
@@ -63,13 +132,6 @@ export function MemoryPanel() {
     }
   }
 
-  const hasData = topics.length > 0 || interestsStr || memoryUpdatedAt
-  const [contextOpen, setContextOpen] = useState(false)
-
-  if (!hasData && !loading) {
-    return <p className="orchestration-empty">No memory data yet. Send a message to build memory.</p>
-  }
-
   return (
     <div>
       {memoryUpdatedAt && (
@@ -81,9 +143,10 @@ export function MemoryPanel() {
         </div>
       )}
 
+      {/* Topics and Interests section */}
       {loading ? (
         <p className="orchestration-empty">Loading...</p>
-      ) : (
+      ) : hasTopicsOrInterests ? (
         <>
           {topics.length > 0 && (
             <div className="memory-section">
@@ -112,15 +175,109 @@ export function MemoryPanel() {
             </div>
           )}
         </>
-      )}
+      ) : null}
 
+      {/* Mem0 Long-Term Memories section */}
+      <div className="memory-section">
+        <div className="memory-context-header">
+          <span className="orchestration-label">
+            Long-Term Memories {mem0Memories.length > 0 && `(${mem0Memories.length})`}
+          </span>
+              <button
+                type="button"
+                className="memory-context-toggle"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (!mem0Open) {
+                    setMem0Open(true)
+                  } else {
+                    setMem0Open(false)
+                  }
+                }}
+              >
+                {mem0Open ? 'Hide' : 'Show'}
+              </button>
+        </div>
+        {mem0Open && (
+          <div>
+            {/* Search bar for memories */}
+            <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+              <input
+                type="text"
+                className="memory-search-input"
+                placeholder="Search memories..."
+                value={mem0SearchQuery}
+                onChange={(e) => setMem0SearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    void loadMem0Memories(mem0SearchQuery)
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className="memory-context-toggle"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  void loadMem0Memories(mem0SearchQuery)
+                }}
+                style={{ whiteSpace: 'nowrap' }}
+              >
+                Search
+              </button>
+              {mem0SearchQuery && (
+                <button
+                  type="button"
+                  className="memory-context-toggle"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setMem0SearchQuery('')
+                    void loadMem0Memories('')
+                  }}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
+            {mem0Error && (
+              <p className="orchestration-empty" style={{ color: 'var(--red)' }}>{mem0Error}</p>
+            )}
+
+            {mem0Loading ? (
+              <p className="orchestration-empty">Loading memories...</p>
+            ) : mem0Memories.length > 0 ? (
+              <div className="memory-list">
+                {mem0Memories.map((mem) => (
+                  <div key={mem.id} className="memory-list-item">
+                    <div className="memory-list-item-text">{mem.memory || mem.text}</div>
+                    <button
+                      type="button"
+                      className="memory-list-delete"
+                      title="Delete this memory"
+                      onClick={(e) => handleDeleteMemory(e, mem.id)}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="orchestration-empty">No long-term memories yet. Chat with the assistant to build memories.</p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Prompt Context section */}
       <div className="memory-section">
         <div className="memory-context-header">
           <span className="orchestration-label">Prompt Context</span>
           <button
             type="button"
             className="memory-context-toggle"
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation()
               if (!contextOpen) {
                 setContextOpen(true)
                 if (!contextText) void loadContext()

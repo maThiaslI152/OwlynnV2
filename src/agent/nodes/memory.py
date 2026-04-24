@@ -157,7 +157,7 @@ async def memory_inject_node(state: AgentState) -> AgentState:
     if memory is not None:
         # 1. Project-scoped memories (or global if default project)
         try:
-            results_dict = await asyncio.to_thread(memory.search, user_message, user_id=mem0_uid, limit=5)
+            results_dict = await asyncio.to_thread(memory.search, user_message, filters={"user_id": mem0_uid}, top_k=5)
             results = results_dict.get("results", []) if isinstance(results_dict, dict) else results_dict
         except Exception:
             pass
@@ -174,7 +174,7 @@ async def memory_inject_node(state: AgentState) -> AgentState:
                         global_uid = n
                 except Exception:
                     pass
-                global_dict = await asyncio.to_thread(memory.search, user_message, user_id=global_uid, limit=3)
+                global_dict = await asyncio.to_thread(memory.search, user_message, filters={"user_id": global_uid}, top_k=3)
                 global_results = global_dict.get("results", []) if isinstance(global_dict, dict) else global_dict
                 results.extend(global_results)
             except Exception:
@@ -263,15 +263,76 @@ def format_memory_context(results: list, profile: dict, enhanced_context: str = 
     return "\n".join(lines) if lines else "No prior memory available."
 
 # --- WRITE: fires after response is generated ---
+async def _should_save_memory(last_human: str, last_ai: str) -> bool:
+    """Selective memory gate: only save if the conversation has meaningful content.
+    
+    Skips:
+    - Very short or empty messages
+    - Purely casual/greeting exchanges  
+    - Messages where the AI response is just a confirmation/hand-off
+    """
+    human_stripped = last_human.strip()
+    ai_stripped = last_ai.strip()
+    
+    # Skip empty
+    if not human_stripped or not ai_stripped:
+        return False
+    
+    # Skip very short messages (< 10 chars)
+    if len(human_stripped) < 10 and len(ai_stripped) < 10:
+        return False
+    
+    # Skip common greeting patterns
+    greeting_patterns = {"hello", "hi", "hey", "thanks", "thank you", "ok", "okay", "goodbye", "bye"}
+    human_lower = human_stripped.lower().rstrip(".!?")
+    if human_lower in greeting_patterns:
+        return False
+    
+    # Skip if AI response is very short and appears to be a simple acknowledgment
+    ai_lower = ai_stripped.lower()
+    simple_acknowledgments = {"you're welcome", "you are welcome", "no problem", "happy to help",
+                               "glad to help", "anytime", "sure", "okay", "done", "got it"}
+    if ai_stripped.strip(".! ").lower() in simple_acknowledgments:
+        return False
+    
+    return True
+
+
+async def _is_semantically_similar(memory, new_text: str, user_id: str) -> bool:
+    """Check if a semantically similar memory already exists to avoid duplicates."""
+    from src.memory.long_term import memory as mem0_memory
+    if mem0_memory is None:
+        return False
+    try:
+        results_dict = await asyncio.to_thread(
+            mem0_memory.search, new_text[:200],
+            filters={"user_id": user_id},
+            top_k=3,
+        )
+        results = results_dict.get("results", []) if isinstance(results_dict, dict) else results_dict
+        for item in results:
+            if isinstance(item, dict):
+                existing = (item.get("memory") or item.get("text", "")).lower().strip()
+                new_lower = new_text.lower().strip()
+                # If the new text is a substring of existing or vice versa, skip
+                if existing and (existing in new_lower or new_lower in existing):
+                    return True
+    except Exception:
+        pass
+    return False
+
+
 async def memory_write_node(state: AgentState) -> AgentState:
     """Post-reasoning node: extract and persist memories from the conversation turn.
 
     Steps:
-    1. Record conversation summary (topics, interests, key questions)
-    2. Extract topics and interests via regex patterns
-    3. Save enriched fact to Mem0 with stable user ID
-    4. Invalidate memory context cache so next request gets fresh data
-    5. Set ``memory_invalidated=True`` to trigger WebSocket notification
+    1. Selective memory gate: skip trivial/greeting exchanges
+    2. Dedup check: skip semantically similar memories
+    3. Record conversation summary (topics, interests, key questions)
+    4. Extract topics and interests via regex patterns
+    5. Save enriched fact to Mem0 with stable user ID
+    6. Invalidate memory context cache so next request gets fresh data
+    7. Set ``memory_invalidated=True`` to trigger WebSocket notification
     """
     thread_id = state.get("thread_id", "default")
     messages  = state.get("messages", [])
@@ -289,6 +350,11 @@ async def memory_write_node(state: AgentState) -> AgentState:
     )
     
     if not (last_human and last_ai):
+        return {}
+    
+    # --- Selective memory gate ---
+    if not await _should_save_memory(last_human, last_ai):
+        logger.debug("[Memory] Skipping memory save (gate rejected trivial/greeting exchange)")
         return {}
     
     # Record this turn in conversation
@@ -324,14 +390,20 @@ async def memory_write_node(state: AgentState) -> AgentState:
             fact_text = f"User asked: {last_human}. AI answered: {last_ai}"
             enriched_fact = MemoryEnricher.enrich_memory(fact_text, topics, interests)
             
-            # Save to Mem0 with STABLE user id (shared across all threads)
-            # infer=False: skip Mem0's internal OpenAI LLM call (we use a dummy key)
-            await asyncio.to_thread(
-                memory.add, 
-                fact_text, 
-                user_id=mem0_uid, 
-                infer=False
-            )
+            # --- Dedup check ---
+            # Only use the fact_text for dedup (not the enriched version which includes topics)
+            is_dup = await _is_semantically_similar(memory, fact_text, mem0_uid)
+            if is_dup:
+                logger.debug("[Memory] Skipping memory save (semantically similar exists)")
+            else:
+                # Save to Mem0 with STABLE user id (shared across all threads)
+                # infer=False: skip Mem0's internal OpenAI LLM call (we use a dummy key)
+                await asyncio.to_thread(
+                    memory.add, 
+                    fact_text, 
+                    user_id=mem0_uid, 
+                    infer=False,
+                )
             
             # Invalidate memory context cache since memory was updated (M4 optimization)
             # Uses invalidate_on_write to signal WebSocket forwarder

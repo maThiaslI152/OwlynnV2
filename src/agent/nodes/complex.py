@@ -116,7 +116,7 @@ You have tools to help answer accurately:
 1) web_search / fetch_webpage: Search the web and fetch page content.
 2) read_workspace_file / write_workspace_file / edit_workspace_file: Read, write, and edit files.
 3) list_workspace_files / delete_workspace_file: List and delete files.
-4) recall_memories: Search long-term memories about the user. When in a project context, this also searches the project's indexed knowledge base.
+4) recall_memories: Search short-term (JSON) memories about the user. recall_all_memories: Deeper semantic search of vector long-term memory. forget_memory: Forget/delete specific memories by ID.
 5) notebook_run / notebook_reset: Python REPL for calculations and data processing. Files are in the WORKSPACE_DIR variable — use f"{WORKSPACE_DIR}/filename.csv" for file paths.
 6) create_docx / create_xlsx / create_pptx / create_pdf: Generate documents.
 7) todo_add / todo_list / todo_complete: Manage the user's task list.
@@ -136,7 +136,7 @@ COMPLEX_TOOL_GUIDANCE_NO_WEB = (
 You have tools (web search is off for this chat):
 1) read_workspace_file / write_workspace_file / edit_workspace_file: File management.
 2) list_workspace_files / delete_workspace_file: List and delete files.
-3) recall_memories: Search long-term memories.
+3) recall_memories: Search short-term (JSON) memories. recall_all_memories: Deeper vector search of long-term memory. forget_memory: Forget/delete memories by ID.
 4) notebook_run / notebook_reset: Python REPL for calculations. Files are in the WORKSPACE_DIR variable — use f"{WORKSPACE_DIR}/filename.csv" for file paths.
 5) create_docx / create_xlsx / create_pptx / create_pdf: Generate documents.
 6) todo_add / todo_list / todo_complete: Manage tasks.
