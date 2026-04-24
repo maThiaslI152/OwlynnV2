@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { AppShell } from './components/AppShell'
 import { WsClient } from './lib/wsClient'
 import { useAppStore } from './state/useAppStore'
@@ -10,17 +10,31 @@ import {
 } from './appEventHandlers'
 import type { ChatMessage, ServerEvent } from './types/protocol'
 
+interface ProjectChat {
+  id: string
+  name: string
+  created_at: number
+}
+
 interface ProjectSummary {
   id: string
   name: string
+  chats?: ProjectChat[]
 }
+
+interface ProjectCreateResponse {
+  id: string
+  name: string
+}
+
+type TauriEventPayload = ServerEvent
 
 type TauriEventWindow = {
   __TAURI__?: {
     event?: {
       listen?: (
         event: string,
-        handler: (payload: { payload: ServerEvent }) => void
+        handler: (payload: { payload: TauriEventPayload }) => void
       ) => Promise<() => void>
     }
   }
@@ -51,23 +65,30 @@ function App() {
   const clearSession = useAppStore((s) => s.clearSession)
   const [projects, setProjects] = useState<ProjectSummary[]>([])
   const [activeProjectId, setActiveProjectId] = useState('default')
+  const [activeChatId, setActiveChatId] = useState('default')
   const [currentThreadId, setCurrentThreadId] = useState('default')
   const projectThreadsRef = useRef<Record<string, string>>({ default: 'default' })
   const wsClientRef = useRef<WsClient | null>(null)
 
   const makeThreadId = () => `thread-${crypto.randomUUID()}`
 
-  const loadProjects = async () => {
+  const loadProjects = useCallback(async () => {
     try {
       const response = await fetch('/api/projects')
       if (!response.ok) return
-      const payload = (await response.json()) as Array<{ id: string; name?: string }>
+      const payload = (await response.json()) as ProjectSummary[]
+      // Only keep the minimal shape: id, name, chats (with id, name, created_at)
       const mapped = payload.map((project) => ({
         id: project.id,
         name: project.name ?? project.id,
+        chats: (project.chats ?? []).map((c: any) => ({
+          id: c.id,
+          name: c.name ?? 'New Chat',
+          created_at: c.created_at ?? 0,
+        })),
       }))
       if (mapped.length === 0) {
-        setProjects([{ id: 'default', name: 'General Workspace' }])
+        setProjects([{ id: 'default', name: 'General Workspace', chats: [] }])
         return
       }
       setProjects(mapped)
@@ -78,13 +99,27 @@ function App() {
         projectThreadsRef.current[first.id] = existingThread
         setActiveProjectId(first.id)
         setCurrentThreadId(existingThread)
+        setActiveChatId(existingThread)
+      } else {
+        // Sync thread IDs with the actual chat data from the API
+        const activeProject = mapped.find((p) => p.id === activeProjectId)
+        if (activeProject && activeProject.chats.length > 0) {
+          // Use the most recent chat's ID as the current thread
+          const sorted = [...activeProject.chats].sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))
+          const latestChatId = sorted[0].id
+          projectThreadsRef.current[activeProjectId] = latestChatId
+          setCurrentThreadId(latestChatId)
+          setActiveChatId(latestChatId)
+        } else {
+          setActiveChatId(currentThreadId)
+        }
       }
     } catch {
-      setProjects([{ id: 'default', name: 'General Workspace' }])
+      setProjects([{ id: 'default', name: 'General Workspace', chats: [] }])
     }
-  }
+  }, [activeProjectId, currentThreadId])
 
-  const handleInterrupt = (interrupts: unknown[] | undefined) => {
+  const handleInterrupt = useCallback((interrupts: unknown[] | undefined) => {
     if (executionPolicy === 'auto_approve') {
       const autoApprove = buildAutoApproveInterruptResponse()
       wsClientRef.current?.send(autoApprove.clientEvent)
@@ -95,7 +130,7 @@ function App() {
     const proposal = buildInterruptProposal(interrupts, latestToolExecution, Date.now())
     upsertActionProposal(proposal)
     setOperatorNote('Approval required: sensitive action waiting for decision.')
-  }
+  }, [executionPolicy, latestToolExecution, wsClientRef])
 
   useEffect(() => {
     let disposed = false
@@ -120,7 +155,7 @@ function App() {
 
   useEffect(() => {
     void loadProjects()
-  }, [])
+  }, [loadProjects])
 
   useEffect(() => {
     // Fetch existing chat history for the current thread
@@ -166,6 +201,7 @@ function App() {
         if (event.type === 'assistant.message') {
           const msg = 'message' in event ? (event as any).message : event
           const finalContent: string = msg.content || ''
+          void loadProjects()
           // Check if the last message is a streaming placeholder; if so, replace it
           // to avoid duplicating content that was already streamed via chunk events.
           const msgs = useAppStore.getState().messages
@@ -239,7 +275,7 @@ function App() {
       disconnect()
       wsClientRef.current = null
     }
-  }, [addMessage, appendStreamChunk, currentThreadId, executionPolicy, latestToolExecution, pushToolExecution, setConnection, setLatestToolExecution, setMemoryUpdatedAt, setModelInfo, setContextCompression, setOperatorNote, setRouterMetadata, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setVoiceState, upsertActionProposal, updateActionProposalStatus, wsBaseUrl])
+  }, [addMessage, appendStreamChunk, currentThreadId, executionPolicy, handleInterrupt, latestToolExecution, loadProjects, pushToolExecution, setConnection, setLatestToolExecution, setMemoryUpdatedAt, setModelInfo, setContextCompression, setOperatorNote, setRouterMetadata, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setVoiceState, upsertActionProposal, updateActionProposalStatus, wsBaseUrl])
 
   useEffect(() => {
     let unlisten: (() => void) | undefined
@@ -275,9 +311,9 @@ function App() {
     return () => {
       if (unlisten) unlisten()
     }
-  }, [executionPolicy, latestToolExecution, pushToolExecution, setLatestToolExecution, setOperatorNote, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setVoiceState, upsertActionProposal, updateActionProposalStatus])
+  }, [executionPolicy, handleInterrupt, latestToolExecution, pushToolExecution, setLatestToolExecution, setOperatorNote, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setVoiceState, upsertActionProposal, updateActionProposalStatus])
 
-  const handleSend = (content: string) => {
+  const handleSend = useCallback((content: string) => {
     const message: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
@@ -292,7 +328,8 @@ function App() {
       message: message.content,
       project_id: activeProjectId,
     })
-  }
+    void loadProjects()
+  }, [addMessage, activeProjectId, currentThreadId, loadProjects])
 
   const handleApproveProposal = async (id: string) => {
     wsClientRef.current?.send({
@@ -312,7 +349,7 @@ function App() {
     setOperatorNote(`Proposal ${id} rejected and sent to backend`)
   }
 
-  const handleSwitchProject = (projectId: string) => {
+  const handleSwitchProject = useCallback((projectId: string) => {
     const next = resolveProjectSwitch({
       activeProjectId,
       currentThreadId,
@@ -325,19 +362,145 @@ function App() {
     clearSession()
     setActiveProjectId(next.nextActiveProjectId)
     setCurrentThreadId(next.nextCurrentThreadId)
+    setActiveChatId(next.nextCurrentThreadId)
     setOperatorNote(next.operatorNote)
-  }
+  }, [activeProjectId, currentThreadId, clearSession])
+
+  // New chat: create a fresh thread within the current project
+  const handleNewChat = useCallback(() => {
+    const newThreadId = makeThreadId()
+    const updatedThreads = { ...projectThreadsRef.current, [activeProjectId]: newThreadId }
+    projectThreadsRef.current = updatedThreads
+    clearSession()
+    // Don't update activeChatId yet — the backend will register this thread on first message
+    setCurrentThreadId(newThreadId)
+    setActiveChatId(newThreadId)
+    setOperatorNote('New conversation started.')
+  }, [activeProjectId, clearSession])
+
+  // Delete a chat: remove from project and switch if needed
+  const handleDeleteChat = useCallback(async (chatId: string) => {
+    try {
+      await fetch(`/api/projects/${encodeURIComponent(activeProjectId)}/chats/${encodeURIComponent(chatId)}`, {
+        method: 'DELETE',
+      })
+      // Refresh projects to get updated chat list
+      await loadProjects()
+      // If we deleted the active chat, create a new one
+      if (chatId === activeChatId) {
+        handleNewChat()
+      } else {
+        setOperatorNote(`Chat ${chatId} deleted.`)
+      }
+    } catch {
+      setOperatorNote('Failed to delete chat.')
+    }
+  }, [activeProjectId, activeChatId, loadProjects, handleNewChat])
+
+  // Rename a chat: update name via backend
+  const handleRenameChat = useCallback(async (chatId: string, newName: string) => {
+    try {
+      await fetch(`/api/projects/${encodeURIComponent(activeProjectId)}/chats/${encodeURIComponent(chatId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName }),
+      })
+      await loadProjects()
+    } catch {
+      // non-critical
+    }
+  }, [activeProjectId, loadProjects])
+
+  // Navigate to a specific chat
+  const handleSelectChat = useCallback((chatId: string) => {
+    if (chatId === activeChatId) return
+    const updatedThreads = { ...projectThreadsRef.current, [activeProjectId]: chatId }
+    projectThreadsRef.current = updatedThreads
+    clearSession()
+    setCurrentThreadId(chatId)
+    setActiveChatId(chatId)
+    setOperatorNote(`Switched to chat.`)
+  }, [activeProjectId, activeChatId, clearSession])
+
+  const handleCreateProject = useCallback(async (projectName: string) => {
+    const trimmedName = projectName.trim()
+    if (!trimmedName) return
+    try {
+      const response = await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: trimmedName }),
+      })
+      if (!response.ok) throw new Error('create failed')
+      const created = (await response.json()) as ProjectCreateResponse
+      const newThreadId = makeThreadId()
+      projectThreadsRef.current = { ...projectThreadsRef.current, [created.id]: newThreadId }
+      clearSession()
+      setActiveProjectId(created.id)
+      setCurrentThreadId(newThreadId)
+      setActiveChatId(newThreadId)
+      setOperatorNote('Switched to new workspace.')
+      await loadProjects()
+    } catch {
+      setOperatorNote('Failed to create workspace.')
+    }
+  }, [clearSession, loadProjects])
+
+  const handleEditProject = useCallback(async (projectId: string, name: string) => {
+    try {
+      await fetch(`/api/projects/${encodeURIComponent(projectId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      })
+      await loadProjects()
+    } catch {
+      // non-critical
+    }
+  }, [loadProjects])
+
+  const handleDeleteProject = useCallback(async (projectId: string) => {
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}`, {
+        method: 'DELETE',
+      })
+      if (!response.ok) throw new Error('delete failed')
+      const updatedThreads = { ...projectThreadsRef.current }
+      delete updatedThreads[projectId]
+      projectThreadsRef.current = updatedThreads
+      if (projectId === activeProjectId) {
+        const fallbackThreadId = projectThreadsRef.current.default ?? makeThreadId()
+        projectThreadsRef.current = { ...projectThreadsRef.current, default: fallbackThreadId }
+        clearSession()
+        setActiveProjectId('default')
+        setCurrentThreadId(fallbackThreadId)
+        setActiveChatId(fallbackThreadId)
+        setOperatorNote('Workspace deleted. Switched to default workspace.')
+      }
+      await loadProjects()
+    } catch {
+      setOperatorNote('Failed to delete workspace.')
+    }
+  }, [activeProjectId, clearSession, loadProjects])
 
   return (
     <AppShell
       onSend={handleSend}
       projects={projects}
       activeProjectId={activeProjectId}
+      activeChatId={activeChatId}
       currentThreadId={currentThreadId}
       onSwitchProject={handleSwitchProject}
       onRefreshProjects={() => void loadProjects()}
+      onCreateProject={handleCreateProject}
+      onEditProject={handleEditProject}
+      onDeleteProject={handleDeleteProject}
       onApproveProposal={handleApproveProposal}
       onRejectProposal={handleRejectProposal}
+      onNewChat={handleNewChat}
+      onSelectChat={handleSelectChat}
+      onDeleteChat={handleDeleteChat}
+      onRenameChat={handleRenameChat}
     />
   )
 }

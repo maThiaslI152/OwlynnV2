@@ -13,7 +13,7 @@ from src.tools.core_tools import (
     list_workspace_files,
     delete_workspace_file,
 )
-from src.tools.core_tools import recall_memories
+from src.tools.core_tools import recall_memories, recall_all_memories, forget_memory
 from src.tools.doc_generator import create_docx, create_xlsx, create_pptx, create_pdf
 from src.tools.notebook import notebook_run, notebook_reset
 from src.tools.todo import todo_add, todo_list, todo_complete
@@ -33,6 +33,8 @@ COMPLEX_TOOLS_WITH_WEB: list = [
     delete_workspace_file,
     # Memory
     recall_memories,
+    recall_all_memories,
+    forget_memory,
     # Computation
     notebook_run,
     notebook_reset,
@@ -60,6 +62,8 @@ COMPLEX_TOOLS_NO_WEB: list = [
     list_workspace_files,
     delete_workspace_file,
     recall_memories,
+    recall_all_memories,
+    forget_memory,
     notebook_run,
     notebook_reset,
     create_docx,
@@ -83,7 +87,7 @@ TOOLBOX_REGISTRY: dict[str, list] = {
     "data_viz": [create_docx, create_xlsx, create_pptx, create_pdf,
                  notebook_run, notebook_reset],
     "productivity": [todo_add, todo_list, todo_complete, list_skills, invoke_skill],
-    "memory": [recall_memories],
+    "memory": [recall_memories, recall_all_memories, forget_memory],
 }
 
 ALWAYS_INCLUDED_TOOLS: list = [ask_user]

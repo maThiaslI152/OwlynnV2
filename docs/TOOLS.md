@@ -68,9 +68,11 @@ Tools are organized into 5 toolbox categories. The Router selects which categori
 ### `memory` Toolbox
 
 
-| Tool              | Description                                                     |
-| ----------------- | --------------------------------------------------------------- |
-| `recall_memories` | Search long-term memory (keyword overlap on recent 50 entries). |
+| Tool                | Description                                                           |
+| ------------------- | --------------------------------------------------------------------- |
+| `recall_memories`   | Search short-term (JSON) memory — keyword overlap on recent 50 entries. |
+| `recall_all_memories` | Deep semantic search of Mem0/Qdrant vector store (long-term memory). Optional `project_id` for scoping. |
+| `forget_memory`     | Delete specific memories by their ID (hash). Use `recall_all_memories` first to find IDs. |
 
 
 ## Security Policy

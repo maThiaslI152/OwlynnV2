@@ -7,25 +7,41 @@ import { ActionProposalQueue } from './ActionProposalQueue'
 import { ToolExecutionPanel } from './ToolExecutionPanel'
 import { ProjectKnowledgePanel } from './ProjectKnowledgePanel'
 import { OrchestrationPanel } from './OrchestrationPanel'
+import { MemoryPanel } from './MemoryPanel'
 import { useAppStore } from '../state/useAppStore'
 import { tauriBridge } from '../lib/tauriBridge'
 import { parseMarkdown, renderMarkdownSegments } from '../lib/markdown.tsx'
 import type { ChatMessage } from '../types/protocol'
 
+interface ProjectChat {
+  id: string
+  name: string
+  created_at: number
+}
+
 interface WorkspaceProject {
   id: string
   name: string
+  chats?: ProjectChat[]
 }
 
 interface AppShellProps {
   onSend: (content: string) => void
   projects: WorkspaceProject[]
   activeProjectId: string
+  activeChatId: string
   currentThreadId: string
   onSwitchProject: (projectId: string) => void
   onRefreshProjects: () => void
+  onCreateProject: (name: string) => void
+  onEditProject: (projectId: string, name: string) => void
+  onDeleteProject: (projectId: string) => void
   onApproveProposal?: (id: string) => Promise<void>
   onRejectProposal?: (id: string) => Promise<void>
+  onNewChat: () => void
+  onSelectChat: (chatId: string) => void
+  onDeleteChat: (chatId: string) => void
+  onRenameChat: (chatId: string, newName: string) => void
 }
 
 function MessageAvatar({ role }: { role: ChatMessage['role'] }) {
@@ -75,18 +91,23 @@ function CollapsibleSection({
   icon,
   defaultOpen = false,
   children,
+  rightAction,
 }: {
   title: string
   icon?: string
   defaultOpen?: boolean
   children: ReactNode
+  rightAction?: ReactNode
 }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
     <div className="inspector-section">
       <div className="inspector-section-header" onClick={() => setOpen(!open)}>
         <h3>{icon ? `${icon} ${title}` : title}</h3>
-        <span className={`inspector-toggle ${open ? 'inspector-toggle-open' : ''}`}>▶</span>
+        <div className="inspector-section-header-actions">
+          {rightAction}
+          <span className={`inspector-toggle ${open ? 'inspector-toggle-open' : ''}`}>▶</span>
+        </div>
       </div>
       <div className={`inspector-section-body ${open ? 'inspector-section-body-open' : ''}`}>{children}</div>
     </div>
@@ -99,15 +120,66 @@ const SUGGESTIONS = [
   'Run a quick system check',
 ]
 
+function RenameInput({
+  initialName,
+  onSave,
+  onCancel,
+}: {
+  initialName: string
+  onSave: (name: string) => void
+  onCancel: () => void
+}) {
+  const [value, setValue] = useState(initialName)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    inputRef.current?.focus()
+    inputRef.current?.select()
+  }, [])
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      const trimmed = value.trim()
+      if (trimmed) onSave(trimmed)
+    } else if (e.key === 'Escape') {
+      onCancel()
+    }
+  }
+
+  return (
+    <input
+      ref={inputRef}
+      type="text"
+      className="chat-rename-input"
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onKeyDown={handleKeyDown}
+      onBlur={() => {
+        const trimmed = value.trim()
+        if (trimmed) onSave(trimmed)
+        else onCancel()
+      }}
+    />
+  )
+}
+
 export function AppShell({
   onSend,
   projects,
   activeProjectId,
+  activeChatId,
   currentThreadId,
   onSwitchProject,
   onRefreshProjects,
+  onCreateProject,
+  onEditProject,
+  onDeleteProject,
   onApproveProposal,
   onRejectProposal,
+  onNewChat,
+  onSelectChat,
+  onDeleteChat,
+  onRenameChat,
 }: AppShellProps) {
   const connectionState = useAppStore((s) => s.connectionState)
   const messages = useAppStore((s) => s.messages)
@@ -120,17 +192,17 @@ export function AppShell({
   const [streamActive, setStreamActive] = useState(false)
   const [inspectorOpen, setInspectorOpen] = useState(false)
   const isStreamingRef = useRef(false)
+  const [renamingChatId, setRenamingChatId] = useState<string | null>(null)
+  const [renamingProjectId, setRenamingProjectId] = useState<string | null>(null)
+  const [creatingProject, setCreatingProject] = useState(false)
 
   const handleToggleMode = useCallback(async (targetMode: 'compact' | 'full') => {
     if (targetMode === 'compact') {
-      // Compact mode: single chat panel with room for inspector overlay
       void tauriBridge.setWindowSize(680, 620)
     } else {
-      // Full mode: comfortable three-panel workspace (260px left + center + 300px right)
       void tauriBridge.setWindowSize(2400, 1600)
     }
     setWindowMode(targetMode)
-    // Close the inspector overlay when entering compact mode
     if (targetMode === 'compact') {
       setInspectorOpen(false)
     }
@@ -170,6 +242,7 @@ export function AppShell({
   const activeProject = projects.find((p) => p.id === activeProjectId)
   const isCompact = windowMode === 'compact'
   const showInspector = !isCompact || inspectorOpen
+  const projectChats = activeProject?.chats ?? []
 
   return (
     <div className={`app-shell${isCompact ? ' app-shell-compact' : ''}`}>
@@ -180,9 +253,19 @@ export function AppShell({
           <div className="workspace-section">
             <div className="workspace-header">
               <h2>Workspace</h2>
-              <button type="button" className="workspace-refresh" onClick={onRefreshProjects}>
-                Refresh
-              </button>
+              <div className="workspace-header-actions">
+                <button
+                  type="button"
+                  className="workspace-refresh"
+                  onClick={() => setCreatingProject(true)}
+                  title="New workspace"
+                >
+                  + New
+                </button>
+                <button type="button" className="workspace-refresh" onClick={onRefreshProjects}>
+                  Refresh
+                </button>
+              </div>
             </div>
             <p className="workspace-meta">
               Active: <strong>{activeProject?.name || activeProjectId}</strong>
@@ -191,19 +274,149 @@ export function AppShell({
               Thread: <code>{currentThreadId.length > 16 ? currentThreadId.slice(0, 16) + '…' : currentThreadId}</code>
             </p>
             <div className="workspace-project-list">
+              {creatingProject && (
+                <div className="workspace-project-item workspace-project-item-active">
+                  <span className="project-icon">+</span>
+                  <RenameInput
+                    initialName="New Workspace"
+                    onSave={(newName) => {
+                      onCreateProject(newName)
+                      setCreatingProject(false)
+                    }}
+                    onCancel={() => setCreatingProject(false)}
+                  />
+                </div>
+              )}
               {projects.map((project) => (
-                <button
+                <div
                   key={project.id}
-                  type="button"
                   className={`workspace-project-item${
                     project.id === activeProjectId ? ' workspace-project-item-active' : ''
                   }`}
-                  onClick={() => onSwitchProject(project.id)}
+                  onClick={() => {
+                    if (renamingProjectId !== project.id) {
+                      onSwitchProject(project.id)
+                    }
+                  }}
                 >
                   <span className="project-icon">{project.name?.charAt(0)?.toUpperCase() || '?'}</span>
-                  <span className="project-name">{project.name}</span>
-                </button>
+                  {renamingProjectId === project.id ? (
+                    <RenameInput
+                      initialName={project.name}
+                      onSave={(newName) => {
+                        onEditProject(project.id, newName)
+                        setRenamingProjectId(null)
+                      }}
+                      onCancel={() => setRenamingProjectId(null)}
+                    />
+                  ) : (
+                    <>
+                      <span className="project-name" title={project.name}>
+                        {project.name}
+                      </span>
+                      {project.id !== 'default' && (
+                        <span className="chat-list-item-actions">
+                          <button
+                            type="button"
+                            className="chat-list-action"
+                            title="Rename workspace"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setRenamingProjectId(project.id)
+                            }}
+                          >
+                            ✎
+                          </button>
+                          <button
+                            type="button"
+                            className="chat-list-action chat-list-action-delete"
+                            title="Delete workspace"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              if (confirm('Delete this workspace? This cannot be undone.')) {
+                                onDeleteProject(project.id)
+                              }
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </span>
+                      )}
+                    </>
+                  )}
+                </div>
               ))}
+            </div>
+          </div>
+          {/* ── Chat List ── */}
+          <div className="workspace-section">
+            <div className="workspace-header">
+              <h2>Chats</h2>
+              <button type="button" className="workspace-refresh" onClick={onNewChat} title="New chat">
+                + New
+              </button>
+            </div>
+            <div className="chat-list">
+              {projectChats.length === 0 ? (
+                <p className="chat-list-empty">No chats yet. Start a new conversation.</p>
+              ) : (
+                [...projectChats]
+                  .sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))
+                  .map((chat) => (
+                    <div
+                      key={chat.id}
+                      className={`chat-list-item${chat.id === activeChatId ? ' chat-list-item-active' : ''}`}
+                      onClick={() => {
+                        if (renamingChatId !== chat.id) {
+                          onSelectChat(chat.id)
+                        }
+                      }}
+                    >
+                      {renamingChatId === chat.id ? (
+                        <RenameInput
+                          initialName={chat.name}
+                          onSave={(newName) => {
+                            onRenameChat(chat.id, newName)
+                            setRenamingChatId(null)
+                          }}
+                          onCancel={() => setRenamingChatId(null)}
+                        />
+                      ) : (
+                        <>
+                          <span className="chat-list-item-name" title={chat.name}>
+                            {chat.name}
+                          </span>
+                          <span className="chat-list-item-actions">
+                            <button
+                              type="button"
+                              className="chat-list-action"
+                              title="Rename"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setRenamingChatId(chat.id)
+                              }}
+                            >
+                              ✎
+                            </button>
+                            <button
+                              type="button"
+                              className="chat-list-action chat-list-action-delete"
+                              title="Delete"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                if (confirm('Delete this chat? This cannot be undone.')) {
+                                  onDeleteChat(chat.id)
+                                }
+                              }}
+                            >
+                              ✕
+                            </button>
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  ))
+              )}
             </div>
           </div>
           <ProjectKnowledgePanel activeProjectId={activeProjectId} />
@@ -328,6 +541,9 @@ export function AppShell({
           )}
           <CollapsibleSection title="Orchestration" icon="⚙" defaultOpen>
             <OrchestrationPanel />
+          </CollapsibleSection>
+          <CollapsibleSection title="Memory & Context" icon="🧠" defaultOpen={false}>
+            <MemoryPanel />
           </CollapsibleSection>
           <CollapsibleSection title="Safe Mode" icon="🛡">
             <SafeModePanel />

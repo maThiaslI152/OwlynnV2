@@ -290,9 +290,17 @@ describe('AppShell', () => {
       { id: 'proj-1', name: 'Project One' },
     ],
     activeProjectId: 'default',
+    activeChatId: 'thread-1',
     currentThreadId: 'thread-1',
     onSwitchProject: vi.fn(),
     onRefreshProjects: vi.fn(),
+    onCreateProject: vi.fn(),
+    onEditProject: vi.fn(),
+    onDeleteProject: vi.fn(),
+    onNewChat: vi.fn(),
+    onSelectChat: vi.fn(),
+    onDeleteChat: vi.fn(),
+    onRenameChat: vi.fn(),
   }
 
   it('renders all panel sections', () => {
@@ -324,5 +332,20 @@ describe('AppShell', () => {
     // May find multiple elements with "Default" (active project + list item)
     expect(screen.getAllByText('Default').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('Project One')).toBeTruthy()
+  })
+
+  it('creates workspace through inline input flow', () => {
+    const onCreateProject = vi.fn()
+    render(<AppShell {...defaultProps} onCreateProject={onCreateProject} />)
+
+    const newButtons = screen.getAllByRole('button', { name: '+ New' })
+    fireEvent.click(newButtons[0])
+
+    const input = screen.getByDisplayValue('New Workspace')
+    fireEvent.change(input, { target: { value: '  Inline Created Project  ' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+
+    expect(onCreateProject).toHaveBeenCalledWith('Inline Created Project')
+    expect(screen.queryByDisplayValue('Inline Created Project')).toBeNull()
   })
 })

@@ -212,7 +212,85 @@ def recall_memories(query: str) -> str:
     memories = search_memories(query, top_k=8)
     if not memories:
         return "No relevant memories found."
-    lines = ["📋 Relevant memories:"]
+    lines = ["Relevant memories:"]
     for m in memories:
-        lines.append(f"  • {m['fact']}  [{m['timestamp'][:10]}]")
+        lines.append(f"  - {m['fact']}  [{m['timestamp'][:10]}]")
     return "\n".join(lines)
+
+
+@tool
+def recall_all_memories(query: str = "", project_id: str = "") -> str:
+    """
+    Searches ALL long-term memory (including Mem0/Qdrant vector memory) for facts about the user.
+    
+    Use this when recall_memories returns nothing or you need deeper semantic search.
+    
+    Args:
+        query: Optional search text. If empty, returns recent memories.
+        project_id: Optional project ID to scope search (e.g. "my-project"). Leave empty for global.
+    """
+    try:
+        from ..memory.long_term import memory as mem0_memory
+    except Exception:
+        return "Error: Mem0 memory not available."
+    
+    if mem0_memory is None:
+        return "Mem0/Qdrant vector memory is not initialized."
+    
+    try:
+        user_id = f"project:{project_id}" if project_id else "owner"
+        filters = {"user_id": user_id}
+        search_query = query if query else " "
+        results_dict = mem0_memory.search(search_query, filters=filters, top_k=20)
+        results = results_dict.get("results", []) if isinstance(results_dict, dict) else results_dict
+        
+        if not results:
+            return "No long-term memories found in vector store."
+        
+        lines = [f"Long-term memories from '{user_id}':"]
+        for item in results:
+            if isinstance(item, dict):
+                memory_text = item.get("memory", item.get("text", ""))
+                memory_id = item.get("id", "")
+                lines.append(f"  [{memory_id}] {memory_text}")
+        return "\n".join(lines)
+    except Exception as e:
+        return f"Error searching vector memory: {e}"
+
+
+@tool
+def forget_memory(memory_hashes: str) -> str:
+    """
+    Deletes specific long-term memories by their IDs (hashes).
+    
+    Use recall_all_memories first to find the memory ID you want to delete.
+    If you want to forget a specific fact, call this with the ID hash.
+    
+    Args:
+        memory_hashes: Comma-separated list of memory IDs to delete (e.g. "abc123,def456").
+    """
+    try:
+        from ..memory.long_term import memory as mem0_memory
+    except Exception:
+        return "Error: Mem0 memory not available."
+    
+    if mem0_memory is None:
+        return "Mem0/Qdrant vector memory is not initialized."
+    
+    ids = [h.strip() for h in memory_hashes.split(",") if h.strip()]
+    if not ids:
+        return "No valid memory IDs provided."
+    
+    deleted = 0
+    errors = []
+    for memory_id in ids:
+        try:
+            mem0_memory.delete(memory_id=memory_id)
+            deleted += 1
+        except Exception as e:
+            errors.append(f"{memory_id}: {e}")
+    
+    result = f"Deleted {deleted}/{len(ids)} memories."
+    if errors:
+        result += f" Errors: {'; '.join(errors)}"
+    return result

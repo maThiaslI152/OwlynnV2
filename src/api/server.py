@@ -24,6 +24,7 @@ from src.agent.llm import LLMPool
 from src.memory.user_profile import get_profile, update_profile
 from src.memory.persona import get_persona, update_persona_field
 from src.memory.memory_manager import load_memories, save_memory, delete_memory
+from src.memory.long_term import memory as mem0_memory
 from src.memory.project import project_manager
 from src.memory.personal_assistant import (
     get_relevant_topics,
@@ -357,6 +358,108 @@ async def api_delete_memory(body: dict):
     success = delete_memory(fact)
     return {"status": "ok" if success else "error", "memories": load_memories()}
 
+# ─── Mem0 LTM API endpoints ──────────────────────────────────────────
+
+@app.get("/api/mem0/search")
+async def api_mem0_search(query: str = "", limit: int = 50, project_id: str = ""):
+    """Search Mem0 long-term memory.
+    
+    - query: optional search text (empty returns recent memories)
+    - limit: max results (default 50)
+    - project_id: if provided, scopes search to that project's memory space;
+      otherwise searches global ("owner") memory.
+    """
+    if mem0_memory is None:
+        return {"status": "error", "message": "Mem0/Qdrant not available", "memories": [], "count": 0}
+    try:
+        user_id = f"project:{project_id}" if project_id else "owner"
+        filters = {"user_id": user_id}
+        # Use a broad query to retrieve memories; if empty, use a space to get recent ones
+        search_query = query if query else " "
+        results_dict = mem0_memory.search(search_query, filters=filters, top_k=limit)
+        results = results_dict.get("results", []) if isinstance(results_dict, dict) else results_dict
+        # Normalize: Mem0 results may have 'memory' or 'id' keys
+        memories = []
+        for item in results:
+            if isinstance(item, dict):
+                memories.append({
+                    "id": item.get("id", ""),
+                    "memory": item.get("memory", item.get("text", "")),
+                    "text": item.get("memory", item.get("text", "")),
+                    "created_at": item.get("created_at", ""),
+                    "user_id": user_id,
+                })
+        return {"status": "ok", "memories": memories, "count": len(memories)}
+    except Exception as e:
+        return {"status": "error", "message": str(e), "memories": [], "count": 0}
+
+
+@app.get("/api/mem0/count")
+async def api_mem0_count(project_id: str = ""):
+    """Get the count of memories for a given user/project.
+    
+    - project_id: if provided, counts project-scoped memories
+    """
+    if mem0_memory is None:
+        return {"status": "error", "message": "Mem0/Qdrant not available", "count": 0}
+    try:
+        user_id = f"project:{project_id}" if project_id else "owner"
+        filters = {"user_id": user_id}
+        # Search with a large top_k to get all memories and count them
+        results_dict = mem0_memory.search(" ", filters=filters, top_k=1000)
+        results = results_dict.get("results", []) if isinstance(results_dict, dict) else results_dict
+        count = len(results) if isinstance(results, list) else 0
+        return {"status": "ok", "count": count, "user_id": user_id}
+    except Exception as e:
+        return {"status": "error", "message": str(e), "count": 0}
+
+
+@app.post("/api/mem0/delete")
+async def api_mem0_delete(body: dict):
+    """Delete a specific memory from Mem0 by its ID.
+    
+    Body: { "memory_id": "..." }
+    """
+    if mem0_memory is None:
+        return {"status": "error", "message": "Mem0/Qdrant not available"}
+    try:
+        memory_id = body.get("memory_id", "")
+        if not memory_id:
+            return {"status": "error", "message": "memory_id is required"}
+        mem0_memory.delete(memory_id=memory_id)
+        return {"status": "ok", "message": f"Deleted memory {memory_id}"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@app.post("/api/mem0/clear")
+async def api_mem0_clear(body: dict):
+    """Clear all memories for a given user_id.
+    
+    Body: { "user_id": "owner" } (defaults to "owner")
+    """
+    if mem0_memory is None:
+        return {"status": "error", "message": "Mem0/Qdrant not available"}
+    try:
+        user_id = body.get("user_id", "owner")
+        mem0_memory.delete_all(user_id=user_id)
+        return {"status": "ok", "message": f"Cleared all memories for {user_id}"} if user_id else {"status": "error", "message": "user_id required"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@app.post("/api/mem0/reset")
+async def api_mem0_reset():
+    """Reset ALL Mem0 memories (global). Use with caution."""
+    if mem0_memory is None:
+        return {"status": "error", "message": "Mem0/Qdrant not available"}
+    try:
+        mem0_memory.reset()
+        return {"status": "ok", "message": "All Mem0 memories reset"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
 # Personal Assistant Endpoints - Topics, Interests, Conversation History
 
 @app.get("/api/topics")
@@ -467,14 +570,24 @@ async def api_get_project(project_id: str):
 
 @app.post("/api/projects/{project_id}/chats")
 async def api_add_project_chat(project_id: str, body: dict):
-    # body: {id, name}
+    # body: {id, name?}
     import time
+    chat_id = body["id"]
+    name = body.get("name", "")
+    # Generate a title from the first message if one was provided
+    if not name and body.get("first_message"):
+        try:
+            title = await generate_chat_title_router_llm(body["first_message"])
+            if title:
+                name = title
+        except Exception:
+            pass
     project_manager.add_chat_to_project(project_id, {
-        "id": body["id"],
-        "name": body.get("name", "New Chat"),
+        "id": chat_id,
+        "name": name or "New Chat",
         "created_at": time.time()
     })
-    return {"status": "ok"}
+    return {"status": "ok", "chat": {"id": chat_id, "name": name or "New Chat"}}
 
 @app.delete("/api/projects/{project_id}/chats/{chat_id}")
 async def api_delete_project_chat(project_id: str, chat_id: str):
@@ -1428,6 +1541,22 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                         logger.info("Saved file to %s", filepath)
                     except Exception as e:
                         logger.error("Failed to save file %s: %s", name, e)
+
+            # On first user message in a thread, register the chat in the project
+            if thread_id not in sessions or not sessions[thread_id].event_buffer:
+                chat_id = thread_id
+                file_names = [f.get("name", "") for f in files if f.get("name")]
+                try:
+                    title = await generate_chat_title_router_llm(user_input[:1000], file_names=file_names)
+                except Exception:
+                    title = ""
+                # Register chat in project manager (idempotent — dedups by chat_id)
+                import time as time_module
+                project_manager.add_chat_to_project(project_id, {
+                    "id": chat_id,
+                    "name": title or "New Chat",
+                    "created_at": time_module.time(),
+                })
 
             message_content = await build_message_content(user_input, files)
             if not message_content:

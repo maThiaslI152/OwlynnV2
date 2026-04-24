@@ -180,7 +180,12 @@ Current verified local profile keys:
 | `GET` | `/api/health` | Health check (agent ready status) |
 | `GET` | `/api/profile` | Get user profile |
 | `POST` | `/api/profile` | Update user profile |
-| `GET` | `/api/memories` | List stored memories |
+| `GET` | `/api/memories` | List stored short-term (JSON) memories |
+| `POST` | `/api/memories` | Save a fact to short-term memory |
+| `DELETE` | `/api/memories` | Delete from short-term memory |
+| `GET` | `/api/mem0/search` | Search Mem0/Qdrant vector long-term memory |
+| `GET` | `/api/mem0/count` | Count memories in Mem0 |
+| `POST` | `/api/mem0/delete` | Delete a memory by ID from Mem0 |
 | `GET` | `/api/projects` | List all projects |
 | `POST` | `/api/projects` | Create a project |
 | `GET` | `/api/topics` | Get tracked topics with relevance |
@@ -218,9 +223,9 @@ Notes:
 | Files | read, write, edit, list, delete workspace files |
 | Documents | create_docx, create_xlsx, create_pptx, create_pdf |
 | Compute | notebook_run, notebook_reset |
-| Memory | recall_memories |
+| Memory | recall_memories, recall_all_memories, forget_memory |
 | Tasks | todo_add, todo_list, todo_complete |
-| Skills | list_skills, invoke_skill, run_skill_chain |
+| System prompts | list_skills, invoke_skill |
 | HITL | ask_user (with choice buttons) |
 
 ## Skills (11)
@@ -240,6 +245,54 @@ Reusable prompt templates in `skills/`. Zero token cost until invoked.
 | Presentation Builder | make slides, powerpoint |
 | Content Rewriter | rewrite, polish, proofread |
 | Brainstorm | brainstorm, ideas, what if |
+
+## Memory System
+
+Owlynn uses a three-tier memory architecture:
+
+### 1. Short-Term Memory (JSON)
+File-based fact storage in `data/memories.json`. Managed by `src/memory/memory_manager.py`. Simple keyword-overlap search, 200-entry cap. Used for quick recall of user facts during a session.
+
+### 2. Long-Term Memory (Mem0 + Qdrant)
+Vector-based semantic memory using Mem0 with a Qdrant backend (`cowork_memory_nomic` collection). Embeddings served by LM Studio (`nomic-embed-text-v1.5`, 768-dim). Managed by `src/memory/long_term.py`.
+
+Key features:
+- **Project isolation**: Memories are scoped by `project:<id>` for non-default projects. Conversations in different projects do not share long-term memory stores. The `default` project uses a global `owner` user ID, so all chats within `default` share the same memory pool.
+- **Cross-session recall**: Within the same project (or within `default`), memories from past conversations are surfaced via semantic search — the LLM recalls facts and topics you discussed in previous chats.
+- **Cross-project user knowledge**: In non-default projects, the assistant also pulls global user memories (profile name), so it retains general knowledge about you while keeping project-specific conversations isolated.
+- **Selective memory gate**: Skips trivial/greeting exchanges to avoid memory pollution
+- **Semantic dedup**: Avoids saving near-duplicate memories via similarity search before write
+- **5-minute context cache**: Avoids rebuilding memory context on every request
+- **WebSocket notification**: `memory_updated` event triggers UI refresh after memory write
+
+### 3. Personal Assistant Memory
+Managed by `src/memory/personal_assistant.py`:
+- **Topic extraction**: Regex-based, 10 categories, stored in `data/topics.json`
+- **Interest detection**: 8 types, stored in `data/interests.json`  
+- **Conversation summaries**: Last 100 entries in `data/conversations.json`
+- **Time-decay relevance scoring**: Topics/interests decay over time
+
+### Memory Tools
+
+| Tool | Description |
+|------|-------------|
+| `recall_memories` | Search short-term JSON memories (keyword overlap) |
+| `recall_all_memories` | Deep semantic search of Mem0/Qdrant vector store |
+| `forget_memory` | Delete specific memories by their ID hash |
+
+### Memory API Endpoints
+
+See [API Reference](docs/API_REFERENCE.md) for the full list, including `/api/mem0/search`, `/api/mem0/delete`, `/api/topics`, `/api/interests`, and `/api/memory-context`.
+
+### Memory Node Flow (LangGraph)
+
+The agent graph has two memory nodes:
+1. **memory_inject_node** (pre-reasoning): Builds memory context from Mem0 + profile + topics + project instructions
+2. **memory_write_node** (post-reasoning): Extracts topics/interests, saves enriched facts to Mem0, invalidates cache
+
+### Live Talk (TTS/STT) — Placeholder
+
+The Live Talk feature is structured as a state machine placeholder for future push-to-talk with TTS and STT. The frontend (`LiveTalkControls.tsx`) and Tauri bridge (`tauriBridge.ts`) have the control flow and state transitions wired up, but actual audio capture/transcription/synthesis is not implemented. The Rust side (`src-tauri/src/main.rs`) exposes `start_push_to_talk`, `stop_push_to_talk`, and `hard_stop_voice` commands that toggle a `voice_recording` boolean.
 
 ## Testing
 
