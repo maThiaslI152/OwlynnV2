@@ -1,9 +1,8 @@
 """
-Web Tools: Search + Fetch (Overhauled)
---------------------------------------
+Web Tools: Search + Fetch
+-------------------------
 web_search           : Tiered reliability pipeline:
-                       Tier 0.5 (SearXNG) -> Tier 1 (API/curl_cffi) -> Tier 2 (DDGS/httpx) -> Tier 3 (Playwright).
-                       Weather (wttr.in) remains a dedicated fast path.
+                       wttr.in (weather) -> SearXNG -> curl_cffi -> DDGS -> httpx -> Playwright.
 fetch_webpage        : Static fetching via httpx + BeautifulSoup
 fetch_webpage_dynamic: Dynamic fetching via Playwright
 """
@@ -17,13 +16,9 @@ from urllib.parse import parse_qs, quote_plus, unquote, urlparse
 
 from langchain_core.tools import tool
 from src.config.settings import (
-    BRAVE_SEARCH_API_KEY,
     SEARXNG_URL,
-    SERPER_API_KEY,
-    TAVILY_API_KEY,
     WEB_SEARCH_ENABLE_BROWSER_FALLBACK,
     WEB_SEARCH_ENABLE_CURL_CFFI,
-    WEB_SEARCH_PROVIDER,
     WEB_SEARCH_TIMEOUT_SECONDS,
 )
 
@@ -77,15 +72,6 @@ def _bot_block_detail(html_content: str) -> str:
     if "verify you are human" in text:
         return '"Verify you are human" interstitial detected'
     return "Anti-bot challenge detected"
-
-
-def _candidate_providers(backend: str) -> list[str]:
-    forced = (WEB_SEARCH_PROVIDER or "auto").strip().lower()
-    if backend in {"brave", "serper", "tavily"}:
-        return [backend]
-    if forced in {"brave", "serper", "tavily"}:
-        return [forced]
-    return ["brave", "serper", "tavily"]
 
 
 def _structured_search_failure(query: str, attempts: list[SearchAttempt]) -> str:
@@ -245,107 +231,6 @@ def _normalize_hits(raw: list[dict], max_hits: int) -> list[dict[str, str]]:
         if len(out) >= max_hits:
             break
     return out
-
-
-async def _web_search_api_brave(
-    query: str, backend: str, news: bool, focus_query: str = ""
-) -> tuple[str | None, SearchAttempt]:
-    import httpx
-
-    if not BRAVE_SEARCH_API_KEY:
-        return None, SearchAttempt("tier1", "brave_api", "unavailable_key", "BRAVE_SEARCH_API_KEY not set")
-    endpoint = (
-        "https://api.search.brave.com/res/v1/news/search"
-        if news
-        else "https://api.search.brave.com/res/v1/web/search"
-    )
-    params = {"q": query, "count": 10}
-    headers = {
-        "X-Subscription-Token": BRAVE_SEARCH_API_KEY,
-        "Accept": "application/json",
-    }
-    try:
-        async with httpx.AsyncClient(timeout=WEB_SEARCH_TIMEOUT_SECONDS) as client:
-            resp = await client.get(endpoint, params=params, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
-    except Exception as e:
-        return None, SearchAttempt("tier1", "brave_api", "network_error", str(e)[:180])
-
-    raw = []
-    if news:
-        raw = data.get("results") or data.get("news", {}).get("results") or []
-    else:
-        raw = data.get("web", {}).get("results") or data.get("results") or []
-    hits = _normalize_hits(raw, max_hits=15 if (focus_query or "").strip() else 5)
-    if not hits:
-        return None, SearchAttempt("tier1", "brave_api", "empty", "No hits in API response")
-    hits = await _maybe_rerank_search_hits(focus_query, hits)
-    return (
-        _format_search_hits_markdown(query, backend, news, hits, "via Brave API"),
-        SearchAttempt("tier1", "brave_api", "ok"),
-    )
-
-
-async def _web_search_api_serper(
-    query: str, backend: str, news: bool, focus_query: str = ""
-) -> tuple[str | None, SearchAttempt]:
-    import httpx
-
-    if not SERPER_API_KEY:
-        return None, SearchAttempt("tier1", "serper_api", "unavailable_key", "SERPER_API_KEY not set")
-    endpoint = "https://google.serper.dev/news" if news else "https://google.serper.dev/search"
-    payload = {"q": query, "num": 10}
-    headers = {"X-API-KEY": SERPER_API_KEY, "Content-Type": "application/json"}
-    try:
-        async with httpx.AsyncClient(timeout=WEB_SEARCH_TIMEOUT_SECONDS) as client:
-            resp = await client.post(endpoint, json=payload, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
-    except Exception as e:
-        return None, SearchAttempt("tier1", "serper_api", "network_error", str(e)[:180])
-
-    raw = data.get("news") if news else data.get("organic")
-    hits = _normalize_hits(raw or [], max_hits=15 if (focus_query or "").strip() else 5)
-    if not hits:
-        return None, SearchAttempt("tier1", "serper_api", "empty", "No hits in API response")
-    hits = await _maybe_rerank_search_hits(focus_query, hits)
-    return (
-        _format_search_hits_markdown(query, backend, news, hits, "via Serper API"),
-        SearchAttempt("tier1", "serper_api", "ok"),
-    )
-
-
-async def _web_search_api_tavily(
-    query: str, backend: str, news: bool, focus_query: str = ""
-) -> tuple[str | None, SearchAttempt]:
-    import httpx
-
-    if not TAVILY_API_KEY:
-        return None, SearchAttempt("tier1", "tavily_api", "unavailable_key", "TAVILY_API_KEY not set")
-    payload = {
-        "api_key": TAVILY_API_KEY,
-        "query": query,
-        "search_depth": "basic",
-        "max_results": 10,
-        "include_answer": False,
-    }
-    try:
-        async with httpx.AsyncClient(timeout=WEB_SEARCH_TIMEOUT_SECONDS) as client:
-            resp = await client.post("https://api.tavily.com/search", json=payload)
-            resp.raise_for_status()
-            data = resp.json()
-    except Exception as e:
-        return None, SearchAttempt("tier1", "tavily_api", "network_error", str(e)[:180])
-
-    hits = _normalize_hits(data.get("results") or [], max_hits=15 if (focus_query or "").strip() else 5)
-    if not hits:
-        return None, SearchAttempt("tier1", "tavily_api", "empty", "No hits in API response")
-    hits = await _maybe_rerank_search_hits(focus_query, hits)
-    return (
-        _format_search_hits_markdown(query, backend, news, hits, "via Tavily API"),
-        SearchAttempt("tier1", "tavily_api", "ok"),
-    )
 
 
 async def _web_search_curl_cffi(
@@ -771,7 +656,7 @@ async def web_search(
     """
     Searches the web and returns top results.
 
-    Order: SearXNG → API providers → curl_cffi → DDGS → httpx → Playwright.
+    Order: SearXNG → curl_cffi → DDGS → httpx → Playwright.
     ``backend="google"`` uses Playwright only.
 
     Use this to look up current information, documentation, definitions, or
@@ -816,20 +701,6 @@ async def web_search(
                 attempts.append(SearchAttempt("tier0.5", "searxng", "empty", "No results"))
             except Exception as e:
                 attempts.append(SearchAttempt("tier0.5", "searxng", "error", str(e)[:120]))
-
-        # Tier 1A: Search APIs (auto provider selection)
-        for provider in _candidate_providers(backend):
-            result: str | None = None
-            attempt = SearchAttempt("tier1", f"{provider}_api", "skipped")
-            if provider == "brave":
-                result, attempt = await _web_search_api_brave(query, backend, news, focus_query)
-            elif provider == "serper":
-                result, attempt = await _web_search_api_serper(query, backend, news, focus_query)
-            elif provider == "tavily":
-                result, attempt = await _web_search_api_tavily(query, backend, news, focus_query)
-            attempts.append(attempt)
-            if result:
-                return result
 
         # Tier 1B: curl_cffi browser-like TLS fallback
         curl_out, curl_attempt = await _web_search_curl_cffi(query, backend, news, focus_query)

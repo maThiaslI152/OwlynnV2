@@ -2,8 +2,8 @@
 Simple Node — Fast answers via the small LLM (LFM2.5-1.2B or similar).
 
 Handles greetings, small talk, and direct knowledge questions.
-No tools, no memory injection (keeps the prompt short for small models).
-Falls back to the large model if the small one fails.
+Injects condensed memory context (topics/interests profile) without full past context
+to keep the prompt short for small models. Falls back to the large model if the small one fails.
 """
 
 import asyncio
@@ -24,6 +24,7 @@ SIMPLE_PROMPT = (
     "Give short, direct answers (1-3 sentences). "
     "No reasoning steps, no preamble, no meta commentary."
     "{style_hint}"
+    "{memory_hint}"
 )
 
 
@@ -59,9 +60,20 @@ async def simple_node(state: AgentState) -> AgentState:
     """Fast-path node: short answers without tools."""
     style_hint = style_instruction_for_prompt(state.get("response_style"))
     from datetime import date
+    # Inject condensed memory context (topics/interests only, no past context) for personalization
+    memory_ctx = state.get("memory_context") or ""
+    memory_hint = ""
+    # Extract the "Your Knowledge About User" section if present (topics/interests)
+    if memory_ctx and "=== Your Knowledge About User ===" in memory_ctx:
+        parts = memory_ctx.split("=== Your Knowledge About User ===")
+        if len(parts) > 1:
+            knowledge = parts[1].split("===")[0].strip()
+            if knowledge:
+                memory_hint = f"\n{knowledge}"
     system = SystemMessage(content=SIMPLE_PROMPT.format(
         current_date=date.today().strftime('%B %d, %Y'),
         style_hint=style_hint,
+        memory_hint=memory_hint,
     ))
     messages = list(state.get("messages") or [])
     prompt = with_system_for_local_server(system, messages)

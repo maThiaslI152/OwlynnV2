@@ -373,10 +373,9 @@ async def api_mem0_search(query: str = "", limit: int = 50, project_id: str = ""
         return {"status": "error", "message": "Mem0/Qdrant not available", "memories": [], "count": 0}
     try:
         user_id = f"project:{project_id}" if project_id else "owner"
-        filters = {"user_id": user_id}
         # Use a broad query to retrieve memories; if empty, use a space to get recent ones
         search_query = query if query else " "
-        results_dict = mem0_memory.search(search_query, filters=filters, top_k=limit)
+        results_dict = mem0_memory.search(search_query, user_id=user_id, filters=None, limit=limit)
         results = results_dict.get("results", []) if isinstance(results_dict, dict) else results_dict
         # Normalize: Mem0 results may have 'memory' or 'id' keys
         memories = []
@@ -404,9 +403,8 @@ async def api_mem0_count(project_id: str = ""):
         return {"status": "error", "message": "Mem0/Qdrant not available", "count": 0}
     try:
         user_id = f"project:{project_id}" if project_id else "owner"
-        filters = {"user_id": user_id}
-        # Search with a large top_k to get all memories and count them
-        results_dict = mem0_memory.search(" ", filters=filters, top_k=1000)
+        # Search with a large limit to get all memories and count them
+        results_dict = mem0_memory.search(" ", user_id=user_id, filters=None, limit=1000)
         results = results_dict.get("results", []) if isinstance(results_dict, dict) else results_dict
         count = len(results) if isinstance(results, list) else 0
         return {"status": "ok", "count": count, "user_id": user_id}
@@ -1251,6 +1249,8 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
         await websocket.close(code=1008, reason="Agent not initialized")
         return
 
+    logger.info("WebSocket accepted for thread=%s", thread_id)
+
     # Get or create session
     sessions = websocket.app.state.sessions
     if thread_id not in sessions:
@@ -1557,6 +1557,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                     "name": title or "New Chat",
                     "created_at": time_module.time(),
                 })
+                logger.info("Registered chat %s in project %s (title=%s)", chat_id, project_id, title or "New Chat")
 
             message_content = await build_message_content(user_input, files)
             if not message_content:

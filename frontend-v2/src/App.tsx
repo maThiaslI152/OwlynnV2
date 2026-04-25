@@ -101,15 +101,22 @@ function App() {
         setCurrentThreadId(existingThread)
         setActiveChatId(existingThread)
       } else {
-        // Sync thread IDs with the actual chat data from the API
         const activeProject = mapped.find((p) => p.id === activeProjectId)
         if (activeProject && activeProject.chats.length > 0) {
-          // Use the most recent chat's ID as the current thread
-          const sorted = [...activeProject.chats].sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))
-          const latestChatId = sorted[0].id
-          projectThreadsRef.current[activeProjectId] = latestChatId
-          setCurrentThreadId(latestChatId)
-          setActiveChatId(latestChatId)
+          // Don't overwrite currentThreadId if the current thread is NOT in the API response
+          // (meaning the chat hasn't been registered by the backend yet — pending new chat)
+          const currentExists = currentThreadId && activeProject.chats.some((c) => c.id === currentThreadId)
+          if (!currentExists) {
+            // Current thread is not yet registered on backend (pending new chat) — keep it
+            projectThreadsRef.current[activeProjectId] = currentThreadId
+          } else {
+            // Sync to latest chat from API only when current thread is already registered
+            const sorted = [...activeProject.chats].sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))
+            const latestChatId = sorted[0].id
+            projectThreadsRef.current[activeProjectId] = latestChatId
+            setCurrentThreadId(latestChatId)
+            setActiveChatId(latestChatId)
+          }
         } else {
           setActiveChatId(currentThreadId)
         }
