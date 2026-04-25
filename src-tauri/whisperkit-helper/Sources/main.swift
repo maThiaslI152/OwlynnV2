@@ -49,6 +49,12 @@ while let line = readLine() {
         whisper.start(ipc: ipc)
     case "transcribe_stop":
         whisper.stop()
+    case "mute":
+        whisper.setMuted(true)
+        soundAnalysis.setMuted(true)
+    case "unmute":
+        whisper.setMuted(false)
+        soundAnalysis.setMuted(false)
     case "shutdown":
         whisper.stop()
         ipc.emit(OutgoingEvent(event: "shutdown"))

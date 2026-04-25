@@ -1,6 +1,6 @@
 # Owlynn Status
 
-Last updated: 2026-04-25 (Phase 6 complete; 3 bug fixes applied: mem0 user_id kwarg, new chat race, simple-path memory injection)
+Last updated: 2026-04-25 (Phase 6 complete; Live Talk Phase 1 TTS-loop mitigation implemented)
 
 ## Current Progress
 
@@ -32,6 +32,15 @@ Last updated: 2026-04-25 (Phase 6 complete; 3 bug fixes applied: mem0 user_id kw
 
 ## Recent Verification Notes
 
+- **Live Talk Phase 1 blocker mitigation implemented (2026-04-25):**
+  - helper-level `mute` / `unmute` command path added and wired through Rust TTS flow (`say`),
+  - WhisperKit and SoundAnalysis both honor mute state so TTS playback audio is dropped before transcription/wake-word analysis,
+  - hardcoded WhisperKit user path removed; helper now uses portable model loading (`download: true`),
+  - duplicate `voice.*` handling risk reduced in frontend by preferring Tauri runtime event path in Tauri builds,
+  - wake-word listener now auto-starts on controls mount,
+  - Korean `Yuna` voice detection logic fixed (inverted condition corrected).
+  - build validation completed (`cargo build`, `npm run build`, helper `swift build -c release`) and helper command smoke test passed.
+  - detailed implementation notes: `docs/LIVE_TALK_PHASE1_TTS_LOOP_FIX_2026-04-25.md`.
 - **Debug session 2026-04-25 — 3 bugs resolved in live chat workflow:**
   - **Bug 1 — LTM ValueError:** All 6 calls to `mem0_memory.search()` passed `user_id` inside `filters` dict instead of as a keyword argument. `mem0ai` v1.0.9 strictly validates keyword args via `_build_filters_and_metadata()`. Fixed in `server.py`, `memory.py`, `core_tools.py`.
   - **Bug 2 — New chat reversion:** `loadProjects()` in `App.tsx` raced with async chat registration. Fixed by checking if `currentThreadId` exists in the API response before overwriting.
@@ -86,7 +95,7 @@ must be used instead. `start.sh` now builds the frontend and launches the `.app`
 - **RESOLVED (2026-04-25) — LTM ValueError on memory search:** `mem0ai` v1.0.9's `Memory.search()` requires `user_id` as a keyword-only argument, but was passed inside the `filters` dict at all 6 call sites. Fixed by passing `user_id=...` as a keyword arg.
 - **RESOLVED (2026-04-25) — New chat reverts to old thread:** Race condition in `loadProjects()` overwrote `currentThreadId` before the backend registered the new chat. Fixed by preserving `currentThreadId` when the thread ID isn't yet in the API response.
 - **RESOLVED (2026-04-25) — Topics/interests not injected into simple LLM path:** The "Your Knowledge About User" context was only injected in the complex node. Fixed by extracting and injecting just the knowledge section into the simple node's system prompt.
-- **RESOLVED — Live Talk TTS feedback loop (ACTIVE):** assistant speech is intermittently re-captured by microphone and re-submitted as user transcript. Frontend suppression guard is in place but not sufficient in all paths.
+- **ACTIVE — Live Talk TTS feedback loop:** helper/backend mute-gate mitigation is now implemented; full real-device manual verification and long-run stability validation are still pending before declaring this resolved.
 - Workspace switching can still cause stale UI state in edge transitions.
 - Frontend/backend event payload mismatches can surface in integration paths.
 - Cloud fallback + anonymization paths require continued regression protection.

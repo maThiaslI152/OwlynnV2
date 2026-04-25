@@ -3,7 +3,7 @@
 use serde::Serialize;
 use std::path::PathBuf;
 use std::process::Command;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{Emitter, Manager};
@@ -193,7 +193,8 @@ fn stop_voice_listening(app: tauri::AppHandle, state: tauri::State<Mutex<NativeR
 fn speak_text(app: tauri::AppHandle, state: tauri::State<Mutex<NativeRuntimeState>>, text: String) -> Result<String, String> {
   let locked = state.lock().map_err(|_| "native runtime state lock failed".to_string())?;
   let engine = Arc::new(Mutex::new(locked.voice.clone()));
-  let _ = voice::speak_text(app, text, engine);
+  let helper = locked.helper.clone();
+  let _ = voice::speak_text(app, text, engine, helper);
   Ok("speech queued".to_string())
 }
 

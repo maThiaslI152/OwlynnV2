@@ -29,6 +29,7 @@ final class WhisperKitEngine {
 
     private var audioEngine: AVAudioEngine?
     private var isTranscribing = false
+    private var isMuted = false
     private let decoderQueue = DispatchQueue(label: "com.owlynn.whisperkit.decoder")
     private var lastEmittedText: String = ""
     private var lastEmittedIsFinal: Bool = false
@@ -56,14 +57,12 @@ final class WhisperKitEngine {
             Self.log("[WhisperKit] Preloading model distil-whisper_distil-large-v3 from cache...")
             Task {
                 do {
-                    let modelPath = "/Users/tim/Documents/huggingface/models/argmaxinc/whisperkit-coreml/distil-whisper_distil-large-v3"
                     let newKit = try await WhisperKit(
                         model: "distil-whisper_distil-large-v3",
-                        modelFolder: modelPath,
                         verbose: false,
                         prewarm: true,
                         load: true,
-                        download: false
+                        download: true
                     )
                     Self.sharedKit = newKit
                     Self.log("[WhisperKit] Preloaded successfully")
@@ -110,14 +109,12 @@ final class WhisperKitEngine {
             Self.loadAttempted = true
             Task {
                 do {
-                    let modelPath = "/Users/tim/Documents/huggingface/models/argmaxinc/whisperkit-coreml/distil-whisper_distil-large-v3"
                     let newKit = try await WhisperKit(
                         model: "distil-whisper_distil-large-v3",
-                        modelFolder: modelPath,
                         verbose: false,
                         prewarm: true,
                         load: true,
-                        download: false
+                        download: true
                     )
                     Self.sharedKit = newKit
                     Self.log("[WhisperKit] Model loaded successfully")
@@ -142,6 +139,16 @@ final class WhisperKitEngine {
         stopMicCapture()
         lastEmittedText = ""
         lastEmittedIsFinal = false
+    }
+
+    func setMuted(_ muted: Bool) {
+        isMuted = muted
+        if muted {
+            // Drop any buffered mic samples collected before mute.
+            sampleAccumulatorLock.lock()
+            sampleAccumulator.removeAll()
+            sampleAccumulatorLock.unlock()
+        }
     }
 
     deinit {
@@ -181,6 +188,10 @@ final class WhisperKitEngine {
             let db = 20.0 * log10(Double(rms) + 1e-10)
             print("{\"event\":\"audio_level\",\"level\":\(db),\"rms\":\(rms)}")
             fflush(stdout)
+
+            if self.isMuted {
+                return
+            }
 
             // Feed audio samples into accumulator
             self.feedBuffer(buffer, ipc: ipc)

@@ -16,6 +16,7 @@ final class SoundAnalysisEngine {
     private var streamAnalyzer: SNAudioStreamAnalyzer?
     private var observer: ResultsObserver?
     private(set) var running = false
+    private var isMuted = false
     private var threshold: Double = 0.3
     private var usingCoreML = false
 
@@ -76,7 +77,8 @@ final class SoundAnalysisEngine {
                     format: inputFormat
                 ) { [weak self] buffer, time in
                     self?.analysisQueue.async {
-                        self?.streamAnalyzer?.analyze(buffer, atAudioFramePosition: time.sampleTime)
+                        guard let self = self, !self.isMuted else { return }
+                        self.streamAnalyzer?.analyze(buffer, atAudioFramePosition: time.sampleTime)
                     }
                 }
 
@@ -120,10 +122,14 @@ final class SoundAnalysisEngine {
         running = false
     }
 
+    func setMuted(_ muted: Bool) {
+        isMuted = muted
+    }
+
     /// Called by main.swift whenever a new transcript chunk arrives (text-matching fallback).
     /// Returns true if the chunk contains the wake word.
     func triggerWakeWordIfNeeded(_ text: String) -> Bool {
-        guard running, !usingCoreML else { return false }
+        guard running, !usingCoreML, !isMuted else { return false }
         return text.lowercased().contains("athena")
     }
 }

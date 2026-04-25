@@ -67,6 +67,7 @@ function App() {
   const wsClientRef = useRef<WsClient | null>(null)
   const ttsSpeakingRef = useRef(false)
   const ttsSuppressionUntilRef = useRef(0)
+  const isTauriRuntime = typeof window !== 'undefined' && Boolean((window as any).__TAURI_INTERNALS__)
 
   const makeThreadId = () => `thread-${crypto.randomUUID()}`
   const shouldSuppressVoiceTranscript = () =>
@@ -240,6 +241,16 @@ function App() {
           if (wakeWordListening && finalContent.trim()) {
             void tauriBridge.speakText(finalContent.trim())
           }
+        } else if (
+          isTauriRuntime &&
+          (event.type === 'voice.state' ||
+            event.type === 'voice.transcript' ||
+            event.type === 'voice.wake_word' ||
+            event.type === 'voice.error' ||
+            event.type === 'voice.tts_state')
+        ) {
+          // In Tauri runtime, native event listener is the canonical voice event source.
+          return
         } else if (event.type === 'voice.state') {
           setVoiceState(event.state)
         } else if (event.type === 'voice.transcript') {

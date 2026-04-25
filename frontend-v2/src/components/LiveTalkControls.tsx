@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAppStore, type VoiceState } from '../state/useAppStore'
 import { tauriBridge } from '../lib/tauriBridge'
 
@@ -24,6 +24,7 @@ export function LiveTalkControls() {
   const setWakeWordPhrase = useAppStore((s) => s.setWakeWordPhrase)
   const voiceActive = !['idle', 'interrupted'].includes(voiceState)
   const [draftPhrase, setDraftPhrase] = useState('Athena')
+  const autoStartAttemptedRef = useRef(false)
 
   // Load the persisted phrase from Rust on mount
   useEffect(() => {
@@ -42,6 +43,34 @@ export function LiveTalkControls() {
     void load()
     return () => { cancelled = true }
   }, [setWakeWordPhrase])
+
+  // Auto-start wake-word listening when available in Tauri runtime.
+  useEffect(() => {
+    if (autoStartAttemptedRef.current) return
+    autoStartAttemptedRef.current = true
+
+    let cancelled = false
+    const autoStart = async () => {
+      try {
+        const result = await tauriBridge.startVoiceListening()
+        if (cancelled) return
+        if (result.ok) {
+          setWakeWordListening(true)
+          setVoiceError(null)
+          setOperatorNote('Wake-word listening started (Athena)')
+        } else {
+          setVoiceError(result.error ?? 'Failed to auto-start wake-word listener')
+          setOperatorNote(`Live Talk error: ${result.error}`)
+        }
+      } catch {
+        // tauriBridge may not be available in browser-preview mode.
+      }
+    }
+    void autoStart()
+    return () => {
+      cancelled = true
+    }
+  }, [setOperatorNote, setVoiceError, setWakeWordListening])
 
   const hardStop = async () => {
     const result = await tauriBridge.hardStopVoice()

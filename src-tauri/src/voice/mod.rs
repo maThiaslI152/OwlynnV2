@@ -354,7 +354,12 @@ pub fn hard_stop_voice(stop_flag: Arc<AtomicBool>, helper_state: Arc<Mutex<Whisp
   helper_state.lock().unwrap().shutdown();
 }
 
-pub fn speak_text(app: AppHandle, text: String, engine: Arc<Mutex<VoiceEngineState>>) -> String {
+pub fn speak_text(
+  app: AppHandle,
+  text: String,
+  engine: Arc<Mutex<VoiceEngineState>>,
+  helper_state: Arc<Mutex<WhisperKitHelper>>,
+) -> String {
   let utterance_id = format!(
     "utt-{}",
     std::time::SystemTime::now()
@@ -376,10 +381,15 @@ pub fn speak_text(app: AppHandle, text: String, engine: Arc<Mutex<VoiceEngineSta
     },
   );
 
+  {
+    let mut helper = helper_state.lock().unwrap();
+    let _ = helper.send_command(r#"{"command":"mute"}"#);
+  }
+
   let korean_voice = if text.chars().any(|c| {
     ('\u{AC00}'..='\u{D7AF}').contains(&c) || ('\u{1100}'..='\u{11FF}').contains(&c)
   }) {
-    if !Command::new("say")
+    if Command::new("say")
       .arg("-v")
       .arg("Yuna")
       .arg("test")
@@ -401,6 +411,10 @@ pub fn speak_text(app: AppHandle, text: String, engine: Arc<Mutex<VoiceEngineSta
       cmd.arg("-v").arg(korean_voice);
     }
     cmd.arg(&text_for_tts).output().ok();
+    {
+      let mut helper = helper_state.lock().unwrap();
+      let _ = helper.send_command(r#"{"command":"unmute"}"#);
+    }
     let mut engine = engine.lock().unwrap();
     engine.tts_speaking = false;
     let _ = app.emit(
