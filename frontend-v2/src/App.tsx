@@ -67,11 +67,36 @@ function App() {
   const wsClientRef = useRef<WsClient | null>(null)
   const ttsSpeakingRef = useRef(false)
   const ttsSuppressionUntilRef = useRef(0)
+  const lastSpokenTextRef = useRef('')
+  /** Transcripts received within this window after TTS finishes are discarded. */
+  const ttsEchoWindowRef = useRef(0)
   const isTauriRuntime = typeof window !== 'undefined' && Boolean((window as any).__TAURI_INTERNALS__)
 
   const makeThreadId = () => `thread-${crypto.randomUUID()}`
   const shouldSuppressVoiceTranscript = () =>
     ttsSpeakingRef.current || Date.now() < ttsSuppressionUntilRef.current
+  const isTtsEcho = (transcript: string) => {
+    const last = lastSpokenTextRef.current
+    if (!last || !transcript) return false
+    // Extend the echo suppression window each time a transcript arrives after
+    // the initial cooldown — lazy perpetual extension catches long TTS echoes.
+    if (Date.now() < ttsEchoWindowRef.current) {
+      ttsEchoWindowRef.current = Date.now() + 3000
+      return true
+    }
+    const a = transcript.toLowerCase().trim()
+    const b = last.toLowerCase().trim()
+    // Exact match or one-way containment = echo
+    const shorter = a.length <= b.length ? a : b
+    const longer = a.length <= b.length ? b : a
+    if (longer.includes(shorter)) return true
+    // High word overlap (>50%) is also suspicious
+    const aWords = new Set(a.split(/\s+/))
+    const bWords = new Set(b.split(/\s+/))
+    const intersection = new Set([...aWords].filter((w) => bWords.has(w)))
+    if (intersection.size > 0 && intersection.size >= Math.min(aWords.size, bWords.size) * 0.5) return true
+    return false
+  }
 
   const loadProjects = useCallback(async () => {
     try {
@@ -239,6 +264,8 @@ function App() {
             })
           }
           if (wakeWordListening && finalContent.trim()) {
+            lastSpokenTextRef.current = finalContent.trim()
+            ttsEchoWindowRef.current = Date.now() + 15000  // 15s echo window from TTS start
             void tauriBridge.speakText(finalContent.trim())
           }
         } else if (
@@ -252,13 +279,21 @@ function App() {
           // In Tauri runtime, native event listener is the canonical voice event source.
           return
         } else if (event.type === 'voice.state') {
+          if (event.state === 'recording' || event.state === 'idle') {
+            setInterimTranscript('')
+          }
           setVoiceState(event.state)
         } else if (event.type === 'voice.transcript') {
           if (shouldSuppressVoiceTranscript()) {
             return
           }
           setInterimTranscript(event.text)
-          if (event.is_final && event.text.trim()) {
+          const trimmed = event.text.trim()
+          if (event.is_final && trimmed) {
+            // Discard transcripts that echo the assistant's own TTS output.
+            if (isTtsEcho(trimmed)) {
+              return
+            }
             const voiceMsg: ChatMessage = {
               id: crypto.randomUUID(),
               role: 'user',
@@ -284,7 +319,7 @@ function App() {
         } else if (event.type === 'voice.tts_state') {
           ttsSpeakingRef.current = event.speaking
           // Keep a short cooldown after TTS stops to avoid speaker/mic echo.
-          ttsSuppressionUntilRef.current = event.speaking ? Date.now() : Date.now() + 1200
+          ttsSuppressionUntilRef.current = event.speaking ? Date.now() : Date.now() + 3000
           setTtsSpeaking(event.speaking)
         } else if (event.type === 'safe_mode.changed') {
           setSafeMode(event.mode)
@@ -336,13 +371,21 @@ function App() {
     void listen<TauriEventPayload>('owlynn://runtime-event', (event) => {
       const payload = event.payload
       if (payload.type === 'voice.state') {
+        if (payload.state === 'recording' || payload.state === 'idle') {
+          setInterimTranscript('')
+        }
         setVoiceState(payload.state)
       } else if (payload.type === 'voice.transcript') {
         if (shouldSuppressVoiceTranscript()) {
           return
         }
         setInterimTranscript(payload.text)
-        if (payload.is_final && payload.text.trim()) {
+        const trimmed = payload.text.trim()
+        if (payload.is_final && trimmed) {
+          // Discard transcripts that echo the assistant's own TTS output.
+          if (isTtsEcho(trimmed)) {
+            return
+          }
           const voiceMsg: ChatMessage = {
             id: crypto.randomUUID(),
             role: 'user',
@@ -368,7 +411,7 @@ function App() {
       } else if (payload.type === 'voice.tts_state') {
         ttsSpeakingRef.current = payload.speaking
         // Keep a short cooldown after TTS stops to avoid speaker/mic echo.
-        ttsSuppressionUntilRef.current = payload.speaking ? Date.now() : Date.now() + 1200
+        ttsSuppressionUntilRef.current = payload.speaking ? Date.now() : Date.now() + 3000
         setTtsSpeaking(payload.speaking)
       } else if (payload.type === 'voice.started') {
         setWakeWordListening(payload.mode === 'wake_word')

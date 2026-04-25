@@ -160,7 +160,8 @@ fn start_voice_listening(app: tauri::AppHandle, state: tauri::State<Mutex<Native
     return Ok("wake-word listening already active".to_string());
   }
   let stop_flag = Arc::new(AtomicBool::new(false));
-  voice::start_wake_listen(app.clone(), stop_flag.clone(), locked.helper.clone());
+  let engine = Arc::new(Mutex::new(locked.voice.clone()));
+  voice::start_wake_listen(app.clone(), stop_flag.clone(), locked.helper.clone(), engine);
   locked.voice.wake_stop = Some(stop_flag);
   locked.voice.wake_word_phrase = "Athena".to_string();
   locked.voice.listening = true;

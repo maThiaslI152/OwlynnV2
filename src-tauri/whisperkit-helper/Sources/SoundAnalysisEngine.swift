@@ -17,6 +17,8 @@ final class SoundAnalysisEngine {
     private var observer: ResultsObserver?
     private(set) var running = false
     private var isMuted = false
+    /// Cooldown timestamp after unmute — wake-word detection is suppressed during this window.
+    private var postUnmuteCooldownUntil: Date = .distantPast
     private var threshold: Double = 0.3
     private var usingCoreML = false
 
@@ -39,6 +41,15 @@ final class SoundAnalysisEngine {
 
                 // Set up audio engine + stream analyzer
                 let engine = AVAudioEngine()
+                do {
+                    try engine.inputNode.setVoiceProcessingEnabled(true)
+                } catch {
+                    ipc.emit(OutgoingEvent(
+                        event: "error", label: nil, confidence: nil,
+                        text: nil, is_final: nil,
+                        message: "Voice processing enable failed: \(error.localizedDescription)"
+                    ))
+                }
                 self.audioEngine = engine
                 let inputNode = engine.inputNode
                 let inputFormat = inputNode.outputFormat(forBus: 0)
@@ -77,7 +88,7 @@ final class SoundAnalysisEngine {
                     format: inputFormat
                 ) { [weak self] buffer, time in
                     self?.analysisQueue.async {
-                        guard let self = self, !self.isMuted else { return }
+                        guard let self = self, !self.isMuted, Date() >= self.postUnmuteCooldownUntil else { return }
                         self.streamAnalyzer?.analyze(buffer, atAudioFramePosition: time.sampleTime)
                     }
                 }
@@ -124,6 +135,11 @@ final class SoundAnalysisEngine {
 
     func setMuted(_ muted: Bool) {
         isMuted = muted
+        if !muted {
+            postUnmuteCooldownUntil = Date().addingTimeInterval(3.0)
+        } else {
+            postUnmuteCooldownUntil = .distantPast
+        }
     }
 
     /// Called by main.swift whenever a new transcript chunk arrives (text-matching fallback).

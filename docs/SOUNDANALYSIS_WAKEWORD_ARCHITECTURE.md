@@ -25,7 +25,7 @@ Date: 2026-04-25
 │  │    ->  "Athena" classification > 0.3?                    │ │
 │  │    ->  stdout: {"event":"wakeword_detected",...}         │ │
 │  │                                                          │ │
-│  │  Stage 2: WhisperKit distil-large-v3 (ANE)               │ │
+│  │  Stage 2: WhisperKit openai_whisper-large-v3-v20240930_turbo (ANE) │ │
 │  │    ->  receives raw PCM via stdin                        │ │
 │  │    ->  stdout: {"event":"transcript",...}                │ │
 │  └─────────────────────────────────────────────────────────┘ │
@@ -46,7 +46,7 @@ The current voice stack uses a single-stage SFSpeechRecognizer approach:
 The new architecture uses:
 
 - **Stage 1 (Passive):** SoundAnalysis + custom CoreML model for acoustic wake-word detection ("Athena"). Low-power, always-listening. No ASR running.
-- **Stage 2 (Active):** WhisperKit distil-large-v3 running on Apple Neural Engine (ANE). High-quality streaming transcription, only active after wake word is detected.
+- **Stage 2 (Active):** WhisperKit `openai_whisper-large-v3-v20240930_turbo` on Apple Neural Engine (ANE). Transcription only active after wake word is detected. See also [`docs/LIVE_TALK_VOICE_PROCESSING_AND_VAD.md`](LIVE_TALK_VOICE_PROCESSING_AND_VAD.md).
 - **TTS:** Keeps existing NSSpeechSynthesizer (can be upgraded to WhisperKit's TTSKit later).
 - **Push-to-talk:** Removed entirely (wake-word only).
 
@@ -114,11 +114,10 @@ Apple Silicon M4 (optimized for Neural Engine accelerator).
 
 ## WhisperKit Model Selection
 
-- **Model:** `distil-whisper_distil-large-v3`
-- **Size:** ~800MB download, ~4GB RAM at runtime
-- **Accuracy:** ~95% of large-v3
-- **Performance:** Real-time on M1+, well within M4 capabilities
-- **Model caching:** Auto-downloaded to `~/.cache/whisperkit/` on first launch
+- **Model:** `openai_whisper-large-v3-v20240930_turbo`
+- **Size:** ~632MB CoreML bundle (WhisperKit auto-download)
+- **Performance:** Real-time on M-series; well within M4 capabilities
+- **Model caching:** WhisperKit default download/cache (see WhisperKit docs); not bundled in-repo by default
 - **ANE compute config:** Audio encoder + text decoder on Neural Engine
 
 ## Two-Stage Pipeline Detail

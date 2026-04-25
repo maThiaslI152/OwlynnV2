@@ -4,7 +4,7 @@ import WhisperKit
 
 /// Stage 2 Real-Time Transcriber
 ///
-/// Loads WhisperKit's `distil-large-v3` model once (on first `start()` or
+/// Loads WhisperKit's `openai_whisper-large-v3-v20240930_turbo` model once (on first `start()` or
 /// `preload()` call), captures microphone audio via AVAudioEngine, feeds
 /// buffers to WhisperKit for streaming transcription, and emits `transcript`
 /// events.
@@ -18,7 +18,7 @@ import WhisperKit
 ///   results.
 /// - Stderr logging for debugging.
 ///
-/// The model auto-downloads (~800 MB) on first launch to
+/// The model auto-downloads (~632 MB) on first launch to
 /// `~/Documents/huggingface/`.
 final class WhisperKitEngine {
     /// Persisted WhisperKit instance — created once, reused across on/off cycles.
@@ -54,11 +54,11 @@ final class WhisperKitEngine {
         Self.loadAttempted = true
 
         decoderQueue.async {
-            Self.log("[WhisperKit] Preloading model distil-whisper_distil-large-v3 from cache...")
+            Self.log("[WhisperKit] Preloading model openai_whisper-large-v3-v20240930_turbo from cache...")
             Task {
                 do {
                     let newKit = try await WhisperKit(
-                        model: "distil-whisper_distil-large-v3",
+                        model: "openai_whisper-large-v3-v20240930_turbo",
                         verbose: false,
                         prewarm: true,
                         load: true,
@@ -105,12 +105,12 @@ final class WhisperKitEngine {
             }
 
             // First load — do it on this queue
-            Self.log("[WhisperKit] Loading model distil-whisper_distil-large-v3 from cache...")
+            Self.log("[WhisperKit] Loading model openai_whisper-large-v3-v20240930_turbo from cache...")
             Self.loadAttempted = true
             Task {
                 do {
                     let newKit = try await WhisperKit(
-                        model: "distil-whisper_distil-large-v3",
+                        model: "openai_whisper-large-v3-v20240930_turbo",
                         verbose: false,
                         prewarm: true,
                         load: true,
@@ -141,13 +141,25 @@ final class WhisperKitEngine {
         lastEmittedIsFinal = false
     }
 
+    /// Cooldown timestamp (wall clock) after which audio processing resumes post-unmute.
+    /// While Date() < postUnmuteCooldownUntil, all audio chunks are dropped.
+    private var postUnmuteCooldownUntil: Date = .distantPast
+
     func setMuted(_ muted: Bool) {
+        let now = Date()
         isMuted = muted
+        sampleAccumulatorLock.lock()
+        sampleAccumulator.removeAll()
+        sampleAccumulatorLock.unlock()
         if muted {
-            // Drop any buffered mic samples collected before mute.
-            sampleAccumulatorLock.lock()
-            sampleAccumulator.removeAll()
-            sampleAccumulatorLock.unlock()
+            // Reset transcription state so residual pre-mute results don't leak.
+            lastEmittedText = ""
+            lastEmittedIsFinal = false
+        } else {
+            // Enforce a 3-second cooldown after unmute so any lingering
+            // TTS echo in the room has time to decay before audio processing
+            // is re-enabled.
+            postUnmuteCooldownUntil = now.addingTimeInterval(3.0)
         }
     }
 
@@ -159,6 +171,11 @@ final class WhisperKitEngine {
 
     private func startMicCapture(ipc: IPC) {
         let engine = AVAudioEngine()
+        do {
+            try engine.inputNode.setVoiceProcessingEnabled(true)
+        } catch {
+            Self.log("[Mic] Failed to enable voice processing: \(error)")
+        }
         self.audioEngine = engine
 
         let inputNode = engine.inputNode
@@ -189,7 +206,7 @@ final class WhisperKitEngine {
             print("{\"event\":\"audio_level\",\"level\":\(db),\"rms\":\(rms)}")
             fflush(stdout)
 
-            if self.isMuted {
+            if self.isMuted || Date() < self.postUnmuteCooldownUntil {
                 return
             }
 
@@ -277,6 +294,13 @@ final class WhisperKitEngine {
                 .joined(separator: " ")
             let cleanedText = stripSpecialTokens(fullText)
 
+            // Filter out WhisperKit hallucinated filler/continuation phrases
+            // that the model emits from silence, noise, or trailing audio.
+            guard !isHallucinatedFiller(cleanedText) else {
+                Self.log("[Transcribe] Suppressed hallucinated filler: \"\(cleanedText)\"")
+                return
+            }
+
             guard !cleanedText.isEmpty else { return }
 
             if cleanedText == lastEmittedText {
@@ -353,5 +377,113 @@ final class WhisperKitEngine {
         // Write to stderr so it doesn't interfere with the stdout JSON protocol
         fputs("[WhisperKitEngine] \(message)\n", stderr)
         fflush(stderr)
+    }
+
+    // MARK: - Hallucination filter
+
+    /// Common WhisperKit hallucinated filler phrases emitted from silence or
+    /// very low-energy audio. These are almost never what the user actually said.
+    private static let fillerPhrases: Set<String> = {
+        let raw: [String] = [
+            "Thank you.",
+            "Thank you",
+            "Thank",
+            "Thanks.",
+            "Thanks",
+            "Thanks for watching.",
+            "Thank you for watching.",
+            "Thank you for your question.",
+            "Thank you for the question.",
+            "Thank you for asking.",
+            "Thank you for listening.",
+            "You",
+            "Yeah.",
+            "Yeah",
+            "Mm-hmm.",
+            "Uh-huh.",
+            "Mhm.",
+            "Mhm",
+            "Hmm.",
+            "Hmm",
+            "Um.",
+            "Um",
+            "Ah.",
+            "Ah",
+            "Oh.",
+            "Oh",
+            "Okay.",
+            "Okay",
+            "OK.",
+            "OK",
+            "So",
+            "So.",
+            "And",
+            "And.",
+            "But",
+            "But.",
+            "The",
+            "The.",
+            "A",
+            "A.",
+            "I",
+            "I.",
+            "You know.",
+            "You know",
+            "I mean.",
+            "I mean",
+            "Right.",
+            "Right",
+            "Sure.",
+            "Sure",
+            "Great.",
+            "Great",
+            "No problem.",
+            "No problem",
+            "You're welcome.",
+            "You are welcome.",
+            "Welcome.",
+            "You're welcome",
+            "You are welcome",
+            "I think.",
+            "I think",
+            "I see.",
+            "I see",
+        ]
+        return Set(raw)
+    }()
+
+    private func isHallucinatedFiller(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+        if Self.fillerPhrases.contains(trimmed) {
+            return true
+        }
+        // Single-word utterances that aren't actual questions/statements
+        let wordCount = trimmed.split(separator: " ").count
+        if wordCount <= 3 {
+            let lower = trimmed.lowercased()
+            // Allow short question words and common short replies
+            let allowedShort = Set([
+                "hi", "hello", "hey", "bye", "yes", "no", "ok", "okay",
+                "why", "how", "what", "when", "where", "who", "which",
+                "go", "stop", "run", "help", "test", "rust", "go",
+                "python", "js", "ts", "java", "c", "c++",
+            ])
+            if wordCount == 1 && allowedShort.contains(lower) {
+                return false
+            }
+            // Allow 2-3 word phrases that look like real questions
+            let questionWords = Set(["what", "why", "how", "when", "where", "who", "which", "is", "are", "can", "does", "do", "did", "will", "would", "could", "should"])
+            let words = lower.split(separator: " ").map(String.init)
+            if words.contains(where: { questionWords.contains($0) }) {
+                return false
+            }
+            // Also allow phrases with numbers
+            if words.contains(where: { $0.rangeOfCharacter(from: .decimalDigits) != nil }) {
+                return false
+            }
+            return true
+        }
+        return false
     }
 }

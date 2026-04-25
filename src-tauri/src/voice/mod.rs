@@ -162,6 +162,7 @@ pub fn start_wake_listen(
   app: AppHandle,
   stop_flag: Arc<AtomicBool>,
   helper_state: Arc<Mutex<WhisperKitHelper>>,
+  engine_state: Arc<Mutex<VoiceEngineState>>,
 ) {
   let (tx, rx) = crossbeam_channel::unbounded::<VoiceEvent>();
   let app_for_emit = app.clone();
@@ -214,7 +215,7 @@ pub fn start_wake_listen(
   let _app_for_pipeline = app.clone();
   let helper_path = helper_binary_path(Some(&app));
   thread::spawn(move || {
-    run_helper_pipeline(&tx, &stop_flag, helper_state, &helper_path);
+    run_helper_pipeline(&tx, &stop_flag, helper_state, engine_state, &helper_path);
     let _ = app.emit(
       "owlynn://runtime-event",
       VoiceStatePayload {
@@ -229,6 +230,7 @@ fn run_helper_pipeline(
   tx: &crossbeam_channel::Sender<VoiceEvent>,
   stop_flag: &AtomicBool,
   helper_state: Arc<Mutex<WhisperKitHelper>>,
+  #[allow(unused_variables)] engine_state: Arc<Mutex<VoiceEngineState>>,
   helper_path: &str,
 ) {
   let mut is_fresh_spawn = false;
@@ -265,6 +267,11 @@ fn run_helper_pipeline(
     helper.reader.take()
   };
 
+  // Track the last meaningful (non-hallucinated) transcript, so we can
+  // force-finalize it before any filler comes through.
+  let mut last_meaningful_text: Option<String> = None;
+  let mut last_meaningful_confidence: f32 = 0.0;
+
   let mut line = String::new();
   loop {
     if stop_flag.load(Ordering::SeqCst) {
@@ -288,13 +295,52 @@ fn run_helper_pipeline(
           let _ = helper.send_command(r#"{"command":"stop_wakeword"}"#);
           let _ = helper.send_command(r#"{"command":"transcribe_start"}"#);
           drop(helper);
+          last_meaningful_text = None;
           let _ = tx.send(VoiceEvent::WakeWord("Athena".to_string(), 0.9));
           continue;
         }
         if payload.contains("\"transcript\"") {
           let text = extract_json_string_field(payload, "text").unwrap_or_default();
-          let is_final = payload.contains("\"is_final\":true");
+          let mut is_final = payload.contains("\"is_final\":true");
           let confidence = extract_json_number_field(payload, "confidence").unwrap_or(0.5);
+
+          if !text.trim().is_empty() {
+            // Check if this is the filler that came from WhisperKit — we know
+            // it from the Swift hallucination filter that blocks known phrases.
+            // But some still leak through (e.g. threshold-adjusted).
+            //
+            // If we already had a meaningful transcript and this new one is
+            // different but very short / filler-like, force-finalize the
+            // meaningful transcript first, then drop this filler.
+            let is_filler = text.len() < 10
+              && last_meaningful_text.as_ref().map_or(false, |last| {
+                last.len() > text.len() * 2 && last.to_lowercase() != text.to_lowercase()
+              });
+
+            if is_filler {
+              // We already sent a meaningful transcript. Force-finalize it
+              // and drop this filler so the frontend gets the real query.
+              if let Some(meaningful) = last_meaningful_text.take() {
+                let _ = tx.send(VoiceEvent::Transcript(
+                  meaningful,
+                  true,
+                  last_meaningful_confidence,
+                ));
+              }
+              // Drop the filler — don't forward.
+              continue;
+            }
+
+            // Track meaningful text for forced-finalization later.
+            // A "short" filler-like phrase that matches what we already saw
+            // is just a repeat confirmation — finalize.
+            if !is_final && text == last_meaningful_text.as_deref().unwrap_or("") {
+              is_final = true;
+            }
+            last_meaningful_text = Some(text.clone());
+            last_meaningful_confidence = confidence;
+          }
+
           let _ = tx.send(VoiceEvent::Transcript(text, is_final, confidence));
           continue;
         }
@@ -324,6 +370,11 @@ fn run_helper_pipeline(
   {
     let mut helper = helper_state.lock().unwrap();
     helper.reader = reader.take();
+  }
+
+  // If we exit with a meaningful pending transcript, force-finalize it.
+  if let Some(meaningful) = last_meaningful_text.take() {
+    let _ = tx.send(VoiceEvent::Transcript(meaningful, true, last_meaningful_confidence));
   }
 
   // Cleanup: stop transcription and wake-word (but keep helper alive)
