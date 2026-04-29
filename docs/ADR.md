@@ -290,7 +290,7 @@ Tauri APIs.
 subprocess (`whisperkit-helper`) using line-delimited JSON over stdin/stdout:
 
 - Stage 1: SoundAnalysis + CoreML wake-word model (`Athena`)
-- Stage 2: WhisperKit `distil-large-v3` transcription
+- Stage 2: WhisperKit `openai_whisper-large-v3-v20240930_turbo` transcription (see `docs/LIVE_TALK_VOICE_PROCESSING_AND_VAD.md`)
 - Push-to-talk removed from command surface and UI
 
 **Consequences:**

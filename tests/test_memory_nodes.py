@@ -315,7 +315,7 @@ class TestMemoryWriteNode:
         """Memory cache is invalidated after writing new memories."""
         MemoryContextCache.set("test_thread_1", "old context")
         state = _make_state(
-            messages=[_human_msg("Hello"), _ai_msg("Hi there!")],
+            messages=[_human_msg("What is the capital of France?"), _ai_msg("The capital of France is Paris.")],
         )
         # Mock memory to avoid DB connection errors
         with patch("src.memory.long_term.memory") as mock_mem:

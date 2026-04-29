@@ -35,7 +35,6 @@ function App() {
   const wsBaseUrl = import.meta.env.VITE_WS_BASE_URL ?? 'ws://127.0.0.1:8000/ws/chat'
   const setConnection = useAppStore((s) => s.setConnectionState)
   const addMessage = useAppStore((s) => s.addMessage)
-  const setVoiceState = useAppStore((s) => s.setVoiceState)
   const setSafeMode = useAppStore((s) => s.setSafeMode)
   const setExecutionPolicy = useAppStore((s) => s.setExecutionPolicy)
   const setScreenAssistMode = useAppStore((s) => s.setScreenAssistMode)
@@ -52,11 +51,7 @@ function App() {
   const setModelInfo = useAppStore((s) => s.setModelInfo)
   const setContextCompression = useAppStore((s) => s.setContextCompression)
   const setMemoryUpdatedAt = useAppStore((s) => s.setMemoryUpdatedAt)
-  const setInterimTranscript = useAppStore((s) => s.setInterimTranscript)
-  const setVoiceError = useAppStore((s) => s.setVoiceError)
-  const setWakeWordListening = useAppStore((s) => s.setWakeWordListening)
   const setTtsSpeaking = useAppStore((s) => s.setTtsSpeaking)
-  const wakeWordListening = useAppStore((s) => s.wakeWordListening)
   const appendStreamChunk = useAppStore((s) => s.appendStreamChunk)
   const clearSession = useAppStore((s) => s.clearSession)
   const [projects, setProjects] = useState<ProjectSummary[]>([])
@@ -65,6 +60,7 @@ function App() {
   const [currentThreadId, setCurrentThreadId] = useState('default')
   const projectThreadsRef = useRef<Record<string, string>>({ default: 'default' })
   const wsClientRef = useRef<WsClient | null>(null)
+  const isTauriRuntime = typeof window !== 'undefined' && Boolean((window as any).__TAURI_INTERNALS__)
 
   const makeThreadId = () => `thread-${crypto.randomUUID()}`
 
@@ -97,15 +93,22 @@ function App() {
         setCurrentThreadId(existingThread)
         setActiveChatId(existingThread)
       } else {
-        // Sync thread IDs with the actual chat data from the API
         const activeProject = mapped.find((p) => p.id === activeProjectId)
         if (activeProject && activeProject.chats.length > 0) {
-          // Use the most recent chat's ID as the current thread
-          const sorted = [...activeProject.chats].sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))
-          const latestChatId = sorted[0].id
-          projectThreadsRef.current[activeProjectId] = latestChatId
-          setCurrentThreadId(latestChatId)
-          setActiveChatId(latestChatId)
+          // Don't overwrite currentThreadId if the current thread is NOT in the API response
+          // (meaning the chat hasn't been registered by the backend yet — pending new chat)
+          const currentExists = currentThreadId && activeProject.chats.some((c) => c.id === currentThreadId)
+          if (!currentExists) {
+            // Current thread is not yet registered on backend (pending new chat) — keep it
+            projectThreadsRef.current[activeProjectId] = currentThreadId
+          } else {
+            // Sync to latest chat from API only when current thread is already registered
+            const sorted = [...activeProject.chats].sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))
+            const latestChatId = sorted[0].id
+            projectThreadsRef.current[activeProjectId] = latestChatId
+            setCurrentThreadId(latestChatId)
+            setActiveChatId(latestChatId)
+          }
         } else {
           setActiveChatId(currentThreadId)
         }
@@ -226,38 +229,10 @@ function App() {
               ts: Date.now(),
             })
           }
-          if (wakeWordListening && finalContent.trim()) {
+          // Speak assistant responses aloud via TTS
+          if (finalContent.trim() && isTauriRuntime) {
             void tauriBridge.speakText(finalContent.trim())
           }
-        } else if (event.type === 'voice.state') {
-          setVoiceState(event.state)
-        } else if (event.type === 'voice.transcript') {
-          setInterimTranscript(event.text)
-          if (event.is_final && event.text.trim()) {
-            const voiceMsg: ChatMessage = {
-              id: crypto.randomUUID(),
-              role: 'user',
-              content: event.text.trim(),
-              ts: Date.now(),
-            }
-            addMessage(voiceMsg)
-            wsClientRef.current?.send({
-              type: 'user.message',
-              id: voiceMsg.id,
-              content: voiceMsg.content,
-              message: voiceMsg.content,
-              project_id: activeProjectId,
-              source: 'voice',
-            })
-          }
-        } else if (event.type === 'voice.wake_word') {
-          setVoiceState('recording')
-          setOperatorNote(`Wake-word detected: ${event.phrase}`)
-        } else if (event.type === 'voice.error') {
-          setVoiceError(event.message)
-          setOperatorNote(`Live Talk error: ${event.message}`)
-        } else if (event.type === 'voice.tts_state') {
-          setTtsSpeaking(event.speaking)
         } else if (event.type === 'safe_mode.changed') {
           setSafeMode(event.mode)
         } else if (event.type === 'screen_assist.state') {
@@ -301,43 +276,15 @@ function App() {
       disconnect()
       wsClientRef.current = null
     }
-  }, [activeProjectId, addMessage, appendStreamChunk, currentThreadId, executionPolicy, handleInterrupt, latestToolExecution, loadProjects, pushToolExecution, setConnection, setLatestToolExecution, setMemoryUpdatedAt, setModelInfo, setContextCompression, setInterimTranscript, setOperatorNote, setRouterMetadata, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setTtsSpeaking, setVoiceError, setVoiceState, upsertActionProposal, updateActionProposalStatus, wakeWordListening, wsBaseUrl])
+  }, [activeProjectId, addMessage, appendStreamChunk, currentThreadId, executionPolicy, handleInterrupt, latestToolExecution, loadProjects, pushToolExecution, setConnection, setLatestToolExecution, setMemoryUpdatedAt, setModelInfo, setContextCompression, setOperatorNote, setRouterMetadata, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setTtsSpeaking, upsertActionProposal, updateActionProposalStatus, isTauriRuntime, wsBaseUrl])
 
+  // Listen for Tauri runtime events (TTS state, screen assist, etc.)
   useEffect(() => {
     let unlisten: (() => void) | undefined
     void listen<TauriEventPayload>('owlynn://runtime-event', (event) => {
       const payload = event.payload
-      if (payload.type === 'voice.state') {
-        setVoiceState(payload.state)
-      } else if (payload.type === 'voice.transcript') {
-        setInterimTranscript(payload.text)
-        if (payload.is_final && payload.text.trim()) {
-          const voiceMsg: ChatMessage = {
-            id: crypto.randomUUID(),
-            role: 'user',
-            content: payload.text.trim(),
-            ts: Date.now(),
-          }
-          addMessage(voiceMsg)
-          wsClientRef.current?.send({
-            type: 'user.message',
-            id: voiceMsg.id,
-            content: voiceMsg.content,
-            message: voiceMsg.content,
-            project_id: activeProjectId,
-            source: 'voice',
-          })
-        }
-      } else if (payload.type === 'voice.wake_word') {
-        setVoiceState('recording')
-        setOperatorNote(`Wake-word detected: ${payload.phrase}`)
-      } else if (payload.type === 'voice.error') {
-        setVoiceError(payload.message)
-        setOperatorNote(`Live Talk error: ${payload.message}`)
-      } else if (payload.type === 'voice.tts_state') {
+      if (payload.type === 'voice.tts_state') {
         setTtsSpeaking(payload.speaking)
-      } else if (payload.type === 'voice.started') {
-        setWakeWordListening(payload.mode === 'wake_word')
       } else if (payload.type === 'safe_mode.changed') {
         setSafeMode(payload.mode)
       } else if (payload.type === 'screen_assist.state') {
@@ -364,7 +311,7 @@ function App() {
     return () => {
       if (unlisten) unlisten()
     }
-  }, [activeProjectId, addMessage, executionPolicy, handleInterrupt, latestToolExecution, pushToolExecution, setInterimTranscript, setLatestToolExecution, setOperatorNote, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setTtsSpeaking, setVoiceError, setVoiceState, setWakeWordListening, upsertActionProposal, updateActionProposalStatus])
+  }, [addMessage, executionPolicy, handleInterrupt, latestToolExecution, pushToolExecution, setLatestToolExecution, setOperatorNote, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setTtsSpeaking, upsertActionProposal, updateActionProposalStatus])
 
   const handleSend = useCallback((content: string) => {
     const message: ChatMessage = {

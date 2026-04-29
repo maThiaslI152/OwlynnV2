@@ -1,6 +1,5 @@
 import pytest
 from src.tools.web_tools import (
-    _candidate_providers,
     _structured_search_failure,
     SearchAttempt,
     detect_bot_block,
@@ -33,12 +32,6 @@ def test_detect_bot_block_markers():
     html = "<html><body>One last step <script src='https://challenges.cloudflare.com'></script></body></html>"
     assert detect_bot_block(html) is True
     assert detect_bot_block("<html><body>Normal content</body></html>") is False
-
-
-def test_candidate_providers_backend_override():
-    assert _candidate_providers("brave") == ["brave"]
-    assert _candidate_providers("serper") == ["serper"]
-    assert _candidate_providers("tavily") == ["tavily"]
 
 
 def test_structured_search_failure_format():

@@ -157,7 +157,7 @@ async def memory_inject_node(state: AgentState) -> AgentState:
     if memory is not None:
         # 1. Project-scoped memories (or global if default project)
         try:
-            results_dict = await asyncio.to_thread(memory.search, user_message, filters={"user_id": mem0_uid}, top_k=5)
+            results_dict = await asyncio.to_thread(lambda: memory.search(user_message, user_id=mem0_uid, filters=None, limit=5))
             results = results_dict.get("results", []) if isinstance(results_dict, dict) else results_dict
         except Exception:
             pass
@@ -174,7 +174,7 @@ async def memory_inject_node(state: AgentState) -> AgentState:
                         global_uid = n
                 except Exception:
                     pass
-                global_dict = await asyncio.to_thread(memory.search, user_message, filters={"user_id": global_uid}, top_k=3)
+                global_dict = await asyncio.to_thread(lambda: memory.search(user_message, user_id=global_uid, filters=None, limit=3))
                 global_results = global_dict.get("results", []) if isinstance(global_dict, dict) else global_dict
                 results.extend(global_results)
             except Exception:
@@ -305,9 +305,7 @@ async def _is_semantically_similar(memory, new_text: str, user_id: str) -> bool:
         return False
     try:
         results_dict = await asyncio.to_thread(
-            mem0_memory.search, new_text[:200],
-            filters={"user_id": user_id},
-            top_k=3,
+            lambda: mem0_memory.search(new_text[:200], user_id=user_id, filters=None, limit=3),
         )
         results = results_dict.get("results", []) if isinstance(results_dict, dict) else results_dict
         for item in results:

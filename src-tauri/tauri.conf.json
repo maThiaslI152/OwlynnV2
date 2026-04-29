@@ -6,8 +6,8 @@
   "build": {
     "frontendDist": "../frontend-v2/dist",
     "devUrl": "http://127.0.0.1:5173",
-    "beforeDevCommand": "npm --prefix ../frontend-v2 run dev",
-    "beforeBuildCommand": "npm --prefix ../frontend-v2 run build"
+    "beforeDevCommand": "npm --prefix frontend-v2 run dev",
+    "beforeBuildCommand": "npm --prefix frontend-v2 run build"
   },
   "app": {
     "withGlobalTauri": true,
@@ -46,8 +46,6 @@
       "minimumSystemVersion": "14.0",
       "entitlements": "Entitlements.plist"
     },
-    "resources": {
-      "whisperkit-helper/.build/release/whisperkit-helper": "whisperkit-helper"
-    }
+    "resources": {}
   }
 }

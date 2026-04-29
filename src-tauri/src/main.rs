@@ -3,7 +3,6 @@
 use serde::Serialize;
 use std::path::PathBuf;
 use std::process::Command;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{Emitter, Manager};
@@ -13,18 +12,10 @@ mod voice;
 #[derive(Default)]
 struct NativeRuntimeState {
   voice: voice::VoiceEngine,
-  helper: Arc<Mutex<voice::WhisperKitHelper>>,
   safe_mode: String,
   screen_preview_active: bool,
   last_preview_path: Option<String>,
   proposals: Vec<ActionProposal>,
-}
-
-#[derive(Clone, Serialize)]
-struct VoiceStartedPayload {
-  #[serde(rename = "type")]
-  event_type: &'static str,
-  mode: String,
 }
 
 #[derive(Clone, Serialize)]
@@ -67,27 +58,6 @@ struct ActionProposalResultPayload {
   status: String,
 }
 
-fn emit_voice_state(app: &tauri::AppHandle, state: &str) {
-  let _ = app.emit(
-    "owlynn://runtime-event",
-    voice::VoiceStatePayload {
-      event_type: "voice.state",
-      state: state.to_string(),
-    },
-  );
-}
-
-fn emit_voice_error(app: &tauri::AppHandle, message: &str, code: &str) {
-  let _ = app.emit(
-    "owlynn://runtime-event",
-    voice::VoiceErrorPayload {
-      event_type: "voice.error",
-      message: message.to_string(),
-      code: code.to_string(),
-    },
-  );
-}
-
 fn emit_safe_mode(app: &tauri::AppHandle, mode: &str) {
   let _ = app.emit(
     "owlynn://runtime-event",
@@ -124,66 +94,6 @@ fn now_millis() -> u128 {
     .duration_since(UNIX_EPOCH)
     .map(|d| d.as_millis())
     .unwrap_or(0)
-}
-
-#[tauri::command]
-fn hard_stop_voice(app: tauri::AppHandle, state: tauri::State<Mutex<NativeRuntimeState>>) -> Result<String, String> {
-  let mut locked = state.lock().map_err(|_| "native runtime state lock failed".to_string())?;
-  locked.voice.listening = false;
-  if let Some(stop_flag) = locked.voice.wake_stop.take() {
-    voice::hard_stop_voice(stop_flag, locked.helper.clone());
-  }
-  let _ = app.emit(
-    "owlynn://runtime-event",
-    voice::VoiceTtsStatePayload {
-      event_type: "voice.tts_state",
-      speaking: false,
-      utterance_id: "hard-stop".to_string(),
-    },
-  );
-  emit_voice_state(&app, "interrupted");
-  Ok("voice interrupted".to_string())
-}
-
-#[tauri::command]
-fn get_wake_word_phrase() -> Result<String, String> {
-  Ok("Athena".to_string())
-}
-
-#[tauri::command]
-fn start_voice_listening(app: tauri::AppHandle, state: tauri::State<Mutex<NativeRuntimeState>>) -> Result<String, String> {
-  let mut locked = state.lock().map_err(|_| "native runtime state lock failed".to_string())?;
-  if !voice::speech_framework_available() {
-    emit_voice_error(&app, "Voice helper unavailable on this platform", "speech_unavailable");
-  }
-  if locked.voice.listening {
-    return Ok("wake-word listening already active".to_string());
-  }
-  let stop_flag = Arc::new(AtomicBool::new(false));
-  voice::start_wake_listen(app.clone(), stop_flag.clone(), locked.helper.clone());
-  locked.voice.wake_stop = Some(stop_flag);
-  locked.voice.wake_word_phrase = "Athena".to_string();
-  locked.voice.listening = true;
-  emit_voice_state(&app, "idle");
-  let _ = app.emit(
-    "owlynn://runtime-event",
-    VoiceStartedPayload {
-      event_type: "voice.started",
-      mode: "wake_word".to_string(),
-    },
-  );
-  Ok("wake-word listening started (Athena)".to_string())
-}
-
-#[tauri::command]
-fn stop_voice_listening(app: tauri::AppHandle, state: tauri::State<Mutex<NativeRuntimeState>>) -> Result<String, String> {
-  let mut locked = state.lock().map_err(|_| "native runtime state lock failed".to_string())?;
-  if let Some(stop_flag) = locked.voice.wake_stop.take() {
-    voice::hard_stop_voice(stop_flag, locked.helper.clone());
-  }
-  locked.voice.listening = false;
-  emit_voice_state(&app, "idle");
-  Ok("wake-word listening stopped".to_string())
 }
 
 #[tauri::command]
@@ -338,16 +248,11 @@ fn main() {
         wake_word_phrase: "Athena".to_string(),
         ..voice::VoiceEngine::default()
       },
-      helper: Arc::new(Mutex::new(voice::WhisperKitHelper::default())),
       safe_mode: "normal".to_string(),
       ..NativeRuntimeState::default()
     }))
     .invoke_handler(tauri::generate_handler![
-      start_voice_listening,
-      stop_voice_listening,
-      hard_stop_voice,
       speak_text,
-      get_wake_word_phrase,
       set_safe_mode,
       start_screen_preview,
       stop_screen_preview,

@@ -10,14 +10,6 @@ function uuid() {
   })
 }
 
-export type VoiceState =
-  | 'idle'
-  | 'recording'
-  | 'transcribing'
-  | 'speaking'
-  | 'interrupted'
-  | 'approval_pending'
-
 export type SafeModeLevel = 'normal' | 'safe_readonly' | 'safe_confirmed_exec' | 'safe_isolated'
 export type ExecutionPolicy = 'hitl' | 'auto_approve'
 export type WindowMode = 'full' | 'compact'
@@ -64,7 +56,6 @@ export interface CompressionInfo {
 interface AppState {
   connectionState: ConnectionState
   messages: ChatMessage[]
-  voiceState: VoiceState
   safeMode: SafeModeLevel
   executionPolicy: ExecutionPolicy
   windowMode: WindowMode
@@ -77,15 +68,10 @@ interface AppState {
   modelInfo: string | null
   contextCompression: CompressionInfo | null
   memoryUpdatedAt: number | null
-  interimTranscript: string
-  voiceError: string | null
-  wakeWordListening: boolean
   ttsSpeaking: boolean
-  wakeWordPhrase: string
   setConnectionState: (state: ConnectionState) => void
   addMessage: (message: ChatMessage) => void
   appendStreamChunk: (chunk: string) => void
-  setVoiceState: (state: VoiceState) => void
   setSafeMode: (mode: SafeModeLevel) => void
   setExecutionPolicy: (policy: ExecutionPolicy) => void
   setWindowMode: (mode: WindowMode) => void
@@ -101,18 +87,13 @@ interface AppState {
   setModelInfo: (model: string | null) => void
   setContextCompression: (info: CompressionInfo | null) => void
   setMemoryUpdatedAt: (ts: number) => void
-  setInterimTranscript: (text: string) => void
-  setVoiceError: (message: string | null) => void
-  setWakeWordListening: (active: boolean) => void
   setTtsSpeaking: (speaking: boolean) => void
-  setWakeWordPhrase: (phrase: string) => void
   clearSession: () => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
   connectionState: 'disconnected',
   messages: [],
-  voiceState: 'idle',
   safeMode: 'normal',
   executionPolicy: 'auto_approve',
   windowMode: 'full',
@@ -129,11 +110,7 @@ export const useAppStore = create<AppState>((set) => ({
   modelInfo: null,
   contextCompression: null,
   memoryUpdatedAt: null,
-  interimTranscript: '',
-  voiceError: null,
-  wakeWordListening: false,
   ttsSpeaking: false,
-  wakeWordPhrase: 'Athena',
   setConnectionState: (connectionState) => set({ connectionState }),
   addMessage: (message) =>
     set((state) => ({
@@ -155,7 +132,6 @@ export const useAppStore = create<AppState>((set) => ({
       }
       return { messages }
     }),
-  setVoiceState: (voiceState) => set({ voiceState }),
   setSafeMode: (safeMode) => set({ safeMode }),
   setExecutionPolicy: (executionPolicy) => set({ executionPolicy }),
   setWindowMode: (windowMode) => set({ windowMode }),
@@ -219,11 +195,7 @@ export const useAppStore = create<AppState>((set) => ({
   setModelInfo: (modelInfo) => set({ modelInfo }),
   setContextCompression: (contextCompression) => set({ contextCompression }),
   setMemoryUpdatedAt: (memoryUpdatedAt) => set({ memoryUpdatedAt }),
-  setInterimTranscript: (interimTranscript) => set({ interimTranscript }),
-  setVoiceError: (voiceError) => set({ voiceError }),
-  setWakeWordListening: (wakeWordListening) => set({ wakeWordListening }),
   setTtsSpeaking: (ttsSpeaking) => set({ ttsSpeaking }),
-  setWakeWordPhrase: (wakeWordPhrase) => set({ wakeWordPhrase }),
   clearSession: () =>
     set({
       messages: [],
@@ -234,8 +206,6 @@ export const useAppStore = create<AppState>((set) => ({
       modelInfo: null,
       contextCompression: null,
       operatorNote: '',
-      interimTranscript: '',
-      voiceError: null,
       ttsSpeaking: false,
     }),
 }))

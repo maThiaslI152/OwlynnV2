@@ -19,18 +19,6 @@ def _skip_if_search_unavailable(out: str) -> None:
 async def test_web_search_general_fallback_chain_mocked(monkeypatch):
     calls: list[str] = []
 
-    async def brave_api(query: str, backend: str, news: bool, focus_query: str = ""):
-        calls.append("brave_api")
-        return None, web_tools.SearchAttempt("tier1", "brave_api", "empty")
-
-    async def serper_api(query: str, backend: str, news: bool, focus_query: str = ""):
-        calls.append("serper_api")
-        return None, web_tools.SearchAttempt("tier1", "serper_api", "empty")
-
-    async def tavily_api(query: str, backend: str, news: bool, focus_query: str = ""):
-        calls.append("tavily_api")
-        return None, web_tools.SearchAttempt("tier1", "tavily_api", "empty")
-
     async def curl_search(query: str, backend: str, news: bool, focus_query: str = ""):
         calls.append("curl_cffi")
         return None, web_tools.SearchAttempt("tier1", "curl_cffi", "empty")
@@ -53,21 +41,14 @@ async def test_web_search_general_fallback_chain_mocked(monkeypatch):
         )
 
     monkeypatch.setattr(web_tools, "_web_search_wttr_in", wttr)
-    monkeypatch.setattr(web_tools, "_web_search_api_brave", brave_api)
-    monkeypatch.setattr(web_tools, "_web_search_api_serper", serper_api)
-    monkeypatch.setattr(web_tools, "_web_search_api_tavily", tavily_api)
     monkeypatch.setattr(web_tools, "_web_search_curl_cffi", curl_search)
     monkeypatch.setattr(web_tools, "_web_search_httpx_ddg_html", ddg_http)
     monkeypatch.setattr(web_tools, "_web_search_bing_httpx", bing)
-    monkeypatch.setattr(web_tools, "_candidate_providers", lambda backend: ["brave", "serper", "tavily"])
     monkeypatch.setattr(web_tools, "_get_ddgs_class", lambda: None)
 
     out = await web_search.ainvoke({"query": "python programming language", "backend": "auto"})
     assert calls == [
         "wttr",
-        "brave_api",
-        "serper_api",
-        "tavily_api",
         "curl_cffi",
         "ddg_http",
         "bing",
@@ -83,18 +64,6 @@ async def test_web_search_news_flow_mocked(monkeypatch):
     async def wttr(query: str, backend: str, news: bool):
         calls.append("wttr")
         return "unexpected"
-
-    async def brave_api(query: str, backend: str, news: bool, focus_query: str = ""):
-        calls.append("brave_api")
-        return None, web_tools.SearchAttempt("tier1", "brave_api", "empty")
-
-    async def serper_api(query: str, backend: str, news: bool, focus_query: str = ""):
-        calls.append("serper_api")
-        return None, web_tools.SearchAttempt("tier1", "serper_api", "empty")
-
-    async def tavily_api(query: str, backend: str, news: bool, focus_query: str = ""):
-        calls.append("tavily_api")
-        return None, web_tools.SearchAttempt("tier1", "tavily_api", "empty")
 
     async def curl_search(query: str, backend: str, news: bool, focus_query: str = ""):
         calls.append("curl_cffi")
@@ -118,14 +87,10 @@ async def test_web_search_news_flow_mocked(monkeypatch):
         )
 
     monkeypatch.setattr(web_tools, "_web_search_wttr_in", wttr)
-    monkeypatch.setattr(web_tools, "_web_search_api_brave", brave_api)
-    monkeypatch.setattr(web_tools, "_web_search_api_serper", serper_api)
-    monkeypatch.setattr(web_tools, "_web_search_api_tavily", tavily_api)
     monkeypatch.setattr(web_tools, "_web_search_curl_cffi", curl_search)
     monkeypatch.setattr(web_tools, "_web_search_httpx_ddg_html", ddg_http)
     monkeypatch.setattr(web_tools, "_web_search_bing_httpx", bing)
     monkeypatch.setattr(web_tools, "_web_search_ddg_lite_httpx", ddg_lite)
-    monkeypatch.setattr(web_tools, "_candidate_providers", lambda backend: ["brave", "serper", "tavily"])
     monkeypatch.setattr(web_tools, "_get_ddgs_class", lambda: None)
 
     out = await web_search.ainvoke(
@@ -133,9 +98,6 @@ async def test_web_search_news_flow_mocked(monkeypatch):
     )
     # wttr fast-path is bypassed for news=True
     assert calls == [
-        "brave_api",
-        "serper_api",
-        "tavily_api",
         "curl_cffi",
         "ddg_http",
         "bing",

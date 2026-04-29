@@ -43,6 +43,9 @@ export function LiveTalkControls() {
     return () => { cancelled = true }
   }, [setWakeWordPhrase])
 
+  // Auto-start was removed — Live Talk is deferred to a future phase.
+  // The UI controls remain as a placeholder for re-enabling later.
+
   const hardStop = async () => {
     const result = await tauriBridge.hardStopVoice()
     if (!result.ok) {

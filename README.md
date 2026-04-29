@@ -314,7 +314,7 @@ Status note: Live Talk/wake-word model quality work is currently in progress but
 - **Wake-word mode**: `start_voice_listening`/`stop_voice_listening` with fixed wake phrase `Athena` (`get_wake_word_phrase` returns `Athena`).
 - **Two-stage pipeline**:
   - Stage 1: SoundAnalysis wake-word detection through a Swift helper process.
-  - Stage 2: WhisperKit (`distil-large-v3`) transcription after wake-word activation.
+  - Stage 2: WhisperKit (`openai_whisper-large-v3-v20240930_turbo`) transcription after wake-word activation. See `docs/LIVE_TALK_VOICE_PROCESSING_AND_VAD.md`.
 - **Speech output (TTS)**: `speak_text` command uses local macOS `say` for now.
 - **Runtime events**: `voice.state`, `voice.transcript`, `voice.wake_word`, `voice.error`, `voice.tts_state`, `voice.started`.
 
