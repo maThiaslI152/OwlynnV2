@@ -170,12 +170,9 @@ final class WhisperKitEngine {
     // MARK: - Microphone capture
 
     private func startMicCapture(ipc: IPC) {
+        // Note: voiceProcessingEnabled was tried but caused aggressive AEC
+        // that suppressed microphone input. Reverted to software-only muting.
         let engine = AVAudioEngine()
-        do {
-            try engine.inputNode.setVoiceProcessingEnabled(true)
-        } catch {
-            Self.log("[Mic] Failed to enable voice processing: \(error)")
-        }
         self.audioEngine = engine
 
         let inputNode = engine.inputNode

@@ -40,16 +40,9 @@ final class SoundAnalysisEngine {
                 request.overlapFactor = 0.5
 
                 // Set up audio engine + stream analyzer
+                // Note: voiceProcessingEnabled was tried but caused aggressive AEC
+                // that suppressed microphone input. Reverted to software-only muting.
                 let engine = AVAudioEngine()
-                do {
-                    try engine.inputNode.setVoiceProcessingEnabled(true)
-                } catch {
-                    ipc.emit(OutgoingEvent(
-                        event: "error", label: nil, confidence: nil,
-                        text: nil, is_final: nil,
-                        message: "Voice processing enable failed: \(error.localizedDescription)"
-                    ))
-                }
                 self.audioEngine = engine
                 let inputNode = engine.inputNode
                 let inputFormat = inputNode.outputFormat(forBus: 0)

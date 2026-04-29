@@ -1,6 +1,6 @@
 # Owlynn Status
 
-Last updated: 2026-04-25 v2 (Live Talk Whisper filler + forced-finalization debug session)
+Last updated: 2026-04-29 (Live Talk deferred to future phase — placeholder UI only)
 
 ## Current Progress
 
@@ -13,7 +13,7 @@ Last updated: 2026-04-25 v2 (Live Talk Whisper filler + forced-finalization debu
   - `medium_models.default`: `lfm2-8b-a1b-absolute-heresy-mpoa-mlx`
 - Security proxy with HITL approval is in place for sensitive tools.
 - Backend API + WebSocket chat and Tauri frontend shell are integrated.
-- Live Talk now targets Tauri v2 + Swift helper orchestration for two-stage wake-word/transcription (`Athena` + WhisperKit `openai_whisper-large-v3-v20240930_turbo`); push-to-talk removed. Voice pipeline, Rust VAD constants, and next-step **Apple `AVAudioEngine.voiceProcessingEnabled`** guidance: [`docs/LIVE_TALK_VOICE_PROCESSING_AND_VAD.md`](LIVE_TALK_VOICE_PROCESSING_AND_VAD.md).
+- Live Talk is **deferred to a future phase**. The UI controls (`LiveTalkControls`) remain as a visual placeholder for re-enabling later. Wake-word no longer auto-starts; `AVAudioEngine.voiceProcessingEnabled` was reverted (aggressive AEC suppressed mic input). The Swift helper binaries and Rust orchestration code are preserved for future re-activation. See [`docs/LIVE_TALK_DEFERRED.md`](LIVE_TALK_DEFERRED.md) for the full status and lessons learned.
 - Test coverage includes unit, integration, and property-based suites across backend and frontend.
 - Phase 1 frontend-v2 websocket transport regression milestone is in place:
   - `frontend-v2` `WsClient` now has dedicated protocol-safety regression tests covering malformed JSON rejection, lifecycle callback delivery (`open`/`close`/`error`/`message`), send-gating on closed socket, disconnect cleanup, and duplicate-disconnect tolerance,
@@ -42,13 +42,7 @@ Last updated: 2026-04-25 v2 (Live Talk Whisper filler + forced-finalization debu
   - build validation completed (`cargo build`, `npm run build`, helper `swift build -c release`) and helper command smoke test passed.
   - detailed implementation notes: `docs/LIVE_TALK_PHASE1_TTS_LOOP_FIX_2026-04-25.md`.
 - **Live Talk voice/VAD documentation (2026-04-25):** Added [`docs/LIVE_TALK_VOICE_PROCESSING_AND_VAD.md`](LIVE_TALK_VOICE_PROCESSING_AND_VAD.md) — current pipeline layers, Rust VAD constants (`voice/mod.rs`), Whisper model `openai_whisper-large-v3-v20240930_turbo`, analysis of **`AVAudioEngine.voiceProcessingEnabled`**, and ordered migration path (Apple processing → tune constants → optional auto-calibrate / Silero / config file).
-- **Live Talk Whisper filler debug session (2026-04-25 v2):**
-  - **Root cause identified:** WhisperKit's sliding-window finalization fails when consecutive windows produce different output (e.g. due to Apple `voiceProcessingEnabled` altering acoustic characteristics). Silence → "Thank you." hallucination then becomes the first finalized transcript, displacing the user's actual speech.
-  - **Rust-side anti-filler:** `run_helper_pipeline` now tracks `last_meaningful_text` and force-finalizes it when a short (<10 chars) filler-like transcript arrives that differs from the meaningful text. Filler is dropped entirely.
-  - **Swift filter expanded:** More filler variants ("Thank", "Thanks", "You're welcome"), word-count threshold `<=2`→`<=3`, 2–3 word phrases pass through only if they contain question words or digits.
-  - **Frontend echo guard strengthened:** Post-TTS cooldown 1200ms→3000ms, content-aware `isTtsEcho()` with word overlap + containment checks, 15s TTS echo window, interim transcript cleared on state transitions.
-  - **Apple voice processing `setVoiceProcessingEnabled(true)` applied** to both WhisperKit and SoundAnalysis engines. **Result:** aggressive AEC suppressed microphone input — user reported "it doesn't record my voice." Flag should be reverted.
-  - **Detailed notes:** [`docs/LIVE_TALK_WHISPER_FILLER_AND_FORCE_FINALIZE.md`](LIVE_TALK_WHISPER_FILLER_AND_FORCE_FINALIZE.md).
+- **Live Talk deferred (2026-04-29):** Live Talk is placed on hold as a feature. The wake-word auto-start on mount was removed; `voiceProcessingEnabled` was reverted (aggressive AEC suppressed mic input). UI controls remain as a visual placeholder. Full lessons learned and code preserved in the repo for future re-activation — see [`docs/LIVE_TALK_DEFERRED.md`](LIVE_TALK_DEFERRED.md).
 - **Debug session 2026-04-25 — 3 bugs resolved in live chat workflow:**
   - **Bug 1 — LTM ValueError:** All 6 calls to `mem0_memory.search()` passed `user_id` inside `filters` dict instead of as a keyword argument. `mem0ai` v1.0.9 strictly validates keyword args via `_build_filters_and_metadata()`. Fixed in `server.py`, `memory.py`, `core_tools.py`.
   - **Bug 2 — New chat reversion:** `loadProjects()` in `App.tsx` raced with async chat registration. Fixed by checking if `currentThreadId` exists in the API response before overwriting.
@@ -103,7 +97,7 @@ must be used instead. `start.sh` now builds the frontend and launches the `.app`
 - **RESOLVED (2026-04-25) — LTM ValueError on memory search:** `mem0ai` v1.0.9's `Memory.search()` requires `user_id` as a keyword-only argument, but was passed inside the `filters` dict at all 6 call sites. Fixed by passing `user_id=...` as a keyword arg.
 - **RESOLVED (2026-04-25) — New chat reverts to old thread:** Race condition in `loadProjects()` overwrote `currentThreadId` before the backend registered the new chat. Fixed by preserving `currentThreadId` when the thread ID isn't yet in the API response.
 - **RESOLVED (2026-04-25) — Topics/interests not injected into simple LLM path:** The "Your Knowledge About User" context was only injected in the complex node. Fixed by extracting and injecting just the knowledge section into the simple node's system prompt.
-- **Live Talk TTS / echo:** Mitigations shipped (helper mute gate, cooldowns, Rust VAD end-of-turn, Swift filler filter, Rust anti-filler forced-finalization, frontend echo guards). **Known issue:** `AVAudioEngine.voiceProcessingEnabled` suppresses mic — flagged for revert. Details in [`docs/LIVE_TALK_WHISPER_FILLER_AND_FORCE_FINALIZE.md`](LIVE_TALK_WHISPER_FILLER_AND_FORCE_FINALIZE.md) and [`docs/LIVE_TALK_VOICE_PROCESSING_AND_VAD.md`](LIVE_TALK_VOICE_PROCESSING_AND_VAD.md).
+- **Live Talk deferred (2026-04-29):** Feature placed on hold. Auto-start removed, `voiceProcessingEnabled` reverted. Code and infrastructure preserved for re-activation. See [`docs/LIVE_TALK_DEFERRED.md`](LIVE_TALK_DEFERRED.md).
 - Workspace switching can still cause stale UI state in edge transitions.
 - Frontend/backend event payload mismatches can surface in integration paths.
 - Cloud fallback + anonymization paths require continued regression protection.

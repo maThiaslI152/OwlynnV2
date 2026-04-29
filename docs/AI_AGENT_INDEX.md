@@ -77,6 +77,7 @@ Use it to locate the right source files, contracts, and tests before making chan
 - SoundAnalysis + WhisperKit migration plan: `docs/SOUNDANALYSIS_WAKEWORD_ARCHITECTURE.md`
 - Live Talk voice processing, Rust VAD, and roadmap (AEC / next steps): `docs/LIVE_TALK_VOICE_PROCESSING_AND_VAD.md`
 - Live Talk Whisper filler hallucinations & forced-finalization: `docs/LIVE_TALK_WHISPER_FILLER_AND_FORCE_FINALIZE.md`
+- Live Talk deferred status (placeholder): `docs/LIVE_TALK_DEFERRED.md`
 - Athena CoreML training guide: `docs/COREML_ATHENA_MODEL_GUIDE.md`
 - Linear workflow (issue/PR conventions): `docs/LINEAR_WORKFLOW.md`
 - Performance & memory SLOs: `docs/PERFORMANCE_SLOS.md`
