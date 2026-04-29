@@ -35,7 +35,6 @@ function App() {
   const wsBaseUrl = import.meta.env.VITE_WS_BASE_URL ?? 'ws://127.0.0.1:8000/ws/chat'
   const setConnection = useAppStore((s) => s.setConnectionState)
   const addMessage = useAppStore((s) => s.addMessage)
-  const setVoiceState = useAppStore((s) => s.setVoiceState)
   const setSafeMode = useAppStore((s) => s.setSafeMode)
   const setExecutionPolicy = useAppStore((s) => s.setExecutionPolicy)
   const setScreenAssistMode = useAppStore((s) => s.setScreenAssistMode)
@@ -52,11 +51,7 @@ function App() {
   const setModelInfo = useAppStore((s) => s.setModelInfo)
   const setContextCompression = useAppStore((s) => s.setContextCompression)
   const setMemoryUpdatedAt = useAppStore((s) => s.setMemoryUpdatedAt)
-  const setInterimTranscript = useAppStore((s) => s.setInterimTranscript)
-  const setVoiceError = useAppStore((s) => s.setVoiceError)
-  const setWakeWordListening = useAppStore((s) => s.setWakeWordListening)
   const setTtsSpeaking = useAppStore((s) => s.setTtsSpeaking)
-  const wakeWordListening = useAppStore((s) => s.wakeWordListening)
   const appendStreamChunk = useAppStore((s) => s.appendStreamChunk)
   const clearSession = useAppStore((s) => s.clearSession)
   const [projects, setProjects] = useState<ProjectSummary[]>([])
@@ -65,38 +60,9 @@ function App() {
   const [currentThreadId, setCurrentThreadId] = useState('default')
   const projectThreadsRef = useRef<Record<string, string>>({ default: 'default' })
   const wsClientRef = useRef<WsClient | null>(null)
-  const ttsSpeakingRef = useRef(false)
-  const ttsSuppressionUntilRef = useRef(0)
-  const lastSpokenTextRef = useRef('')
-  /** Transcripts received within this window after TTS finishes are discarded. */
-  const ttsEchoWindowRef = useRef(0)
   const isTauriRuntime = typeof window !== 'undefined' && Boolean((window as any).__TAURI_INTERNALS__)
 
   const makeThreadId = () => `thread-${crypto.randomUUID()}`
-  const shouldSuppressVoiceTranscript = () =>
-    ttsSpeakingRef.current || Date.now() < ttsSuppressionUntilRef.current
-  const isTtsEcho = (transcript: string) => {
-    const last = lastSpokenTextRef.current
-    if (!last || !transcript) return false
-    // Extend the echo suppression window each time a transcript arrives after
-    // the initial cooldown — lazy perpetual extension catches long TTS echoes.
-    if (Date.now() < ttsEchoWindowRef.current) {
-      ttsEchoWindowRef.current = Date.now() + 3000
-      return true
-    }
-    const a = transcript.toLowerCase().trim()
-    const b = last.toLowerCase().trim()
-    // Exact match or one-way containment = echo
-    const shorter = a.length <= b.length ? a : b
-    const longer = a.length <= b.length ? b : a
-    if (longer.includes(shorter)) return true
-    // High word overlap (>50%) is also suspicious
-    const aWords = new Set(a.split(/\s+/))
-    const bWords = new Set(b.split(/\s+/))
-    const intersection = new Set([...aWords].filter((w) => bWords.has(w)))
-    if (intersection.size > 0 && intersection.size >= Math.min(aWords.size, bWords.size) * 0.5) return true
-    return false
-  }
 
   const loadProjects = useCallback(async () => {
     try {
@@ -263,64 +229,10 @@ function App() {
               ts: Date.now(),
             })
           }
-          if (wakeWordListening && finalContent.trim()) {
-            lastSpokenTextRef.current = finalContent.trim()
-            ttsEchoWindowRef.current = Date.now() + 15000  // 15s echo window from TTS start
+          // Speak assistant responses aloud via TTS
+          if (finalContent.trim() && isTauriRuntime) {
             void tauriBridge.speakText(finalContent.trim())
           }
-        } else if (
-          isTauriRuntime &&
-          (event.type === 'voice.state' ||
-            event.type === 'voice.transcript' ||
-            event.type === 'voice.wake_word' ||
-            event.type === 'voice.error' ||
-            event.type === 'voice.tts_state')
-        ) {
-          // In Tauri runtime, native event listener is the canonical voice event source.
-          return
-        } else if (event.type === 'voice.state') {
-          if (event.state === 'recording' || event.state === 'idle') {
-            setInterimTranscript('')
-          }
-          setVoiceState(event.state)
-        } else if (event.type === 'voice.transcript') {
-          if (shouldSuppressVoiceTranscript()) {
-            return
-          }
-          setInterimTranscript(event.text)
-          const trimmed = event.text.trim()
-          if (event.is_final && trimmed) {
-            // Discard transcripts that echo the assistant's own TTS output.
-            if (isTtsEcho(trimmed)) {
-              return
-            }
-            const voiceMsg: ChatMessage = {
-              id: crypto.randomUUID(),
-              role: 'user',
-              content: event.text.trim(),
-              ts: Date.now(),
-            }
-            addMessage(voiceMsg)
-            wsClientRef.current?.send({
-              type: 'user.message',
-              id: voiceMsg.id,
-              content: voiceMsg.content,
-              message: voiceMsg.content,
-              project_id: activeProjectId,
-              source: 'voice',
-            })
-          }
-        } else if (event.type === 'voice.wake_word') {
-          setVoiceState('recording')
-          setOperatorNote(`Wake-word detected: ${event.phrase}`)
-        } else if (event.type === 'voice.error') {
-          setVoiceError(event.message)
-          setOperatorNote(`Live Talk error: ${event.message}`)
-        } else if (event.type === 'voice.tts_state') {
-          ttsSpeakingRef.current = event.speaking
-          // Keep a short cooldown after TTS stops to avoid speaker/mic echo.
-          ttsSuppressionUntilRef.current = event.speaking ? Date.now() : Date.now() + 3000
-          setTtsSpeaking(event.speaking)
         } else if (event.type === 'safe_mode.changed') {
           setSafeMode(event.mode)
         } else if (event.type === 'screen_assist.state') {
@@ -364,57 +276,15 @@ function App() {
       disconnect()
       wsClientRef.current = null
     }
-  }, [activeProjectId, addMessage, appendStreamChunk, currentThreadId, executionPolicy, handleInterrupt, latestToolExecution, loadProjects, pushToolExecution, setConnection, setLatestToolExecution, setMemoryUpdatedAt, setModelInfo, setContextCompression, setInterimTranscript, setOperatorNote, setRouterMetadata, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setTtsSpeaking, setVoiceError, setVoiceState, upsertActionProposal, updateActionProposalStatus, wakeWordListening, wsBaseUrl])
+  }, [activeProjectId, addMessage, appendStreamChunk, currentThreadId, executionPolicy, handleInterrupt, latestToolExecution, loadProjects, pushToolExecution, setConnection, setLatestToolExecution, setMemoryUpdatedAt, setModelInfo, setContextCompression, setOperatorNote, setRouterMetadata, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setTtsSpeaking, upsertActionProposal, updateActionProposalStatus, isTauriRuntime, wsBaseUrl])
 
+  // Listen for Tauri runtime events (TTS state, screen assist, etc.)
   useEffect(() => {
     let unlisten: (() => void) | undefined
     void listen<TauriEventPayload>('owlynn://runtime-event', (event) => {
       const payload = event.payload
-      if (payload.type === 'voice.state') {
-        if (payload.state === 'recording' || payload.state === 'idle') {
-          setInterimTranscript('')
-        }
-        setVoiceState(payload.state)
-      } else if (payload.type === 'voice.transcript') {
-        if (shouldSuppressVoiceTranscript()) {
-          return
-        }
-        setInterimTranscript(payload.text)
-        const trimmed = payload.text.trim()
-        if (payload.is_final && trimmed) {
-          // Discard transcripts that echo the assistant's own TTS output.
-          if (isTtsEcho(trimmed)) {
-            return
-          }
-          const voiceMsg: ChatMessage = {
-            id: crypto.randomUUID(),
-            role: 'user',
-            content: payload.text.trim(),
-            ts: Date.now(),
-          }
-          addMessage(voiceMsg)
-          wsClientRef.current?.send({
-            type: 'user.message',
-            id: voiceMsg.id,
-            content: voiceMsg.content,
-            message: voiceMsg.content,
-            project_id: activeProjectId,
-            source: 'voice',
-          })
-        }
-      } else if (payload.type === 'voice.wake_word') {
-        setVoiceState('recording')
-        setOperatorNote(`Wake-word detected: ${payload.phrase}`)
-      } else if (payload.type === 'voice.error') {
-        setVoiceError(payload.message)
-        setOperatorNote(`Live Talk error: ${payload.message}`)
-      } else if (payload.type === 'voice.tts_state') {
-        ttsSpeakingRef.current = payload.speaking
-        // Keep a short cooldown after TTS stops to avoid speaker/mic echo.
-        ttsSuppressionUntilRef.current = payload.speaking ? Date.now() : Date.now() + 3000
+      if (payload.type === 'voice.tts_state') {
         setTtsSpeaking(payload.speaking)
-      } else if (payload.type === 'voice.started') {
-        setWakeWordListening(payload.mode === 'wake_word')
       } else if (payload.type === 'safe_mode.changed') {
         setSafeMode(payload.mode)
       } else if (payload.type === 'screen_assist.state') {
@@ -441,7 +311,7 @@ function App() {
     return () => {
       if (unlisten) unlisten()
     }
-  }, [activeProjectId, addMessage, executionPolicy, handleInterrupt, latestToolExecution, pushToolExecution, setInterimTranscript, setLatestToolExecution, setOperatorNote, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setTtsSpeaking, setVoiceError, setVoiceState, setWakeWordListening, upsertActionProposal, updateActionProposalStatus])
+  }, [addMessage, executionPolicy, handleInterrupt, latestToolExecution, pushToolExecution, setLatestToolExecution, setOperatorNote, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setTtsSpeaking, upsertActionProposal, updateActionProposalStatus])
 
   const handleSend = useCallback((content: string) => {
     const message: ChatMessage = {

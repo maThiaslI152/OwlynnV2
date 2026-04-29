@@ -4,7 +4,6 @@ import { useAppStore } from '../../state/useAppStore'
 import { Composer } from '../Composer'
 import { OrchestrationPanel } from '../OrchestrationPanel'
 import { SafeModePanel } from '../SafeModePanel'
-import { LiveTalkControls } from '../LiveTalkControls'
 import { ProjectKnowledgePanel } from '../ProjectKnowledgePanel'
 import { AppShell } from '../AppShell'
 
@@ -171,34 +170,6 @@ describe('SafeModePanel', () => {
       const state = useAppStore.getState()
       expect(state.operatorNote).toContain('Safe Mode error')
     })
-  })
-})
-
-// ── LiveTalkControls ────────────────────────────────────────────────────
-
-describe('LiveTalkControls', () => {
-  it('shows current voice state', () => {
-    render(<LiveTalkControls />)
-    expect(screen.getByText(/Idle/)).toBeTruthy()
-  })
-
-  it('shows push-to-talk and hard stop buttons', () => {
-    render(<LiveTalkControls />)
-    expect(screen.getByText(/Push.*Talk/)).toBeTruthy()
-    expect(screen.getByText(/Hard Stop/)).toBeTruthy()
-  })
-
-  it('shows wake-word controls and transcript preview', () => {
-    render(<LiveTalkControls />)
-    expect(screen.getByLabelText(/Wake-word phrase/)).toBeTruthy()
-    expect(screen.getByText(/Enable Wake-word/i)).toBeTruthy()
-    expect(screen.getByText(/Transcript preview/i)).toBeTruthy()
-  })
-
-  it('updates voice state from store', () => {
-    useAppStore.getState().setVoiceState('recording')
-    render(<LiveTalkControls />)
-    expect(screen.getByText(/Recording/)).toBeTruthy()
   })
 })
 

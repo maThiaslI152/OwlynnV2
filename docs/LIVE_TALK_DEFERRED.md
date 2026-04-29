@@ -1,44 +1,41 @@
-# Live Talk — Deferred
+# Live Talk — Removed
 
-**Status:** Placeholder / deferred to a future phase  
-**Date:** 2026-04-29
+**Status:** Fully removed from the codebase (2026-04-29 v2)  
+**TTS retained:** Assistant responses are read aloud via macOS `say` (`speak_text` Tauri command)
 
 ## What happened
 
-Live Talk (wake-word → WhisperKit transcription → LLM → TTS) was developed over several sessions but ultimately **placed on hold** due to persistent echo/filler issues that could not be resolved with the current architecture.
+Live Talk (wake-word → WhisperKit transcription → LLM → TTS) was developed over several sessions but ultimately **removed** due to persistent echo/filler issues that could not be resolved with the current architecture.
+
+## What was removed
+
+| Component | Details |
+|-----------|---------|
+| **Swift helper** (`src-tauri/whisperkit-helper/`) | Entire directory deleted — WhisperKitEngine.swift, SoundAnalysisEngine.swift, main.swift, Package.swift |
+| **Rust voice orchestration** (`voice/mod.rs`) | Stripped to just `speak_text` — removed `WhisperKitHelper`, `run_helper_pipeline`, `start_wake_listen`, `hard_stop_voice`, JSON extractors, `VoiceEvent` enum, all pipeline threading |
+| **Rust Tauri commands** (`main.rs`) | Removed `hard_stop_voice`, `start_voice_listening`, `stop_voice_listening`, `get_wake_word_phrase`, `emit_voice_state`, `emit_voice_error`, `VoiceStartedPayload`, `WhisperKitHelper` from state |
+| **Frontend `LiveTalkControls`** | Entire component file deleted |
+| **Frontend store state** | Removed `voiceState`, `interimTranscript`, `voiceError`, `wakeWordListening`, `wakeWordPhrase` and all their setters |
+| **Frontend voice event handlers** (`App.tsx`) | Removed all `voice.state`, `voice.transcript`, `voice.wake_word`, `voice.error`, `voice.started` handlers from both WS listener and Tauri event listener |
+| **Frontend `tauriBridge`** | Removed `startVoiceListening`, `stopVoiceListening`, `hardStopVoice`, `getWakeWordPhrase` |
+| **Frontend echo guards** | Removed `shouldSuppressVoiceTranscript`, `isTtsEcho`, `ttsSuppressionUntilRef`, `lastSpokenTextRef`, `ttsEchoWindowRef` |
+| **Test file** | Removed LiveTalkControls test cases from `components.extended.test.tsx` |
+| **Tauri config** | Removed `whisperkit-helper` resource bundling from `tauri.conf.json` |
+| **AppShell** | Removed LiveTalk section and LiveTalkControls import |
 
 ## What remains
 
-- **UI (`LiveTalkControls` component):** Stays in the frontend as a visual placeholder. Wake-word **no longer auto-starts** on mount.
-- **Swift helper binaries:** The Rust `WhisperKitHelper` and Swift `whisperkit-helper` code remain in the repo. Builds via `swift build -c release` in `src-tauri/whisperkit-helper/`.
-- **Rust orchestration (`voice/mod.rs`):** All commands (`start_voice_listening`, `stop_voice_listening`, `hard_stop_voice`, `speak_text`) remain registered as Tauri commands.
-- **TTS (`speak_text`):** The `say` command and `VoiceEngineState` are preserved. Currently only fires when `wakeWordListening` is true (which it isn't by default). Could be re-enabled independently.
-- **Anti-filler forced-finalization:** The Rust-side forced-finalization logic in `run_helper_pipeline` remains in place for future use.
-- **Hallucination filter (`isHallucinatedFiller`):** The expanded Swift filter remains in `WhisperKitEngine.swift`.
-- **Frontend echo guards:** The 3s cooldown, `isTtsEcho()`, and echo window guards remain in `App.tsx`.
+| Component | Details |
+|-----------|---------|
+| **TTS (`speak_text`)** | macOS `say` command. Fires automatically when `assistant.message` is received in Tauri runtime. Emits `voice.tts_state` events (`speaking: true/false`). |
+| **`voice.tts_state` handler** | Frontend still listens for `voice.tts_state` events and updates `ttsSpeaking` store |
+| **`VoiceEngineState`** | Kept in Rust for `tts_speaking` flag management |
 
-## What was removed / reverted
+## Documentation artifacts
 
-| Change | Reason |
-|--------|--------|
-| Wake-word auto-start on mount | Prevents unwanted mic activation |
-| `engine.inputNode.setVoiceProcessingEnabled(true)` | Aggressive AEC suppressed mic input entirely |
-
-## Known issues (for future re-activation)
-
-1. **Whisper filler hallucinations:** WhisperKit hallucinates "Thank you." etc. from silence. Mitigated with Swift filter + Rust anti-filler layer but not fully solved.
-2. **Finalization race:** WhisperKit's sliding-window finalization requires consecutive matching windows. Under some acoustic conditions windows differ, preventing `is_final: true` emission for real user speech.
-3. **No auto-stop:** After wake-word → transcript, the pipeline stays in transcribe mode indefinitely (auto-stop VAD was removed due to echo loops). User must manually stop.
-4. **Echo loop:** TTS playback re-captured by microphone. Mitigated via mute/unmute + cooldowns + frontend guards, but residual cases remain.
-
-## Repo artifacts
-
-All implementation history is preserved in these docs for future reference:
+The following docs record the implementation history for future reference:
 
 - [`docs/LIVE_TALK_VOICE_PROCESSING_AND_VAD.md`](LIVE_TALK_VOICE_PROCESSING_AND_VAD.md) — Voice pipeline architecture, anti-filler layer
 - [`docs/LIVE_TALK_WHISPER_FILLER_AND_FORCE_FINALIZE.md`](LIVE_TALK_WHISPER_FILLER_AND_FORCE_FINALIZE.md) — Filler hallucination debug analysis and all changes
 - [`docs/LIVE_TALK_PHASE1_TTS_LOOP_FIX_2026-04-25.md`](LIVE_TALK_PHASE1_TTS_LOOP_FIX_2026-04-25.md) — Phase 1 mute/unmute implementation
 - [`docs/SOUNDANALYSIS_WAKEWORD_ARCHITECTURE.md`](SOUNDANALYSIS_WAKEWORD_ARCHITECTURE.md) — Two-stage pipeline architecture
-- `src-tauri/src/voice/mod.rs` — Rust orchestration
-- `src-tauri/whisperkit-helper/Sources/` — Swift helper (WhisperKit + SoundAnalysis engines)
-- `frontend-v2/src/components/LiveTalkControls.tsx` — Placeholder UI

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, useCallback, type ReactNode } from 'react'
 import { Composer } from './Composer'
-import { LiveTalkControls } from './LiveTalkControls'
 import { SafeModePanel } from './SafeModePanel'
 import { ScreenAssistPanel } from './ScreenAssistPanel'
 import { ActionProposalQueue } from './ActionProposalQueue'
@@ -186,8 +185,6 @@ export function AppShell({
   const operatorNote = useAppStore((s) => s.operatorNote)
   const windowMode = useAppStore((s) => s.windowMode)
   const setWindowMode = useAppStore((s) => s.setWindowMode)
-  const voiceState = useAppStore((s) => s.voiceState)
-  const interimTranscript = useAppStore((s) => s.interimTranscript)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const [streamActive, setStreamActive] = useState(false)
@@ -481,11 +478,6 @@ export function AppShell({
                     ))}
                   </div>
                 )}
-                {isCompact && voiceState !== 'idle' && (
-                  <p className="messages-empty-hint">
-                    {voiceState === 'recording' ? 'Listening...' : voiceState === 'transcribing' ? 'Transcribing...' : ''}
-                  </p>
-                )}
               </div>
             ) : (
               messages.map((message, idx) => {
@@ -509,9 +501,6 @@ export function AppShell({
             </span>
           </div>
         )}
-        {interimTranscript ? (
-          <div className="voice-interim-transcript">{interimTranscript}</div>
-        ) : null}
         <Composer onSend={onSend} disabled={connectionState !== 'connected'} compact={isCompact} />
       </main>
 
@@ -551,9 +540,6 @@ export function AppShell({
           </CollapsibleSection>
           <CollapsibleSection title="Safe Mode" icon="🛡">
             <SafeModePanel />
-          </CollapsibleSection>
-          <CollapsibleSection title="Live Talk" icon="🎤">
-            <LiveTalkControls />
           </CollapsibleSection>
           <CollapsibleSection title="Screen Assist" icon="🖥">
             <ScreenAssistPanel />
