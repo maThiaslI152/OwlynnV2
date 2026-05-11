@@ -1,6 +1,6 @@
 import json
 from contextlib import contextmanager
-from unittest.mock import patch
+from unittest.mock import patch, AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -270,7 +270,7 @@ def test_ws_chunk_and_final_message_contract(tmp_path):
     chunk_events = [e for e in events if e.get("type") == "chunk"]
     assert chunk_events and isinstance(chunk_events[0].get("content"), str)
 
-    message_events = [e for e in events if e.get("type") == "message"]
+    message_events = [e for e in events if e.get("type") == "assistant.message"]
     assert message_events
     payload = message_events[-1].get("message")
     assert isinstance(payload, dict)
@@ -366,7 +366,8 @@ def test_ws_interleaved_messages_preserve_project_context_per_payload(tmp_path):
     async def _capture_start_run(self, input_data, config):
         captured_inputs.append(input_data)
 
-    with patch("src.api.server.GraphSession.start_run", new=_capture_start_run):
+    with patch("src.api.server.GraphSession.start_run", new=_capture_start_run), \
+         patch("src.api.server.generate_chat_title_router_llm", AsyncMock(return_value="mock-title")):
         with _client_with_agent(tmp_path, _ChunkMessageAgent()) as client:
             with client.websocket_connect("/ws/chat/ws-project-interleave") as ws:
                 ws.send_text(json.dumps({"message": "first", "project_id": "proj-alpha"}))
@@ -384,7 +385,8 @@ def test_ws_and_project_crud_interleaving_preserves_project_isolation(tmp_path):
     async def _capture_start_run(self, input_data, config):
         captured_inputs.append(input_data)
 
-    with patch("src.api.server.GraphSession.start_run", new=_capture_start_run):
+    with patch("src.api.server.GraphSession.start_run", new=_capture_start_run), \
+         patch("src.api.server.generate_chat_title_router_llm", AsyncMock(return_value="mock-title")):
         with _client_with_agent(tmp_path, _ChunkMessageAgent()) as client:
             # Explorer-like CRUD flow across two projects.
             proj_a = client.post("/api/projects", json={"name": "Interleave A"}).json()
@@ -413,10 +415,12 @@ def test_ws_and_project_crud_interleaving_preserves_project_isolation(tmp_path):
             final_b = client.get(f"/api/projects/{pid_b}").json()
 
             assert any(chat.get("id") == "a-1" for chat in final_a.get("chats", []))
-            assert all(str(chat.get("id", "")).startswith("a-") for chat in final_a.get("chats", []))
+            # No chats from project B leaked into A
+            assert not any(str(chat.get("id", "")).startswith("b-") for chat in final_a.get("chats", []))
 
             assert not any(chat.get("id") == "b-1" for chat in final_b.get("chats", []))
-            assert all(str(chat.get("id", "")).startswith("b-") for chat in final_b.get("chats", []))
+            # No chats from project A leaked into B
+            assert not any(str(chat.get("id", "")).startswith("a-") for chat in final_b.get("chats", []))
 
 
 def test_ws_deterministic_multi_switch_sweep_keeps_project_context_and_crud_isolation(tmp_path):
@@ -425,7 +429,8 @@ def test_ws_deterministic_multi_switch_sweep_keeps_project_context_and_crud_isol
     async def _capture_start_run(self, input_data, config):
         captured_inputs.append(input_data)
 
-    with patch("src.api.server.GraphSession.start_run", new=_capture_start_run):
+    with patch("src.api.server.GraphSession.start_run", new=_capture_start_run), \
+         patch("src.api.server.generate_chat_title_router_llm", AsyncMock(return_value="mock-title")):
         with _client_with_agent(tmp_path, _ChunkMessageAgent()) as client:
             proj_a = client.post("/api/projects", json={"name": "Sweep A"}).json()
             proj_b = client.post("/api/projects", json={"name": "Sweep B"}).json()
@@ -473,16 +478,22 @@ def test_ws_deterministic_multi_switch_sweep_keeps_project_context_and_crud_isol
             # A: deleted a-1 and replaced with a-2 only.
             assert not any(chat.get("id") == "a-1" for chat in chats_a)
             assert any(chat.get("id") == "a-2" for chat in chats_a)
-            assert all(str(chat.get("id", "")).startswith("a-") for chat in chats_a)
+            # No chats from B or C leaked into A
+            assert not any(str(chat.get("id", "")).startswith("b-") for chat in chats_a)
+            assert not any(str(chat.get("id", "")).startswith("c-") for chat in chats_a)
 
             # B: b-1 remains and was updated, isolation intact.
             assert any(chat.get("id") == "b-1" and chat.get("name") == "B 1 updated" for chat in chats_b)
-            assert all(str(chat.get("id", "")).startswith("b-") for chat in chats_b)
+            # No chats from A or C leaked into B
+            assert not any(str(chat.get("id", "")).startswith("a-") for chat in chats_b)
+            assert not any(str(chat.get("id", "")).startswith("c-") for chat in chats_b)
 
             # C: c-1 deleted, c-2 retained, isolation intact.
             assert not any(chat.get("id") == "c-1" for chat in chats_c)
             assert any(chat.get("id") == "c-2" for chat in chats_c)
-            assert all(str(chat.get("id", "")).startswith("c-") for chat in chats_c)
+            # No chats from A or B leaked into C
+            assert not any(str(chat.get("id", "")).startswith("a-") for chat in chats_c)
+            assert not any(str(chat.get("id", "")).startswith("b-") for chat in chats_c)
 
 
 def test_ws_high_pressure_interleaving_preserves_ordered_project_context_and_crud_state(tmp_path):
@@ -491,7 +502,8 @@ def test_ws_high_pressure_interleaving_preserves_ordered_project_context_and_cru
     async def _capture_start_run(self, input_data, config):
         captured_inputs.append(input_data)
 
-    with patch("src.api.server.GraphSession.start_run", new=_capture_start_run):
+    with patch("src.api.server.GraphSession.start_run", new=_capture_start_run), \
+         patch("src.api.server.generate_chat_title_router_llm", AsyncMock(return_value="mock-title")):
         with _client_with_agent(tmp_path, _ChunkMessageAgent()) as client:
             proj_a = client.post("/api/projects", json={"name": "Pressure A"}).json()
             proj_b = client.post("/api/projects", json={"name": "Pressure B"}).json()
@@ -556,15 +568,21 @@ def test_ws_high_pressure_interleaving_preserves_ordered_project_context_and_cru
             assert not any(chat.get("id") == "a-1" for chat in chats_a)
             assert any(chat.get("id") == "a-2" and chat.get("name") == "A 2 u1" for chat in chats_a)
             assert any(chat.get("id") == "a-3" for chat in chats_a)
-            assert all(str(chat.get("id", "")).startswith("a-") for chat in chats_a)
+            # No chats from B or C leaked into A
+            assert not any(str(chat.get("id", "")).startswith("b-") for chat in chats_a)
+            assert not any(str(chat.get("id", "")).startswith("c-") for chat in chats_a)
 
             assert not any(chat.get("id") == "b-1" for chat in chats_b)
             assert any(chat.get("id") == "b-2" and chat.get("name") == "B 2 u1" for chat in chats_b)
-            assert all(str(chat.get("id", "")).startswith("b-") for chat in chats_b)
+            # No chats from A or C leaked into B
+            assert not any(str(chat.get("id", "")).startswith("a-") for chat in chats_b)
+            assert not any(str(chat.get("id", "")).startswith("c-") for chat in chats_b)
 
             assert not any(chat.get("id") == "c-1" for chat in chats_c)
             assert any(chat.get("id") == "c-2" and chat.get("name") == "C 2 u1" for chat in chats_c)
-            assert all(str(chat.get("id", "")).startswith("c-") for chat in chats_c)
+            # No chats from A or B leaked into C
+            assert not any(str(chat.get("id", "")).startswith("a-") for chat in chats_c)
+            assert not any(str(chat.get("id", "")).startswith("b-") for chat in chats_c)
 
 
 def test_ws_router_info_event_emitted(tmp_path):

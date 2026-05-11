@@ -34,11 +34,25 @@ class LLMPool:
     _swap_manager: Optional["SwapManager"] = None  # noqa: F821 — forward ref
     _lock = asyncio.Lock()
 
+    # Test override injection (bypasses LM Studio in tests)
+    _test_overrides: dict[str, "ChatOpenAI"] = {}
+
+    @classmethod
+    def set_test_overrides(cls, overrides: dict[str, "ChatOpenAI"]) -> None:
+        """Set LLM overrides for testing (avoids connecting to LM Studio)."""
+        cls._test_overrides = overrides
+
+    @classmethod
+    def clear_test_overrides(cls) -> None:
+        cls._test_overrides = {}
+
     # ── small ────────────────────────────────────────────────────────────
 
     @classmethod
     async def get_small_llm(cls) -> ChatOpenAI:
         """Get or create cached small LLM instance."""
+        if "small" in cls._test_overrides:
+            return cls._test_overrides["small"]
         if cls._small_llm is None:
             try:
                 async with cls._lock:
@@ -84,6 +98,10 @@ class LLMPool:
         ChatOpenAI
             A LangChain client pointing at the now-loaded LM Studio model.
         """
+        if variant in cls._test_overrides:
+            return cls._test_overrides[variant]
+        if "medium" in cls._test_overrides:
+            return cls._test_overrides["medium"]
         if cls._current_medium_variant == variant and cls._medium_llm is not None:
             return cls._medium_llm
 
@@ -127,6 +145,8 @@ class LLMPool:
         CloudUnavailableError
             If no valid API key is found in env var or profile.
         """
+        if "cloud" in cls._test_overrides:
+            return cls._test_overrides["cloud"]
         if cls._cloud_llm is not None:
             return cls._cloud_llm
 
@@ -172,6 +192,7 @@ class LLMPool:
         cls._medium_llm = None
         cls._cloud_llm = None
         cls._current_medium_variant = None
+        cls._test_overrides = {}
 
     # ── private ──────────────────────────────────────────────────────────
 

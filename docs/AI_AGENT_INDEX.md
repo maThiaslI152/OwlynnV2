@@ -81,6 +81,7 @@ Use it to locate the right source files, contracts, and tests before making chan
 - Athena CoreML training guide: `docs/COREML_ATHENA_MODEL_GUIDE.md`
 - Linear workflow (issue/PR conventions): `docs/LINEAR_WORKFLOW.md`
 - Performance & memory SLOs: `docs/PERFORMANCE_SLOS.md`
+- Engineering improvement backlog: `docs/ENGINEERING_IMPROVEMENTS.md`
 
 ## Before You Commit (Agent Checklist)
 

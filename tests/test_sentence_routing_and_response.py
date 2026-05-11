@@ -9,25 +9,26 @@ from langchain_core.messages import AIMessage, HumanMessage
 
 from src.agent.graph import build_graph
 from src.agent.state import AgentState
+from src.agent.llm import LLMPool
 
 
 SIMPLE_CASES = [
-    ("Hi there", "simple", "small", "SMALL: greeting"),
-    ("Hello, how are you?", "simple", "small", "SMALL: greeting"),
-    ("Thanks for your help!", "simple", "small", "SMALL: greeting"),
+    ("Hi there", "simple", "small-local", "SMALL: greeting"),
+    ("Hello, how are you?", "simple", "small-local", "SMALL: greeting"),
+    ("Thanks for your help!", "simple", "small-local", "SMALL: greeting"),
 ]
 
 COMPLEX_CASES = [
     (
         "Design a migration strategy from monolith to microservices with rollout phases.",
         "complex-default",
-        "large",
+        "medium-default",
         "LARGE: architecture plan",
     ),
     (
         "Write and explain a Python quicksort implementation with complexity analysis.",
         "complex-default",
-        "large",
+        "medium-default",
         "LARGE: architecture plan",
     ),
 ]
@@ -38,23 +39,28 @@ COMPLEX_CASES = [
 async def test_sentence_matrix_simple_route_and_response(
     sentence: str, expected_route: str, expected_model: str, expected_reply: str
 ):
-    app = build_graph().compile()
+    LLMPool.clear_test_overrides()
 
-    mock_simple_llm = AsyncMock()
-    mock_simple_llm.bind = MagicMock(return_value=mock_simple_llm)
-    mock_simple_llm.ainvoke.return_value = AIMessage(content=expected_reply)
+    mock_small_llm = AsyncMock()
+    mock_small_llm.bind = MagicMock(return_value=mock_small_llm)
+    mock_small_llm.ainvoke.return_value = AIMessage(content=expected_reply)
 
-    with patch("src.agent.nodes.simple.get_small_llm", AsyncMock(return_value=mock_simple_llm)), \
-         patch("src.agent.nodes.memory.get_profile", return_value={}), \
-         patch("src.agent.nodes.memory.get_persona", return_value={"role": "assistant"}), \
-         patch("src.agent.nodes.memory.get_memory_context_for_prompt", return_value=""), \
-         patch("src.agent.nodes.memory.record_conversation", return_value=None), \
-         patch("src.memory.long_term.memory", None):
-        state: AgentState = {"messages": [HumanMessage(content=sentence)], "thread_id": "route-simple"}
-        result = await app.ainvoke(
-            state,
-            config={"configurable": {"thread_id": "route-simple"}},
-        )
+    LLMPool.set_test_overrides({"small": mock_small_llm})
+    try:
+        app = build_graph().compile()
+
+        with patch("src.agent.nodes.memory.get_profile", return_value={}), \
+             patch("src.agent.nodes.memory.get_persona", return_value={"role": "assistant"}), \
+             patch("src.agent.nodes.memory.get_memory_context_for_prompt", return_value=""), \
+             patch("src.agent.nodes.memory.record_conversation", return_value=None), \
+             patch("src.memory.long_term.memory", None):
+            state: AgentState = {"messages": [HumanMessage(content=sentence)], "thread_id": "route-simple"}
+            result = await app.ainvoke(
+                state,
+                config={"configurable": {"thread_id": "route-simple"}},
+            )
+    finally:
+        LLMPool.clear_test_overrides()
 
     assert result["route"] == expected_route
     assert result["model_used"] == expected_model
@@ -66,30 +72,36 @@ async def test_sentence_matrix_simple_route_and_response(
 async def test_sentence_matrix_complex_route_and_response(
     sentence: str, expected_route: str, expected_model: str, expected_reply: str
 ):
-    app = build_graph().compile()
+    LLMPool.clear_test_overrides()
 
     # Force router classification for non-keyword complex prompts.
     mock_router_llm = AsyncMock()
     mock_router_llm.bind = MagicMock(return_value=mock_router_llm)
-    mock_router_llm.ainvoke.return_value = AIMessage(content='{"routing":"complex","confidence":0.98}')
+    mock_router_llm.ainvoke.return_value = AIMessage(content='{"routing": "complex", "confidence": 0.99}')
 
     mock_bound = AsyncMock()
+    mock_bound.bind = MagicMock(return_value=mock_bound)
     mock_bound.ainvoke.return_value = AIMessage(content=expected_reply)
     mock_large_base = MagicMock()
+    mock_large_base.bind = MagicMock(return_value=mock_bound)
     mock_large_base.bind_tools = MagicMock(return_value=mock_bound)
 
-    with patch("src.agent.nodes.router.get_small_llm", AsyncMock(return_value=mock_router_llm)), \
-         patch("src.agent.nodes.complex.get_large_llm", AsyncMock(return_value=mock_large_base)), \
-         patch("src.agent.nodes.memory.get_profile", return_value={}), \
-         patch("src.agent.nodes.memory.get_persona", return_value={"role": "assistant"}), \
-         patch("src.agent.nodes.memory.get_memory_context_for_prompt", return_value=""), \
-         patch("src.agent.nodes.memory.record_conversation", return_value=None), \
-         patch("src.memory.long_term.memory", None):
-        state: AgentState = {"messages": [HumanMessage(content=sentence)], "thread_id": "route-complex"}
-        result = await app.ainvoke(
-            state,
-            config={"configurable": {"thread_id": "route-complex"}},
-        )
+    LLMPool.set_test_overrides({"small": mock_router_llm, "default": mock_large_base})
+    try:
+        app = build_graph().compile()
+
+        with patch("src.agent.nodes.memory.get_profile", return_value={}), \
+             patch("src.agent.nodes.memory.get_persona", return_value={"role": "assistant"}), \
+             patch("src.agent.nodes.memory.get_memory_context_for_prompt", return_value=""), \
+             patch("src.agent.nodes.memory.record_conversation", return_value=None), \
+             patch("src.memory.long_term.memory", None):
+            state: AgentState = {"messages": [HumanMessage(content=sentence)], "thread_id": "route-complex"}
+            result = await app.ainvoke(
+                state,
+                config={"configurable": {"thread_id": "route-complex"}},
+            )
+    finally:
+        LLMPool.clear_test_overrides()
 
     assert result["route"] == expected_route
     assert result["model_used"] == expected_model

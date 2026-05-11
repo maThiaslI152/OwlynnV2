@@ -45,6 +45,11 @@ src-tauri/whisperkit-helper/.build/
 *.mlmodelc/
 .whisperkit-cache/
 
+# Training data & CoreML artifacts (deferred Live Talk)
+TrainingData/
+Athena.mlproj/
+AthenaSoundClassifier.mlmodel
+
 # ChromaDB local data
 src/tools/glossaries/chroma_db/
 
