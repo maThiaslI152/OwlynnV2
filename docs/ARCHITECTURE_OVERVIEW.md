@@ -14,10 +14,10 @@ The system operates under a hard VRAM constraint: the M4 Air 24GB unified memory
 
 | Key | Model | Role | VRAM | Context Window |
 |-----|-------|------|------|----------------|
-| Small_LLM | `liquid/lfm2.5-1.2b` (GGUF Q4_K_M) | Routing, simple answers, chat titles | ~730 MB | 4,096 |
-| Medium_Default | `qwen/qwen3.5-9b` (GGUF Q6_K) | General complex reasoning, tool calling | ~8.3 GB | 100,000 |
-| Medium_Vision | `zai-org/glm-4.6v-flash` | Image/multimodal processing | ~8 GB | 131,072 |
-| Medium_LongCtx | `LFM2 8B A1B GGUF Q8_0` | Extended context tasks | ~8 GB | 131,072 |
+| Small_LLM | `gemma-4-e2b-heretic-uncensored-mlx` (MLX) | Routing, simple answers, chat titles | ~1.5 GB | 4,096 |
+| Medium_Default | `lfm2-8b-a1b-absolute-heresy-mpoa-mlx` (MLX) | General complex reasoning, tool calling | ~4 GB | 100,000 |
+| Medium_Vision | `zai-org/glm-4.6v-flash` | Image/multimodal processing | ~4 GB | 131,072 |
+| Medium_LongCtx | `lfm2-8b-a1b` | Extended context tasks | ~4 GB | 131,072 |
 | Cloud_LLM | `deepseek-chat` (DeepSeek API) | Frontier-quality reasoning (cloud) | N/A | 131,072 |
 
 Small_LLM and one M-tier model are served via LM Studio on port 1234 (OpenAI-compatible API). Cloud_LLM uses the DeepSeek API at `https://api.deepseek.com/v1`.
@@ -173,10 +173,10 @@ Tier 3:   Playwright (full browser)
 
 - **Active**: React 19 + TypeScript frontend (Vite 8 + Zustand 5) in `frontend-v2/`
   - 9 panel components: Composer, OrchestrationPanel, SafeModePanel, ScreenAssistPanel,
-    ToolExecutionPanel (with HMAC audit trail), ActionProposalQueue, LiveTalkControls,
+    ToolExecutionPanel (with HMAC audit trail), ActionProposalQueue,
     ProjectKnowledgePanel, AppShell
   - WebSocket streaming for real-time responses
-  - Tauri v1 desktop shell for macOS native features (vibrancy, screen capture, push-to-talk)
+  - Tauri v2 desktop shell for macOS native features (vibrancy, screen capture)
   - Styled with Tier-colored model badges (local/cloud), route badges, compression stats
 - **Legacy**: Vanilla HTML/JS/CSS frontend in `frontend/` (end of life, retained for reference)
 

@@ -2,7 +2,7 @@
 
 This document defines the *developer-facing* JSON contract between:
 
-- the frontend WebSocket client (`frontend/script.js`)
+- the frontend WebSocket client (`frontend-v2`)
 - the backend WebSocket handler (`src/api/server.py`)
 - the LangGraph execution stream forwarded to the browser
 
@@ -476,17 +476,11 @@ Notes:
 - Streaming sources: `src/agent/nodes/simple.py`, `src/agent/nodes/complex.py`, and their tool calling behavior
 - Tool-call payload content: `serialize_message()` output consumed by `renderMessage()`
 
-## Tauri Runtime Voice Events (Desktop channel)
+## TTS Runtime Event (Desktop channel)
 
-In addition to the backend WebSocket stream, desktop voice features emit runtime events on
-`owlynn://runtime-event` from `src-tauri/src/main.rs`.
+The desktop shell emits a TTS event on `owlynn://runtime-event` from `src-tauri/src/main.rs`:
 
-These events are consumed in `frontend-v2/src/App.tsx`:
-
-- `voice.state`: `{ "type": "voice.state", "state": "idle|recording|transcribing|speaking|interrupted|approval_pending" }`
-- `voice.transcript`: `{ "type": "voice.transcript", "text": "string", "is_final": true|false, "confidence": 0.0..1.0 }`
-- `voice.wake_word`: `{ "type": "voice.wake_word", "phrase": "string", "confidence": 0.0..1.0 }`
-- `voice.error`: `{ "type": "voice.error", "message": "string", "code": "string" }`
 - `voice.tts_state`: `{ "type": "voice.tts_state", "speaking": true|false, "utterance_id": "string" }`
-- `voice.started`: `{ "type": "voice.started", "mode": "wake_word|ptt" }`
+
+This is consumed in `frontend-v2/src/App.tsx`.
 

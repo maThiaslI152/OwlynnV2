@@ -4,11 +4,11 @@
 
 Owlynn is a local-first AI coworker that runs a LangGraph agent backend with a Tauri frontend.
 It is designed to keep most reasoning and data on your machine while still supporting optional
-cloud escalation and external tools (like Linear via MCP).
+cloud escalation and external tools.
 
 ## Core architecture
 
-- **Frontend**: Tauri + HTML/CSS/JS (`frontend/`)
+- **Frontend**: Tauri + React/TypeScript (`frontend-v2/`)
 - **Backend**: FastAPI + WebSocket streaming (`src/api/server.py`)
 - **Agent orchestration**: LangGraph nodes (`src/agent/`)
 - **Memory**: JSON + Mem0/Qdrant integrations (`src/memory/`)
@@ -26,7 +26,7 @@ cloud escalation and external tools (like Linear via MCP).
 
 - Stabilize hybrid model routing (small/medium/cloud DeepSeek pathing)
 - Keep tool-call reliability high under local model edge cases
-- Maintain clean project-level workflow through Linear (`WIN-`* issues)
+- Maintain clean project-level workflow
 - Improve startup and MCP resilience under flaky network conditions
 
 ## Local development checklist
@@ -36,12 +36,10 @@ cloud escalation and external tools (like Linear via MCP).
 3. Run backend: `python -m uvicorn src.api.server:app --host 127.0.0.1 --port 8000`
 4. Run tests before merge:
   - Backend: `pytest tests/ -v`
-  - Frontend: `cd frontend && npx vitest run`
+  - Frontend: `cd frontend-v2 && npx vitest run`
 
 ## Delivery conventions
 
-- Branch names include Linear key: `WIN-<id>-short-slug`
-- PR title/body references the same issue key
 - Keep feature changes scoped and test-backed
 - Prefer focused PRs over large mixed commits
 
@@ -51,5 +49,3 @@ cloud escalation and external tools (like Linear via MCP).
 - `docs/AGENT_FLOW.md`
 - `docs/TOOLS.md`
 - `docs/API_REFERENCE.md`
-- `docs/LINEAR_GITHUB_SYNC.md`
-- `docs/LINEAR_PROJECT_OVERSIGHT.md`

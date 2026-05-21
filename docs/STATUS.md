@@ -31,7 +31,7 @@ Last updated: 2026-05-11 v4 (All 13 skipped tests fixed — TF-IDF, LLM override
   - `ToolExecutionPanel` now has focused tests covering empty state, tool execution detail rendering (status badge, risk metadata, inputs), empty export skip note, filter button rendering and switching, signing/verify input field binding, and verify-bundle/export-report button presence,
   - added `vitest.config.ts` setup file with `jsdom` environment and browser API polyfills (`crypto.subtle`, `URL.createObjectURL`, `navigator.clipboard`) for component test infrastructure,
   - frontend-v2 validation now passes with expanded test set (`node node_modules/vitest/vitest.mjs run` -> `50 passed`, `npm run build` -> pass).
-- Phase 4 governance docs established: ADR log (`docs/ADR.md`), Linear workflow guide (`docs/LINEAR_WORKFLOW.md`), performance & memory SLOs (`docs/PERFORMANCE_SLOS.md`).
+- Phase 4 governance docs established: ADR log (`docs/ADR.md`), performance & memory SLOs (`docs/PERFORMANCE_SLOS.md`).
 - Phase 5 live test pass: removed stale tests depending on removed APIs (`test_context_files.py`, `test_router_model_swap.py`), fixed tool awareness test assertions to match current `COMPLEX_TOOL_GUIDANCE_WEB`. Core test suite: **203 passed, 0 failed** (frontend: 50 passed, build passes).
 
 ## Recent Verification Notes
@@ -44,8 +44,8 @@ Last updated: 2026-05-11 v4 (All 13 skipped tests fixed — TF-IDF, LLM override
   - wake-word listener now auto-starts on controls mount,
   - Korean `Yuna` voice detection logic fixed (inverted condition corrected).
   - build validation completed (`cargo build`, `npm run build`, helper `swift build -c release`) and helper command smoke test passed.
-  - detailed implementation notes: `docs/LIVE_TALK_PHASE1_TTS_LOOP_FIX_2026-04-25.md`.
-- **Live Talk voice/VAD documentation (2026-04-25):** Added [`docs/LIVE_TALK_VOICE_PROCESSING_AND_VAD.md`](LIVE_TALK_VOICE_PROCESSING_AND_VAD.md) — current pipeline layers, Rust VAD constants (`voice/mod.rs`), Whisper model `openai_whisper-large-v3-v20240930_turbo`, analysis of **`AVAudioEngine.voiceProcessingEnabled`**, and ordered migration path (Apple processing → tune constants → optional auto-calibrate / Silero / config file).
+  - detailed implementation notes: `docs/archive/LIVE_TALK_PHASE1_TTS_LOOP_FIX_2026-04-25.md`.
+- **Live Talk voice/VAD documentation (2026-04-25):** Added [`docs/archive/LIVE_TALK_VOICE_PROCESSING_AND_VAD.md`](LIVE_TALK_VOICE_PROCESSING_AND_VAD.md) — current pipeline layers, Rust VAD constants (`voice/mod.rs`), Whisper model `openai_whisper-large-v3-v20240930_turbo`, analysis of **`AVAudioEngine.voiceProcessingEnabled`**, and ordered migration path (Apple processing → tune constants → optional auto-calibrate / Silero / config file).
 - **Live Talk removed (2026-04-29 v2):** All wake-word listening, transcription, and Swift helper infrastructure have been removed from the codebase. Only `speak_text` (TTS via macOS `say`) remains for assistant audio responses. See [`docs/LIVE_TALK_DEFERRED.md`](LIVE_TALK_DEFERRED.md).
 - **Debug session 2026-04-25 — 3 bugs resolved in live chat workflow:**
   - **Bug 1 — LTM ValueError:** All 6 calls to `mem0_memory.search()` passed `user_id` inside `filters` dict instead of as a keyword argument. `mem0ai` v1.0.9 strictly validates keyword args via `_build_filters_and_metadata()`. Fixed in `server.py`, `memory.py`, `core_tools.py`.
@@ -57,7 +57,7 @@ Last updated: 2026-05-11 v4 (All 13 skipped tests fixed — TF-IDF, LLM override
   - transcript output sanitization added in WhisperKit engine (`skipSpecialTokens: true` + `<|...|>` token stripping),
   - input normalization added toward 16k model input path before transcription windows are decoded,
   - frontend suppression guard added while `voice.tts_state.speaking == true` plus short post-TTS cooldown to reduce self-transcription.
-- **Live Talk (2026-04-25):** TTS feedback loop is **mitigated** (helper mute/unmute, post-unmute cooldown, frontend guards, Rust turn-based VAD on `audio_level`). Residual edge cases may remain on some mic/speaker setups; recommended follow-up is **`AVAudioEngine.voiceProcessingEnabled`** on wake + transcribe engines — see [`docs/LIVE_TALK_VOICE_PROCESSING_AND_VAD.md`](LIVE_TALK_VOICE_PROCESSING_AND_VAD.md).
+- **Live Talk (2026-04-25):** TTS feedback loop is **mitigated** (helper mute/unmute, post-unmute cooldown, frontend guards, Rust turn-based VAD on `audio_level`). Residual edge cases may remain on some mic/speaker setups; recommended follow-up is **`AVAudioEngine.voiceProcessingEnabled`** on wake + transcribe engines — see [`docs/archive/LIVE_TALK_VOICE_PROCESSING_AND_VAD.md`](LIVE_TALK_VOICE_PROCESSING_AND_VAD.md).
 - **Live Talk helper stability + mic runtime pass (2026-04-24):**
   - fixed stale helper lifecycle causing `helper stdout unavailable` on re-enable (stop now performs full helper shutdown and next start respawns cleanly),
   - bundled `whisperkit-helper` into app resources and resolved runtime helper path in Rust (`.app` launch no longer depends on inherited env vars),
@@ -73,7 +73,7 @@ Last updated: 2026-05-11 v4 (All 13 skipped tests fixed — TF-IDF, LLM override
 - Auto-summarize node wired into LangGraph graph: `memory_inject → summarize_gate → auto_summarize → router`. When `active_tokens > 85%` of `context_window`, older messages are compressed by Small_LLM. Protected messages (tool results, pinned, user_fact, system messages) are preserved. `context_summarized` WS event emitted on compression.
 - `memory_updated` WS event now emitted when `memory_write_node` completes with invalidation, signaling frontend to refresh memory context.
 - Architecture Decision Log (ADR) created — 11 decisions recorded spanning Tauri, LangGraph, models, WebSocket, memory, security, state management, and telemetry.
-- Linear milestones created for all completed phases (A-C, 1, 2, 3) and Phase 4. Linear workflow guide documents issue/PR conventions.
+- Milestones created for all completed phases (A-C, 1, 2, 3) and Phase 4.
 - Performance & memory SLOs defined for Mac Air M4 (16 GB): response latency targets, memory budget with degradation ladder, storage, CPU/thermal, throughput, and measurement procedures.
 - Profile update via `POST /api/profile` now persists the active router and medium keys above.
 - Profile update semantics now report partial field failures instead of silently ignoring invalid keys.
@@ -85,7 +85,7 @@ Last updated: 2026-05-11 v4 (All 13 skipped tests fixed — TF-IDF, LLM override
 - WebSocket chat smoke checks return to `idle` without `model_not_found` errors for legacy model IDs.
 - Runtime event shape in current server paths is chunk-oriented for some turns (`chunk` + `status`) rather than always emitting a final `message` event.
 - Voice transcript flow now sends final transcript as `user.message` with `source: "voice"` from the frontend runtime event handler.
-- **Live Talk ObjC FFI type fix (2026-04-24):** `NSLocale localeWithLocaleIdentifier:` was passed a raw C string (`*const i8`) where ObjC expected `NSString `*, causing `objc_retain` on non-object memory and a deterministic `SIGBUS`. **Fix:** Use `NSString::alloc(nil).init_str("en-US")` and pass the result. Also converted `stringWithUTF8String:` calls to `cocoa::foundation` typed bindings. See `[docs/OBJC_FFI_CRASH.md](docs/OBJC_FFI_CRASH.md)`.
+- **Live Talk ObjC FFI type fix (2026-04-24):** `NSLocale localeWithLocaleIdentifier:` was passed a raw C string (`*const i8`) where ObjC expected `NSString `*, causing `objc_retain` on non-object memory and a deterministic `SIGBUS`. **Fix:** Use `NSString::alloc(nil).init_str("en-US")` and pass the result. Also converted `stringWithUTF8String:` calls to `cocoa::foundation` typed bindings. See `[docs/archive/OBJC_FFI_CRASH.md](docs/archive/OBJC_FFI_CRASH.md)`.
 - `**transparent: true` restored (2026-04-24):** Set back to `true` in `tauri.conf.json`. The frosted-glass CSS (`body.tauri-glass`) provides a solid dark background while the window chrome is transparent.
 - **Live Talk autorelease pool crash fix (2026-04-24):** Rust threads hosting SFSpeechRecognizer/AVAudioEngine callbacks accumulated autoreleased ObjC objects. Explicit `-release` calls caused double-frees when the implicit TLS pool drained on thread exit. **Fix:** Removed all explicit `msg_send![obj, release]` calls from `do_run_native_speech_recognition`. The 4 ObjC objects (recognizer, request, task, audio_engine) are intentionally leaked (retain count 1) per speech session — negligible.
 - **Live Talk confidence type bug fix (2026-04-24):** `SFTranscriptionSegment.confidence` returns ObjC `float` (32-bit), but was read as `f64`. On x86_64 the upper 32 bits of XMM0 contained garbage, producing random confidence values that almost never passed the `> 0.3` wake-word threshold. **Fix:** Read as `f32` first, then cast to `f64`.
@@ -110,7 +110,7 @@ must be used instead. `start.sh` now builds the frontend and launches the `.app`
 - Cloud fallback + anonymization paths require continued regression protection.
 - Router selection may drift on borderline prompts or long-context/tool-heavy prompts.
 - CRUD and project-state invariants need continued hardening under repeated operations.
-- **RESOLVED — ObjC FFI type mismatch crash (2026-04-24):** `NSLocale localeWithLocaleIdentifier:` was passed a raw C string instead of `NSString `*, and `stringWithUTF8String:` calls used unterminated Rust `&str` pointers. All refactored to use `cocoa::foundation` typed bindings. See `[docs/OBJC_FFI_CRASH.md](docs/OBJC_FFI_CRASH.md)` for full analysis.
+- **RESOLVED — ObjC FFI type mismatch crash (2026-04-24):** `NSLocale localeWithLocaleIdentifier:` was passed a raw C string instead of `NSString `*, and `stringWithUTF8String:` calls used unterminated Rust `&str` pointers. All refactored to use `cocoa::foundation` typed bindings. See `[docs/archive/OBJC_FFI_CRASH.md](docs/archive/OBJC_FFI_CRASH.md)` for full analysis.
 - **RESOLVED — Autorelease pool crash (2026-04-24):** SFSpeechRecognizer callback objects accumulated on an implicit TLS pool. Explicit `-release` calls caused double-free on thread exit. Removed all release calls; objects leak instead of crashing.
 - **RESOLVED — Wake-word detection not firing (2026-04-24):** ObjC `float` confidence was read as `f64`, producing garbage values. Read as `f32` and cast.
 - **RESOLVED — PTT not sending to chat (2026-04-24):** `task.cancel()` doesn't produce final result. Changed to `task.finish()`.
@@ -256,13 +256,7 @@ Slice 1 — Architecture Decisions Log (ADR):
 - Each ADR follows context/decision/consequence format for clear trade-off documentation.
 - Cross-referenced in `docs/AI_AGENT_INDEX.md` canonical documentation map.
 
-Slice 2 — Release train alignment + Linear workflow:
-
-- Created 5 Linear milestones (`Phase A-C: Frontend Rebuild & Hardening`, `Phase 1: Stabilization`, `Phase 2: Reliability & Visibility`, `Phase 3: Capability Expansion`, `Phase 4: Governance & Release`) linked to the Owlynn project.
-- Updated Linear project description to enumerate all completed phases.
-- Created `docs/LINEAR_WORKFLOW.md` documenting issue conventions (title format, description template, labels), branch naming (`win-<number>-<description>`), commit message references, GitHub auto-linking, and full workflow from plan to close.
-- Updated `docs/AI_AGENT_PROJECT_GUIDE.md` to link to the Linear workflow doc.
-- Cross-referenced in `docs/AI_AGENT_INDEX.md`.
+Slice 2 — Release train alignment:
 
 Slice 3 — Performance & memory SLOs:
 

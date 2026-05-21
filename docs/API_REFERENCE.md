@@ -2,7 +2,7 @@
 
 This file documents the backend endpoints exposed by `src/api/server.py`.
 
-The implementation is primarily used by `frontend/script.js`, but this is written for developers modifying backend behavior.
+The implementation is consumed by `frontend-v2`, but this is written for developers modifying backend behavior.
 
 ## Base URL
 
@@ -10,9 +10,7 @@ The implementation is primarily used by `frontend/script.js`, but this is writte
 
 ## Static/UI
 
-- `GET /` serves the frontend `frontend/index.html`
-- `GET /script.js` serves `frontend/script.js`
-- `/static/*` serves static assets mounted from the `frontend/` directory
+- `GET /` serves the frontend `frontend-v2/dist/index.html`
 
 ## Health
 

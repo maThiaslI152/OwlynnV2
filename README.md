@@ -89,7 +89,7 @@ frontend-v2/          React 19 + TypeScript frontend (active)
   ├── src/
   │   ├── components/    Composer, OrchestrationPanel, SafeModePanel,
   │   │                   ScreenAssistPanel, ToolExecutionPanel,
-  │   │                   ActionProposalQueue, LiveTalkControls,
+  │   │                   ActionProposalQueue,
   │   │                   ProjectKnowledgePanel, AppShell
   │   ├── state/         Zustand store (useAppStore)
   │   ├── types/         WebSocket protocol type definitions
@@ -98,26 +98,12 @@ frontend-v2/          React 19 + TypeScript frontend (active)
 
 src-tauri/            Tauri v2 desktop runtime
   ├── src/main.rs       Tauri command/event runtime
-  ├── src/voice/mod.rs  Swift helper orchestration + voice event bridge
-  ├── tauri.conf.json   Tauri v2 config + bundled helper resource
-  └── whisperkit-helper/
-      ├── Package.swift
-      └── Sources/       Swift helper (SoundAnalysis + WhisperKit pipeline)
-
-frontend/             Legacy v1 frontend (HTML/CSS/JS, vendored deps)
-  ├── index.html       Main HTML shell
-  ├── script.js        StateManager + LeftPane + app init
-  ├── style.css        Styles
-  └── modules/         IIFE module scripts
-      ├── explorer.js          Project tree sidebar
-      ├── orchestrator-panel.js Chat/Stage tab manager
-      ├── knowledge-map.js     Memory visualization panel
-      └── stage.js             CodeMirror file editor
+  ├── src/voice/mod.rs  TTS orchestration (macOS `say` command)
+  └── tauri.conf.json   Tauri v2 configuration
 
 skills/              Reusable prompt templates (markdown)
 data/                User data (profile, memories, todos, topics)
 tests/               pytest + hypothesis test suite
-frontend/tests/      vitest + fast-check property tests
 docs/                Architecture and API documentation
 ```
 
@@ -144,21 +130,13 @@ cp .env.example .env
 # - Small key: gemma-4-e2b-heretic-uncensored-mlx
 # - Medium key: lfm2-8b-a1b-absolute-heresy-mpoa-mlx
 
-# 4. Build the Swift helper (required for Live Talk)
-(cd src-tauri/whisperkit-helper && swift build -c release)
-
-# 5. Start services + backend + desktop app
+# 4. Start services + backend + desktop app
 ./start.sh
 
 # Run just the backend (without frontend):
 # uvicorn src.api.server:app --host 127.0.0.1 --port 8000
 ```
-
 The app opens at `http://127.0.0.1:8000` or as a Tauri desktop window.
-
-For macOS microphone/speech permissions in development, run the debug `.app` bundle
-path (`tauri build --debug` + `open`) instead of raw `tauri dev`, so TCC can read
-the app `Info.plist`.
 
 ## Configuration
 
@@ -171,7 +149,6 @@ the app `Info.plist`.
 | `QDRANT_PORT` | `6333` | Qdrant port |
 | `SEARXNG_URL` | _(empty)_ | SearXNG URL (e.g. `http://localhost:8888`) |
 | `DEEPSEEK_API_KEY` | _(empty)_ | Optional DeepSeek API key for cloud tier |
-| `LINEAR_API_KEY` | _(empty)_ | Optional Linear API key (if your Linear MCP auth flow requires it) |
 | `OPTIMIZE_FOR_M4` | `false` | Enable M4 Mac Air optimizations |
 
 ### LLM Setup
@@ -209,26 +186,6 @@ Current verified local profile keys:
 | `WS` | `/ws/chat/{thread_id}` | WebSocket for streaming chat |
 
 Full reference: [docs/API_REFERENCE.md](docs/API_REFERENCE.md)
-
-### Linear Integration (MCP)
-
-Owlynn can call Linear via MCP when `mcp_config.json` includes:
-
-```json
-{
-  "mcpServers": {
-    "linear": {
-      "command": "npx",
-      "args": ["-y", "mcp-remote", "https://mcp.linear.app/sse"]
-    }
-  }
-}
-```
-
-Notes:
-- Keep `npx` available on your machine (`node` 18+ recommended).
-- Linear auth is handled by the MCP server (OAuth or API key flow, depending on your MCP setup).
-- External MCP tools are loaded at agent startup and become callable in the complex reasoning loop.
 
 ## Tools (20)
 
@@ -305,32 +262,6 @@ The agent graph has two memory nodes:
 1. **memory_inject_node** (pre-reasoning): Builds memory context from Mem0 + profile + topics + project instructions
 2. **memory_write_node** (post-reasoning): Extracts topics/interests, saves enriched facts to Mem0, invalidates cache
 
-### Live Talk (TTS/STT) — macOS-native (Tauri/Rust)
-
-Live Talk runs through the Tauri Rust layer for desktop-first personal assistant usage:
-
-Status note: Live Talk/wake-word model quality work is currently in progress but intentionally deferred while other product features are prioritized.
-
-- **Wake-word mode**: `start_voice_listening`/`stop_voice_listening` with fixed wake phrase `Athena` (`get_wake_word_phrase` returns `Athena`).
-- **Two-stage pipeline**:
-  - Stage 1: SoundAnalysis wake-word detection through a Swift helper process.
-  - Stage 2: WhisperKit (`openai_whisper-large-v3-v20240930_turbo`) transcription after wake-word activation. See `docs/LIVE_TALK_VOICE_PROCESSING_AND_VAD.md`.
-- **Speech output (TTS)**: `speak_text` command uses local macOS `say` for now.
-- **Runtime events**: `voice.state`, `voice.transcript`, `voice.wake_word`, `voice.error`, `voice.tts_state`, `voice.started`.
-
-Frontend wiring:
-
-- `LiveTalkControls.tsx` exposes wake-word toggle, fixed `Athena` display, hard-stop, transcript preview, and error badges
-- `App.tsx` listens to Tauri runtime voice events and forwards final transcript text as a normal `user.message` event with `source: "voice"`
-- `AppShell.tsx` shows inline interim transcript feedback above the composer
-- Wake-word phrase is fixed to `Athena` in both frontend and backend
-
-macOS permission assets are included at `src-tauri/Entitlements.plist` and `src-tauri/Info.plist` for microphone and speech recognition usage descriptions.
-
-**Implementation detail:** `src-tauri/src/voice/mod.rs` now orchestrates a Swift helper subprocess
-(`src-tauri/whisperkit-helper`) over line-delimited JSON stdin/stdout. This removes direct ObjC
-FFI coupling from Rust while preserving local-only voice processing.
-
 ## Testing
 
 ### Backend (pytest + hypothesis)
@@ -361,8 +292,6 @@ npx vitest run
 - [Tools Reference](docs/TOOLS.md)
 - [Chat Protocol](docs/CHAT_PROTOCOL.md)
 - [API Reference](docs/API_REFERENCE.md)
-- [Linear GitHub Sync](docs/LINEAR_GITHUB_SYNC.md)
-- [Linear Project Oversight](docs/LINEAR_PROJECT_OVERSIGHT.md)
 - [Human Project Guide](docs/HUMAN_PROJECT_GUIDE.md)
 - [AI Agent Project Guide](docs/AI_AGENT_PROJECT_GUIDE.md)
 - [AI Agent Navigation Index](docs/AI_AGENT_INDEX.md)

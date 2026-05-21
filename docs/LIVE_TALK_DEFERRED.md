@@ -35,7 +35,7 @@ Live Talk (wake-word → WhisperKit transcription → LLM → TTS) was developed
 
 The following docs record the implementation history for future reference:
 
-- [`docs/LIVE_TALK_VOICE_PROCESSING_AND_VAD.md`](LIVE_TALK_VOICE_PROCESSING_AND_VAD.md) — Voice pipeline architecture, anti-filler layer
-- [`docs/LIVE_TALK_WHISPER_FILLER_AND_FORCE_FINALIZE.md`](LIVE_TALK_WHISPER_FILLER_AND_FORCE_FINALIZE.md) — Filler hallucination debug analysis and all changes
-- [`docs/LIVE_TALK_PHASE1_TTS_LOOP_FIX_2026-04-25.md`](LIVE_TALK_PHASE1_TTS_LOOP_FIX_2026-04-25.md) — Phase 1 mute/unmute implementation
-- [`docs/SOUNDANALYSIS_WAKEWORD_ARCHITECTURE.md`](SOUNDANALYSIS_WAKEWORD_ARCHITECTURE.md) — Two-stage pipeline architecture
+- [`docs/archive/LIVE_TALK_VOICE_PROCESSING_AND_VAD.md`](LIVE_TALK_VOICE_PROCESSING_AND_VAD.md) — Voice pipeline architecture, anti-filler layer
+- [`docs/archive/LIVE_TALK_WHISPER_FILLER_AND_FORCE_FINALIZE.md`](LIVE_TALK_WHISPER_FILLER_AND_FORCE_FINALIZE.md) — Filler hallucination debug analysis and all changes
+- [`docs/archive/LIVE_TALK_PHASE1_TTS_LOOP_FIX_2026-04-25.md`](LIVE_TALK_PHASE1_TTS_LOOP_FIX_2026-04-25.md) — Phase 1 mute/unmute implementation
+- [`docs/archive/SOUNDANALYSIS_WAKEWORD_ARCHITECTURE.md`](SOUNDANALYSIS_WAKEWORD_ARCHITECTURE.md) — Two-stage pipeline architecture

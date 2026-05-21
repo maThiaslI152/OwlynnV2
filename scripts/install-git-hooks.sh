@@ -9,9 +9,5 @@ if [[ ! -d "${HOOKS_DIR}" ]]; then
   exit 1
 fi
 
-chmod +x "${HOOKS_DIR}/commit-msg"
-git -C "${REPO_ROOT}" config core.hooksPath .githooks
-
-echo "Installed repo-local git hooks."
-echo "core.hooksPath -> .githooks"
-echo "Active hook: .githooks/commit-msg (non-blocking WIN-* warning)"
+echo "No git hooks to install."
+echo "To set up hooks in the future, add scripts to .githooks/ and run this script again."

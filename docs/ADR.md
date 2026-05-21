@@ -137,7 +137,7 @@ memory (accessed via Mem0); SearxNG for local web retrieval.
 **Consequences:**
 
 - Redis provides sub-millisecond session state access.
-- Qdrant (on port 8100) with `nomic-embed-text-v1.5` embeddings for memory vector storage.
+- Qdrant (on port 6333) with `nomic-embed-text-v1.5` embeddings for memory vector storage.
 - Mem0 wraps Qdrant for higher-level memory operations (topic extraction, enriched memory).
 - SearxNG enables privacy-preserving local web search.
 - Qdrant, Redis, and SearxNG run in containers (`docker-compose.yml`).
@@ -227,7 +227,7 @@ with structured categorized output and prior-summary awareness.
 
 **Date:** 2026-04-24
 
-**Status:** SUPERSEDED by ADR-0013 (2026-04-24)
+**Status:** SUPERSEDED by ADR-0013 (2026-04-24), then REMOVED (2026-04-29)
 
 **Context:** Live Talk needed to move from UI placeholders to a desktop-native voice runtime
 for personal assistant workflows (wake-word style listening, push-to-talk, and TTS response playback),
@@ -270,7 +270,7 @@ automatically.
 crash on macOS Sequoia 26.4. The opaque window workaround (`transparent: false`,
 no overlay title bar) is required. Frontend CSS was updated so `body.tauri-glass`
 uses a dark gradient instead of `background: transparent`.
-- **Full crash analysis:** See `[docs/OBJC_FFI_CRASH.md](docs/OBJC_FFI_CRASH.md)` for
+- **Full crash analysis:** See `[docs/archive/OBJC_FFI_CRASH.md](docs/archive/OBJC_FFI_CRASH.md)` for
 the complete root-cause analysis of the non-null-terminated C string crash and the
 macOS 26.4 transparent window crash.
 
@@ -279,6 +279,8 @@ macOS 26.4 transparent window crash.
 ## ADR-0013: Tauri v2 + Swift Helper for Two-Stage Voice Pipeline
 
 **Date:** 2026-04-24
+
+**Status:** REMOVED (2026-04-29) — Live Talk voice pipeline removed from codebase. Only `speak_text` TTS remains.
 
 **Context:** The previous Live Talk implementation used direct ObjC FFI from Rust with
 `SFSpeechRecognizer` for both wake-word and transcription, and exposed push-to-talk controls.
@@ -290,7 +292,7 @@ Tauri APIs.
 subprocess (`whisperkit-helper`) using line-delimited JSON over stdin/stdout:
 
 - Stage 1: SoundAnalysis + CoreML wake-word model (`Athena`)
-- Stage 2: WhisperKit `openai_whisper-large-v3-v20240930_turbo` transcription (see `docs/LIVE_TALK_VOICE_PROCESSING_AND_VAD.md`)
+- Stage 2: WhisperKit `openai_whisper-large-v3-v20240930_turbo` transcription (see `docs/archive/LIVE_TALK_VOICE_PROCESSING_AND_VAD.md`)
 - Push-to-talk removed from command surface and UI
 
 **Consequences:**

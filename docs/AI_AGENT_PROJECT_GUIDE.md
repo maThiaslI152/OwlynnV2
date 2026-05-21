@@ -13,7 +13,7 @@ Quick navigation companion: `docs/AI_AGENT_INDEX.md`
 - `src/api/`: HTTP + WebSocket app surface
 - `src/tools/`: tool implementations exposed to agent
 - `src/memory/`: persona/profile/project/user memory components
-- `frontend/`: desktop UI shell and interaction modules
+- `frontend-v2/`: desktop UI shell and interaction modules
 - `tests/`: behavior, property, and regression tests
 
 ## Execution rules for coding tasks
@@ -33,14 +33,6 @@ Quick navigation companion: `docs/AI_AGENT_INDEX.md`
   - blank-response fallback behavior
   - anonymization/deanonymization correctness for cloud paths
 
-## MCP + Linear guidance
-
-- MCP servers are configured in `mcp_config.json`.
-- MCP tools are loaded dynamically and should be available to complex tool flow.
-- Linear is the source of truth for work tracking (`WIN-*`).
-- Use issue-key conventions in branch names, commits, and PR metadata.
-- Full Linear workflow conventions: `docs/LINEAR_WORKFLOW.md`
-
 ## Testing policy
 
 - Minimum for model/routing changes:
@@ -56,4 +48,3 @@ Quick navigation companion: `docs/AI_AGENT_INDEX.md`
 - Code compiles and tests pass for changed area.
 - User-facing behavior is verified (or explicitly noted if not runnable).
 - Documentation updated when behavior/workflow changes.
-- Linear issue updated with summary and validation notes.

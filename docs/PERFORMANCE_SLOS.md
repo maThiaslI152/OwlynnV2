@@ -27,8 +27,8 @@ or final message received (non-streaming).
 | Component | Budget | Notes |
 |-----------|--------|-------|
 | Python agent (langgraph + LLM pool) | 2 GB | Peak during complex reasoning + tool execution |
-| Small LLM (gemma-4, loaded in LM Studio) | 1.5 GB | Always loaded |
-| Medium LLM (lfm2-8b, loaded in LM Studio) | 4 GB | Loaded on demand; stays warm for session |
+| Small LLM (gemma-4 MLX, loaded in LM Studio) | 1.5 GB | Always loaded |
+| Medium LLM (lfm2-8b MLX, loaded in LM Studio) | 4 GB | Loaded on demand; stays warm for session |
 | Qdrant (Docker) | 512 MB | Vector store for memory |
 | Redis (Docker) | 128 MB | Session state + LangGraph checkpoints |
 | SearxNG (Docker) | 256 MB | Local web search |

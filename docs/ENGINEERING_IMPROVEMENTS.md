@@ -139,7 +139,7 @@ This document captures prioritized improvement ideas for Owlynn. It is **advisor
 
 ## How to use this doc
 
-1. Open a **Linear** (or internal) issue per item when work starts; reference `WIN-*` conventions in `docs/LINEAR_WORKFLOW.md` if applicable.
+1. Open an issue per item when work starts.
 2. For architectural choices, add an **ADR** in `docs/ADR.md` instead of only editing this file.
 3. When an item is done or rejected, update **this file** or `docs/STATUS.md` so agents do not re-propose stale work.
 
