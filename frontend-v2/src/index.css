@@ -1441,12 +1441,17 @@ body {
 }
 
 /* ── Tauri Frosted Glass Mode ───────────────────────────── */
+/* Uses transparent: false in tauri.conf.json to avoid click-through issues.
+   The glass illusion is created entirely with backdrop-filter, gradients, and
+   a subtle panel-border glow — no native window transparency needed.          */
 
 body.tauri-glass {
   background:
-    radial-gradient(1200px 700px at 15% -10%, rgba(130, 198, 255, 0.22), transparent 65%),
-    radial-gradient(1000px 650px at 80% 0%, rgba(149, 222, 255, 0.18), transparent 60%),
+    radial-gradient(1200px 700px at 15% -10%, rgba(130, 198, 255, 0.18), transparent 65%),
+    radial-gradient(1000px 650px at 80% 0%, rgba(149, 222, 255, 0.14), transparent 60%),
+    radial-gradient(800px 500px at 50% 100%, rgba(80, 140, 200, 0.08), transparent 60%),
     linear-gradient(180deg, #060d18 0%, #081122 100%);
+  position: relative;
 }
 
 body.tauri-glass #root {
@@ -1455,41 +1460,51 @@ body.tauri-glass #root {
 
 body.tauri-glass .app-shell {
   background:
-    radial-gradient(1000px 600px at 20% -10%, rgba(173, 224, 255, 0.12), transparent 62%),
-    radial-gradient(820px 500px at 85% 0%, rgba(166, 233, 255, 0.1), transparent 60%),
-    linear-gradient(180deg, rgba(140, 196, 255, 0.08), rgba(140, 196, 255, 0.04));
+    radial-gradient(1000px 600px at 20% -10%, rgba(173, 224, 255, 0.10), transparent 62%),
+    radial-gradient(820px 500px at 85% 0%, rgba(166, 233, 255, 0.08), transparent 60%),
+    linear-gradient(180deg, rgba(140, 196, 255, 0.06), rgba(140, 196, 255, 0.03));
 }
 
 body.tauri-glass .panel {
-  background: linear-gradient(180deg, rgba(14, 28, 49, 0.32), rgba(10, 22, 40, 0.28));
-  backdrop-filter: blur(26px) saturate(155%);
-  -webkit-backdrop-filter: blur(26px) saturate(155%);
+  background: linear-gradient(180deg, rgba(14, 28, 49, 0.28), rgba(10, 22, 40, 0.24));
+  backdrop-filter: blur(28px) saturate(160%);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  border-right: 1px solid rgba(140, 196, 255, 0.06);
 }
 
 body.tauri-glass .left-panel,
 body.tauri-glass .right-panel {
-  backdrop-filter: blur(30px) saturate(165%);
-  -webkit-backdrop-filter: blur(30px) saturate(165%);
+  backdrop-filter: blur(32px) saturate(170%);
+  -webkit-backdrop-filter: blur(32px) saturate(170%);
 }
 
 body.tauri-glass .center-panel {
-  backdrop-filter: blur(22px) saturate(145%);
-  -webkit-backdrop-filter: blur(22px) saturate(145%);
+  backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  border-right: none;
 }
 
 body.tauri-glass .topbar,
 body.tauri-glass .workspace-section,
 body.tauri-glass .inspector-header,
 body.tauri-glass .composer-wrapper {
-  background: rgba(13, 28, 49, 0.18);
+  background: rgba(13, 28, 49, 0.15);
+}
+
+/* Slightly brighter glass surface for focused interactive areas */
+body.tauri-glass .composer textarea:focus {
+  background: rgba(14, 30, 55, 0.75);
+  border-color: var(--accent-glow);
 }
 
 body.tauri-glass .message-assistant .message-bubble {
-  background: linear-gradient(180deg, rgba(51, 83, 128, 0.28), rgba(37, 62, 99, 0.24));
+  background: linear-gradient(180deg, rgba(51, 83, 128, 0.24), rgba(37, 62, 99, 0.20));
+  border: 1px solid rgba(140, 196, 255, 0.08);
 }
 
 body.tauri-glass .message-user .message-bubble {
-  background: linear-gradient(180deg, rgba(118, 195, 255, 0.8), rgba(95, 176, 255, 0.74));
+  background: linear-gradient(180deg, rgba(118, 195, 255, 0.75), rgba(95, 176, 255, 0.68));
+  border: 1px solid rgba(118, 195, 255, 0.2);
 }
 
 /* ── Chat List (left panel) ─────────────────────────────── */

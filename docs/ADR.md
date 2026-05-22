@@ -14,7 +14,8 @@ decision, and consequences of a key design choice.
 screen capture, push-to-talk, and security controls. Options included Electron, Tauri v1/v2,
 and bare Python GUI frameworks.
 
-**Decision:** Tauri desktop shell with React + TypeScript frontend, using macOS native vibrancy.
+**Decision:** Tauri desktop shell with React + TypeScript frontend, using macOS native vibrancy
+and CSS backdrop blur for a semi-transparent glass aesthetic.
 
 **Consequences:**
 
@@ -23,6 +24,11 @@ and bare Python GUI frameworks.
 - Smaller binary size compared to Electron (~5MB vs ~100MB).
 - Migration to Tauri v2 is complete (see ADR-0013): updated `tauri.conf.json` schema,
 capability-based permissions, event/command APIs, and frontend imports.
+- `transparent: true` with `titleBarStyle: "Overlay"` caused WebKit GPU compositing crashes
+  on macOS Sequoia 26.4 (see archived `OBJC_FFI_CRASH.md`). Without `titleBarStyle`,
+  `transparent: true` + native vibrancy (`window_vibrancy` crate) gives a frosted glass
+  desktop effect. The CSS body uses a solid dark gradient (`#060d18` → `#081122`) so
+  interactive elements receive clicks correctly while the window chrome remains translucent.
 - Requires Tauri permission audit before production release.
 
 ---

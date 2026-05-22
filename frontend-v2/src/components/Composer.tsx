@@ -52,7 +52,6 @@ export function Composer({ onSend, disabled, compact }: ComposerProps) {
             onKeyDown={handleKeyDown}
             placeholder={compact ? "Ask..." : "Ask Owlynn..."}
             rows={1}
-            disabled={disabled}
           />
         </div>
         <button

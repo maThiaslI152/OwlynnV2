@@ -4,7 +4,9 @@ import './index.css'
 import App from './App.tsx'
 
 // Apply Tauri-specific glass mode for native frosted effects.
-if ((window as unknown as { __TAURI__?: unknown }).__TAURI__) {
+const hasTauriInternals = typeof window !== 'undefined' && Boolean((window as any).__TAURI_INTERNALS__);
+
+if (hasTauriInternals) {
   document.body.classList.add('tauri-glass')
 }
 

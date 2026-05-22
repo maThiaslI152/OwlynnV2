@@ -555,6 +555,114 @@
       "description": "Permission identifier",
       "oneOf": [
         {
+          "description": "Enables the approve_action_proposal command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-approve-action-proposal",
+          "markdownDescription": "Enables the approve_action_proposal command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the create_action_proposal command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-create-action-proposal",
+          "markdownDescription": "Enables the create_action_proposal command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the debug_log command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-debug-log",
+          "markdownDescription": "Enables the debug_log command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the reject_action_proposal command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-reject-action-proposal",
+          "markdownDescription": "Enables the reject_action_proposal command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the set_safe_mode command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-set-safe-mode",
+          "markdownDescription": "Enables the set_safe_mode command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the set_window_size command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-set-window-size",
+          "markdownDescription": "Enables the set_window_size command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the speak_text command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-speak-text",
+          "markdownDescription": "Enables the speak_text command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the start_screen_preview command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-start-screen-preview",
+          "markdownDescription": "Enables the start_screen_preview command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the stop_screen_preview command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-stop-screen-preview",
+          "markdownDescription": "Enables the stop_screen_preview command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the approve_action_proposal command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-approve-action-proposal",
+          "markdownDescription": "Denies the approve_action_proposal command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the create_action_proposal command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-create-action-proposal",
+          "markdownDescription": "Denies the create_action_proposal command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the debug_log command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-debug-log",
+          "markdownDescription": "Denies the debug_log command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the reject_action_proposal command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-reject-action-proposal",
+          "markdownDescription": "Denies the reject_action_proposal command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the set_safe_mode command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-set-safe-mode",
+          "markdownDescription": "Denies the set_safe_mode command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the set_window_size command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-set-window-size",
+          "markdownDescription": "Denies the set_window_size command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the speak_text command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-speak-text",
+          "markdownDescription": "Denies the speak_text command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the start_screen_preview command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-start-screen-preview",
+          "markdownDescription": "Denies the start_screen_preview command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the stop_screen_preview command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-stop-screen-preview",
+          "markdownDescription": "Denies the stop_screen_preview command without any pre-configured scope."
+        },
+        {
           "description": "Default core plugins set.\n#### This default permission set includes:\n\n- `core:path:default`\n- `core:event:default`\n- `core:window:default`\n- `core:webview:default`\n- `core:app:default`\n- `core:image:default`\n- `core:resources:default`\n- `core:menu:default`\n- `core:tray:default`",
           "type": "string",
           "const": "core:default",

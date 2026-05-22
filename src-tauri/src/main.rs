@@ -98,6 +98,13 @@ fn now_millis() -> u128 {
 
 #[tauri::command]
 fn speak_text(app: tauri::AppHandle, state: tauri::State<Mutex<NativeRuntimeState>>, text: String) -> Result<String, String> {
+  const MAX_TTS_LENGTH: usize = 5000;
+  if text.len() > MAX_TTS_LENGTH {
+    return Err(format!("text too long ({} chars, max {})", text.len(), MAX_TTS_LENGTH));
+  }
+  if text.trim().is_empty() {
+    return Err("text must not be empty".to_string());
+  }
   let locked = state.lock().map_err(|_| "native runtime state lock failed".to_string())?;
   let engine = Arc::new(Mutex::new(locked.voice.clone()));
   let _ = voice::speak_text(app, text, engine);
@@ -262,21 +269,22 @@ fn main() {
       set_window_size
     ])
     .setup(|app| {
-      let window = app.get_webview_window("main").ok_or("main window not found")?;
       #[cfg(target_os = "macos")]
       {
-        use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
-        let _ = apply_vibrancy(
-          &window,
-          NSVisualEffectMaterial::Sidebar,
-          Some(NSVisualEffectState::Active),
-          None,
-        );
-      }
-      #[cfg(target_os = "windows")]
-      {
-        use window_vibrancy::apply_acrylic;
-        let _ = apply_acrylic(&window, Some((18, 18, 18, 200)));
+        let window = app.get_webview_window("main").ok_or("main window not found")?;
+        use cocoa::appkit::{NSColor, NSWindow};
+        use cocoa::base::{id, nil};
+        let ns_window = window.ns_window().unwrap() as id;
+        unsafe {
+          let bg_color = NSColor::colorWithRed_green_blue_alpha_(
+            nil,
+            14.0 / 255.0,
+            28.0 / 255.0,
+            49.0 / 255.0,
+            1.0,
+          );
+          ns_window.setBackgroundColor_(bg_color);
+        }
       }
       Ok(())
     })

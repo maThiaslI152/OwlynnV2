@@ -6,14 +6,16 @@
   "build": {
     "frontendDist": "../frontend-v2/dist",
     "devUrl": "http://127.0.0.1:5173",
-    "beforeDevCommand": "npm --prefix frontend-v2 run dev",
-    "beforeBuildCommand": "npm --prefix frontend-v2 run build"
+    "beforeDevCommand": "npm --prefix ../frontend-v2 run dev",
+    "beforeBuildCommand": "npm --prefix ../frontend-v2 run build",
+    "removeUnusedCommands": true
   },
   "app": {
-    "withGlobalTauri": true,
-    "macOSPrivateApi": true,
+    "withGlobalTauri": false,
+    "macOSPrivateApi": false,
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: http://127.0.0.1:8000 asset: https://asset.localhost; connect-src 'self' ws://127.0.0.1:8000 http://127.0.0.1:8000; font-src 'self';"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: http://127.0.0.1:8000 asset: https://asset.localhost; connect-src 'self' ws://127.0.0.1:8000 http://127.0.0.1:8000; font-src 'self';",
+      "freezePrototype": true
     },
     "windows": [
       {
@@ -25,7 +27,7 @@
         "width": 1100,
         "minWidth": 680,
         "minHeight": 480,
-        "transparent": true,
+        "titleBarStyle": "Transparent",
         "decorations": true,
         "dragDropEnabled": false
       }

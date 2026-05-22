@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-create-action-proposal"
+description = "Enables the create_action_proposal command without any pre-configured scope."
+commands.allow = ["create_action_proposal"]
+
+[[permission]]
+identifier = "deny-create-action-proposal"
+description = "Denies the create_action_proposal command without any pre-configured scope."
+commands.deny = ["create_action_proposal"]
