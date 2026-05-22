@@ -142,6 +142,7 @@ if [ -x "$_LOCAL_TAURI" ]; then
         echo "      Launching Owlynn.app..."
         open "$_APP_BUNDLE"
         echo "      App launched. Restart script to relaunch."
+        wait
     else
         echo "      .app bundle not found, falling back to tauri dev..."
         "$_LOCAL_TAURI" dev
