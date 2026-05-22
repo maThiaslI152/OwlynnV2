@@ -3,6 +3,7 @@ import { Composer } from './Composer'
 import { SafeModePanel } from './SafeModePanel'
 import { ScreenAssistPanel } from './ScreenAssistPanel'
 import { ActionProposalQueue } from './ActionProposalQueue'
+import type { InterruptChoice } from '../state/useAppStore'
 import { ToolExecutionPanel } from './ToolExecutionPanel'
 import { ProjectKnowledgePanel } from './ProjectKnowledgePanel'
 import { OrchestrationPanel } from './OrchestrationPanel'
@@ -37,6 +38,7 @@ interface AppShellProps {
   onDeleteProject: (projectId: string) => void
   onApproveProposal?: (id: string) => Promise<void>
   onRejectProposal?: (id: string) => Promise<void>
+  onSelectChoice?: (choice: InterruptChoice, userInput?: string) => void
   onNewChat: () => void
   onSelectChat: (chatId: string) => void
   onDeleteChat: (chatId: string) => void
@@ -175,6 +177,7 @@ export function AppShell({
   onDeleteProject,
   onApproveProposal,
   onRejectProposal,
+  onSelectChoice,
   onNewChat,
   onSelectChat,
   onDeleteChat,
@@ -548,7 +551,7 @@ export function AppShell({
             <ToolExecutionPanel />
           </CollapsibleSection>
           <CollapsibleSection title="Action Proposals" icon="📋">
-            <ActionProposalQueue onApprove={onApproveProposal} onReject={onRejectProposal} />
+            <ActionProposalQueue onApprove={onApproveProposal} onReject={onRejectProposal} onSelectChoice={onSelectChoice} />
           </CollapsibleSection>
         </aside>
       )}

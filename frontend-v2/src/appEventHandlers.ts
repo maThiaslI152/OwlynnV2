@@ -1,4 +1,4 @@
-import type { ActionProposal, ToolExecutionSnapshot } from './state/useAppStore'
+import type { ActionProposal, ToolExecutionSnapshot, InterruptChoice } from './state/useAppStore'
 import type { SecurityApprovalClientEvent, ToolExecutionEvent } from './types/protocol'
 
 export function deriveRiskHint(toolName?: string, input?: string | null): string {
@@ -152,4 +152,45 @@ export function resolveProjectSwitch(params: {
     nextProjectThreads,
     operatorNote: `Switched to project ${targetProjectId}`,
   }
+}
+
+export interface AskUserInterrupt {
+  question: string
+  choices: InterruptChoice[]
+}
+
+/**
+ * Detect and parse an ask_user / skill_ambiguity interrupt from the raw
+ * interrupts array. Returns null if this is a security-style interrupt.
+ */
+export function parseInterruptChoices(
+  interrupts: unknown[] | undefined,
+): AskUserInterrupt | null {
+  if (!interrupts || interrupts.length === 0) return null
+
+  const primary = interrupts[0]
+  if (typeof primary !== 'object' || primary === null) return null
+
+  const typed = primary as Record<string, unknown>
+  // Only handle ask_user type (includes skill_ambiguity sent as ask_user)
+  if (typed.type !== 'ask_user') return null
+
+  const question = typeof typed.question === 'string' ? typed.question : ''
+  const rawChoices = Array.isArray(typed.choices) ? typed.choices : []
+
+  const choices: InterruptChoice[] = rawChoices.map((c: unknown) => {
+    if (typeof c !== 'object' || c === null) {
+      return { label: String(c) }
+    }
+    const choice = c as Record<string, unknown>
+    return {
+      label: typeof choice.label === 'string' ? choice.label : String(choice.label ?? ''),
+      route: typeof choice.route === 'string' ? choice.route : undefined,
+      toolbox: Array.isArray(choice.toolbox) ? choice.toolbox as string[] : undefined,
+      skill_name: choice.skill_name != null ? String(choice.skill_name) : undefined,
+      allows_user_input: choice.allows_user_input === true,
+    }
+  })
+
+  return { question, choices }
 }

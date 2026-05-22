@@ -13,6 +13,7 @@ from src.agent.state import AgentState
 from src.agent.llm import get_small_llm, LLMPool
 from src.config.settings import MEDIUM_DEFAULT_CONTEXT, MEDIUM_LONGCTX_CONTEXT, CLOUD_CONTEXT
 from src.memory.user_profile import get_profile
+from src.tools.skills import SkillMatcher, _default_loader as _skill_loader
 
 import json
 import re
@@ -388,20 +389,83 @@ async def router_node(state: AgentState) -> AgentState:
     router_clarification_used = False
     if confidence < threshold and router_hitl_enabled:
         try:
-            clarification = interrupt({
-                "type": "ask_user",
-                "question": "I'm not sure how to handle this. What would you prefer?",
-                "choices": [
-                    {"label": "Search the web", "route": "complex-default", "toolbox": ["web_search"]},
-                    {"label": "Work with local files", "route": "complex-default", "toolbox": ["file_ops"]},
-                    {"label": "Create documents/visualizations", "route": "complex-default", "toolbox": ["data_viz"]},
-                    {"label": "Use cloud model for higher quality", "route": "complex-cloud", "toolbox": ["all"]},
-                    {"label": "Just answer directly", "route": "complex-default", "toolbox": ["all"]},
-                ],
-            })
+            # ── Skill ambiguity check ────────────────────────────────
+            matcher = SkillMatcher(_skill_loader)
+            match_result = matcher.match_with_confidence(user_text, top_k=5)
+
+            if match_result.is_ambiguous and match_result.candidate_skills:
+                # Build dynamic choices from candidate skills
+                choices: list[dict] = []
+                for skill, score in match_result.candidate_skills[:5]:
+                    # Map skill category to toolbox for routing
+                    toolbox = _toolbox_for_skill(skill)
+                    choices.append({
+                        "label": f"{skill.name} — {skill.description} ({score:.0%})",
+                        "route": "complex-default",
+                        "toolbox": toolbox,
+                        "skill_name": skill.file,
+                    })
+                # Always append "Others" as the last choice
+                choices.append({
+                    "label": "Others (describe what you need)",
+                    "route": "complex-default",
+                    "toolbox": ["all"],
+                    "skill_name": None,
+                    "allows_user_input": True,
+                })
+
+                clarification = interrupt({
+                    "type": "ask_user",
+                    "question": (
+                        "I'm not sure which approach fits best — "
+                        f"{match_result.ambiguity_reason}\n"
+                        "Which would help you most?"
+                    ),
+                    "choices": choices,
+                })
+            else:
+                clarification = interrupt({
+                    "type": "ask_user",
+                    "question": "I'm not sure how to handle this. What would you prefer?",
+                    "choices": [
+                        {"label": "Search the web", "route": "complex-default", "toolbox": ["web_search"]},
+                        {"label": "Work with local files", "route": "complex-default", "toolbox": ["file_ops"]},
+                        {"label": "Create documents/visualizations", "route": "complex-default", "toolbox": ["data_viz"]},
+                        {"label": "Use cloud model for higher quality", "route": "complex-cloud", "toolbox": ["all"]},
+                        {"label": "Just answer directly", "route": "complex-default", "toolbox": ["all"]},
+                    ],
+                })
+
             router_clarification_used = True
-            # Use clarification response to finalize routing
+            # ── Handle "Others" free-text re-match ──────────────────
+            user_input_override = None
             if isinstance(clarification, dict):
+                if clarification.get("allows_user_input") and clarification.get("user_input"):
+                    # User typed a custom description — re-run skill matching
+                    refined = clarification["user_input"].strip()
+                    re_match = matcher.match_with_confidence(refined, top_k=5)
+                    if re_match.candidate_skills:
+                        top = re_match.candidate_skills[0]
+                        toolbox = _toolbox_for_skill(top[0])
+                        logger.info(
+                            "[router] HITL 'Others' re-match → skill=%s score=%.0f%%",
+                            top[0].name, top[1] * 100,
+                        )
+                        budget = estimate_token_budget(user_text, "complex-default")
+                        metadata = _build_router_metadata(
+                            "complex-default", confidence=0.8, reasoning="hitl_others_rematch",
+                            classification_source="hitl", cloud_available=cloud_available,
+                            has_images=has_images, task_category="from_hitl", estimated_tokens=budget, web_on=web_on,
+                        )
+                        return {
+                            "route": "complex-default", "token_budget": budget,
+                            "selected_toolboxes": toolbox,
+                            "router_clarification_used": True,
+                            "router_metadata": metadata,
+                        }
+                    # Fall through to default complex if re-match also fails
+                    user_input_override = refined
+
                 decision = "complex"
                 toolbox = clarification.get("toolbox", ["all"])
                 route_override = clarification.get("route", "complex-default")
@@ -416,10 +480,12 @@ async def router_node(state: AgentState) -> AgentState:
                     classification_source="hitl", cloud_available=cloud_available,
                     has_images=has_images, task_category="from_hitl", estimated_tokens=budget, web_on=web_on,
                 )
-                return {"route": route_override, "token_budget": budget,
-                        "selected_toolboxes": toolbox,
-                        "router_clarification_used": True,
-                        "router_metadata": metadata}
+                return {
+                    "route": route_override, "token_budget": budget,
+                    "selected_toolboxes": toolbox,
+                    "router_clarification_used": True,
+                    "router_metadata": metadata,
+                }
         except Exception as e:
             logger.warning(f"[router] HITL interrupt failed: {e}")
 
@@ -464,6 +530,32 @@ async def router_node(state: AgentState) -> AgentState:
     return {"route": route, "token_budget": budget,
             "selected_toolboxes": toolbox, "router_clarification_used": router_clarification_used,
             "router_metadata": metadata}
+
+
+def _toolbox_for_skill(skill) -> list[str]:
+    """Map a SkillDefinition to router toolbox categories."""
+    from src.tools.skills import SkillDefinition
+    # Map skill categories and tools_used to toolbox names
+    category_toolbox_map = {
+        "research": ["web_search"],
+        "writing": ["data_viz"],
+        "data": ["data_viz"],
+        "productivity": ["productivity"],
+        "communication": ["data_viz"],
+    }
+    toolbox = category_toolbox_map.get(skill.category, ["all"])
+
+    # If the skill explicitly lists web_search tools, ensure it's included
+    if isinstance(skill, SkillDefinition) and skill.tools_used:
+        tools = [t.lower() for t in skill.tools_used]
+        if any("web" in t or "fetch" in t for t in tools):
+            if "web_search" not in toolbox:
+                toolbox = ["web_search"] + [t for t in toolbox if t != "web_search"]
+        if any("file" in t or "read" in t or "write" in t or "edit" in t for t in tools):
+            if "file_ops" not in toolbox:
+                toolbox = ["file_ops"] + [t for t in toolbox if t != "file_ops"]
+
+    return toolbox
 
 
 def _detect_task_type(text: str) -> str:

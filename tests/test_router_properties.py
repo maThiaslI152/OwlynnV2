@@ -23,8 +23,9 @@ from src.agent.nodes.router import (
     _has_image_content,
     _needs_frontier_quality,
     _resolve_complex_route,
+    _toolbox_for_skill,
 )
-from src.config.settings import MEDIUM_DEFAULT_CONTEXT, MEDIUM_LONGCTX_CONTEXT, CLOUD_CONTEXT
+from src.tools.skills import SkillDefinition
 
 
 # ── Valid route set ──────────────────────────────────────────────────────
@@ -347,3 +348,58 @@ class TestParseRoutingProperty:
         assert dec == routing
         assert abs(conf - confidence) < 1e-6
         assert tb == [toolbox]
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# Property: _toolbox_for_skill maps skill categories correctly
+# ═════════════════════════════════════════════════════════════════════════
+
+class TestToolboxForSkill:
+    """_toolbox_for_skill returns valid toolbox lists for skill definitions."""
+
+    def test_research_skill_maps_to_web_search(self):
+        skill = SkillDefinition(
+            file="research.md", name="Research",
+            triggers=["research"], description="Research things",
+            prompt="Research: {context}", category="research",
+        )
+        toolbox = _toolbox_for_skill(skill)
+        assert "web_search" in toolbox
+
+    def test_writing_skill_maps_to_data_viz(self):
+        skill = SkillDefinition(
+            file="write.md", name="Writer",
+            triggers=["write"], description="Write things",
+            prompt="Write: {context}", category="writing",
+        )
+        toolbox = _toolbox_for_skill(skill)
+        assert "data_viz" in toolbox
+
+    def test_skill_with_web_tools_gets_web_search(self):
+        skill = SkillDefinition(
+            file="scan.md", name="Scanner",
+            triggers=["scan"], description="Scan things",
+            prompt="Scan: {context}", category="general",
+            tools_used=["web_search", "fetch_webpage"],
+        )
+        toolbox = _toolbox_for_skill(skill)
+        assert "web_search" in toolbox
+
+    def test_skill_with_file_tools_gets_file_ops(self):
+        skill = SkillDefinition(
+            file="review.md", name="Reviewer",
+            triggers=["review"], description="Review code",
+            prompt="Review: {context}", category="general",
+            tools_used=["read_workspace_file"],
+        )
+        toolbox = _toolbox_for_skill(skill)
+        assert "file_ops" in toolbox
+
+    def test_unknown_category_defaults_to_all(self):
+        skill = SkillDefinition(
+            file="unknown.md", name="Unknown",
+            triggers=["unknown"], description="Unknown skill",
+            prompt="Do: {context}", category="general",
+        )
+        toolbox = _toolbox_for_skill(skill)
+        assert toolbox == ["all"]

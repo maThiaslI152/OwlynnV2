@@ -73,6 +73,24 @@ class SkillDefinition:
             raise ValueError("SkillDefinition param names must be unique")
 
 
+@dataclass
+class MatchResult:
+    """Result of a skill match operation with ambiguity information.
+
+    Attributes:
+        is_ambiguous: True when the match is uncertain and HITL should be triggered.
+        top_match: The highest-scoring skill, or None if no skills matched.
+        candidate_skills: Up to 5 best matches for display in a choice popup.
+        ambiguity_reason: Human-readable description of why the match is ambiguous.
+        best_score: The combined score of the top match (0.0-1.0).
+    """
+    is_ambiguous: bool
+    top_match: Optional[SkillDefinition] = None
+    candidate_skills: list[tuple[SkillDefinition, float]] = field(default_factory=list)
+    ambiguity_reason: str = ""
+    best_score: float = 0.0
+
+
 def _parse_front_matter(text: str) -> tuple[dict, str]:
     """Parse YAML-like front matter from a markdown skill file.
 
@@ -331,6 +349,111 @@ class SkillMatcher:
         if results and results[0][1] >= threshold:
             return results[0][0]
         return None
+
+    # ── Thresholds for ambiguity detection ──────────────────────────────
+    LOW_CONFIDENCE_THRESHOLD = 0.5
+    TIE_MARGIN = 0.15
+    TIE_MIN_TOP_SCORE = 0.3
+    VAGUE_WORD_COUNT = 3
+
+    # Weak intent-signalling keywords — if none of these appear, the
+    # query is likely too vague to match skills confidently.
+    _INTENT_KEYWORDS: set[str] = {
+        "research", "investigate", "analyze", "explain", "summarize",
+        "write", "create", "build", "generate", "refactor", "review",
+        "check", "audit", "visualize", "chart", "graph", "plot",
+        "email", "draft", "compose", "report", "briefing",
+        "brainstorm", "suggest", "idea", "plan", "todo", "task",
+        "code", "document", "data", "compare", "rewrite", "translate",
+        "scan", "search", "look", "find", "meeting", "note",
+        "presentation", "slide", "check", "verify", "fact",
+    }
+
+    def match_with_confidence(self, query: str, top_k: int = 5) -> MatchResult:
+        """Run skill matching with ambiguity detection for HITL gating.
+
+        Returns a :class:`MatchResult` with:
+        - ``is_ambiguous``: True when the match is uncertain (three-signal check).
+        - ``candidate_skills``: Up to *top_k* best matches for display as choices.
+        - ``ambiguity_reason``: Human-readable explanation when ambiguous.
+        - ``top_match`` / ``best_score``: Best match and its score.
+
+        Three ambiguity signals:
+
+        **Signal A — Low Confidence**: Best combined score < ``LOW_CONFIDENCE_THRESHOLD`` (0.5).
+
+        **Signal B — Multi-Tie**: Two or more skills within ``TIE_MARGIN`` (0.15)
+        of each other AND top score > ``TIE_MIN_TOP_SCORE`` (0.3).
+
+        **Signal C — Vague Query**: Query has fewer than ``VAGUE_WORD_COUNT`` (3)
+        words OR contains no recognised intent keywords.
+        """
+        results = self.match(query, top_k=top_k)
+
+        # ── Signal C: vague query detection ──────────────────────────
+        words = query.strip().split()
+        query_lower = query.lower()
+        has_intent_keywords = any(
+            kw in query_lower for kw in self._INTENT_KEYWORDS
+        )
+        vague_query = (
+            len(words) < self.VAGUE_WORD_COUNT or not has_intent_keywords
+        )
+
+        if not results:
+            # No skills matched at all — clearly ambiguous
+            if vague_query:
+                reason = (
+                    f"Your query is very short ({len(words)} words) with no clear intent. "
+                    "Try adding more detail about what you need."
+                )
+            else:
+                reason = "No skills matched your query. Try rephrasing with more specific keywords."
+            return MatchResult(
+                is_ambiguous=True,
+                candidate_skills=[],
+                ambiguity_reason=reason,
+            )
+
+        best = results[0]
+        best_score = best[1]
+
+        # ── Signal A: low confidence ─────────────────────────────────
+        low_confidence = best_score < self.LOW_CONFIDENCE_THRESHOLD
+
+        # ── Signal B: multi-tie ──────────────────────────────────────
+        multi_tie = False
+        if len(results) >= 2 and best_score >= self.TIE_MIN_TOP_SCORE:
+            second_score = results[1][1]
+            if (best_score - second_score) <= self.TIE_MARGIN:
+                multi_tie = True
+
+        # ── Build ambiguity reason ───────────────────────────────────
+        reasons: list[str] = []
+        if low_confidence:
+            reasons.append(
+                f"Best match '{best[0].name}' has low confidence "
+                f"({best_score:.0%})"
+            )
+        if multi_tie:
+            tied_names = [r[0].name for r in results if (best_score - r[1]) <= self.TIE_MARGIN]
+            reasons.append(
+                f"Multiple skills are close matches: {', '.join(tied_names[:3])}"
+            )
+        if vague_query:
+            reasons.append(f"Query is vague ({len(words)} words, no strong intent)")
+        if not reasons and not vague_query:
+            reasons.append("Query is ambiguous — unable to determine the best match")
+
+        is_ambiguous = low_confidence or multi_tie or vague_query
+
+        return MatchResult(
+            is_ambiguous=is_ambiguous,
+            top_match=best[0],
+            candidate_skills=results[:top_k],
+            ambiguity_reason="; ".join(reasons) if is_ambiguous else "",
+            best_score=best_score,
+        )
 
     def _keyword_score(self, query: str, skill: SkillDefinition) -> float:
         """Score a skill against *query* using trigger substring / token overlap.

@@ -53,6 +53,14 @@ export interface CompressionInfo {
   tokensFreed: number
 }
 
+export interface InterruptChoice {
+  label: string
+  route?: string
+  toolbox?: string[]
+  skill_name?: string | null
+  allows_user_input?: boolean
+}
+
 interface AppState {
   connectionState: ConnectionState
   messages: ChatMessage[]
@@ -69,6 +77,8 @@ interface AppState {
   contextCompression: CompressionInfo | null
   memoryUpdatedAt: number | null
   ttsSpeaking: boolean
+  interruptQuestion: string | null
+  interruptChoices: InterruptChoice[] | null
   setConnectionState: (state: ConnectionState) => void
   addMessage: (message: ChatMessage) => void
   appendStreamChunk: (chunk: string) => void
@@ -88,6 +98,8 @@ interface AppState {
   setContextCompression: (info: CompressionInfo | null) => void
   setMemoryUpdatedAt: (ts: number) => void
   setTtsSpeaking: (speaking: boolean) => void
+  setInterruptPrompt: (question: string | null, choices: InterruptChoice[] | null) => void
+  clearInterruptPrompt: () => void
   clearSession: () => void
 }
 
@@ -111,6 +123,8 @@ export const useAppStore = create<AppState>((set) => ({
   contextCompression: null,
   memoryUpdatedAt: null,
   ttsSpeaking: false,
+  interruptQuestion: null,
+  interruptChoices: null,
   setConnectionState: (connectionState) => set({ connectionState }),
   addMessage: (message) =>
     set((state) => ({
@@ -196,6 +210,10 @@ export const useAppStore = create<AppState>((set) => ({
   setContextCompression: (contextCompression) => set({ contextCompression }),
   setMemoryUpdatedAt: (memoryUpdatedAt) => set({ memoryUpdatedAt }),
   setTtsSpeaking: (ttsSpeaking) => set({ ttsSpeaking }),
+  setInterruptPrompt: (interruptQuestion, interruptChoices) =>
+    set({ interruptQuestion, interruptChoices }),
+  clearInterruptPrompt: () =>
+    set({ interruptQuestion: null, interruptChoices: null }),
   clearSession: () =>
     set({
       messages: [],
@@ -207,5 +225,7 @@ export const useAppStore = create<AppState>((set) => ({
       contextCompression: null,
       operatorNote: '',
       ttsSpeaking: false,
+      interruptQuestion: null,
+      interruptChoices: null,
     }),
 }))

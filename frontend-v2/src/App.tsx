@@ -7,6 +7,7 @@ import { tauriBridge } from './lib/tauriBridge'
 import {
   buildAutoApproveInterruptResponse,
   buildInterruptProposal,
+  parseInterruptChoices,
   resolveProjectSwitch,
   toToolExecutionSnapshot,
 } from './appEventHandlers'
@@ -54,6 +55,8 @@ function App() {
   const setTtsSpeaking = useAppStore((s) => s.setTtsSpeaking)
   const appendStreamChunk = useAppStore((s) => s.appendStreamChunk)
   const clearSession = useAppStore((s) => s.clearSession)
+  const setInterruptPrompt = useAppStore((s) => s.setInterruptPrompt)
+  const clearInterruptPrompt = useAppStore((s) => s.clearInterruptPrompt)
   const [projects, setProjects] = useState<ProjectSummary[]>([])
   const [activeProjectId, setActiveProjectId] = useState('default')
   const [activeChatId, setActiveChatId] = useState('default')
@@ -126,10 +129,18 @@ function App() {
       return
     }
 
+    // Branch: ask_user / skill_ambiguity interrupts (choices-based)
+    const askUser = parseInterruptChoices(interrupts)
+    if (askUser) {
+      setInterruptPrompt(askUser.question, askUser.choices)
+      setOperatorNote('Clarification needed: choose an option to continue.')
+      return
+    }
+
     const proposal = buildInterruptProposal(interrupts, latestToolExecution, Date.now())
     upsertActionProposal(proposal)
     setOperatorNote('Approval required: sensitive action waiting for decision.')
-  }, [executionPolicy, latestToolExecution, wsClientRef])
+  }, [executionPolicy, latestToolExecution, wsClientRef, setInterruptPrompt, setOperatorNote])
 
   useEffect(() => {
     let disposed = false
@@ -349,6 +360,19 @@ function App() {
     setOperatorNote(`Proposal ${id} rejected and sent to backend`)
   }
 
+  const handleSelectChoice = useCallback((choice: import('./state/useAppStore').InterruptChoice, userInput?: string) => {
+    const answer: Record<string, unknown> = { ...choice }
+    if (userInput !== undefined) {
+      answer.user_input = userInput
+    }
+    wsClientRef.current?.send({
+      type: 'ask_user_response',
+      answer: answer,
+    })
+    clearInterruptPrompt()
+    setOperatorNote('Choice sent — resuming conversation.')
+  }, [clearInterruptPrompt, setOperatorNote])
+
   const handleSwitchProject = useCallback((projectId: string) => {
     const next = resolveProjectSwitch({
       activeProjectId,
@@ -497,6 +521,7 @@ function App() {
       onDeleteProject={handleDeleteProject}
       onApproveProposal={handleApproveProposal}
       onRejectProposal={handleRejectProposal}
+      onSelectChoice={handleSelectChoice}
       onNewChat={handleNewChat}
       onSelectChat={handleSelectChat}
       onDeleteChat={handleDeleteChat}

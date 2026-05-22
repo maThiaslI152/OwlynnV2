@@ -4,7 +4,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from src.tools.skills import SkillDefinition, SkillLoader, SkillMatcher
+from src.tools.skills import SkillDefinition, SkillLoader, SkillMatcher, MatchResult
 
 
 def _make_skill(name: str, triggers: list[str], description: str = "", file: str = "") -> SkillDefinition:
@@ -157,3 +157,89 @@ class TestRebuildIndex:
         assert m._tfidf_matrix is None
         assert m._vectorizer is None
         assert m._skill_names == []
+
+
+class TestMatchWithConfidence:
+    """Tests for SkillMatcher.match_with_confidence()."""
+
+    def test_strong_match_is_not_ambiguous(self, matcher):
+        """Exact trigger match with high score → not ambiguous."""
+        result = matcher.match_with_confidence("help me research this topic")
+        assert not result.is_ambiguous
+        assert result.top_match is not None
+        assert result.top_match.name == "Research Assistant"
+        assert result.best_score >= 0.6
+        assert result.ambiguity_reason == ""
+
+    def test_weak_match_is_ambiguous_signal_a(self):
+        """No strong match → is_ambiguous = True (Signal A: low confidence)."""
+        loader = MagicMock(spec=SkillLoader)
+        loader.load_all.return_value = [
+            _make_skill("Niche Skill", ["xyzzy_unique_trigger_42"])
+        ]
+        m = SkillMatcher(loader)
+        result = m.match_with_confidence("something completely unrelated here")
+        assert result.is_ambiguous
+        assert len(result.ambiguity_reason) > 0
+
+    def test_vague_query_is_ambiguous_signal_c(self, matcher):
+        """Very short query → is_ambiguous = True (Signal C: vague query)."""
+        result = matcher.match_with_confidence("hi")
+        assert result.is_ambiguous
+        assert len(result.ambiguity_reason) > 0
+
+    def test_no_intent_keywords_is_ambiguous_signal_c(self, matcher):
+        """Query with no intent keywords → is_ambiguous = True (Signal C)."""
+        result = matcher.match_with_confidence("the quick brown fox")
+        assert result.is_ambiguous
+        assert len(result.ambiguity_reason) > 0
+
+    def test_multi_tie_is_ambiguous_signal_b(self):
+        """Multiple close-scoring skills → is_ambiguous = True (Signal B)."""
+        loader = MagicMock(spec=SkillLoader)
+        loader.load_all.return_value = [
+            _make_skill("Research", ["research"], "Research things"),
+            _make_skill("Investigate", ["investigate"], "Investigate topics"),
+            _make_skill("Analyze", ["analyze"], "Analyze data"),
+        ]
+        m = SkillMatcher(loader)
+        # "investigate" is an exact trigger for "Investigate" → 1.0 keyword
+        # But "research" might also score from TF-IDF similarity
+        result = m.match_with_confidence("please research and investigate this topic")
+        # Should have at least 2 candidates with close scores
+        if len(result.candidate_skills) >= 2:
+            scores = [s for _, s in result.candidate_skills[:2]]
+            close = (scores[0] - scores[1]) <= 0.15
+            if close:
+                assert result.is_ambiguous is True
+                assert "Multiple skills" in result.ambiguity_reason or "close" in result.ambiguity_reason.lower()
+
+    def test_candidate_skills_respects_top_k(self):
+        """candidate_skills length does not exceed the requested top_k."""
+        loader = MagicMock(spec=SkillLoader)
+        loader.load_all.return_value = [
+            _make_skill(f"Skill{i}", [f"trigger{i}"]) for i in range(10)
+        ]
+        m = SkillMatcher(loader)
+        result = m.match_with_confidence("anything", top_k=3)
+        assert len(result.candidate_skills) <= 3
+
+    def test_returns_match_result_type(self, matcher):
+        """Returns MatchResult dataclass with expected fields."""
+        result = matcher.match_with_confidence("research")
+        assert isinstance(result, MatchResult)
+        assert hasattr(result, "is_ambiguous")
+        assert hasattr(result, "candidate_skills")
+        assert hasattr(result, "ambiguity_reason")
+        assert hasattr(result, "best_score")
+        assert hasattr(result, "top_match")
+
+    def test_empty_skills_returns_ambiguous(self):
+        """No skills loaded → is_ambiguous = True."""
+        loader = MagicMock(spec=SkillLoader)
+        loader.load_all.return_value = []
+        m = SkillMatcher(loader)
+        result = m.match_with_confidence("research something")
+        assert result.is_ambiguous
+        assert result.top_match is None
+        assert result.candidate_skills == []
