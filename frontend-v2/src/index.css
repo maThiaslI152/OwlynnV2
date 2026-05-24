@@ -1226,6 +1226,123 @@ body {
   background: var(--red-bg);
 }
 
+/* ── Inline Security Prompt ────────────────────────────── */
+
+.security-inline-prompt {
+  padding: 0 16px 12px 16px;
+  animation: securitySlideIn 0.3s ease-out;
+}
+
+@keyframes securitySlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.security-inline-card {
+  border: 2px solid var(--warning, #f0a030);
+  border-radius: var(--radius-md, 8px);
+  background: var(--bg-elevated, #1a1a2e);
+  padding: 16px;
+  max-width: 640px;
+  margin: 0 auto;
+  box-shadow: 0 0 20px rgba(240, 160, 48, 0.12);
+}
+
+.security-inline-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.security-inline-icon {
+  font-size: 1.25rem;
+  color: var(--warning, #f0a030);
+}
+
+.security-inline-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--warning, #f0a030);
+}
+
+.security-inline-body {
+  margin-bottom: 14px;
+}
+
+.security-inline-body p {
+  margin-bottom: 6px;
+  font-size: 0.82rem;
+  color: var(--text-secondary, #b0b0c0);
+  line-height: 1.45;
+}
+
+.security-inline-body strong {
+  color: var(--text-primary, #e0e0f0);
+}
+
+.security-inline-rationale {
+  color: var(--text-muted, #8888a0) !important;
+  font-style: italic;
+  font-size: 0.78rem !important;
+}
+
+.security-inline-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.security-btn {
+  flex: 1;
+  min-width: 100px;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm, 4px);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+  border: 1px solid transparent;
+}
+
+.security-btn-deny {
+  background: transparent;
+  border-color: var(--red, #e05555);
+  color: var(--red, #e05555);
+}
+
+.security-btn-deny:hover {
+  background: var(--red-bg, rgba(224, 85, 85, 0.12));
+}
+
+.security-btn-allow {
+  background: transparent;
+  border-color: var(--green, #4caf50);
+  color: var(--green, #4caf50);
+}
+
+.security-btn-allow:hover {
+  background: var(--green-bg, rgba(76, 175, 80, 0.12));
+}
+
+.security-btn-auto {
+  background: var(--warning, #f0a030);
+  border-color: var(--warning, #f0a030);
+  color: #1a1a2e;
+}
+
+.security-btn-auto:hover {
+  background: #f5b84d;
+  border-color: #f5b84d;
+}
+
 /* ── Utility ───────────────────────────────────────────── */
 
 .empty {

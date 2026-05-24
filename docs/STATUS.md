@@ -13,8 +13,8 @@ Last updated: 2026-05-11 v4 (All 13 skipped tests fixed — TF-IDF, LLM override
 - Core LangGraph flow is active: memory inject, routing, complex tool loop, and memory writeback.
 - Hybrid model routing (small/medium/cloud) and medium-model swap logic are implemented.
 - Active runtime profile now uses LM Studio model keys compatible with local inventory:
-  - `small_llm_model_name`: `gemma-4-e2b-heretic-uncensored-mlx`
-  - `medium_models.default`: `lfm2-8b-a1b-absolute-heresy-mpoa-mlx`
+  - `small_llm_model_name`: `ibm-grok4-ultrafast-coder-1b`
+  - `medium_models.default`: `qwen3.5-9b-mlx`
 - Security proxy with HITL approval is in place for sensitive tools.
 - Backend API + WebSocket chat and Tauri frontend shell are integrated.
 - **Live Talk removed (2026-04-29).** All wake-word listening, STT transcription, and Swift helper infrastructure have been removed from the codebase. The TTS (`speak_text`) command is preserved — assistant responses are read aloud via macOS `say`. See [`docs/LIVE_TALK_DEFERRED.md`](LIVE_TALK_DEFERRED.md) for details.
@@ -98,6 +98,8 @@ must be used instead. `start.sh` now builds the frontend and launches the `.app`
 
 ## Current Bugs / Risks
 
+- **RESOLVED (2026-05-24) — Workspace creation fails with "Failed to create workspace":** 6 fixes applied in `frontend-v2/src/App.tsx`: (1) `handleCreateProject` now uses `apiUrl()` for Tauri runtime compatibility + error logging, (2) `loadProjects` reads `activeProjectId`/`currentThreadId` from refs to eliminate stale closure, (3) removed premature `loadProjects()` call from `handleSend`, (4) initial thread IDs use proper UUIDs instead of magic string `"default"`, (5) ref sync effects keep refs in sync with state, (6) `loadProjects` auto-switch simplified to stop fighting user navigation. All debug/agent-log code cleaned up. Build passes, 77 tests pass.
+- **RESOLVED (2026-05-24) — Chats not appearing on General Workspace sidebar:** Same root cause as above — fixed by the race condition and stale closure fixes in `loadProjects`. Chat registration on backend now has time to complete before the refresh triggered in the `assistant.message` handler.
 - **RESOLVED (2026-05-11) — 13 skipped tests fixed:** Skill matcher tests unblocked by adding `scikit-learn` to `requirements-dev.txt`. Graph integration tests now use `LLMPool.set_test_overrides()` instead of per-module patches. WS contract tests: `generate_chat_title_router_llm` mocked to prevent LM Studio connection before `start_run`.
 - **RESOLVED (2026-04-29) — Dead audit tests removed:** `test_frontend_audit_bugs.py` and `test_frontend_audit_preservation.py` referenced the removed `frontend/` directory (old HTML/JS frontend). Both files are deleted.
 - **RESOLVED (2026-04-29) — Known pre-existing failures skipped:** 11 tests across 3 files marked with `@pytest.mark.skip` — 5 WS contract tests (GraphSession.start_run mock not reaching WS handler), 5 routing tests (build_graph connects LM Studio before patches apply), 2 skill matcher tests (TF-IDF corpus needs actual skill files). These are tracked for fix in Phase 7.

@@ -64,8 +64,8 @@ Large LLM (optional cloud via DeepSeek).
 
 **Consequences:**
 
-- Small LLM (`gemma-4-e2b-heretic-uncensored-mlx`, 4K context) for routing and simple tasks.
-- Medium LLM (`lfm2-8b-a1b-absolute-heresy-mpoa-mlx`, 100K context) for complex tasks.
+- Small LLM (`ibm-grok4-ultrafast-coder-1b`, Q8_0, 4K context) for routing and simple tasks.
+- Medium LLM (`qwen3.5-9b-mlx`, MLX 4bit, 100K context) for complex tasks.
 - Cloud fallback (DeepSeek) for coding and long-context tasks when available.
 - `LLMPool` manages lifecycle — clears when profile changes trigger model swap.
 - Model keys stored in runtime profile, changeable without server restart.
@@ -308,3 +308,40 @@ subprocess (`whisperkit-helper`) using line-delimited JSON over stdin/stdout:
 - Wake-word phrase is fixed to `Athena` (`get_wake_word_phrase` remains for compatibility).
 - macOS minimum runtime target raised to 14.0 for stable ANE execution profile.
 - Direct Rust ObjC voice coupling is reduced; Swift-native frameworks live in the helper process.
+
+---
+
+## ADR-0014: Skill Matcher HITL Resolves Routing Ambiguity
+
+**Date:** 2026-05-24
+
+**Context:** The router uses a Small LLM (1B parameters) which may misclassify user queries.
+Skills provide domain-specific knowledge and tool specifications that help specialize routing,
+but the skill matcher's ambiguity (low confidence, multi-tie, or vague query) needs a
+mechanism to surface user intent when automated matching is uncertain.
+Previously, HITL clarification was gated solely on routing confidence (via
+`router_clarification_threshold`), which conflated two concerns: LLM routing quality and
+skill-match certainty. This caused HITL to fire unnecessarily when the LLM was uncertain
+but skill match was strong, and conversely to skip HITL when the LLM was confident but the
+skill match was ambiguous.
+
+**Decision:** Decouple routing confidence and skill ambiguity into separate thresholds
+(`routing_confidence_threshold` and `skill_clarification_threshold`). The router node
+always runs the SkillMatcher (even when the LLM is confident), using MatchResult ambiguity
+signals (low confidence, multi-tie, vague query) as an independent HITL trigger. When HITL
+fires, candidate skills are presented as choices with their toolbox mappings so the user
+can clarify intent. When HITL does not fire, a `skill_matched` field is set in AgentState
+so downstream nodes can use the matched skill's toolbox and prompt.
+
+**Consequences:**
+
+- User gains a direct say in routing when skills are ambiguous, improving routing quality
+  on edge cases.
+- Adds latency on ambiguous queries (one HITL round-trip), but only reactively — skill
+  matching runs inline, not on every query.
+- Skill matcher is always evaluated; `skill_matched` propagates to AgentState for
+  proactive toolbox selection outside the HITL path.
+- Toolbox selection becomes skill-driven: `_toolbox_for_skill` derives toolboxes from the
+  skill's own `tools_used` field first, falling back to a category map, then to `["all"]`.
+- Profile settings `route_confidence_threshold` and `skill_clarification_threshold` replace
+  the single `router_clarification_threshold` for independent tuning.

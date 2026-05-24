@@ -38,6 +38,7 @@ Use it to locate the right source files, contracts, and tests before making chan
 - `frontend-v2/src/state/useAppStore.ts`
 - `frontend-v2/src/components/MemoryPanel.tsx`
 - `frontend-v2/src/components/AppShell.tsx`
+- Bug analysis: `docs/BUG-ANALYSIS.md` (workspace creation failures, chat display issues)
 - Tests:
   - `tests/test_crud_operations.py`
   - `tests/test_crud_properties.py`

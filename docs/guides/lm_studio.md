@@ -5,16 +5,16 @@
 Owlynn uses a Small model (always loaded) plus one Medium-tier model at a time (swappable):
 
 ### Small Model (Always Loaded)
-- `liquid/lfm2.5-1.2b` — routing, simple answers, chat titles (~730 MB VRAM)
+- `ibm-grok4-ultrafast-coder-1b` — routing, simple answers, chat titles (~1.7 GB VRAM)
 
 ### Medium-Tier Models (One at a Time)
 Download all three; the system auto-swaps based on task type:
 
 | Variant | Model Key | Role |
 |---------|-----------|------|
-| Default | `qwen/qwen3.5-9b` | General complex reasoning, tool calling |
-| Vision | `zai-org/glm-4.6v-flash` | Image/multimodal processing |
-| Long Context | `LFM2 8B A1B GGUF Q8_0` | Extended context tasks |
+| Default | `qwen3.5-9b-mlx` | General complex reasoning, tool calling |
+| Vision | `qwen3.5-9b-mlx` | Image/multimodal processing |
+| Long Context | `qwen3.5-9b-mlx` | Extended context tasks |
 
 ### Swap Behavior
 

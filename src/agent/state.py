@@ -78,6 +78,13 @@ class AgentState(TypedDict):
     # Router metadata for telemetry — populated by router_node on each routing decision
     router_metadata: dict | None
 
+    # Skill matched by the router (proactive, outside HITL path)
+    # Dict with keys: name, toolbox, score — set when a strong skill match is found
+    skill_matched: dict | None
+
+    # Names of tools explicitly denied by human reviewer (appended across turns)
+    denied_tools: list[str] | None
+
     # Fallback chain for telemetry — ordered list of model attempts in complex_llm_node
     fallback_chain: list[dict] | None
 

@@ -61,6 +61,15 @@ export interface InterruptChoice {
   allows_user_input?: boolean
 }
 
+export interface InlineSecurityPrompt {
+  id: string
+  summary: string
+  toolName?: string
+  riskHint?: string
+  riskRationale?: string
+  backendInterrupt?: unknown
+}
+
 interface AppState {
   connectionState: ConnectionState
   messages: ChatMessage[]
@@ -79,6 +88,7 @@ interface AppState {
   ttsSpeaking: boolean
   interruptQuestion: string | null
   interruptChoices: InterruptChoice[] | null
+  inlineSecurityPrompt: InlineSecurityPrompt | null
   setConnectionState: (state: ConnectionState) => void
   addMessage: (message: ChatMessage) => void
   appendStreamChunk: (chunk: string) => void
@@ -100,6 +110,8 @@ interface AppState {
   setTtsSpeaking: (speaking: boolean) => void
   setInterruptPrompt: (question: string | null, choices: InterruptChoice[] | null) => void
   clearInterruptPrompt: () => void
+  setInlineSecurityPrompt: (prompt: InlineSecurityPrompt | null) => void
+  clearInlineSecurityPrompt: () => void
   clearSession: () => void
 }
 
@@ -125,6 +137,7 @@ export const useAppStore = create<AppState>((set) => ({
   ttsSpeaking: false,
   interruptQuestion: null,
   interruptChoices: null,
+  inlineSecurityPrompt: null,
   setConnectionState: (connectionState) => set({ connectionState }),
   addMessage: (message) =>
     set((state) => ({
@@ -214,6 +227,8 @@ export const useAppStore = create<AppState>((set) => ({
     set({ interruptQuestion, interruptChoices }),
   clearInterruptPrompt: () =>
     set({ interruptQuestion: null, interruptChoices: null }),
+  setInlineSecurityPrompt: (inlineSecurityPrompt) => set({ inlineSecurityPrompt }),
+  clearInlineSecurityPrompt: () => set({ inlineSecurityPrompt: null }),
   clearSession: () =>
     set({
       messages: [],
@@ -227,5 +242,6 @@ export const useAppStore = create<AppState>((set) => ({
       ttsSpeaking: false,
       interruptQuestion: null,
       interruptChoices: null,
+      inlineSecurityPrompt: null,
     }),
 }))

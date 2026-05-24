@@ -21,6 +21,11 @@ export interface SecurityApprovalClientEvent {
   approved: boolean
 }
 
+export interface AskUserResponseClientEvent {
+  type: 'ask_user_response'
+  answer: Record<string, unknown>
+}
+
 export interface AssistantMessageEvent {
   type: 'assistant.message'
   id?: string
@@ -132,7 +137,7 @@ export interface ToolExecutionEvent {
   duration?: number
 }
 
-export type ClientEvent = UserMessageEvent | SecurityApprovalClientEvent
+export type ClientEvent = UserMessageEvent | SecurityApprovalClientEvent | AskUserResponseClientEvent
 export interface ChunkEvent {
   type: 'chunk'
   content: string

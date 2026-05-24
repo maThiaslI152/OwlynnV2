@@ -14,10 +14,10 @@ The system operates under a hard VRAM constraint: the M4 Air 24GB unified memory
 
 | Key | Model | Role | VRAM | Context Window |
 |-----|-------|------|------|----------------|
-| Small_LLM | `gemma-4-e2b-heretic-uncensored-mlx` (MLX) | Routing, simple answers, chat titles | ~1.5 GB | 4,096 |
-| Medium_Default | `lfm2-8b-a1b-absolute-heresy-mpoa-mlx` (MLX) | General complex reasoning, tool calling | ~4 GB | 100,000 |
-| Medium_Vision | `zai-org/glm-4.6v-flash` | Image/multimodal processing | ~4 GB | 131,072 |
-| Medium_LongCtx | `lfm2-8b-a1b` | Extended context tasks | ~4 GB | 131,072 |
+| Small_LLM | `ibm-grok4-ultrafast-coder-1b` (Q8_0) | Routing, simple answers, chat titles | ~1.7 GB | 4,096 |
+| Medium_Default | `qwen3.5-9b-mlx` (MLX 4bit) | General complex reasoning, tool calling | ~6 GB | 100,000 |
+| Medium_Vision | `qwen3.5-9b-mlx` (MLX 4bit) | Image/multimodal processing | ~6 GB | 100,000 |
+| Medium_LongCtx | `qwen3.5-9b-mlx` (MLX 4bit) | Extended context tasks | ~6 GB | 131,072 |
 | Cloud_LLM | `deepseek-chat` (DeepSeek API) | Frontier-quality reasoning (cloud) | N/A | 131,072 |
 
 Small_LLM and one M-tier model are served via LM Studio on port 1234 (OpenAI-compatible API). Cloud_LLM uses the DeepSeek API at `https://api.deepseek.com/v1`.

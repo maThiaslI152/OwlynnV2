@@ -10,6 +10,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from fastapi import Response
 from fastapi import HTTPException
 import json
 import asyncio
@@ -21,7 +22,7 @@ from langgraph.types import Command
 from src.agent.graph import init_agent
 from src.agent.nodes.router import generate_chat_title_router_llm
 from src.agent.llm import LLMPool
-from src.memory.user_profile import get_profile, update_profile
+from src.memory.user_profile import get_profile, update_profile, VALID_FIELDS
 from src.memory.persona import get_persona, update_persona_field
 from src.memory.memory_manager import load_memories, save_memory, delete_memory
 from src.memory.long_term import memory as mem0_memory
@@ -312,6 +313,21 @@ async def api_get_unified_settings():
     except Exception as e:
         return {"error": str(e)}
 
+@app.put("/api/unified-settings")
+async def api_update_unified_settings(body: dict):
+    """Update unified profile and advanced settings in one payload."""
+    try:
+        # Allowed fields: profile VALID_FIELDS + advanced settings defaults + cloud budget
+        allowed = set(VALID_FIELDS.keys()) | set(_ADVANCED_SETTINGS_DEFAULTS.keys()) | set(_UNIFIED_SETTINGS_CLOUD_BUDGET_DEFAULTS.keys())
+        updated = []
+        for field, value in body.items():
+            if field in allowed:
+                update_profile(field, value)
+                updated.append(field)
+        return {"status": "ok", "updated": updated}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 @app.get("/api/health")
 async def api_health():
     """Check if the agent graph is fully initialized."""
@@ -553,7 +569,8 @@ async def api_update_interests(body: dict):
         return {"status": "error", "message": str(e)}
 
 @app.get("/api/projects")
-async def api_list_projects():
+async def api_list_projects(response: Response):
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     return project_manager.list_projects()
 
 @app.post("/api/projects")
@@ -583,14 +600,29 @@ async def api_add_project_chat(project_id: str, body: dict):
     project_manager.add_chat_to_project(project_id, {
         "id": chat_id,
         "name": name or "New Chat",
-        "created_at": time.time()
+        "created_at": __import__('time').time()
     })
     return {"status": "ok", "chat": {"id": chat_id, "name": name or "New Chat"}}
 
 @app.delete("/api/projects/{project_id}/chats/{chat_id}")
 async def api_delete_project_chat(project_id: str, chat_id: str):
-    project_manager.delete_chat_from_project(project_id, chat_id)
-    return {"status": "ok"}
+    #region agent log
+    with open("/Users/tim/Works/OwlynnV2/.cursor/debug-03f428.log", "a") as f:
+        f.write('{"sessionId":"03f428","runId":"run1","hypothesisId":"A","location":"server.py:592","message":"delete_chat called","data":{"project_id":' + json.dumps(project_id) + ',"chat_id":' + json.dumps(chat_id) + '},"timestamp":' + str(int(__import__('time').time()*1000)) + '}\n')
+    #endregion
+    try:
+        project_manager.delete_chat_from_project(project_id, chat_id)
+        #region agent log
+        with open("/Users/tim/Works/OwlynnV2/.cursor/debug-03f428.log", "a") as f:
+            f.write('{"sessionId":"03f428","runId":"run1","hypothesisId":"A","location":"server.py:597","message":"delete_chat success","data":{"project_id":' + json.dumps(project_id) + ',"chat_id":' + json.dumps(chat_id) + '},"timestamp":' + str(int(__import__('time').time()*1000)) + '}\n')
+        #endregion
+        return {"status": "ok"}
+    except Exception as e:
+        #region agent log
+        with open("/Users/tim/Works/OwlynnV2/.cursor/debug-03f428.log", "a") as f:
+            f.write('{"sessionId":"03f428","runId":"run1","hypothesisId":"A","location":"server.py:600","message":"delete_chat ERROR","data":{"error":' + json.dumps(str(e)) + '},"timestamp":' + str(int(__import__('time').time()*1000)) + '}\n')
+        #endregion
+        return {"status": "error", "message": str(e)}
 
 @app.put("/api/projects/{project_id}/chats/{chat_id}")
 async def api_update_project_chat(project_id: str, chat_id: str, body: dict):
@@ -958,11 +990,26 @@ async def api_create_folder(body: dict):
 
 @app.delete("/api/projects/{project_id}")
 async def api_delete_project(project_id: str):
-    success = project_manager.delete_project(project_id)
-    if success:
-        return {"status": "ok"}
-    else:
-        return {"status": "error", "message": "Failed to delete project or cannot delete default project"}
+    #region agent log
+    with open("/Users/tim/Works/OwlynnV2/.cursor/debug-03f428.log", "a") as f:
+        f.write('{"sessionId":"03f428","runId":"run1","hypothesisId":"A","location":"server.py:962","message":"delete_project called","data":{"project_id":' + json.dumps(project_id) + '},"timestamp":' + str(int(__import__('time').time()*1000)) + '}\n')
+    #endregion
+    try:
+        success = project_manager.delete_project(project_id)
+        #region agent log
+        with open("/Users/tim/Works/OwlynnV2/.cursor/debug-03f428.log", "a") as f:
+            f.write('{"sessionId":"03f428","runId":"run1","hypothesisId":"A","location":"server.py:967","message":"delete_project result","data":{"success":' + json.dumps(success) + ',"project_id":' + json.dumps(project_id) + '},"timestamp":' + str(int(__import__('time').time()*1000)) + '}\n')
+        #endregion
+        if success:
+            return {"status": "ok"}
+        else:
+            return {"status": "error", "message": "Failed to delete project or cannot delete default project"}
+    except Exception as e:
+        #region agent log
+        with open("/Users/tim/Works/OwlynnV2/.cursor/debug-03f428.log", "a") as f:
+            f.write('{"sessionId":"03f428","runId":"run1","hypothesisId":"A","location":"server.py:973","message":"delete_project ERROR","data":{"error":' + json.dumps(str(e)) + '},"timestamp":' + str(int(__import__('time').time()*1000)) + '}\n')
+        #endregion
+        return {"status": "error", "message": str(e)}
 
 
 @app.post("/api/projects/{project_id}/knowledge")
@@ -1311,7 +1358,8 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                         if chunk.content:
                             # Stream deltas may be str or list[content_block]; stringify like finalize path.
                             text = _stringify_lc_message_content(chunk.content)
-                            if text:
+                            # Skip empty chunks and internal reminders
+                            if text and not text.strip().startswith("[Internal reminder"):
                                 await websocket.send_json({"type": "chunk", "content": text})
                         
                     elif kind == "on_chain_end":
@@ -1400,12 +1448,14 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
 
                                 if tc_list:
                                     # Include reasoning / pre-tool text in the same payload (serialize_message flattens content).
-                                    aw_msg = serialize_message(msg)
-                                    if _node_model_used:
-                                        aw_msg["model_used"] = _node_model_used
-                                    if _node_token_usage:
-                                        aw_msg["token_usage"] = _node_token_usage
-                                    await websocket.send_json({"type": "assistant.message", "message": aw_msg})
+                                    # Skip internal reminders leaking through tool-call AIMessages.
+                                    if text_for_ui and not text_for_ui.startswith("[Internal reminder"):
+                                        aw_msg = serialize_message(msg)
+                                        if _node_model_used:
+                                            aw_msg["model_used"] = _node_model_used
+                                        if _node_token_usage:
+                                            aw_msg["token_usage"] = _node_token_usage
+                                        await websocket.send_json({"type": "assistant.message", "message": aw_msg})
                                     for tc in tc_list:
                                         tool_call_id = str(tc.get("id") or tc.get("tool_call_id") or f"pending-{len(pending_tool_calls)+1}")
                                         tool_name = str(tc.get("name") or "unknown_tool")
@@ -1448,6 +1498,10 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                             }
                                         )
                                     else:
+                                        # Skip internal assistant reminders and empty messages.
+                                        content = str(getattr(msg, "content", "") or "").strip()
+                                        if not content or content.startswith("[Internal reminder"):
+                                            continue
                                         await websocket.send_json({"type": "assistant.message", "message": serialize_message(msg)})
                 else:
                     # Our custom events (status, error, etc)

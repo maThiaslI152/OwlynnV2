@@ -3,7 +3,7 @@ import { Composer } from './Composer'
 import { SafeModePanel } from './SafeModePanel'
 import { ScreenAssistPanel } from './ScreenAssistPanel'
 import { ActionProposalQueue } from './ActionProposalQueue'
-import type { InterruptChoice } from '../state/useAppStore'
+import type { InlineSecurityPrompt, InterruptChoice } from '../state/useAppStore'
 import { ToolExecutionPanel } from './ToolExecutionPanel'
 import { ProjectKnowledgePanel } from './ProjectKnowledgePanel'
 import { OrchestrationPanel } from './OrchestrationPanel'
@@ -38,11 +38,13 @@ interface AppShellProps {
   onDeleteProject: (projectId: string) => void
   onApproveProposal?: (id: string) => Promise<void>
   onRejectProposal?: (id: string) => Promise<void>
+  onAutoApprove?: (id: string) => Promise<void>
   onSelectChoice?: (choice: InterruptChoice, userInput?: string) => void
   onNewChat: () => void
   onSelectChat: (chatId: string) => void
   onDeleteChat: (chatId: string) => void
   onRenameChat: (chatId: string, newName: string) => void
+  inlineSecurityPrompt?: InlineSecurityPrompt | null
 }
 
 function MessageAvatar({ role }: { role: ChatMessage['role'] }) {
@@ -177,11 +179,13 @@ export function AppShell({
   onDeleteProject,
   onApproveProposal,
   onRejectProposal,
+  onAutoApprove,
   onSelectChoice,
   onNewChat,
   onSelectChat,
   onDeleteChat,
   onRenameChat,
+  inlineSecurityPrompt,
 }: AppShellProps) {
   const connectionState = useAppStore((s) => s.connectionState)
   const messages = useAppStore((s) => s.messages)
@@ -460,7 +464,12 @@ export function AppShell({
         {operatorNote ? <p className="operator-note">ⓘ {operatorNote}</p> : null}
         <div className="messages-container" ref={messagesContainerRef}>
           <div className="messages">
-            {messages.length === 0 ? (
+            {messages.filter((m) => {
+              const content = (m.content || '').trim()
+              if (!content) return false
+              if (content.startsWith('[Internal reminder')) return false
+              return true
+            }).length === 0 ? (
               <div className="messages-empty">
                 <div className="messages-empty-icon">💬</div>
                 <p className="messages-empty-text">
@@ -483,7 +492,12 @@ export function AppShell({
                 )}
               </div>
             ) : (
-              messages.map((message, idx) => {
+              messages.filter((m) => {
+                const content = (m.content || '').trim()
+                if (!content) return false
+                if (content.startsWith('[Internal reminder')) return false
+                return true
+              }).map((message, idx) => {
                 const isStreaming =
                   isStreamingRef.current && idx === messages.length - 1 && message.id?.startsWith('stream-')
                 return <MessageBubble key={message.id || idx} message={message} isStreaming={isStreaming} />
@@ -492,6 +506,54 @@ export function AppShell({
             <div ref={messagesEndRef} />
           </div>
         </div>
+        {inlineSecurityPrompt && (
+          <div className="security-inline-prompt">
+            <div className="security-inline-card">
+              <div className="security-inline-header">
+                <span className="security-inline-icon">&#x26A0;</span>
+                <span className="security-inline-title">Security Approval Required</span>
+              </div>
+              <div className="security-inline-body">
+                <p className="security-inline-tool">
+                  <strong>Tool:</strong> {inlineSecurityPrompt.toolName || 'Unknown'}
+                </p>
+                {inlineSecurityPrompt.riskHint && (
+                  <p className="security-inline-risk">
+                    <strong>Risk:</strong> {inlineSecurityPrompt.riskHint}
+                  </p>
+                )}
+                {inlineSecurityPrompt.riskRationale && (
+                  <p className="security-inline-rationale">
+                    {inlineSecurityPrompt.riskRationale}
+                  </p>
+                )}
+              </div>
+              <div className="security-inline-actions">
+                <button
+                  type="button"
+                  className="security-btn security-btn-deny"
+                  onClick={() => onRejectProposal?.(inlineSecurityPrompt.id)}
+                >
+                  Decline
+                </button>
+                <button
+                  type="button"
+                  className="security-btn security-btn-allow"
+                  onClick={() => onApproveProposal?.(inlineSecurityPrompt.id)}
+                >
+                  Allow
+                </button>
+                <button
+                  type="button"
+                  className="security-btn security-btn-auto"
+                  onClick={() => onAutoApprove?.(inlineSecurityPrompt.id)}
+                >
+                  Auto-Allow
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {streamActive && (
           <div className="streaming-indicator">
             <span className="streaming-badge">

@@ -157,10 +157,15 @@ async def security_proxy_node(state: AgentState) -> AgentState:
             "pending_tool_names": approved_tools,
         }
 
+    denied_tool_names = [str(c.get("name", "unknown")) for c in sensitive_calls]
+    prior_denied = state.get("denied_tools") or []
+    all_denied = prior_denied + denied_tool_names
+
     denied_message = AIMessage(
         content=(
-            "I stopped that action because it requires explicit approval and was not approved. "
-            "I can suggest a safer alternative if you want."
+            f"[POLICY BLOCK] Human reviewer denied {', '.join(denied_tool_names)}. "
+            "This tool requires explicit approval and cannot be retried. "
+            "I can suggest a safer alternative or a different approach."
         )
     )
     return {
@@ -169,4 +174,5 @@ async def security_proxy_node(state: AgentState) -> AgentState:
         "security_decision": "denied",
         "security_reason": "Sensitive tool request denied by human reviewer.",
         "pending_tool_calls": False,
+        "denied_tools": all_denied,
     }

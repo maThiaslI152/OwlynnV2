@@ -13,7 +13,7 @@ from src.agent.state import AgentState
 from src.agent.llm import get_small_llm, LLMPool
 from src.config.settings import MEDIUM_DEFAULT_CONTEXT, MEDIUM_LONGCTX_CONTEXT, CLOUD_CONTEXT
 from src.memory.user_profile import get_profile
-from src.tools.skills import SkillMatcher, _default_loader as _skill_loader
+from src.tools.skills import SkillMatcher, MatchResult, _default_loader as _skill_loader
 
 import json
 import re
@@ -276,7 +276,7 @@ async def router_node(state: AgentState) -> AgentState:
     messages = state.get("messages", [])
     if not messages:
         return {"route": "complex-default", "selected_toolboxes": ["all"],
-                "router_clarification_used": False}
+                "router_clarification_used": False, "skill_matched": None}
 
     user_text = _last_user_text(state)
     user_lower = user_text.lower()
@@ -310,6 +310,7 @@ async def router_node(state: AgentState) -> AgentState:
             )
             return {"route": route, "token_budget": budget,
                     "selected_toolboxes": toolbox, "router_clarification_used": False,
+                    "skill_matched": None,
                     "router_metadata": metadata}
 
     if web_on and any(h in user_lower for h in _WEBISH_HINTS):
@@ -323,6 +324,7 @@ async def router_node(state: AgentState) -> AgentState:
         )
         return {"route": route, "token_budget": budget,
                 "selected_toolboxes": toolbox, "router_clarification_used": False,
+                "skill_matched": None,
                 "router_metadata": metadata}
 
     # Attachments saved to workspace need the large model + tools.
@@ -341,6 +343,7 @@ async def router_node(state: AgentState) -> AgentState:
         )
         return {"route": route, "token_budget": budget,
                 "selected_toolboxes": toolbox, "router_clarification_used": False,
+                "skill_matched": None,
                 "router_metadata": metadata}
 
     # Quick keyword check to bypass LLM for obvious simple cases.
@@ -359,6 +362,7 @@ async def router_node(state: AgentState) -> AgentState:
             )
             return {"route": "simple", "token_budget": budget,
                     "selected_toolboxes": ["all"], "router_clarification_used": False,
+                    "skill_matched": None,
                     "router_metadata": metadata}
 
     # ── Stage 1: Ask Small LLM for simple/complex + toolbox ──────────────
@@ -381,31 +385,59 @@ async def router_node(state: AgentState) -> AgentState:
         decision, confidence, toolbox = "complex", 0.5, ["all"]
         classification_source = "llm_classifier"
 
-    # ── HITL clarification when confidence is low ────────────────────────
+    # ── HITL clarification and proactive skill matching ────────────────
     profile = get_profile()
     router_hitl_enabled = profile.get("router_hitl_enabled", True)
-    threshold = float(profile.get("router_clarification_threshold", 0.6))
+    routing_confidence_threshold = float(profile.get("route_confidence_threshold", 0.6))
+    skill_clarification_threshold = float(profile.get("skill_clarification_threshold", 0.5))
 
     router_clarification_used = False
-    if confidence < threshold and router_hitl_enabled:
+    skill_matched = None
+
+    if router_hitl_enabled:
+        # ── Run skill matcher (safe fallback if it fails) ──
+        match_result = None
         try:
-            # ── Skill ambiguity check ────────────────────────────────
             matcher = SkillMatcher(_skill_loader)
             match_result = matcher.match_with_confidence(user_text, top_k=5)
+        except Exception as e:
+            logger.warning("[router] Skill matcher failed: %s", e)
+            match_result = MatchResult(
+                is_ambiguous=True,
+                candidate_skills=[],
+                ambiguity_reason="Skill matching unavailable",
+            )
 
+        # ── Two independent HITL triggers ──────────────────────────
+        hitl_needed = (
+            confidence < routing_confidence_threshold      # LLM uncertain
+            or match_result.is_ambiguous                    # Skill ambiguous
+        )
+
+        # HITL requires a checkpointer — without one, interrupt() silently
+        # stops the node without returning a route, breaking graph state.
+        _can_interrupt = False
+        try:
+            from langgraph.config import get_config as _get_config
+            _cp = _get_config().get("configurable", {}).get("__pregel_checkpointer")
+            _can_interrupt = _cp is not None
+        except RuntimeError:
+            pass  # outside graph context
+
+        if hitl_needed and _can_interrupt:
+            # ── Build interrupt payload and PAUSE the graph ──────
+            # Only catch context/checkpointer errors (RuntimeError, ValueError).
+            # GraphInterrupt must NOT be caught — it pauses the graph properly.
             if match_result.is_ambiguous and match_result.candidate_skills:
-                # Build dynamic choices from candidate skills
                 choices: list[dict] = []
                 for skill, score in match_result.candidate_skills[:5]:
-                    # Map skill category to toolbox for routing
-                    toolbox = _toolbox_for_skill(skill)
+                    skill_toolbox = _toolbox_for_skill(skill)
                     choices.append({
                         "label": f"{skill.name} — {skill.description} ({score:.0%})",
                         "route": "complex-default",
-                        "toolbox": toolbox,
+                        "toolbox": skill_toolbox,
                         "skill_name": skill.file,
                     })
-                # Always append "Others" as the last choice
                 choices.append({
                     "label": "Others (describe what you need)",
                     "route": "complex-default",
@@ -413,40 +445,53 @@ async def router_node(state: AgentState) -> AgentState:
                     "skill_name": None,
                     "allows_user_input": True,
                 })
-
-                clarification = interrupt({
-                    "type": "ask_user",
-                    "question": (
-                        "I'm not sure which approach fits best — "
-                        f"{match_result.ambiguity_reason}\n"
-                        "Which would help you most?"
-                    ),
-                    "choices": choices,
-                })
+                try:
+                    clarification = interrupt({
+                        "type": "ask_user",
+                        "question": (
+                            "I'm not sure which approach fits best — "
+                            f"{match_result.ambiguity_reason}\n"
+                            "Which would help you most?"
+                        ),
+                        "choices": choices,
+                    })
+                except (RuntimeError, ValueError):
+                    logger.debug("[router] HITL unavailable (no checkpointer or outside graph context)")
+                    clarification = None
             else:
-                clarification = interrupt({
-                    "type": "ask_user",
-                    "question": "I'm not sure how to handle this. What would you prefer?",
-                    "choices": [
-                        {"label": "Search the web", "route": "complex-default", "toolbox": ["web_search"]},
-                        {"label": "Work with local files", "route": "complex-default", "toolbox": ["file_ops"]},
-                        {"label": "Create documents/visualizations", "route": "complex-default", "toolbox": ["data_viz"]},
-                        {"label": "Use cloud model for higher quality", "route": "complex-cloud", "toolbox": ["all"]},
-                        {"label": "Just answer directly", "route": "complex-default", "toolbox": ["all"]},
-                    ],
-                })
+                try:
+                    clarification = interrupt({
+                        "type": "ask_user",
+                        "question": "I'm not sure how to handle this. What would you prefer?",
+                        "choices": [
+                            {"label": "Search the web", "route": "complex-default", "toolbox": ["web_search"]},
+                            {"label": "Work with local files", "route": "complex-default", "toolbox": ["file_ops"]},
+                            {"label": "Create documents/visualizations", "route": "complex-default", "toolbox": ["data_viz"]},
+                            {"label": "Use cloud model for higher quality", "route": "complex-cloud", "toolbox": ["all"]},
+                            {"label": "Just answer directly", "route": "complex-default", "toolbox": ["all"]},
+                        ],
+                    })
+                except (RuntimeError, ValueError):
+                    logger.debug("[router] HITL unavailable (no checkpointer or outside graph context)")
+                    clarification = None
 
-            router_clarification_used = True
-            # ── Handle "Others" free-text re-match ──────────────────
-            user_input_override = None
-            if isinstance(clarification, dict):
-                if clarification.get("allows_user_input") and clarification.get("user_input"):
-                    # User typed a custom description — re-run skill matching
+            # ── Resume: unwrap the backend's {"answer": ...} wrapper ──
+            if isinstance(clarification, dict) and "answer" in clarification and isinstance(clarification["answer"], dict):
+                clarification = clarification["answer"]
+
+            if clarification is not None:
+                router_clarification_used = True
+
+                # ── Handle "Others" free-text re-match ──────────────
+                if isinstance(clarification, dict) and clarification.get("allows_user_input") and clarification.get("user_input"):
                     refined = clarification["user_input"].strip()
-                    re_match = matcher.match_with_confidence(refined, top_k=5)
+                    try:
+                        re_match = matcher.match_with_confidence(refined, top_k=5)
+                    except Exception:
+                        re_match = MatchResult(is_ambiguous=True, candidate_skills=[], ambiguity_reason="")
                     if re_match.candidate_skills:
                         top = re_match.candidate_skills[0]
-                        toolbox = _toolbox_for_skill(top[0])
+                        re_toolbox = _toolbox_for_skill(top[0])
                         logger.info(
                             "[router] HITL 'Others' re-match → skill=%s score=%.0f%%",
                             top[0].name, top[1] * 100,
@@ -459,19 +504,19 @@ async def router_node(state: AgentState) -> AgentState:
                         )
                         return {
                             "route": "complex-default", "token_budget": budget,
-                            "selected_toolboxes": toolbox,
+                            "selected_toolboxes": re_toolbox,
                             "router_clarification_used": True,
+                            "skill_matched": None,
                             "router_metadata": metadata,
                         }
                     # Fall through to default complex if re-match also fails
-                    user_input_override = refined
 
+                # ── Standard HITL choice handling ────────────────────
                 decision = "complex"
-                toolbox = clarification.get("toolbox", ["all"])
-                route_override = clarification.get("route", "complex-default")
-                logger.info(f"[router] HITL clarification → route={route_override}, toolbox={toolbox}")
+                toolbox = clarification.get("toolbox", ["all"]) if isinstance(clarification, dict) else ["all"]
+                route_override = clarification.get("route", "complex-default") if isinstance(clarification, dict) else "complex-default"
+                logger.info("[router] HITL clarification → route=%s, toolbox=%s", route_override, toolbox)
                 budget = estimate_token_budget(user_text, route_override)
-                # Check cloud availability for cloud route
                 if route_override == "complex-cloud" and not cloud_available:
                     route_override = "complex-default"
                     logger.warning("[router] Cloud unavailable, falling back to complex-default")
@@ -484,10 +529,27 @@ async def router_node(state: AgentState) -> AgentState:
                     "route": route_override, "token_budget": budget,
                     "selected_toolboxes": toolbox,
                     "router_clarification_used": True,
+                    "skill_matched": None,
                     "router_metadata": metadata,
                 }
-        except Exception as e:
-            logger.warning(f"[router] HITL interrupt failed: {e}")
+
+        elif hitl_needed:
+            logger.debug("[router] HITL needed but checkpointer unavailable — falling through to LLM route")
+
+        # ── No HITL: proactive skill matching ────────────────────
+        if match_result.top_match and match_result.best_score >= skill_clarification_threshold:
+            skill_toolbox = _toolbox_for_skill(match_result.top_match)
+            skill_matched = {
+                "name": match_result.top_match.name,
+                "toolbox": skill_toolbox,
+                "score": match_result.best_score,
+            }
+            if set(skill_toolbox) != set(toolbox) and toolbox != ["all"]:
+                logger.info(
+                    "[router] Skill-driven toolbox: LLM=%s → skill=%s",
+                    toolbox, skill_toolbox,
+                )
+                toolbox = skill_toolbox
 
     # ── Finalize route ───────────────────────────────────────────────────
     if decision == "simple":
@@ -500,6 +562,7 @@ async def router_node(state: AgentState) -> AgentState:
         )
         return {"route": "simple", "token_budget": budget,
                 "selected_toolboxes": toolbox, "router_clarification_used": router_clarification_used,
+                "skill_matched": skill_matched,
                 "router_metadata": metadata}
 
     # Stage 2: complex variant selection
@@ -529,31 +592,58 @@ async def router_node(state: AgentState) -> AgentState:
     logger.info(f"[router] → {route} (confidence={confidence:.2f}, toolbox={toolbox})")
     return {"route": route, "token_budget": budget,
             "selected_toolboxes": toolbox, "router_clarification_used": router_clarification_used,
+            "skill_matched": skill_matched,
             "router_metadata": metadata}
 
 
-def _toolbox_for_skill(skill) -> list[str]:
-    """Map a SkillDefinition to router toolbox categories."""
-    from src.tools.skills import SkillDefinition
-    # Map skill categories and tools_used to toolbox names
-    category_toolbox_map = {
-        "research": ["web_search"],
-        "writing": ["data_viz"],
-        "data": ["data_viz"],
-        "productivity": ["productivity"],
-        "communication": ["data_viz"],
-    }
-    toolbox = category_toolbox_map.get(skill.category, ["all"])
+# ── Skill category → toolbox fallback map ──────────────────────────────
+_SKILL_CATEGORY_TOOLBOX: dict[str, list[str]] = {
+    "research": ["web_search"],
+    "writing": ["data_viz"],
+    "data": ["data_viz"],
+    "productivity": ["productivity"],
+    "communication": ["data_viz"],
+}
 
-    # If the skill explicitly lists web_search tools, ensure it's included
+
+def _toolbox_for_skill(skill) -> list[str]:
+    """Derive router toolbox categories from a SkillDefinition.
+
+    Priority order:
+    1. Skill's own ``tools_used`` field — map tool names to toolbox categories
+    2. Category fallback via ``_SKILL_CATEGORY_TOOLBOX``
+    3. ``["all"]`` when nothing matches
+    """
+    from src.tools.skills import SkillDefinition
+
+    # ── Stage 1: tools_used → toolbox mapping ──────────────────────────
+    if isinstance(skill, SkillDefinition) and skill.tools_used:
+        toolbox: list[str] = []
+        tools = [t.lower() for t in skill.tools_used]
+        if any("web" in t or "fetch" in t or "search" in t or "http" in t for t in tools):
+            toolbox.append("web_search")
+        if any("file" in t or "read" in t or "write" in t or "edit" in t
+               or "dir" in t or "list" in t or "path" in t for t in tools):
+            toolbox.append("file_ops")
+        if any("data" in t or "viz" in t or "chart" in t or "graph" in t
+               or "plot" in t or "document" in t for t in tools):
+            toolbox.append("data_viz")
+        if any("terminal" in t or "shell" in t or "run" in t or "execute" in t
+               or "bash" in t or "notebook" in t for t in tools):
+            toolbox.append("productivity")
+        if toolbox:
+            return toolbox
+
+    # ── Stage 2: category fallback ─────────────────────────────────────
+    toolbox = _SKILL_CATEGORY_TOOLBOX.get(skill.category, ["all"])
+
+    # ── Stage 3: amend web+file tools even when category already matched ─
     if isinstance(skill, SkillDefinition) and skill.tools_used:
         tools = [t.lower() for t in skill.tools_used]
-        if any("web" in t or "fetch" in t for t in tools):
-            if "web_search" not in toolbox:
-                toolbox = ["web_search"] + [t for t in toolbox if t != "web_search"]
-        if any("file" in t or "read" in t or "write" in t or "edit" in t for t in tools):
-            if "file_ops" not in toolbox:
-                toolbox = ["file_ops"] + [t for t in toolbox if t != "file_ops"]
+        if any("web" in t or "fetch" in t for t in tools) and "web_search" not in toolbox:
+            toolbox.insert(0, "web_search")
+        if any("file" in t or "read" in t or "write" in t or "edit" in t for t in tools) and "file_ops" not in toolbox:
+            toolbox.insert(0, "file_ops")
 
     return toolbox
 
