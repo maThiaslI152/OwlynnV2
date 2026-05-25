@@ -119,10 +119,10 @@ class ProfileBuilder:
     cloud_llm_base_url: str = "https://api.deepseek.com/v1"
     cloud_llm_model_name: str = "deepseek-chat"
     small_llm_base_url: str = "http://127.0.0.1:1234/v1"
-    small_llm_model_name: str = "liquid/lfm2.5-1.2b"
+    small_llm_model_name: str = "ibm-grok4-ultrafast-coder-1b"
     llm_base_url: str = "http://127.0.0.1:1234/v1"
     medium_models: dict = field(default_factory=lambda: {
-        "default": "qwen/qwen3.5-9b",
+        "default": "gemma-4-e4b-uncensored-hauhaucs-aggressive",
         "vision": "zai-org/glm-4.6v-flash",
         "longctx": "lfm2-8b-a1b-gguf-q8_0",
     })
@@ -376,3 +376,14 @@ def _clean_pool_after_test():
     """Auto-clean LLMPool overrides after each test."""
     yield
     teardown_benchmark_llms()
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Write benchmark_report.json after all tests complete."""
+    try:
+        from tests.benchmarks.report import write_report, print_summary
+        path = write_report()
+        print(f"\n[benchmark] Report written to {path}")
+        print_summary()
+    except Exception:
+        pass

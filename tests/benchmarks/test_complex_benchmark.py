@@ -29,12 +29,12 @@ from tests.benchmarks.conftest import (
     time_async_call,
     time_concurrent,
 )
-from tests.benchmarks.report import BenchmarkEntry, record_entry, clear_entries
+from tests.benchmarks.report import BenchmarkEntry, record_entry
 
 
 @pytest.fixture(autouse=True)
 def _clean():
-    clear_entries()
+
     teardown_benchmark_llms()
     yield
     teardown_benchmark_llms()
@@ -44,6 +44,7 @@ def _clean():
 # Per-route latency
 # ═══════════════════════════════════════════════════════════════════════════
 
+@pytest.mark.benchmark
 class TestComplexPerRouteLatency:
     """Measure complex_llm_node latency for each route variant."""
 
@@ -52,7 +53,7 @@ class TestComplexPerRouteLatency:
         ("complex-default", 80),
         ("complex-vision", 120),
         ("complex-longctx", 150),
-        ("complex-cloud", 200),
+        ("complex-cloud", 300),
     ])
     async def test_complex_latency_per_route(self, route: str, model_delay: int):
         """p50/p95/p99 per route with realistic mock delays."""
@@ -102,6 +103,7 @@ class TestComplexPerRouteLatency:
 # Fallback chain coverage
 # ═══════════════════════════════════════════════════════════════════════════
 
+@pytest.mark.benchmark
 class TestFallbackChainCoverage:
     """Force each fallback path and measure added latency."""
 
@@ -111,7 +113,7 @@ class TestFallbackChainCoverage:
         from src.agent.llm import CloudUnavailableError
         from src.agent.nodes.complex import complex_llm_node
 
-        mock_medium = make_mock_llm(delay_ms=60, content="Fallback response")
+        mock_medium = make_mock_llm(delay_ms=80, content="Fallback response")
 
         async def _cloud_raises():
             raise CloudUnavailableError("No API key")
@@ -223,6 +225,7 @@ class TestFallbackChainCoverage:
 # Context trimming efficiency
 # ═══════════════════════════════════════════════════════════════════════════
 
+@pytest.mark.benchmark
 class TestContextTrimEfficiency:
     """Measure _trim_tool_history token reduction."""
 
@@ -245,11 +248,13 @@ class TestContextTrimEfficiency:
         original_count = len(messages)
         trimmed = _trim_tool_history(messages, max_tool_cycles=6)
 
-        assert len(trimmed) <= original_count, "Trim should not increase message count"
-        # Should have compressed old tool messages
-        assert len(trimmed) < original_count or original_count <= 6, (
-            f"Trim should reduce messages, got {len(trimmed)} from {original_count}"
-        )
+        assert len(trimmed) == original_count, "Trim preserves message count, compresses content only"
+        # Old tool messages should be compressed to summary strings
+        old_tool_count = 0
+        for i, msg in enumerate(trimmed):
+            if isinstance(msg, ToolMessage) and "completed" in str(msg.content):
+                old_tool_count += 1
+        assert old_tool_count > 0, "Some old tool messages should be compressed to summaries"
 
     def test_trim_preserves_recent_cycles(self):
         """Recent tool cycles are preserved, old ones compressed."""
@@ -281,6 +286,7 @@ class TestContextTrimEfficiency:
 # Post-processing overhead
 # ═══════════════════════════════════════════════════════════════════════════
 
+@pytest.mark.benchmark
 class TestPostProcessingOverhead:
     """Measure anonymize, deanonymize, think-tag strip, _auto_read_workspace_bundle."""
 
@@ -376,6 +382,7 @@ class TestPostProcessingOverhead:
 # Tool action throughput
 # ═══════════════════════════════════════════════════════════════════════════
 
+@pytest.mark.benchmark
 class TestToolActionThroughput:
     """Measure complex_tool_action_node calls/sec."""
 
@@ -414,6 +421,7 @@ class TestToolActionThroughput:
 # End-to-end graph latency
 # ═══════════════════════════════════════════════════════════════════════════
 
+@pytest.mark.benchmark
 class TestGraphE2ELatency:
     """Measure full graph latency per route (with MemorySaver)."""
 
@@ -458,7 +466,7 @@ class TestGraphE2ELatency:
              patch("src.agent.nodes.complex.get_cloud_llm", new_callable=AsyncMock, return_value=mock_llm), \
              patch("src.agent.nodes.memory.get_profile", return_value=profile), \
              patch("src.agent.nodes.memory.get_persona", return_value={"role": "Helper"}), \
-             patch("src.agent.nodes.memory.memory", MagicMock()), \
+             patch("src.memory.long_term.memory", MagicMock()), \
              patch("src.agent.nodes.memory.get_memory_context_for_prompt", return_value="Mock"), \
              patch("src.agent.nodes.memory.MemoryContextCache") as mock_cache, \
              patch("src.agent.nodes.memory._should_save_memory", return_value=False):

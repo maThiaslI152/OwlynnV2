@@ -22,12 +22,12 @@ from tests.benchmarks.conftest import (
     teardown_benchmark_llms,
     time_async_call,
 )
-from tests.benchmarks.report import BenchmarkEntry, record_entry, clear_entries
+from tests.benchmarks.report import BenchmarkEntry, record_entry
 
 
 @pytest.fixture(autouse=True)
 def _clean():
-    clear_entries()
+
     teardown_benchmark_llms()
     yield
     teardown_benchmark_llms()
@@ -37,6 +37,7 @@ def _clean():
 # Memory inject overhead
 # ═══════════════════════════════════════════════════════════════════════════
 
+@pytest.mark.benchmark
 class TestMemoryInject:
     """Measure memory_inject_node call time with mocked Mem0/Qdrant."""
 
@@ -49,7 +50,7 @@ class TestMemoryInject:
 
         profile = ProfileBuilder().build()
 
-        with patch("src.agent.nodes.memory.memory", mock_mem0), \
+        with patch("src.memory.long_term.memory", mock_mem0), \
              patch("src.agent.nodes.memory.get_profile", return_value=profile), \
              patch("src.agent.nodes.memory.get_persona", return_value={"role": "Helper"}), \
              patch("src.agent.nodes.memory.get_memory_context_for_prompt", return_value="Mock context"), \
@@ -133,6 +134,7 @@ class TestMemoryInject:
 # Memory write overhead
 # ═══════════════════════════════════════════════════════════════════════════
 
+@pytest.mark.benchmark
 class TestMemoryWrite:
     """Measure memory_write_node call time with mocked storage."""
 
@@ -144,7 +146,7 @@ class TestMemoryWrite:
 
         profile = ProfileBuilder().build()
 
-        with patch("src.agent.nodes.memory.memory", mock_mem0), \
+        with patch("src.memory.long_term.memory", mock_mem0), \
              patch("src.agent.nodes.memory.get_profile", return_value=profile), \
              patch("src.agent.nodes.memory.record_conversation", return_value=None), \
              patch("src.agent.nodes.memory._should_save_memory", return_value=True), \
@@ -230,6 +232,7 @@ class TestMemoryWrite:
 # Context formatting cost
 # ═══════════════════════════════════════════════════════════════════════════
 
+@pytest.mark.benchmark
 class TestContextFormatting:
     """Measure format_memory_context cost with varied data sizes."""
 

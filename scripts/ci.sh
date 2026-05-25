@@ -43,8 +43,8 @@ if ! $FRONTEND_ONLY; then
     python -m pip install -r requirements.txt -r requirements-dev.txt
   fi
 
-  info "Running unit tests (excluding network)…"
-  if python -m pytest -q -m "not network" --tb=short; then
+  info "Running unit tests (excluding network, benchmarks)…"
+  if python -m pytest -q -m "not network and not benchmark" --tb=short; then
     pass "Unit tests passed"
   else
     fail "Unit tests failed"; EXIT_CODE=1

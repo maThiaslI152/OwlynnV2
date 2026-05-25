@@ -28,12 +28,12 @@ from tests.benchmarks.conftest import (
     time_concurrent,
     SHORT_INPUTS,
 )
-from tests.benchmarks.report import BenchmarkEntry, record_entry, clear_entries
+from tests.benchmarks.report import BenchmarkEntry, record_entry
 
 
 @pytest.fixture(autouse=True)
 def _clean():
-    clear_entries()
+
     teardown_benchmark_llms()
     yield
     teardown_benchmark_llms()
@@ -43,6 +43,7 @@ def _clean():
 # Simple node latency by input size
 # ═══════════════════════════════════════════════════════════════════════════
 
+@pytest.mark.benchmark
 class TestSimpleLatency:
     """Measure simple_node latency across input sizes."""
 
@@ -58,7 +59,7 @@ class TestSimpleLatency:
         from src.agent.nodes.simple import simple_node
         from src.agent.llm import LLMPool
 
-        mock_small = make_mock_llm(delay_ms=25, content="Mock simple response")
+        mock_small = make_mock_llm(delay_ms=15, content="Mock simple response")
         setup_benchmark_llms(small=mock_small)
 
         state = make_simple_state(text=input_text)
@@ -123,6 +124,7 @@ class TestSimpleLatency:
 # Simple node fallback overhead
 # ═══════════════════════════════════════════════════════════════════════════
 
+@pytest.mark.benchmark
 class TestSimpleFallback:
     """Measure penalty when small LLM fails and falls back to medium."""
 
@@ -135,7 +137,7 @@ class TestSimpleFallback:
         mock_small = MockDelayLLM(
             delay_ms=0, response_content="", fail_on_call=RuntimeError("Small failed")
         )
-        mock_medium = make_mock_llm(delay_ms=60, content="Fallback response")
+        mock_medium = make_mock_llm(delay_ms=80, content="Fallback response")
         setup_benchmark_llms(small=mock_small, medium=mock_medium)
 
         state = make_simple_state(text="Hello")
@@ -163,6 +165,7 @@ class TestSimpleFallback:
 # Simple node concurrency
 # ═══════════════════════════════════════════════════════════════════════════
 
+@pytest.mark.benchmark
 class TestSimpleConcurrency:
     """Measure simple_node throughput under concurrent load."""
 

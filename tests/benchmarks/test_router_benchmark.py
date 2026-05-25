@@ -31,12 +31,12 @@ from tests.benchmarks.conftest import (
     SHORT_INPUTS,
     LARGE_INPUTS,
 )
-from tests.benchmarks.report import BenchmarkEntry, record_entry, clear_entries
+from tests.benchmarks.report import BenchmarkEntry, record_entry
 
 
 @pytest.fixture(autouse=True)
 def _clean():
-    clear_entries()
+
     teardown_benchmark_llms()
     yield
     teardown_benchmark_llms()
@@ -46,6 +46,7 @@ def _clean():
 # Router throughput — single-invocation latency by input size
 # ═══════════════════════════════════════════════════════════════════════════
 
+@pytest.mark.benchmark
 class TestRouterThroughput:
     """Measure router_node latency across varied input sizes."""
 
@@ -63,7 +64,7 @@ class TestRouterThroughput:
         from src.agent.llm import LLMPool
 
         mock_small = make_mock_llm(
-            delay_ms=30,
+            delay_ms=15,
             content='{"routing":"complex","confidence":0.85,"toolbox":"all"}',
         )
         setup_benchmark_llms(small=mock_small)
@@ -104,7 +105,7 @@ class TestRouterThroughput:
         from src.agent.nodes.router import router_node
 
         mock_small = make_mock_llm(
-            delay_ms=20,
+            delay_ms=15,
             content='{"routing":"complex","confidence":0.9,"toolbox":"all"}',
         )
         setup_benchmark_llms(small=mock_small)
@@ -143,6 +144,7 @@ class TestRouterThroughput:
 # Token budget accuracy
 # ═══════════════════════════════════════════════════════════════════════════
 
+@pytest.mark.benchmark
 class TestTokenBudgetAccuracy:
     """Verify estimate_token_budget stays within per-route caps."""
 
@@ -191,6 +193,7 @@ class TestTokenBudgetAccuracy:
 # HITL interception rate
 # ═══════════════════════════════════════════════════════════════════════════
 
+@pytest.mark.benchmark
 class TestHITLInterceptRate:
     """Measure how often HITL triggers at different confidence thresholds."""
 
@@ -222,6 +225,7 @@ class TestHITLInterceptRate:
 # Skill matcher latency
 # ═══════════════════════════════════════════════════════════════════════════
 
+@pytest.mark.benchmark
 class TestSkillMatcherLatency:
     """Measure SkillMatcher.match_with_confidence() latency."""
 
@@ -242,9 +246,9 @@ class TestSkillMatcherLatency:
         ]
 
         for text in inputs * 10:
-            elapsed, _ = await time_async_call(
-                matcher.match_with_confidence, text, top_k=3
-            )
+            start = asyncio.get_running_loop().time()
+            _ = matcher.match_with_confidence(text, top_k=3)
+            elapsed = asyncio.get_running_loop().time() - start
             tracker.record(elapsed)
 
         entry = BenchmarkEntry(
@@ -266,6 +270,7 @@ class TestSkillMatcherLatency:
 # Router concurrency
 # ═══════════════════════════════════════════════════════════════════════════
 
+@pytest.mark.benchmark
 class TestRouterConcurrency:
     """Measure router_node throughput under concurrent load."""
 
