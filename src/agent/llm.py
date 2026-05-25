@@ -119,7 +119,7 @@ class LLMPool:
 
             profile = get_profile()
             medium_models: dict = profile.get("medium_models", {})
-            model_name = medium_models.get(variant, "qwen/qwen3.5-9b")
+            model_name = medium_models.get(variant, "gemma-4-e4b-uncensored-hauhaucs-aggressive")
             base_url = profile.get("llm_base_url", "http://127.0.0.1:1234/v1")
 
             cls._medium_llm = ChatOpenAI(
@@ -127,7 +127,7 @@ class LLMPool:
                 api_key="sk-local-no-key-needed",
                 base_url=base_url,
                 temperature=0.4,
-                max_tokens=4096,
+                max_tokens=4096,  # Gemma 4 E4B Q4_K_M performs well at 4K
                 extra_body={"max_output_tokens": 4096},
             )
             cls._current_medium_variant = variant

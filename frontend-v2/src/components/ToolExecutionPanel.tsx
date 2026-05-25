@@ -190,11 +190,6 @@ console.log('Verification OK')`
       {!tool && history.length === 0 ? (
         <div>
           <p className="empty">No tool activity yet.</p>
-          <div className="tool-empty-preview">
-            <p className="tool-empty-title">Waiting for agent tool calls</p>
-            <p className="tool-empty-row"><code>workspace_search</code> · pending</p>
-            <p className="tool-empty-row"><code>browser_snapshot</code> · queued</p>
-          </div>
         </div>
       ) : tool ? (
         <div className="tool-exec-item">
@@ -227,7 +222,7 @@ console.log('Verification OK')`
       <div style={{marginTop:4}}>
         <button
           type="button"
-          onClick={() => setShowAdvanced(!showAdvanced)}
+          onClick={(e) => { e.stopPropagation(); setShowAdvanced(!showAdvanced) }}
           style={{border:'none', background:'transparent', color:'var(--text-muted)', fontSize:'0.7rem', cursor:'pointer', padding:0}}
         >
           {showAdvanced ? '−' : '+'} Audit & Verify

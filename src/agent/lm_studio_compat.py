@@ -1,5 +1,5 @@
 """
-LM Studio (Qwen 3.x) Jinja chat templates often require a concrete **user** message.
+LM Studio Jinja chat templates often require a concrete **user** message.
 Requests that are only a system message, or some system+user shapes sent via OpenAI API,
 can raise: 'No user query found in messages.'
 
@@ -15,7 +15,8 @@ from src.memory.user_profile import get_profile
 
 
 def lm_studio_fold_system_enabled() -> bool:
-    return bool(get_profile().get("lm_studio_fold_system", True))
+    """Check if system-prompt folding is enabled (default: off for Gemma)."""
+    return bool(get_profile().get("lm_studio_fold_system", False))
 
 
 def fold_system_into_first_user(
@@ -39,13 +40,31 @@ def fold_system_into_first_user(
             merged = True
             c = m.content
             if isinstance(c, str):
-                new_c = f"{sys_txt}\n\n{c}" if sys_txt else c
+                if sys_txt:
+                    new_c = (
+                        "[SYSTEM INSTRUCTIONS BEGIN]\n"
+                        f"{sys_txt}\n"
+                        "[SYSTEM INSTRUCTIONS END]\n\n"
+                        f"{c}"
+                    )
+                else:
+                    new_c = c
             elif isinstance(c, list):
-                new_c: list = [{"type": "text", "text": f"{sys_txt}\n\n"}]
+                if sys_txt:
+                    new_c: list = [
+                        {"type": "text", "text": f"[SYSTEM INSTRUCTIONS BEGIN]\n{sys_txt}\n[SYSTEM INSTRUCTIONS END]\n\n"}
+                    ]
+                else:
+                    new_c: list = []
                 for block in c:
                     new_c.append(block)
             else:
-                new_c = f"{sys_txt}\n\n{c}"
+                if sys_txt:
+                    new_c = (
+                        f"[SYSTEM INSTRUCTIONS BEGIN]\n{sys_txt}\n[SYSTEM INSTRUCTIONS END]\n\n{c}"
+                    )
+                else:
+                    new_c = f"{c}"
             out.append(HumanMessage(content=new_c))
         else:
             out.append(m)

@@ -22,18 +22,26 @@ SIMPLE_PROMPT = (
     "You are Owlynn, a helpful assistant. "
     "Today is {current_date}. "
     "Give short, direct answers (1-3 sentences). "
-    "No reasoning steps, no preamble, no meta commentary."
+    "No reasoning steps, no preamble, no meta commentary. "
+    "Never describe your own identity, role, or purpose unless the user explicitly asks."
     "{style_hint}"
     "{memory_hint}"
 )
 
 
 def _clean_response(text: str) -> str:
-    """Strip thinking tokens and reasoning artifacts from small model output."""
+    """Strip thinking tokens, reasoning artifacts, and self-descriptive preambles from small model output."""
     if not text:
         return ""
     # Remove <think>...</think> blocks
     out = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+    # Strip self-descriptive preambles (model echoing system prompt folded into user message)
+    out = re.sub(
+        r"^\[SYSTEM INSTRUCTIONS BEGIN\].*?\[SYSTEM INSTRUCTIONS END\]\s*",
+        "",
+        out,
+        flags=re.DOTALL,
+    ).strip()
     # Remove numbered reasoning steps (e.g. "1. **Analyze**...")
     lines = out.split("\n")
     kept: list[str] = []

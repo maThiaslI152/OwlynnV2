@@ -19,12 +19,27 @@ export function SafeModePanel() {
 
   const onModeChange = async (mode: SafeModeLevel) => {
     const result = await tauriBridge.setSafeMode(mode)
-    if (!result.ok) {
-      setOperatorNote(`Safe Mode error: ${result.error}`)
+    if (result.ok) {
+      setSafeMode(mode)
+      setOperatorNote(`Safe Mode set to ${mode}`)
       return
     }
-    setSafeMode(mode)
-    setOperatorNote(`Safe Mode set to ${mode}`)
+    // Tauri IPC unavailable (browser mode) — fall back to REST API
+    try {
+      const response = await fetch('/api/advanced-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ safe_mode: mode }),
+      })
+      if (!response.ok) {
+        setOperatorNote(`Safe Mode error: request failed (${response.status})`)
+        return
+      }
+      setSafeMode(mode)
+      setOperatorNote(`Safe Mode set to ${mode}`)
+    } catch (error) {
+      setOperatorNote(`Safe Mode error: ${(error as Error).message}`)
+    }
   }
 
   const onPolicyChange = (policy: ExecutionPolicy) => {

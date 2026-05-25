@@ -93,21 +93,21 @@ M4_MAC_OPTIMIZATION = {
         "timeout": 10,           # seconds - small model should be fast
     },
     "large_model": {
-        "max_tokens": 8192,       # Dynamic budget handles this per-request
-        "context_length": 100000, # Qwen3.5 9B context window (set in LM Studio)
+        "max_tokens": 4096,       # Gemma 4 E4B Q4_K_M — shorter, faster responses
+        "context_length": 16384,  # Gemma 4 base context window (Q4_K_M default)
         "temperature": 0.5,
-        "timeout": 120,          # seconds - longer timeout for big context
-        "cloud_timeout": 180,    # seconds - accommodate cloud API latency
+        "timeout": 60,           # seconds — 4B Q4 model is much faster than 9B fp16
+        "cloud_timeout": 180,    # seconds — accommodate cloud API latency
     },
     "medium_models": {
         "swap_timeout": 120,     # seconds - max wait for LM Studio model swap
         "poll_interval": 2,      # seconds - poll interval during swap
     },
     "memory": {
-        "max_facts": 150,        # Reduced from 200 for M4 memory
-        "search_window": 50,     # Only search recent 50 memories (not all 150)
-        "cache_ttl": 300,        # Cache memory context for 5 minutes
-        "cache_cleanup": 600,    # Clean old cache entries every 10 min
+        "max_facts": 200,       # Restored — Gemma 4 E4B Q4_K_M leaves plenty of RAM
+        "search_window": 100,   # Wider search since RAM isn't bottlenecked
+        "cache_ttl": 300,       # Cache memory context for 5 minutes
+        "cache_cleanup": 600,   # Clean old cache entries every 10 min
     },
     "checkpoint": {
         "memory_cleanup_interval": 3600,  # Clean old threads hourly

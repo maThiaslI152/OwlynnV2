@@ -172,15 +172,27 @@ class TestMatchWithConfidence:
         assert result.ambiguity_reason == ""
 
     def test_weak_match_is_ambiguous_signal_a(self):
-        """No strong match → is_ambiguous = True (Signal A: low confidence)."""
+        """No strong match, AND query is short → is_ambiguous = True (Signal A)."""
+        loader = MagicMock(spec=SkillLoader)
+        loader.load_all.return_value = [
+            _make_skill("Niche Skill", ["xyzzy_unique_trigger_42"])
+        ]
+        m = SkillMatcher(loader)
+        # Short query with no intent keywords → vague → HITL
+        result = m.match_with_confidence("unrelated")
+        assert result.is_ambiguous
+        assert len(result.ambiguity_reason) > 0
+
+    def test_substantive_query_no_skill_match_is_not_ambiguous(self):
+        """Clear query with enough words → routes directly even with no skill match."""
         loader = MagicMock(spec=SkillLoader)
         loader.load_all.return_value = [
             _make_skill("Niche Skill", ["xyzzy_unique_trigger_42"])
         ]
         m = SkillMatcher(loader)
         result = m.match_with_confidence("something completely unrelated here")
-        assert result.is_ambiguous
-        assert len(result.ambiguity_reason) > 0
+        assert not result.is_ambiguous
+        assert result.candidate_skills == []
 
     def test_vague_query_is_ambiguous_signal_c(self, matcher):
         """Very short query → is_ambiguous = True (Signal C: vague query)."""
@@ -188,11 +200,16 @@ class TestMatchWithConfidence:
         assert result.is_ambiguous
         assert len(result.ambiguity_reason) > 0
 
-    def test_no_intent_keywords_is_ambiguous_signal_c(self, matcher):
-        """Query with no intent keywords → is_ambiguous = True (Signal C)."""
-        result = matcher.match_with_confidence("the quick brown fox")
+    def test_short_no_intent_keywords_is_ambiguous_signal_c(self, matcher):
+        """Short query with no intent keywords → is_ambiguous = True (Signal C)."""
+        result = matcher.match_with_confidence("hmm")
         assert result.is_ambiguous
         assert len(result.ambiguity_reason) > 0
+
+    def test_long_no_intent_keywords_is_not_ambiguous(self, matcher):
+        """Long enough query without intent keywords → routes directly (not vague)."""
+        result = matcher.match_with_confidence("the quick brown fox")
+        assert not result.is_ambiguous
 
     def test_multi_tie_is_ambiguous_signal_b(self):
         """Multiple close-scoring skills → is_ambiguous = True (Signal B)."""
@@ -234,12 +251,22 @@ class TestMatchWithConfidence:
         assert hasattr(result, "best_score")
         assert hasattr(result, "top_match")
 
-    def test_empty_skills_returns_ambiguous(self):
-        """No skills loaded → is_ambiguous = True."""
+    def test_empty_skills_vague_query_is_ambiguous(self):
+        """No skills loaded + vague query → is_ambiguous = True."""
+        loader = MagicMock(spec=SkillLoader)
+        loader.load_all.return_value = []
+        m = SkillMatcher(loader)
+        result = m.match_with_confidence("huh")
+        assert result.is_ambiguous
+        assert result.top_match is None
+        assert result.candidate_skills == []
+
+    def test_empty_skills_clear_query_is_not_ambiguous(self):
+        """No skills loaded but query has clear intent → routes directly (no HITL)."""
         loader = MagicMock(spec=SkillLoader)
         loader.load_all.return_value = []
         m = SkillMatcher(loader)
         result = m.match_with_confidence("research something")
-        assert result.is_ambiguous
+        assert not result.is_ambiguous
         assert result.top_match is None
         assert result.candidate_skills == []

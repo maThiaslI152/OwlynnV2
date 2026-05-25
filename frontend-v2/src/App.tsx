@@ -60,6 +60,8 @@ function App() {
   const inlineSecurityPrompt = useAppStore((s) => s.inlineSecurityPrompt)
   const setInlineSecurityPrompt = useAppStore((s) => s.setInlineSecurityPrompt)
   const clearInlineSecurityPrompt = useAppStore((s) => s.clearInlineSecurityPrompt)
+  const interruptQuestion = useAppStore((s) => s.interruptQuestion)
+  const interruptChoices = useAppStore((s) => s.interruptChoices)
   const makeThreadId = () => `thread-${crypto.randomUUID()}`
   const initialThreadId = makeThreadId()
   const [projects, setProjects] = useState<ProjectSummary[]>([])
@@ -122,17 +124,18 @@ function App() {
   }, [])
 
   const handleInterrupt = useCallback((interrupts: unknown[] | undefined) => {
-    if (executionPolicy === 'auto_approve') {
-      const autoApprove = buildAutoApproveInterruptResponse()
-      wsClientRef.current?.send(autoApprove.clientEvent)
-      setOperatorNote(autoApprove.operatorNote)
-      return
-    }
-
+    // ask_user interrupts always need UI interaction, regardless of execution policy
     const askUser = parseInterruptChoices(interrupts)
     if (askUser) {
       setInterruptPrompt(askUser.question, askUser.choices)
       setOperatorNote('Clarification needed: choose an option to continue.')
+      return
+    }
+
+    if (executionPolicy === 'auto_approve') {
+      const autoApprove = buildAutoApproveInterruptResponse()
+      wsClientRef.current?.send(autoApprove.clientEvent)
+      setOperatorNote(autoApprove.operatorNote)
       return
     }
 
@@ -450,7 +453,7 @@ function App() {
       if (chatId === activeChatId) {
         handleNewChat()
       } else {
-        setOperatorNote(`Chat ${chatId} deleted.`)
+        setOperatorNote('Chat deleted.')
       }
     } catch (e: any) {
       setOperatorNote('Failed to delete chat.')
@@ -536,6 +539,8 @@ function App() {
         setCurrentThreadId(fallbackThreadId)
         setActiveChatId(fallbackThreadId)
         setOperatorNote('Workspace deleted. Switched to default workspace.')
+      } else {
+        setOperatorNote('Workspace deleted.')
       }
       await loadProjects()
     } catch (e: any) {
@@ -564,6 +569,8 @@ function App() {
       onDeleteChat={handleDeleteChat}
       onRenameChat={handleRenameChat}
       inlineSecurityPrompt={inlineSecurityPrompt}
+      interruptQuestion={interruptQuestion}
+      interruptChoices={interruptChoices}
     />
   )
 }

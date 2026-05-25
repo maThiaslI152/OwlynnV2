@@ -1,4 +1,9 @@
 import { useEffect, useRef, useState, useCallback, type ReactNode } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import rehypeRaw from 'rehype-raw'
+import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
+import type { Options } from 'rehype-sanitize'
 import { Composer } from './Composer'
 import { SafeModePanel } from './SafeModePanel'
 import { ScreenAssistPanel } from './ScreenAssistPanel'
@@ -10,7 +15,6 @@ import { OrchestrationPanel } from './OrchestrationPanel'
 import { MemoryPanel } from './MemoryPanel'
 import { useAppStore } from '../state/useAppStore'
 import { tauriBridge } from '../lib/tauriBridge'
-import { parseMarkdown, renderMarkdownSegments } from '../lib/markdown.tsx'
 import type { ChatMessage } from '../types/protocol'
 
 interface ProjectChat {
@@ -45,6 +49,9 @@ interface AppShellProps {
   onDeleteChat: (chatId: string) => void
   onRenameChat: (chatId: string, newName: string) => void
   inlineSecurityPrompt?: InlineSecurityPrompt | null
+  interruptQuestion?: string | null
+  interruptChoices?: InterruptChoice[] | null
+  onClearInterrupt?: () => void
 }
 
 function MessageAvatar({ role }: { role: ChatMessage['role'] }) {
@@ -52,6 +59,24 @@ function MessageAvatar({ role }: { role: ChatMessage['role'] }) {
     return <div className="message-avatar">U</div>
   }
   return <div className="message-avatar">O</div>
+}
+
+// Extended sanitize schema: allows style attributes needed for Visual Comparison
+// skill HTML output (side-by-side cards, styled containers) while blocking
+// dangerous elements like <script> and event handlers.
+const markdownSchema: Options = {
+  ...defaultSchema,
+  attributes: {
+    ...defaultSchema.attributes,
+    div: [...(defaultSchema.attributes?.div || []), 'style', 'className'],
+    span: [...(defaultSchema.attributes?.span || []), 'style'],
+    strong: [...(defaultSchema.attributes?.strong || []), 'style'],
+    th: [...(defaultSchema.attributes?.th || []), 'style', 'align'],
+    td: [...(defaultSchema.attributes?.td || []), 'style', 'align'],
+    table: [...(defaultSchema.attributes?.table || []), 'style'],
+    code: ['className'],
+    pre: ['className'],
+  },
 }
 
 function formatTimeRelative(ts: number): string {
@@ -70,8 +95,72 @@ function formatTimeRelative(ts: number): string {
 }
 
 function MessageContent({ content }: { content: string }) {
-  const segments = parseMarkdown(content)
-  return <>{renderMarkdownSegments(segments, 'msg')}</>
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      rehypePlugins={[rehypeRaw, [rehypeSanitize, markdownSchema]]}
+      components={{
+        a: ({ href, children, ...props }) => (
+          <a className="msg-link" href={href} target="_blank" rel="noopener noreferrer" {...props}>
+            {children}
+          </a>
+        ),
+        pre: ({ children, ...props }) => (
+          <pre className="msg-code-block" {...props}>
+            {children}
+          </pre>
+        ),
+        code: ({ className, children, ...props }) => {
+          const isInline = !className
+          if (isInline) {
+            return <code className="msg-inline-code" {...props}>{children}</code>
+          }
+          const lang = className?.replace('language-', '')
+          return (
+            <code className={className} {...props}>
+              {lang && <span className="msg-code-lang">{lang}</span>}
+              {children}
+            </code>
+          )
+        },
+        table: ({ children, ...props }) => (
+          <table className="msg-table" {...props}>{children}</table>
+        ),
+        th: ({ children, ...props }) => (
+          <th {...props}>{children}</th>
+        ),
+        td: ({ children, ...props }) => (
+          <td {...props}>{children}</td>
+        ),
+        h1: ({ children, ...props }) => (
+          <h1 className="msg-heading h1" {...props}>{children}</h1>
+        ),
+        h2: ({ children, ...props }) => (
+          <h2 className="msg-heading h2" {...props}>{children}</h2>
+        ),
+        h3: ({ children, ...props }) => (
+          <h3 className="msg-heading h3" {...props}>{children}</h3>
+        ),
+        h4: ({ children, ...props }) => (
+          <h4 className="msg-heading h4" {...props}>{children}</h4>
+        ),
+        h5: ({ children, ...props }) => (
+          <h5 className="msg-heading h5" {...props}>{children}</h5>
+        ),
+        h6: ({ children, ...props }) => (
+          <h6 className="msg-heading h6" {...props}>{children}</h6>
+        ),
+        ul: ({ children, ...props }) => (
+          <ul className="msg-list" {...props}>{children}</ul>
+        ),
+        ol: ({ children, ...props }) => (
+          <ol className="msg-list" {...props}>{children}</ol>
+        ),
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+  )
 }
 
 function MessageBubble({ message, isStreaming }: { message: ChatMessage; isStreaming: boolean }) {
@@ -166,6 +255,86 @@ function RenameInput({
   )
 }
 
+function InterruptChoicesInline({
+  question,
+  choices,
+  onSelect,
+  onClose,
+}: {
+  question: string
+  choices: import('../state/useAppStore').InterruptChoice[]
+  onSelect?: (choice: import('../state/useAppStore').InterruptChoice, userInput?: string) => void
+  onClose?: () => void
+}) {
+  const [othersInput, setOthersInput] = useState('')
+  const hasOthers = choices.some((c) => c.allows_user_input)
+
+  const handleChoiceClick = (choice: import('../state/useAppStore').InterruptChoice) => {
+    if (choice.allows_user_input) return
+    onSelect?.(choice)
+  }
+
+  const handleOthersSubmit = () => {
+    const othersChoice = choices.find((c) => c.allows_user_input)
+    if (othersChoice && othersInput.trim()) {
+      onSelect?.(othersChoice, othersInput.trim())
+      setOthersInput('')
+    }
+  }
+
+  return (
+    <div className="interrupt-inline-prompt">
+      <div className="interrupt-inline-card">
+        <div className="interrupt-inline-header">
+          <span className="interrupt-inline-icon">?</span>
+          <span className="interrupt-inline-title">{question}</span>
+          {onClose && (
+            <button type="button" className="interrupt-inline-close" onClick={onClose} title="Dismiss">
+              ×
+            </button>
+          )}
+        </div>
+        <div className="interrupt-inline-choices">
+          {choices.map((choice, idx) => {
+            if (choice.allows_user_input) return null
+            return (
+              <button
+                key={idx}
+                type="button"
+                className="btn-choice"
+                onClick={() => handleChoiceClick(choice)}
+              >
+                {choice.label}
+              </button>
+            )
+          })}
+        </div>
+        {hasOthers && (
+          <div className="interrupt-inline-others">
+            <input
+              type="text"
+              placeholder="Describe what you need..."
+              value={othersInput}
+              onChange={(e) => setOthersInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleOthersSubmit()
+              }}
+            />
+            <button
+              type="button"
+              className="btn-others-submit"
+              disabled={!othersInput.trim()}
+              onClick={handleOthersSubmit}
+            >
+              Submit
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export function AppShell({
   onSend,
   projects,
@@ -186,6 +355,9 @@ export function AppShell({
   onDeleteChat,
   onRenameChat,
   inlineSecurityPrompt,
+  interruptQuestion,
+  interruptChoices,
+  onClearInterrupt,
 }: AppShellProps) {
   const connectionState = useAppStore((s) => s.connectionState)
   const messages = useAppStore((s) => s.messages)
@@ -506,6 +678,14 @@ export function AppShell({
             <div ref={messagesEndRef} />
           </div>
         </div>
+        {interruptQuestion && interruptChoices && interruptChoices.length > 0 && (
+          <InterruptChoicesInline
+            question={interruptQuestion}
+            choices={interruptChoices}
+            onSelect={onSelectChoice}
+            onClose={onClearInterrupt}
+          />
+        )}
         {inlineSecurityPrompt && (
           <div className="security-inline-prompt">
             <div className="security-inline-card">
@@ -609,7 +789,7 @@ export function AppShell({
           <CollapsibleSection title="Screen Assist" icon="🖥">
             <ScreenAssistPanel />
           </CollapsibleSection>
-          <CollapsibleSection title="Tool Execution" icon="🔧">
+          <CollapsibleSection title="Tool Execution" icon="🔧" defaultOpen={true}>
             <ToolExecutionPanel />
           </CollapsibleSection>
           <CollapsibleSection title="Action Proposals" icon="📋">

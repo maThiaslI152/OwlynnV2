@@ -34,10 +34,13 @@ export function MemoryPanel() {
     const fetchData = async () => {
       setLoading(true)
       try {
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 10_000)
         const [topicsRes, interestsRes] = await Promise.all([
-          fetch('/api/topics'),
-          fetch('/api/interests'),
+          fetch('/api/topics', { signal: controller.signal }),
+          fetch('/api/interests', { signal: controller.signal }),
         ])
+        clearTimeout(timeoutId)
         if (!disposed) {
           if (topicsRes.ok) {
             const data = await topicsRes.json()

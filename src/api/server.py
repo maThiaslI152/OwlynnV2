@@ -158,6 +158,7 @@ _ADVANCED_SETTINGS_DEFAULTS = {
     "router_hitl_enabled": True,
     "router_clarification_threshold": 0.6,
     "execution_policy": "auto_approve",
+    "safe_mode": "normal",
     "custom_sensitive_terms": [],
     "redis_url": "redis://localhost:6379",
     "lm_studio_fold_system": True,
@@ -1309,6 +1310,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
         q = await session.add_listener()
         pending_tool_calls: dict[str, dict] = {}
         running_tool_calls: dict[str, dict] = {}
+        _stream_echo_buffer = ""  # Accumulates streaming text to detect system instruction echo
         try:
             while True:
                 event = await q.get()
@@ -1324,6 +1326,8 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                     # Debug print
                     if kind in ["on_chain_start", "on_chain_end"]:
                         logger.debug("Event=%s | Node=%s", kind, node)
+                    elif kind == "on_chat_model_stream":
+                        logger.debug("Stream | Node=%s", node)
 
                     if kind == "on_chain_start" and (node in {"tool_action", "tools"} or metadata.get("langgraph_step") == "tools"):
                         for tool_call_id, tc in list(pending_tool_calls.items()):
@@ -1359,7 +1363,24 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                             # Stream deltas may be str or list[content_block]; stringify like finalize path.
                             text = _stringify_lc_message_content(chunk.content)
                             # Skip empty chunks and internal reminders
-                            if text and not text.strip().startswith("[Internal reminder"):
+                            if not text or text.strip().startswith("[Internal reminder"):
+                                continue
+                            # Suppress system instruction echo in streaming chunks.
+                            # Some models (Gemma) regurgitate the folded system prompt as output.
+                            # Accumulate text until we've passed the echo block, then start sending.
+                            _stream_echo_buffer += text
+                            if "[SYSTEM INSTRUCTIONS BEGIN]" in _stream_echo_buffer:
+                                # Still inside the system echo block — keep buffering but don't send
+                                if "[SYSTEM INSTRUCTIONS END]" in _stream_echo_buffer:
+                                    # End marker found — extract everything after the end marker
+                                    idx = _stream_echo_buffer.find("[SYSTEM INSTRUCTIONS END]")
+                                    after = _stream_echo_buffer[idx + len("[SYSTEM INSTRUCTIONS END]"):].lstrip()
+                                    _stream_echo_buffer = ""  # Reset buffer
+                                    if after:
+                                        await websocket.send_json({"type": "chunk", "content": after})
+                                # else: still buffering, don't send yet
+                            else:
+                                # Past the echo block or never started — send normally
                                 await websocket.send_json({"type": "chunk", "content": text})
                         
                     elif kind == "on_chain_end":
@@ -1389,6 +1410,14 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                             router_metadata = None
                             if isinstance(output, dict):
                                 router_metadata = output.get("router_metadata")
+                            # If output contains nested state, check there too
+                            if not router_metadata and isinstance(output, dict):
+                                inner = output.get("state") or output.get("agent_state")
+                                if isinstance(inner, dict):
+                                    router_metadata = inner.get("router_metadata")
+                            if not router_metadata:
+                                logger.debug("[ws] router on_chain_end: output type=%s, has_router_metadata=%s",
+                                    type(output).__name__, isinstance(output, dict) and "router_metadata" in output)
                             if router_metadata and isinstance(router_metadata, dict):
                                 safe_metadata = {}
                                 for k, v in router_metadata.items():
@@ -1473,6 +1502,18 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                     if _node_token_usage:
                                         final_msg["token_usage"] = _node_token_usage
                                     await websocket.send_json({"type": "assistant.message", "message": final_msg})
+                                elif not tc_list:
+                                    # text_for_ui is empty (e.g. _clean_response stripped system echo leaving nothing).
+                                    # Fallback: extract raw content after system markers from the uncut message.
+                                    raw_content = str(getattr(msg, "content", "") or "")
+                                    if "[SYSTEM INSTRUCTIONS END]" in raw_content:
+                                        idx = raw_content.find("[SYSTEM INSTRUCTIONS END]") + len("[SYSTEM INSTRUCTIONS END]")
+                                        after = raw_content[idx:].strip()
+                                        if after:
+                                            fallback_msg = {"type": msg.type, "content": after}
+                                            if _node_model_used:
+                                                fallback_msg["model_used"] = _node_model_used
+                                            await websocket.send_json({"type": "assistant.message", "message": fallback_msg})
                         elif node in {"tool_action", "tools"} or metadata.get("langgraph_step") == "tools":
                             if isinstance(output, dict) and "messages" in output:
                                 for msg in output["messages"]:

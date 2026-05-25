@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 # ── Summarize gate: conditional edge from memory_inject ───────────────
 
-_DEFAULT_CONTEXT_WINDOW = 100_000
+_DEFAULT_CONTEXT_WINDOW = 16_384  # M4 Air: MLX segfaults beyond ~13K tokens
 _SUMMARIZE_THRESHOLD = 0.85
 
 def summarize_gate(state: AgentState) -> str:
@@ -121,7 +121,7 @@ async def init_agent(checkpointer=None):
     if checkpointer is None:
         try:
             from langgraph.checkpoint.redis.aio import AsyncRedisSaver
-            checkpointer = AsyncRedisSaver(url=REDIS_URL)
+            checkpointer = AsyncRedisSaver(redis_url=REDIS_URL)
             await checkpointer.setup()
             logger.info("Using Redis checkpointer at %s", REDIS_URL)
         except Exception as e:

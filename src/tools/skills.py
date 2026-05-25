@@ -397,22 +397,27 @@ class SkillMatcher:
             kw in query_lower for kw in self._INTENT_KEYWORDS
         )
         vague_query = (
-            len(words) < self.VAGUE_WORD_COUNT or not has_intent_keywords
+            len(words) < self.VAGUE_WORD_COUNT and not has_intent_keywords
         )
 
         if not results:
-            # No skills matched at all — clearly ambiguous
+            # No skills matched at all
             if vague_query:
                 reason = (
                     f"Your query is very short ({len(words)} words) with no clear intent. "
                     "Try adding more detail about what you need."
                 )
-            else:
-                reason = "No skills matched your query. Try rephrasing with more specific keywords."
+                return MatchResult(
+                    is_ambiguous=True,
+                    candidate_skills=[],
+                    ambiguity_reason=reason,
+                )
+            # Query has clear intent but no specific skill matches —
+            # route directly without HITL interruption.
             return MatchResult(
-                is_ambiguous=True,
+                is_ambiguous=False,
                 candidate_skills=[],
-                ambiguity_reason=reason,
+                ambiguity_reason="",
             )
 
         best = results[0]

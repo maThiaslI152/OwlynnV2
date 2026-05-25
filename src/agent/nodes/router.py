@@ -414,6 +414,19 @@ async def router_node(state: AgentState) -> AgentState:
             or match_result.is_ambiguous                    # Skill ambiguous
         )
 
+        # When skill matcher found a confident match, skip HITL even
+        # if the LLM router confidence is low — the skill signal is stronger.
+        if (
+            hitl_needed
+            and not match_result.is_ambiguous
+            and match_result.best_score >= skill_clarification_threshold
+        ):
+            hitl_needed = False
+            logger.info(
+                "[router] Skipping HITL — confident skill match: %s (%.0f%%)",
+                match_result.top_match.name, match_result.best_score * 100,
+            )
+
         # HITL requires a checkpointer — without one, interrupt() silently
         # stops the node without returning a route, breaking graph state.
         _can_interrupt = False
@@ -737,6 +750,7 @@ async def generate_chat_title_router_llm(
     Generate a chat title using the router's small LLM.
 
     This is intentionally lightweight: we only ask for a single JSON title object.
+    Falls back to a truncated excerpt of the user message when the LLM is unavailable.
     """
     user_text = str(user_text or "").strip()
     if not user_text:
@@ -746,16 +760,28 @@ async def generate_chat_title_router_llm(
     joined_files = ", ".join([str(n).strip() for n in file_names if n])
     joined_files = joined_files[:400]  # avoid massive prompts
 
-    small_llm = await get_small_llm()
+    # Try LLM-based title generation
+    try:
+        small_llm = await get_small_llm()
 
-    router_llm = small_llm.bind(temperature=0.2, max_tokens=64)
-    response = await router_llm.ainvoke(
-        [HumanMessage(content=CHAT_TITLE_PROMPT.format(user_input=user_text[:1000], file_names=joined_files))]
-    )
+        router_llm = small_llm.bind(temperature=0.2, max_tokens=64)
+        response = await router_llm.ainvoke(
+            [HumanMessage(content=CHAT_TITLE_PROMPT.format(user_input=user_text[:1000], file_names=joined_files))]
+        )
 
-    title = _parse_title_json(getattr(response, "content", "") or "")
-    # Normalize / truncate to keep UI clean (frontend also truncates as fallback).
-    title = re.sub(r"\s+", " ", title).strip()
-    if not title:
+        title = _parse_title_json(getattr(response, "content", "") or "")
+        # Normalize / truncate to keep UI clean (frontend also truncates as fallback).
+        title = re.sub(r"\s+", " ", title).strip()
+        if title:
+            return title[:60]
+    except Exception:
+        logger.debug("[chat_title] LLM unavailable, using text fallback")
+
+    # Fallback: use the first meaningful line/segment of the user message
+    fallback = user_text.split("\n")[0].strip()
+    # Strip common prefixes that don't make good titles
+    fallback = re.sub(r"^(hi|hey|hello|ok|okay|yes|no|thanks|please)[,.\s]+", "", fallback, flags=re.IGNORECASE).strip()
+    if not fallback:
         return ""
-    return title[:60]
+    fallback = re.sub(r"\s+", " ", fallback).strip()
+    return fallback[:60]

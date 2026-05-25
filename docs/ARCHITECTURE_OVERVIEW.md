@@ -184,7 +184,7 @@ Tier 3:   Playwright (full browser)
 
 - **Docker Compose**: Redis (port 6379, 512 MB cap), Qdrant (port 6333), SearXNG (port 8888)
 - **LM Studio**: Local LLM inference server (port 1234)
-- **Redis**: `redis:7-alpine` with AOF persistence, stores conversation checkpoints
+- **Redis**: `redis/redis-stack-server:latest` with AOF persistence, stores conversation checkpoints
 - **No sandbox/container needed for tool execution** — all tools run natively
 
 ### 12. Tiered Fallback Chain

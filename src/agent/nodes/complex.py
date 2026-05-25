@@ -21,8 +21,8 @@ from src.memory.user_profile import get_profile
 
 logger = logging.getLogger(__name__)
 
-# Context window for the large model (Qwen3.5 9B in LM Studio)
-_LARGE_CONTEXT_WINDOW = 100000
+# Context window for the local model (Gemma 4 E4B Q4_K_M in LM Studio)
+_LARGE_CONTEXT_WINDOW = 16384
 # Minimum output tokens — if less than this is available, we still try
 _MIN_OUTPUT_TOKENS = 512
 # Safety margin to avoid hitting the exact limit
@@ -66,7 +66,7 @@ def _cap_budget_to_context(prompt_messages: list, requested_budget: int) -> int:
 
 
 def _strip_thinking_tags(text: str) -> str:
-    """Remove <think>...</think> blocks from Qwen3.5 reasoning output."""
+    """Remove <think>...</think> blocks from reasoning output."""
     if not text:
         return text
     cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
@@ -74,24 +74,24 @@ def _strip_thinking_tags(text: str) -> str:
 
 
 COMPLEX_PROMPT = """### Identity
-You are Owlynn, an expert reasoning agent. Think step by step before answering.
+You are Owlynn, an expert reasoning agent. For complex tasks (code, math, multi-step work): think step by step before answering. For simple questions, greetings, or small talk: answer concisely without lengthy preamble.
 Current date: {current_date}
 
 ### Behaviors
 - If a request is clearly ambiguous or missing critical details, use ask_user once to clarify. If you can reasonably infer intent from context or memory, just do the work. Don't over-ask.
 - When a request matches a known skill, call invoke_skill to get the workflow and follow it. Use list_skills to see available skills if unsure.
-- Be thorough and accurate. Show your reasoning clearly.
+- Match your verbosity to the task: be thorough for complex work, be concise for simple questions.
 - If project instructions are provided below, they take HIGHEST PRIORITY. Tailor your tone, focus, and approach to match the project's purpose.
 
 User memory context:
 {memory_context}
 
-User persona summary:
+Agent persona summary:
 {persona}
 
 ### Guidelines
 - If writing code, include comments
-- If reasoning through a problem, show your thinking clearly
+- When reasoning through a genuinely complex problem, show your thinking. Skip elaborate reasoning for trivial questions.
 - Never fabricate facts — if uncertain, say so{style_hint}"""
 
 # Models sometimes mimic bracketed "use tool X" system text instead of emitting real tool_calls; forbid that.
@@ -869,9 +869,9 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                     has_tool_calls = bool(getattr(response, "tool_calls", None))
                 out_messages = [nudge, response]
 
-    # Strip <think> tags from the final response before returning
+    # Strip <think> tags from all assistant responses before returning
     for i, msg in enumerate(out_messages):
-        if isinstance(msg, AIMessage) and msg.content and not getattr(msg, "tool_calls", None):
+        if isinstance(msg, AIMessage) and msg.content:
             cleaned = _strip_thinking_tags(msg.content)
             if cleaned != msg.content:
                 out_messages[i] = AIMessage(content=cleaned)

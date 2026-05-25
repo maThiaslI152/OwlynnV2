@@ -1,4 +1,4 @@
-import { convertFileSrc, invoke } from '@tauri-apps/api/core'
+import { convertFileSrc, invoke as tauriInvoke } from '@tauri-apps/api/core'
 
 interface BridgeResult<T = string> {
   ok: boolean
@@ -6,9 +6,20 @@ interface BridgeResult<T = string> {
   error?: string
 }
 
-async function invokeOrResult<T>(command: string, args?: Record<string, unknown>): Promise<BridgeResult<T>> {
+function tauriAvailable(): boolean {
   try {
-    const data = await invoke<T>(command, args)
+    return typeof (window as any).__TAURI__ !== 'undefined'
+  } catch {
+    return false
+  }
+}
+
+async function invokeOrResult<T>(command: string, args?: Record<string, unknown>): Promise<BridgeResult<T>> {
+  if (!tauriAvailable()) {
+    return { ok: false, error: 'Tauri IPC not available (browser mode)' }
+  }
+  try {
+    const data = await tauriInvoke<T>(command, args)
     return { ok: true, data }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
@@ -39,6 +50,7 @@ export const tauriBridge = {
 
   convertFileSrc: (path: string) => {
     try {
+      if (!tauriAvailable()) return path
       return convertFileSrc(path)
     } catch {
       return ''
