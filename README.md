@@ -1,25 +1,26 @@
+---
+last_verified: 2026-05-26
+auto_generated: false
+---
+
 # Owlynn — Local AI Cowork Agent
 
-A private, local-first AI productivity agent inspired by Anthropic's Cowork. Runs entirely on your machine with LangGraph orchestration, three-tier LLM routing, and a Tauri desktop frontend. Optimized for Apple Silicon (M4 Air 24GB).
+A private, local-first AI productivity agent. Runs entirely on your machine with LangGraph orchestration, three-tier LLM routing, and a Tauri desktop frontend. Optimized for Apple Silicon (M4 Air 24GB).
 
 ## Overview
 
-Owlynn is a desktop AI assistant that keeps your data local. It uses a stateful cyclic LangGraph to orchestrate conversations through a small routing model, a medium reasoning model, and an optional cloud fallback — all with a security proxy that gates sensitive tool calls behind human approval.
+Owlynn is a desktop AI assistant that keeps data local. It uses a stateful cyclic LangGraph to orchestrate conversations through a small routing model, a medium reasoning model, and an optional cloud fallback — all with a security proxy that gates sensitive tool calls behind human approval.
 
-## Tech Stack
+## Entry Points
 
-| Layer | Technology |
-|-------|-----------|
-| Backend | FastAPI + LangGraph + Python 3.12+ |
-| Frontend | React 19 + TypeScript (Vite 8) + Zustand 5, served via Tauri desktop shell |
-| Small LLM | Gemma 4 E2B Heretic Uncensored (MLX, routing) |
-| Medium LLM | LFM2 8B A1B Absolute Heresy MPOA (MLX, reasoning + tool calling) |
-| Cloud LLM | DeepSeek API (optional escalation) |
-| Memory | Mem0 + Qdrant + JSON files |
-| Checkpointing | Redis (falls back to in-memory `MemorySaver`) |
-| Search | Multi-tier: SearXNG (self-hosted) → Brave/Serper/Tavily → DuckDuckGo → Playwright |
-| Testing | pytest + hypothesis (backend), vitest + @testing-library/react (frontend) |
-| Desktop | Tauri v2.10 (Rust, macOS vibrancy) |
+```text
+src/api/server.py          # FastAPI entry point (REST + WebSocket)
+src/agent/graph.py          # LangGraph graph builder, init_agent()
+src-tauri/src/main.rs       # Tauri command/event runtime
+frontend-v2/src/App.tsx     # React app shell, WebSocket lifecycle
+./start.sh                  # Full stack launcher
+uvicorn src.api.server:app --host 127.0.0.1 --port 8000
+```
 
 ## Architecture
 
@@ -42,11 +43,26 @@ memory_inject ──► (85% context?) ──► auto_summarize
                                     (loop back)
 ```
 
-The router uses the small LLM to classify requests into simple (greetings, quick answers) or complex (reasoning, tool use). Complex requests are further routed to the appropriate model variant: default, vision, long-context, or cloud.
+The router uses the small LLM to classify requests into `simple` (greetings, quick answers) or `complex` (reasoning, tool use). Complex requests are further routed to the appropriate model variant: default, vision, long-context, or cloud.
+
+### Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Backend | `FastAPI` + `LangGraph` + Python 3.12+ |
+| Frontend | React 19 + TypeScript (Vite 8) + Zustand 5, served via Tauri desktop shell |
+| Small LLM | `ibm-grok4-ultrafast-coder-1b` (Q8_0, routing) |
+| Medium LLM | `qwen3.5-9b-mlx` (MLX 4bit, reasoning + tool calling, swappable) |
+| Cloud LLM | `deepseek-chat` (DeepSeek API, optional escalation) |
+| Memory | Mem0 + Qdrant + JSON files |
+| Checkpointing | Redis (falls back to in-memory `MemorySaver`) |
+| Search | Multi-tier: wttr.in / SearXNG (self-hosted) → curl_cffi / DDGS → Playwright |
+| Testing | `pytest` + `hypothesis` (backend), `vitest` + `@testing-library/react` (frontend) |
+| Desktop | Tauri v2.10 (Rust, macOS vibrancy) |
 
 ## Project Structure
 
-```
+```text
 src/agent/           LangGraph orchestration
   ├── graph.py         Graph builder and init_agent()
   ├── llm.py           LLMPool singleton (small + medium + cloud)
@@ -98,7 +114,7 @@ frontend-v2/          React 19 + TypeScript frontend (active)
 
 src-tauri/            Tauri v2 desktop runtime
   ├── src/main.rs       Tauri command/event runtime
-  ├── src/voice/mod.rs  TTS orchestration (macOS `say` command)
+  ├── src/voice/mod.rs  TTS orchestration (macOS say command)
   └── tauri.conf.json   Tauri v2 configuration
 
 skills/              Reusable prompt templates (markdown)
@@ -106,37 +122,6 @@ data/                User data (profile, memories, todos, topics)
 tests/               pytest + hypothesis test suite
 docs/                Architecture and API documentation
 ```
-
-## Prerequisites
-
-- **Python 3.12+** with pip/uv
-- **LM Studio** with models loaded on port 1234
-- **Docker/Podman** for Qdrant and SearXNG containers
-- **Node.js 18+** for frontend tests
-- **Rust & Cargo** for building the Tauri desktop app
-
-## Quick Start
-
-```bash
-# 1. Clone and install Python dependencies
-git clone <repo-url> && cd owlynn
-pip install -r requirements.txt
-
-# 2. Copy and configure environment variables
-cp .env.example .env
-# Edit .env with your settings (see Configuration below)
-
-# 3. Start LM Studio with both models loaded (port 1234)
-# - Small key: gemma-4-e2b-heretic-uncensored-mlx
-# - Medium key: lfm2-8b-a1b-absolute-heresy-mpoa-mlx
-
-# 4. Start services + backend + desktop app
-./start.sh
-
-# Run just the backend (without frontend):
-# uvicorn src.api.server:app --host 127.0.0.1 --port 8000
-```
-The app opens at `http://127.0.0.1:8000` or as a Tauri desktop window.
 
 ## Configuration
 
@@ -153,19 +138,63 @@ The app opens at `http://127.0.0.1:8000` or as a Tauri desktop window.
 
 ### LLM Setup
 
-Models are configured in the user profile (`data/user_profile.json`) or via the Settings UI:
+Models configured in `data/user_profile.json` or via the Settings UI:
 
-- **Small LLM**: `small_llm_model_name` — routing model (default: `liquid/lfm2.5-1.2b`)
-- **Medium LLM**: `medium_models.default` — reasoning model (default: `qwen/qwen3.5-9b`)
-- **Medium Vision**: `medium_models.vision` — for image inputs
-- **Medium LongCtx**: `medium_models.longctx` — for large context windows
-- **Cloud LLM**: `cloud_llm_model_name` — DeepSeek fallback (default: `deepseek-chat`)
+| Slot | Profile Key | Default | Description |
+|------|------------|---------|-------------|
+| Small LLM | `small_llm_model_name` | `liquid/lfm2.5-1.2b` | Routing model |
+| Medium LLM | `medium_models.default` | `qwen/qwen3.5-9b` | Reasoning model |
+| Medium Vision | `medium_models.vision` | — | Image inputs |
+| Medium LongCtx | `medium_models.longctx` | — | Large context windows |
+| Cloud LLM | `cloud_llm_model_name` | `deepseek-chat` | DeepSeek fallback |
 
-Current verified local profile keys:
-- **Small LLM**: `gemma-4-e2b-heretic-uncensored-mlx`
-- **Medium LLM (default)**: `lfm2-8b-a1b-absolute-heresy-mpoa-mlx`
+Verified local profile keys:
 
-## API Overview
+- Small LLM: `ibm-grok4-ultrafast-coder-1b`
+- Medium LLM (default): `qwen3.5-9b-mlx`
+
+## Prerequisites
+
+- Python 3.12+ with `pip`/`uv`
+- LM Studio with models loaded on port 1234
+- Docker/Podman for Qdrant and SearXNG containers
+- Node.js 18+ for frontend tests
+- Rust & Cargo for Tauri desktop build
+
+## Testing
+
+### Backend (`pytest` + `hypothesis`)
+
+```bash
+pytest tests/ -v
+pytest tests/test_crud_properties.py -v
+pytest tests/ -v --hypothesis-show-statistics
+```
+
+### Frontend (`vitest` + `@testing-library/react`)
+
+```bash
+cd frontend-v2
+npm install
+npx vitest run
+```
+
+## Quick Start
+
+```bash
+git clone <repo-url> && cd owlynn
+pip install -r requirements.txt
+cp .env.example .env
+# Edit .env with your settings
+./start.sh
+# Backend only: uvicorn src.api.server:app --host 127.0.0.1 --port 8000
+```
+
+The app opens at `http://127.0.0.1:8000` or as a Tauri desktop window.
+
+## API
+
+### REST Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -185,22 +214,22 @@ Current verified local profile keys:
 | `GET` | `/api/tools` | List available tools |
 | `WS` | `/ws/chat/{thread_id}` | WebSocket for streaming chat |
 
-Full reference: [docs/API_REFERENCE.md](docs/API_REFERENCE.md)
+Full reference: [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md)
 
-## Tools (20)
+## Tools (22)
 
 | Category | Tools |
 |----------|-------|
-| Web | web_search, fetch_webpage |
-| Files | read, write, edit, list, delete workspace files |
-| Documents | create_docx, create_xlsx, create_pptx, create_pdf |
-| Compute | notebook_run, notebook_reset |
-| Memory | recall_memories, recall_all_memories, forget_memory |
-| Tasks | todo_add, todo_list, todo_complete |
-| System prompts | list_skills, invoke_skill |
-| HITL | ask_user (with choice buttons) |
+| Web | `web_search`, `fetch_webpage` |
+| Files | `read`, `write`, `edit`, `list`, `delete` workspace files |
+| Documents | `create_docx`, `create_xlsx`, `create_pptx`, `create_pdf` |
+| Compute | `notebook_run`, `notebook_reset` |
+| Memory | `recall_memories`, `recall_all_memories`, `forget_memory` |
+| Tasks | `todo_add`, `todo_list`, `todo_complete` |
+| System prompts | `list_skills`, `invoke_skill` |
+| HITL | `ask_user` (with choice buttons) |
 
-## Skills (11)
+## Skills (18)
 
 Reusable prompt templates in `skills/`. Zero token cost until invoked.
 
@@ -211,38 +240,55 @@ Reusable prompt templates in `skills/`. Zero token cost until invoked.
 | Morning Briefing | briefing, daily summary |
 | Visual Comparison | compare, vs, chart |
 | Data Visualization | graph, plot, histogram |
+| Data Analyzer | analyze data, statistics, insights, trends |
 | Meeting Notes | meeting notes, action items |
 | Email Drafter | draft email, compose |
 | Report Generator | create report, weekly report |
 | Presentation Builder | make slides, powerpoint |
 | Content Rewriter | rewrite, polish, proofread |
 | Brainstorm | brainstorm, ideas, what if |
+| Code Reviewer | review code, code review, review |
+| Fact Checker | fact check, verify, check facts |
+| Information Scanner | scan, find, search for information |
+| Explainer | explain, how does, what is |
+| Todo Planner | plan tasks, organize, schedule |
+| Weekly Review | weekly review, week summary, recap |
 
 ## Memory System
 
-Owlynn uses a three-tier memory architecture:
+Three-tier memory architecture:
 
-### 1. Short-Term Memory (JSON)
-File-based fact storage in `data/memories.json`. Managed by `src/memory/memory_manager.py`. Simple keyword-overlap search, 200-entry cap. Used for quick recall of user facts during a session.
+### Short-Term Memory (JSON)
 
-### 2. Long-Term Memory (Mem0 + Qdrant)
-Vector-based semantic memory using Mem0 with a Qdrant backend (`cowork_memory_nomic` collection). Embeddings served by LM Studio (`nomic-embed-text-v1.5`, 768-dim). Managed by `src/memory/long_term.py`.
+- File-based fact storage in `data/memories.json`
+- Managed by `src/memory/memory_manager.py`
+- Simple keyword-overlap search, 200-entry cap
+- Used for quick recall of user facts during a session
 
-Key features:
-- **Project isolation**: Memories are scoped by `project:<id>` for non-default projects. Conversations in different projects do not share long-term memory stores. The `default` project uses a global `owner` user ID, so all chats within `default` share the same memory pool.
-- **Cross-session recall**: Within the same project (or within `default`), memories from past conversations are surfaced via semantic search — the LLM recalls facts and topics you discussed in previous chats.
-- **Cross-project user knowledge**: In non-default projects, the assistant also pulls global user memories (profile name), so it retains general knowledge about you while keeping project-specific conversations isolated.
-- **Selective memory gate**: Skips trivial/greeting exchanges to avoid memory pollution
-- **Semantic dedup**: Avoids saving near-duplicate memories via similarity search before write
-- **5-minute context cache**: Avoids rebuilding memory context on every request
-- **WebSocket notification**: `memory_updated` event triggers UI refresh after memory write
+### Long-Term Memory (Mem0 + Qdrant)
 
-### 3. Personal Assistant Memory
+- Vector-based semantic memory with Mem0 + Qdrant backend (`cowork_memory_nomic` collection)
+- Embeddings: LM Studio (`nomic-embed-text-v1.5`, 768-dim)
+- Managed by `src/memory/long_term.py`
+
+| Feature | Description |
+|---------|-------------|
+| Project isolation | Memories scoped by `project:<id>`. `default` project uses global `owner` user ID |
+| Cross-session recall | Semantic search surfaces memories from past conversations within same project |
+| Cross-project knowledge | Non-default projects pull global user memories (profile name) |
+| Selective memory gate | Skips trivial/greeting exchanges |
+| Semantic dedup | Similarity search before write avoids near-duplicates |
+| Context cache | 5-minute `MemoryContextCache` per thread |
+| WebSocket notification | `memory_updated` event triggers UI refresh |
+
+### Personal Assistant Memory
+
 Managed by `src/memory/personal_assistant.py`:
-- **Topic extraction**: Regex-based, 10 categories, stored in `data/topics.json`
-- **Interest detection**: 8 types, stored in `data/interests.json`  
-- **Conversation summaries**: Last 100 entries in `data/conversations.json`
-- **Time-decay relevance scoring**: Topics/interests decay over time
+
+- Topic extraction: regex-based, 10 categories, stored in `data/topics.json`
+- Interest detection: 8 types, stored in `data/interests.json`
+- Conversation summaries: last 100 entries in `data/conversations.json`
+- Time-decay relevance scoring
 
 ### Memory Tools
 
@@ -252,53 +298,31 @@ Managed by `src/memory/personal_assistant.py`:
 | `recall_all_memories` | Deep semantic search of Mem0/Qdrant vector store |
 | `forget_memory` | Delete specific memories by their ID hash |
 
-### Memory API Endpoints
-
-See [API Reference](docs/API_REFERENCE.md) for the full list, including `/api/mem0/search`, `/api/mem0/delete`, `/api/topics`, `/api/interests`, and `/api/memory-context`.
-
 ### Memory Node Flow (LangGraph)
 
-The agent graph has two memory nodes:
-1. **memory_inject_node** (pre-reasoning): Builds memory context from Mem0 + profile + topics + project instructions
-2. **memory_write_node** (post-reasoning): Extracts topics/interests, saves enriched facts to Mem0, invalidates cache
+1. `memory_inject_node` (pre-reasoning): Builds memory context from Mem0 + profile + topics + project instructions
+2. `memory_write_node` (post-reasoning): Extracts topics/interests, saves enriched facts to Mem0, invalidates cache
 
-## Testing
+## Key Decisions
 
-### Backend (pytest + hypothesis)
-
-```bash
-# Run all tests
-pytest tests/ -v
-
-# Run property-based tests only
-pytest tests/test_crud_properties.py -v
-
-# Run with hypothesis verbose output
-pytest tests/ -v --hypothesis-show-statistics
-```
-
-### Frontend (vitest + @testing-library/react)
-
-```bash
-cd frontend-v2
-npm install
-npx vitest run
-```
+| Decision | Rationale | Trade-off |
+|----------|-----------|-----------|
+| Three-tier LLM routing | Local-first with cloud fallback | Added swap latency for M-tier model changes |
+| LangGraph orchestration | Stateful cyclic graph with checkpointing | More complex than linear pipelines |
+| Tauri desktop shell | Native macOS integration, small binary | macOS-only features, Tauri IPC dependency |
+| Mem0 + Qdrant memory | Semantic vector search | Requires Docker container for Qdrant |
+| Security proxy HITL | Gated destructive operations | Adds latency for approved sensitive tool calls |
 
 ## Documentation
 
-- [Architecture Overview](docs/ARCHITECTURE_OVERVIEW.md)
-- [Agent Flow](docs/AGENT_FLOW.md)
-- [Tools Reference](docs/TOOLS.md)
-- [Chat Protocol](docs/CHAT_PROTOCOL.md)
-- [API Reference](docs/API_REFERENCE.md)
-- [Human Project Guide](docs/HUMAN_PROJECT_GUIDE.md)
-- [AI Agent Project Guide](docs/AI_AGENT_PROJECT_GUIDE.md)
-- [AI Agent Navigation Index](docs/AI_AGENT_INDEX.md)
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, code style, testing requirements, and PR process.
+- [`docs/ARCHITECTURE_OVERVIEW.md`](docs/ARCHITECTURE_OVERVIEW.md)
+- [`docs/AGENT_FLOW.md`](docs/AGENT_FLOW.md)
+- [`docs/TOOLS.md`](docs/TOOLS.md)
+- [`docs/CHAT_PROTOCOL.md`](docs/CHAT_PROTOCOL.md)
+- [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md)
+- [`docs/HUMAN_PROJECT_GUIDE.md`](docs/HUMAN_PROJECT_GUIDE.md)
+- [`docs/AI_AGENT_PROJECT_GUIDE.md`](docs/AI_AGENT_PROJECT_GUIDE.md)
+- [`docs/AI_AGENT_INDEX.md`](docs/AI_AGENT_INDEX.md)
 
 ## License
 

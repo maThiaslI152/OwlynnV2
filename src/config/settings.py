@@ -49,8 +49,6 @@ WEB_RAG_MIN_CHARS_FOR_RANK = int(os.getenv("WEB_RAG_MIN_CHARS_FOR_RANK", "1800")
 WEB_SEARCH_RERANK_TOP_N = int(os.getenv("WEB_SEARCH_RERANK_TOP_N", "8"))
 
 # Web search reliability controls
-# Provider routing: auto | brave | serper | tavily | none
-WEB_SEARCH_PROVIDER = (os.getenv("WEB_SEARCH_PROVIDER", "auto") or "auto").strip().lower()
 WEB_SEARCH_TIMEOUT_SECONDS = float(os.getenv("WEB_SEARCH_TIMEOUT_SECONDS", "22"))
 WEB_SEARCH_ENABLE_CURL_CFFI = os.getenv("WEB_SEARCH_ENABLE_CURL_CFFI", "true").strip().lower() in {
     "1",
@@ -61,11 +59,6 @@ WEB_SEARCH_ENABLE_CURL_CFFI = os.getenv("WEB_SEARCH_ENABLE_CURL_CFFI", "true").s
 WEB_SEARCH_ENABLE_BROWSER_FALLBACK = os.getenv(
     "WEB_SEARCH_ENABLE_BROWSER_FALLBACK", "true"
 ).strip().lower() in {"1", "true", "yes", "on"}
-
-# Tier-1 provider keys (optional)
-BRAVE_SEARCH_API_KEY = (os.getenv("BRAVE_SEARCH_API_KEY", "") or "").strip()
-SERPER_API_KEY = (os.getenv("SERPER_API_KEY", "") or "").strip()
-TAVILY_API_KEY = (os.getenv("TAVILY_API_KEY", "") or "").strip()
 
 # SearXNG (self-hosted metasearch — recommended for local setups, no API keys / no bot blocking)
 SEARXNG_URL = (os.getenv("SEARXNG_URL", "") or "").strip()  # e.g. "http://localhost:8888"
@@ -92,11 +85,11 @@ M4_MAC_OPTIMIZATION = {
         "temperature": 0.1,      # Lower for consistent routing
         "timeout": 10,           # seconds - small model should be fast
     },
-    "large_model": {
-        "max_tokens": 4096,       # Gemma 4 E4B Q4_K_M — shorter, faster responses
-        "context_length": 16384,  # Gemma 4 base context window (Q4_K_M default)
+    "medium_model": {
+        "max_tokens": 4096,       # Qwen3.5 9B MLX 4bit — shorter, faster responses
+        "context_length": 16384,  # Default context window
         "temperature": 0.5,
-        "timeout": 60,           # seconds — 4B Q4 model is much faster than 9B fp16
+        "timeout": 60,           # seconds
         "cloud_timeout": 180,    # seconds — accommodate cloud API latency
     },
     "medium_models": {
@@ -104,8 +97,8 @@ M4_MAC_OPTIMIZATION = {
         "poll_interval": 2,      # seconds - poll interval during swap
     },
     "memory": {
-        "max_facts": 200,       # Restored — Gemma 4 E4B Q4_K_M leaves plenty of RAM
-        "search_window": 100,   # Wider search since RAM isn't bottlenecked
+        "max_facts": 200,       # Default memory capacity
+        "search_window": 100,   # Wider search window
         "cache_ttl": 300,       # Cache memory context for 5 minutes
         "cache_cleanup": 600,   # Clean old cache entries every 10 min
     },
@@ -125,17 +118,17 @@ M4_MAC_OPTIMIZATION = {
 # Apply M4 optimization if specified
 if os.getenv("MACHINE_TYPE") == "M4_MAC" or os.getenv("OPTIMIZE_FOR_M4", "").lower() == "true":
     MODEL_TIMEOUT_SMALL = M4_MAC_OPTIMIZATION["small_model"]["timeout"]
-    MODEL_TIMEOUT_LARGE = M4_MAC_OPTIMIZATION["large_model"]["timeout"]
+    MODEL_TIMEOUT_MEDIUM = M4_MAC_OPTIMIZATION["medium_model"]["timeout"]
     MAX_TOKENS_SMALL = M4_MAC_OPTIMIZATION["small_model"]["max_tokens"]
-    MAX_TOKENS_LARGE = M4_MAC_OPTIMIZATION["large_model"]["max_tokens"]
+    MAX_TOKENS_MEDIUM = M4_MAC_OPTIMIZATION["medium_model"]["max_tokens"]
     MAX_MEMORIES = M4_MAC_OPTIMIZATION["memory"]["max_facts"]
     MEMORY_SEARCH_WINDOW = M4_MAC_OPTIMIZATION["memory"]["search_window"]
 else:
     # Standard defaults (non-M4)
     MODEL_TIMEOUT_SMALL = 15
-    MODEL_TIMEOUT_LARGE = 45
+    MODEL_TIMEOUT_MEDIUM = 45
     MAX_TOKENS_SMALL = 1024
-    MAX_TOKENS_LARGE = 8192
+    MAX_TOKENS_MEDIUM = 8192
     MAX_MEMORIES = 200
     MEMORY_SEARCH_WINDOW = 200
 

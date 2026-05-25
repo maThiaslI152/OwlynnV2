@@ -1,16 +1,31 @@
+---
+last_verified: 2026-05-26
+auto_generated: false
+---
+
 # Architecture Overview
 
-Owlynn is a local-first AI productivity agent built with **LangGraph** for orchestration and **FastAPI** for the backend. Optimized for Apple Silicon (M4 Air 24GB) with a three-tier S / M(swap) / L hybrid LLM architecture.
+Owlynn is a local-first AI productivity agent built with LangGraph for orchestration and FastAPI for the backend. Optimized for Apple Silicon (M4 Air 24GB) with a three-tier S/M(swap)/L hybrid LLM architecture.
 
-## Three-Tier LLM Architecture
+## Overview
 
-The system operates under a hard VRAM constraint: the M4 Air 24GB unified memory can only hold the S model + one M-tier model + embeddings simultaneously. The three tiers are:
+The system operates under a hard VRAM constraint: the M4 Air 24GB unified memory can only hold the S model + one M-tier model + embeddings simultaneously. The S tier (Small) is always loaded. The M tier (Medium) swaps between three task-specific variants. The L tier (Large) is a cloud API used only when local models cannot handle the task.
 
-- **S (Small):** Always loaded. Handles routing, simple answers, chat titles, toolbox selection, and HITL clarification.
-- **M (Medium):** Swappable local slot. Only one M-tier model loaded at a time; the SwapManager hot-swaps between three variants based on task type.
-- **L (Large):** Cloud API. Used only when local models can't handle the task — frontier-quality reasoning, very large summarization, or when even the long-context local model is insufficient.
+## Entry Points
 
-### Model Table
+```text
+src/agent/graph.py          # init_agent(), route_decision()
+src/agent/llm.py            # LLMPool singleton
+src/agent/swap_manager.py   # SwapManager
+src/agent/tool_sets.py      # ToolboxRegistry, resolve_tools()
+src/agent/anonymization.py   # AnonymizationEngine
+src/api/server.py            # FastAPI + WebSocket handler
+frontend-v2/src/App.tsx      # React app shell
+```
+
+## Architecture
+
+### Three-Tier LLM Architecture
 
 | Key | Model | Role | VRAM | Context Window |
 |-----|-------|------|------|----------------|
@@ -22,26 +37,7 @@ The system operates under a hard VRAM constraint: the M4 Air 24GB unified memory
 
 Small_LLM and one M-tier model are served via LM Studio on port 1234 (OpenAI-compatible API). Cloud_LLM uses the DeepSeek API at `https://api.deepseek.com/v1`.
 
-## Core Components
-
-### 1. Orchestrator (LangGraph) — 5-Way Routing
-
-```
-memory_inject → router → simple → memory_write → END
-                       → complex_llm ↔ security_proxy ↔ tool_action → memory_write → END
-```
-
-The router performs a **two-stage decision**:
-1. **Stage 1:** Classify as `simple` vs `complex` (keyword heuristics + Small_LLM).
-2. **Stage 2 (complex only):** Select the model variant:
-   - Image attachments → `complex-vision`
-   - Input tokens > 80% of Medium_Default context → `complex-longctx`
-   - Input tokens > Medium_LongCtx context or frontier-quality indicators → `complex-cloud`
-   - Default → `complex-default`
-   - Prefer currently-loaded variant when borderline (avoid swap latency)
-
-
-#### Graph Flow Diagram
+### Graph Flow
 
 ```
 memory_inject → router ──→ simple ──────────────────→ memory_write → END
@@ -52,45 +48,61 @@ memory_inject → router ──→ simple ────────────�
                   └──→ complex-cloud   ──→ complex_llm ↔ security_proxy ↔ tool_action → memory_write → END
 ```
 
-- **memory_inject**: Loads user profile, persona, topics, interests, and long-term memory context.
-- **router**: Small_LLM classifies the message and selects route + toolbox categories. Keyword heuristics bypass LLM for obvious cases. Conversations with tool history stay on `complex`.
-- **simple**: Small_LLM gives short direct answers. No tools. Falls back to Medium_Default on failure.
-- **complex_llm**: Selected M-tier or Cloud model with dynamically-bound tools. Emits tool calls or direct answers.
-- **security_proxy**: Gates sensitive tools (file write/edit/delete, notebook). Auto-approves safe tools.
-- **tool_action**: Executes approved tool calls via ToolNode, loops back to complex_llm.
-- **memory_write**: Extracts topics/interests, saves to Mem0/Qdrant, invalidates cache.
+### Router: Two-Stage Decision
 
-### 2. LLMPool (`src/agent/llm.py`)
+1. **Stage 1**: Classify as `simple` vs `complex` (keyword heuristics + Small_LLM)
+2. **Stage 2 (complex only)**: Select model variant:
+   - Image attachments → `complex-vision`
+   - Input tokens > 80% of Medium_Default context → `complex-longctx`
+   - Input tokens > Medium_LongCtx context or frontier-quality indicators → `complex-cloud`
+   - Default → `complex-default`
+   - Prefer currently-loaded variant when borderline (avoid swap latency)
+
+### Node Descriptions
+
+| Node | Behavior |
+|------|----------|
+| `memory_inject` | Loads user profile, persona, topics, interests, and long-term memory context |
+| `router` | Small_LLM classifies message and selects route + toolbox categories. Keyword heuristics bypass LLM for obvious cases. Conversations with tool history stay on `complex` |
+| `simple` | Small_LLM gives short direct answers. No tools. Falls back to Medium_Default on failure |
+| `complex_llm` | Selected M-tier or Cloud model with dynamically-bound tools. Emits tool calls or direct answers |
+| `security_proxy` | Gates sensitive tools (`write_workspace_file`, `edit_workspace_file`, `delete_workspace_file`, `notebook_run`). Auto-approves safe tools |
+| `tool_action` | Executes approved tool calls via `ToolNode`, loops back to `complex_llm` |
+| `memory_write` | Extracts topics/interests, saves to Mem0/Qdrant, invalidates cache |
+
+## API
+
+### LLMPool (`src/agent/llm.py`)
 
 Manages three cached instance slots:
 
 | Slot | Method | Description |
 |------|--------|-------------|
-| `_small_llm` | `get_small_llm()` | Always-loaded Small_LLM. ~700 tok/s prompt, ~110 tok/s gen. |
-| `_medium_llm` | `get_medium_llm(variant)` | Currently-loaded M-tier model. Returns cached instance if variant matches; triggers SwapManager if not. |
-| `_cloud_llm` | `get_cloud_llm()` | DeepSeek API client. `streaming=True`, `max_tokens=8192`, `temperature=0.4`. |
+| `_small_llm` | `get_small_llm()` | Always-loaded Small_LLM. ~700 tok/s prompt, ~110 tok/s gen |
+| `_medium_llm` | `get_medium_llm(variant)` | Currently-loaded M-tier model. Returns cached instance if variant matches; triggers SwapManager if not |
+| `_cloud_llm` | `get_cloud_llm()` | DeepSeek API client. `streaming=True`, `max_tokens=8192`, `temperature=0.4` |
 
-- `_current_medium_variant` tracks which M-tier model is loaded (`"default"`, `"vision"`, `"longctx"`, or `None`).
-- `get_large_llm()` is kept as an alias for `get_medium_llm("default")` for backward compatibility.
-- `clear()` resets all slots and `_current_medium_variant`.
-- API key resolution: `DEEPSEEK_API_KEY` env var → `deepseek_api_key` in User_Profile → cloud disabled.
+- `_current_medium_variant` tracks which M-tier model is loaded (`"default"`, `"vision"`, `"longctx"`, or `None`)
+- `get_large_llm()` is an alias for `get_medium_llm("default")` (backward compatibility)
+- `clear()` resets all slots and `_current_medium_variant`
+- API key resolution: `DEEPSEEK_API_KEY` env var → `deepseek_api_key` in User_Profile → cloud disabled
 
-### 3. SwapManager (`src/agent/swap_manager.py`)
+### SwapManager (`src/agent/swap_manager.py`)
 
-Wraps the **LM Studio native API** (`http://127.0.0.1:1234/api/v1/`) for model load/unload. Uses `httpx.AsyncClient`.
+Wraps the LM Studio native API (`http://127.0.0.1:1234/api/v1/`) for model load/unload. Uses `httpx.AsyncClient`.
 
-**Key constraint:** Only one M-tier model loaded at a time. The swap sequence is:
+**Swap sequence** (only one M-tier model loaded at a time):
 
-1. Query `GET /api/v1/models` to get the `instance_id` of the currently loaded M-tier model.
-2. Unload current model: `POST /api/v1/models/unload` with `{instance_id}`.
-3. Load target model: `POST /api/v1/models/load` with `{model: target_model_key}`.
-4. Poll `GET /api/v1/models` until target appears in `loaded_instances` (timeout: 120s, poll interval: 2s).
+1. `GET /api/v1/models` — get `instance_id` of currently loaded M-tier model
+2. `POST /api/v1/models/unload` with `{instance_id}`
+3. `POST /api/v1/models/load` with `{model: target_model_key}`
+4. Poll `GET /api/v1/models` until target appears in `loaded_instances` (timeout: 120s, poll interval: 2s)
 
-- If unload fails → proceed with load anyway (LM Studio may handle the conflict).
-- If load fails or times out → raise `ModelSwapError`, caught by Complex_Node for fallback.
-- Model key mapping read from `User_Profile["medium_models"]`.
+- If unload fails → proceed with load anyway (LM Studio may handle the conflict)
+- If load fails or times out → raise `ModelSwapError`, caught by Complex_Node for fallback
+- Model key mapping read from `User_Profile["medium_models"]`
 
-### 4. ToolboxRegistry (`src/agent/tool_sets.py`)
+### ToolboxRegistry (`src/agent/tool_sets.py`)
 
 Dynamic tool loading reduces token overhead by ~2000 tokens per turn. The router selects toolbox categories; only relevant tools are bound.
 
@@ -104,20 +116,22 @@ Dynamic tool loading reduces token overhead by ~2000 tokens per turn. The router
 | `productivity` | `todo_add`, `todo_list`, `todo_complete`, `list_skills`, `invoke_skill` |
 | `memory` | `recall_memories` |
 
-**Always included:** `ask_user` (HITL escape hatch).
+Always included: `ask_user` (HITL escape hatch).
 
 `resolve_tools(toolbox_names, web_search_enabled)` returns the union of requested toolboxes + always-included tools. Passing `"all"` returns the full tool set. When `web_search_enabled=False`, web tools are excluded regardless of selection.
 
-### 5. AnonymizationEngine (`src/agent/anonymization.py`)
+### AnonymizationEngine (`src/agent/anonymization.py`)
 
-PII scrubbing for cloud-bound messages. Applies **only** when route is `complex-cloud` AND `cloud_anonymization_enabled` is `True`. Local M-tier models are trusted (data never leaves the machine).
+PII scrubbing for cloud-bound messages. Applies only when route is `complex-cloud` AND `cloud_anonymization_enabled` is `True`. Local M-tier models are trusted (data never leaves the machine).
 
-**Flow:**
-1. `anonymize(text, context)` → scans for sensitive patterns, replaces with `[CATEGORY_N]` placeholders, returns `(anonymized_text, mapping)`.
-2. Send anonymized text to Cloud_LLM.
-3. `deanonymize(response_text, mapping)` → restores placeholders to original values.
+`anonymize(text, context) → (anonymized_text, mapping)`
+- Scans for sensitive patterns, replaces with `[CATEGORY_N]` placeholders
 
-**Detection categories (priority order — longest match first):**
+`deanonymize(response_text, mapping) → original_text`
+- Restores placeholders to original values
+
+Detection categories (priority order — longest match first):
+
 1. API keys/tokens (`sk-`, `key-`, `Bearer`, `ghp_`, 32+ char alphanumeric)
 2. Email addresses
 3. URLs with localhost ports
@@ -127,88 +141,99 @@ PII scrubbing for cloud-bound messages. Applies **only** when route is `complex-
 7. Known names (from User_Profile `name` field)
 8. Custom sensitive terms (from User_Profile `custom_sensitive_terms`)
 
-**Round-trip property:** `deanonymize(anonymize(text, ctx)[0], anonymize(text, ctx)[1]) == text`
+Round-trip property: `deanonymize(anonymize(text, ctx)[0], anonymize(text, ctx)[1]) == text`
 
-### 6. Short-Term Memory: Redis Checkpointer
-
-Conversation history persists across model swaps and server restarts via `langgraph-checkpoint-redis` (`AsyncRedisSaver`).
-
-```python
-# src/agent/graph.py
-from langgraph_checkpoint_redis import AsyncRedisSaver
-
-checkpointer = AsyncRedisSaver(url=REDIS_URL)
-await checkpointer.setup()
-# Falls back to MemorySaver if Redis is unavailable
-```
-
-- Redis runs as a container alongside Qdrant and SearXNG in `docker-compose.yml`.
-- Each conversation thread maintains isolated state via `Thread_ID`.
-- Messages, routing metadata, and tool call history are all preserved across M-tier swaps.
-
-### 7. Long-Term Memory
-
-- **Mem0 + Qdrant** (multilingual-e5-small embeddings, ~500 MB VRAM)
-- **Data files**: JSON storage for topics, interests, conversations, todos
-- Memory injection/write pipeline is model-agnostic — operates on conversation content regardless of which LLM produced it.
-
-### 8. Skills System
-
-Reusable prompt templates in `skills/*.md`. Zero token cost until invoked.
-Triggers match user intent keywords. Currently: research, summarize, briefing,
-comparison, visualization, meeting notes, email, report, presentation, rewriter, brainstorm.
-
-### 9. Web Search Pipeline
+### Web Search Pipeline
 
 ```
 Tier 0:   wttr.in (weather fast path)
 Tier 0.5: SearXNG (self-hosted, localhost:8888)
-Tier 1A:  Brave/Serper/Tavily APIs (if keys set)
-Tier 1B:  curl_cffi (DDG/Bing HTML scraping)
+Tier 1:   curl_cffi (DDG/Bing HTML scraping)
 Tier 2:   DDGS Python library / httpx fallbacks
 Tier 3:   Playwright (full browser)
 ```
 
-### 10. Frontend
-
-- **Active**: React 19 + TypeScript frontend (Vite 8 + Zustand 5) in `frontend-v2/`
-  - 9 panel components: Composer, OrchestrationPanel, SafeModePanel, ScreenAssistPanel,
-    ToolExecutionPanel (with HMAC audit trail), ActionProposalQueue,
-    ProjectKnowledgePanel, AppShell
-  - WebSocket streaming for real-time responses
-  - Tauri v2 desktop shell for macOS native features (vibrancy, screen capture)
-  - Styled with Tier-colored model badges (local/cloud), route badges, compression stats
-- **Legacy**: Vanilla HTML/JS/CSS frontend in `frontend/` (end of life, retained for reference)
-
-### 11. Infrastructure
-
-- **Docker Compose**: Redis (port 6379, 512 MB cap), Qdrant (port 6333), SearXNG (port 8888)
-- **LM Studio**: Local LLM inference server (port 1234)
-- **Redis**: `redis/redis-stack-server:latest` with AOF persistence, stores conversation checkpoints
-- **No sandbox/container needed for tool execution** — all tools run natively
-
-### 12. Tiered Fallback Chain
+### Tiered Fallback Chain
 
 The system ensures users always get a response:
 
-1. **Cloud failure** → Retry with Medium_Default. HTTP 401/403 → suggest checking API key. HTTP 429 → retry after 2s, then Medium_Default.
-2. **Medium_Vision failure** → Fall back to Medium_Default.
-3. **Medium_LongCtx failure** → Try Cloud_LLM first, then Medium_Default with truncated context.
-4. **Medium_Default failure** → Return error suggesting user check LM Studio.
-5. **Small_LLM failure** → Fall back to Medium_Default.
-6. **Model swap failure (ModelSwapError)** → Use currently-loaded M-tier variant.
+| Rank | Scenario | Fallback |
+|------|----------|----------|
+| 1 | Cloud failure | Retry with Medium_Default. HTTP 401/403 → suggest checking API key. HTTP 429 → retry after 2s, then Medium_Default |
+| 2 | Medium_Vision failure | Medium_Default |
+| 3 | Medium_LongCtx failure | Cloud_LLM first, then Medium_Default with truncated context |
+| 4 | Medium_Default failure | Return error suggesting user check LM Studio |
+| 5 | Small_LLM failure | Medium_Default |
+| 6 | Model swap failure (`ModelSwapError`) | Currently-loaded M-tier variant |
 
-All fallbacks set `model_used` to a descriptive value with `-fallback` suffix.
+All fallbacks set `model_used` with `-fallback` suffix.
 
-### 13. Frontend Inspector Panels
+### Frontend Inspector Panels
 
-The right inspector panel (or overlay in compact mode) provides real-time observability:
+| Panel | Data Source | Requirements |
+|-------|------------|--------------|
+| Orchestration | `router_info` WS event | WebSocket |
+| Memory & Context | `GET /api/topics`, `GET /api/interests`, `GET /api/mem0/search`, `GET /api/memory-context` | WebSocket + REST |
+| Safe Mode | Tauri IPC | Tauri IPC bridge |
+| Screen Assist | Tauri IPC | Tauri IPC bridge |
+| Tool Execution | Tool lifecycle events + audit export | WebSocket |
+| Action Proposals | Security approval interrupts | WebSocket |
 
-- **Orchestration** — displays routing decision (route, model, confidence, source) from `router_info` WS event.
-- **Memory & Context** — shows tracked topics (`GET /api/topics`), interests (`GET /api/interests`), Mem0 long-term memory search (`GET /api/mem0/search`), and injected prompt context (`GET /api/memory-context`).
-- **Safe Mode** — controls safety level (Normal/Read-only/Confirmed Exec/Isolated) and execution policy (Auto-approve/HITL). Currently depends on Tauri IPC bridge.
-- **Screen Assist** — screen capture, preview, and annotation. Requires Tauri IPC bridge.
-- **Tool Execution** — logs tool calls with filtering (All/Risky/Error), export with SHA-256 hash chaining, and HMAC-signed audit verification.
-- **Action Proposals** — displays pending security approvals and interrupt choice selections.
+### Infrastructure
 
-**Known issues (2026-05-25 browser audit):** Orchestration panel shows no routing data (BUG-2), Memory panel hangs on "Loading..." (BUG-3), Safe Mode dropdown errors in browser-only mode (BUG-5), Tool Execution shows mock data (BUG-6), Audit & Verify sub-panel won't expand (BUG-8). See [`docs/BUG-ANALYSIS.md`](BUG-ANALYSIS.md) for details.
+| Service | Container | Port | Config |
+|---------|-----------|------|--------|
+| Redis | `redis/redis-stack-server:latest` (AOF persistence, 512 MB cap) | 6379 | `REDIS_URL` |
+| Qdrant | Docker image | 6333 | `QDRANT_HOST`, `QDRANT_PORT` |
+| SearXNG | `searxng/searxng:latest` | 8888 | `SEARXNG_URL` |
+| LM Studio | Native macOS app | 1234 | Small/Medium LLM base URLs |
+
+### Redis Checkpointer
+
+Conversation history persists across model swaps and server restarts via `langgraph-checkpoint-redis` (`AsyncRedisSaver`):
+
+```python
+from langgraph_checkpoint_redis import AsyncRedisSaver
+
+checkpointer = AsyncRedisSaver(url=REDIS_URL)
+await checkpointer.setup()
+```
+
+- Falls back to `MemorySaver` if Redis unavailable
+- Each conversation thread maintains isolated state via `Thread_ID`
+- Messages, routing metadata, and tool call history preserved across M-tier swaps
+
+## Key Decisions
+
+| Decision | Rationale | Trade-off |
+|----------|-----------|-----------|
+| Three-tier S/M/L routing | Local-first with cloud fallback | Swap latency for M-tier model changes |
+| Dynamic toolbox selection | Saves ~2000 tokens/turn | Router must classify correctly |
+| PII anonymization for cloud | Privacy for cloud-bound messages | Adds processing latency; pattern-based detection may miss novel PII formats |
+| Redis checkpointing | Conversation persistence across restarts | Requires Redis container |
+| Tauri desktop shell | Native macOS features, small binary | Tauri IPC dependency blocks browser-only deployment |
+
+## Testing
+
+- Backend: `pytest tests/ -v` (unit, integration, property-based)
+- Frontend: `cd frontend-v2 && npx vitest run && npm run build`
+
+## Configuration
+
+| Env Var | Default | Description |
+|----------|---------|-------------|
+| `REDIS_URL` | `redis://localhost:6379` | Redis for LangGraph checkpointing |
+| `QDRANT_HOST` | `localhost` | Qdrant host |
+| `QDRANT_PORT` | `6333` | Qdrant port |
+| `SEARXNG_URL` | _(empty)_ | SearXNG instance URL |
+| `DEEPSEEK_API_KEY` | _(empty)_ | DeepSeek API key for cloud tier |
+| `OPTIMIZE_FOR_M4` | `false` | M4 Air optimizations |
+
+Profile fields (`data/user_profile.json`):
+
+| Field | Type | Default |
+|-------|------|---------|
+| `cloud_escalation_enabled` | boolean | `true` |
+| `cloud_anonymization_enabled` | boolean | `true` |
+| `custom_sensitive_terms` | list | `[]` |
+| `medium_models` | object | Three variant keys |

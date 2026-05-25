@@ -1,271 +1,120 @@
-# Owlynn Enhanced Chat - Quick Start Guide
+---
+last_verified: 2026-05-26
+auto_generated: false
+---
 
-## 🎯 What's New
+# Owlynn Enhanced Chat — Quick Start Guide
 
-Your Owlynn chat experience has been significantly improved to rival Anthropic's Claude and Cowork platforms. Here's what you can do now:
+## Overview
 
-## 🎨 Visual Improvements
+Owlynn chat supports code highlighting (190+ languages), rich text formatting, tool execution visibility, model information badges, and real-time streaming via WebSocket.
 
-### 1. Beautiful Code Highlighting
-- Send any message with code blocks
-- Code will be automatically highlighted with syntax colors
-- Supports 190+ programming languages
-- Dark theme (like VS Code)
+## Entry Points
 
-**Try it:**
-```
-"Here's a Python function:
-
-```python
-def greet(name):
-    return f'Hello, {name}!'
-```
-"
+```text
+http://127.0.0.1:8000                         # Browser access
+frontend-v2/src/App.tsx                        # React app shell
+frontend-v2/src/lib/wsClient.ts                # WebSocket client
+src/api/server.py                              # Backend streaming
 ```
 
-### 2. Rich Text Formatting
-- **Tables** display properly with styling
-- **Lists** have proper indentation and spacing  
-- **Bold**, *italic*, and `code` are all styled beautifully
-- Math equations render properly (compatible with KaTeX)
-- Links are formatted correctly
-
-**Try it:**
-```
-"Create a comparison table:
-
-| Feature | Owlynn | Claude |
-|---------|--------|--------|
-| Speed   | Fast   | Faster |
-| Cost    | Free   | Paid   |
-"
-```
-
-### 3. Tool Execution Visibility
-- When tools execute, you'll see colored cards
-- Shows what the tool is doing (Input)
-- Shows what it found (Output)
-- Displays execution time
-- Shows status: 🟡 Running → 🟢 Success or 🔴 Failed
-
-**You'll see:**
-```
-🔧 web_search | 🟡 Running...
-Input: "best pizza in NYC"
-Output: "Top 10 pizza places found..."
-⏱ 2.34s
-```
-
-### 4. Model Information Badge
-- Each response shows which model was used
-- Helps you understand the reasoning complexity
-- Badge appears at the bottom of responses
-
-## 🚀 How to Use
-
-### Basic Chat
-1. Type your message
-2. Press Enter or click Send
-3. Watch as text streams in with syntax highlighting
-4. See tool execution cards as tools run
-5. View model info badge when complete
-
-### Asking for Code
-```
-"Write me a function to calculate fibonacci numbers"
-```
-→ You'll see beautiful highlighted code
-
-### Getting Information
-```
-"Search for the latest AI news"
-```
-→ Tool execution card will show the search running
-→ Results display in formatted output
-
-### Complex Questions
-```
-"Analyze this data and create a summary with code examples"
-```
-→ Multiple tool cards may appear
-→ Code highlighted automatically
-→ Clear model information shows reasoning depth
-
-## 📋 Features Checklist
-
-✅ **Rendering**
-- [ ] Code highlighting in multiple languages
-- [ ] Table formatting
-- [ ] List styling
-- [ ] Inline code with contrast
-- [ ] Link handling
-- [ ] Emoji support
-
-✅ **Tool Execution**
-- [ ] Tool execution cards
-- [ ] Status indicators (running/success/error)
-- [ ] Input/output display
-- [ ] Execution timing
-- [ ] Error details
-
-✅ **Model Information**
-- [ ] Model badge display
-- [ ] Model type indicator
-- [ ] Reasoning depth indicator
-
-✅ **Error Handling**
-- [ ] Beautiful error messages
-- [ ] Error details in expandable section
-- [ ] Clear error icons
-
-✅ **Animations**
-- [ ] Message fade-in effect
-- [ ] Tool card slide-in
-- [ ] Loading skeleton animation
-- [ ] Smooth transitions
-
-## 🎬 Demo Scenarios
-
-### Scenario 1: Get Code
-**You:** "Write a function to validate email addresses"
-
-**Owlynn:** 
-```
-You'll see:
-1. Thinking process (collapsible)
-2. Beautiful syntax-highlighted code
-3. Explanation with formatted text
-4. Model info badge showing which model ran
-5. Copy and Regenerate buttons
-```
-
-### Scenario 2: Research Query
-**You:** "What are the latest developments in quantum computing?"
-
-**Owlynn:**
-```
-You'll see:
-1. Tool execution card showing "web_search" running
-2. Input query displayed
-3. Duration timer
-4. Results displayed with formatting
-5. Follow-up responses with highlighted code if examples provided
-```
-
-### Scenario 3: Error Case
-**You:** "Generate an invalid request"
-
-**Owlynn:**
-```
-You'll see:
-1. Beautiful error card
-2. Clear error title and message
-3. Expandable error details
-4. Red avatar icon
-5. Next action suggestions
-```
-
-## 🎮 Interactive Features
-
-### Copy Button
-- Click the "Copy" button on any response
-- Content copied to clipboard
-- Button shows "✅ Copied" confirmation for 2 seconds
-
-### Regenerate Button
-- Click "Regenerate" to re-run the last query
-- Removes current response
-- Sends the same prompt again
-- Useful for trying different responses
-
-### Message Actions
-Appears at bottom of each AI response:
-```
-📋 Copy  ↻ Regenerate  🔹 model-name
-```
-
-## 🎨 Color Coding
-
-### Status Indicators
-- 🟡 **Yellow/Running** - Tool is currently executing
-- 🟢 **Green/Success** - Tool completed successfully  
-- 🔴 **Red/Error** - Tool failed or had an error
-- 🟣 **Purple/Info** - Model information badge
-
-### Message Areas
-- **Orange/Anthropic** - Assistant responses & tool execution
-- **Light Gray** - User messages
-- **Dark Gray** - Code blocks and terminal output
-- **Red** - Errors and warnings
-
-## ⚙️ Setup
+## Configuration
 
 ### DeepSeek API Key (Cloud Escalation)
 
-To enable cloud escalation via the DeepSeek API, set your API key:
-
 ```bash
-# Option A: Environment variable
 export DEEPSEEK_API_KEY=sk-...
-
-# Option B: Settings → Profile → Cloud section
-# Enter your API key in the masked field
 ```
 
-Cloud escalation is optional — all local models work without it.
+Or: Settings → Profile → Cloud section (masked field). Cloud escalation is optional — all local models work without it.
 
 ### Redis (Short-Term Memory Backend)
 
-Redis is now used for conversation checkpointing (replaces in-memory MemorySaver). Start it alongside Qdrant and SearXNG:
-
 ```bash
 docker-compose up -d
-```
-
-Verify Redis is running:
-
-```bash
 redis-cli ping
-# Expected output: PONG
 ```
 
-If Redis is unavailable, the system falls back to in-memory MemorySaver automatically.
+Expected output: `PONG`. Falls back to in-memory `MemorySaver` if Redis unavailable.
 
-### Settings
+### Settings Access
 
-Access settings to customize:
-- **Profile**: Name, language, response style, medium model variants, cloud (DeepSeek) configuration
-- **Advanced**: Cloud escalation toggle, anonymization toggle, Router HITL, clarification threshold, custom sensitive terms
-- **Memory**: Short-term (Redis URL), long-term (Mem0/Qdrant)
-- **Persona**: Agent name, tone of voice
+| Section | Fields |
+|---------|--------|
+| Profile | Name, language, response style, medium model variants, cloud (DeepSeek) configuration |
+| Advanced | Cloud escalation toggle, anonymization toggle, Router HITL, clarification threshold, custom sensitive terms |
+| Memory | Short-term (Redis URL), long-term (Mem0/Qdrant) |
+| Persona | Agent name, tone of voice |
 
-## 🔧 Troubleshooting
+## API
 
-### Code not highlighting?
-- Make sure you use proper markdown: ` ```python`
-- Check browser console: `console.log(hljs)` should return an object
-- Try refreshing the page
+### Render Capabilities
 
-### Tool cards not showing?
-- The UI currently renders tool calls/results via `type: "message"` events (AIMessage `tool_calls` and ToolMessage outputs).
-- `type: "tool_execution"` is an optional event; if you rely on it, implement/forward it in the backend.
-- Check WebSocket connection (green dot in sidebar)
-- Look for browser errors in console
+| Feature | Detail |
+|---------|--------|
+| Code highlighting | 190+ languages, dark theme (VS Code style), triggered by markdown code fences |
+| Rich text | Tables, lists, bold, italic, `inline code` |
+| Math | KaTeX-compatible equation rendering |
+| Links | Formatted clickable links |
+| Tool execution cards | Colored cards showing input, output, duration, status (running/success/error) |
+| Model badge | Response footer showing which model was used |
 
-### Model badge not showing?
-- The current backend does not emit `type: "model_info"` events.
-- The UI primarily shows the *response style* badge; verify you’re checking the right indicator.
+### Status Indicators
 
-## 🌐 Browser Support
+| Color | Meaning |
+|-------|---------|
+| Yellow | Tool is currently executing |
+| Green | Tool completed successfully |
+| Red | Tool failed or had an error |
+| Purple | Model information badge |
 
-Works on:
-- ✅ Chrome/Chromium (latest)
-- ✅ Firefox (latest)
-- ✅ Safari (latest)
-- ✅ Edge (latest)
-- ✅ Mobile browsers (iOS Safari, Chrome Android)
+### Message Areas
 
-## 📱 Mobile Experience
+| Color | Content |
+|-------|---------|
+| Orange/Anthropic | Assistant responses & tool execution |
+| Light Gray | User messages |
+| Dark Gray | Code blocks and terminal output |
+| Red | Errors and warnings |
+
+### Interactive Features
+
+| Feature | Behavior |
+|---------|----------|
+| Copy button | Copies response content to clipboard, shows "✅ Copied" for 2 seconds |
+| Regenerate button | Re-runs the last query, removes current response, sends same prompt again |
+| Message actions | `📋 Copy  ↻ Regenerate  🔹 model-name` at bottom of each AI response |
+
+## Key Decisions
+
+| Decision | Rationale | Trade-off |
+|----------|-----------|-----------|
+| Syntax highlighting in browser | Fast, zero server overhead | Requires highlight.js bundle |
+| WebSocket streaming for real-time UX | Immediate token display | Connection management complexity |
+| DOMPurify sanitization | XSS protection | Slight rendering overhead |
+
+## Testing
+
+### Troubleshooting
+
+| Issue | Check |
+|-------|-------|
+| Code not highlighting | Use proper markdown: ` ```python`. Check `console.log(hljs)` returns an object. Refresh page |
+| Tool cards not showing | Tool calls rendered via `type: "message"` events (`AIMessage.tool_calls`, `ToolMessage` outputs). `type: "tool_execution"` is optional. Check WS connection (green dot in sidebar) |
+| Model badge not showing | `type: "model_info"` emitted by backend after node completion. Verify WS connection. Check browser console |
+| Memory panel "Loading..." indefinitely | No timeout/error fallback — known as BUG-3. Refresh page or restart backend |
+
+### Browser Support
+
+| Browser | Status |
+|---------|--------|
+| Chrome/Chromium (latest) | Supported |
+| Firefox (latest) | Supported |
+| Safari (latest) | Supported |
+| Edge (latest) | Supported |
+| Mobile (iOS Safari, Chrome Android) | Supported |
+
+### Mobile Experience
 
 - Full responsive design
 - Touch-friendly buttons
@@ -273,86 +122,11 @@ Works on:
 - Optimized message display
 - Settings accessible on small screens
 
-## 🔐 Security
+### Security
 
-- All HTML is sanitized with DOMPurify
-- XSS protection on user input
-- Safe tool execution in sandboxed environment
-- Secure WebSocket connections recommended
-
-## 💡 Pro Tips
-
-1. **Use Code Blocks** - Always use proper markdown:
-   ```python
-   # Good
-   ```
-
-   Wrong:
-   ```
-   # Bad
-   ```
-
-2. **Clear Tool Status** - Watch execution cards to see what's happening
-   - Input shows what tool received
-   - Output shows results
-   - Duration shows performance
-
-3. **Compare Models** - Look at model badges to understand complexity:
-   - Small model = fast, simple queries
-   - Large model = complex reasoning
-
-4. **Copy & Share** - Use copy button to share responses easily
-
-5. **Regenerate Often** - Different runs can give different results
-
-## 🚀 Performance Tips
-
-- Messages render instantly as they stream
-- Syntax highlighting done in browser (fast)
-- Tool cards appear in real-time
-- Animations are GPU-accelerated
-- Minimal memory footprint
-
-## 📚 Advanced Usage
-
-### Custom Prompts
-Use these prefixes for better results:
-
-- **"Code:"** - Focus on generating code
-- **"Explain:"** - Get detailed explanations
-- **"Summarize:"** - Get concise summaries
-- **"Research:"** - Trigger web search tools
-- **"Analyze:"** - Deep analysis of data
-
-### Tool Control
-When tool execution is visible:
-- See which tool is running
-- Check the exact input given
-- View the complete output
-- Monitor execution time
-- Catch errors immediately
-
-## 🎯 Next Steps
-
-1. Try sending a message with code today
-2. Watch the syntax highlighting in action
-3. Observe tool execution cards
-4. Check the model info badge
-5. Try the copy and regenerate buttons
-6. Customize your profile and persona
-
-## 📞 Feedback
-
-The system is now much closer to Anthropic's experience! If you notice:
-- Rendering issues
-- Tool cards not appearing
-- Performance problems
-- Suggestions for improvement
-
-Please report and we'll enhance further!
-
----
-
-**Version:** 2.0 Enhanced  
-**Release:** March 2026  
-**Status:** Ready to use!
+| Measure | Detail |
+|---------|--------|
+| HTML sanitization | DOMPurify on all rendered content |
+| XSS protection | Sanitized user input |
+| Tool execution | Security proxy gates sensitive operations |
+| WebSocket | Secure connections recommended |

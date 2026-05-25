@@ -1,24 +1,43 @@
-# Chat & Events Protocol (Developer Reference)
+---
+last_verified: 2026-05-26
+auto_generated: false
+---
 
-This document defines the *developer-facing* JSON contract between:
+# Chat & Events Protocol
 
-- the frontend WebSocket client (`frontend-v2`)
-- the backend WebSocket handler (`src/api/server.py`)
-- the LangGraph execution stream forwarded to the browser
+Developer-facing JSON contract between the frontend WebSocket client (`frontend-v2`), the backend WebSocket handler (`src/api/server.py`), and the LangGraph execution stream forwarded to the browser.
 
-Keeping this doc accurate prevents UI/backend drift when you modify nodes, tools, or streaming behavior.
+## Overview
 
-## WebSocket endpoint
+Defines all client-to-server payloads and server-to-client event types. Keeping this doc accurate prevents UI/backend drift when modifying nodes, tools, or streaming behavior.
 
-`ws://<host>:8000/ws/chat/<thread_id>`
+## Entry Points
+
+```text
+src/api/server.py                  # websocket_endpoint(), serialize_message(), forward_events()
+frontend-v2/src/lib/wsClient.ts     # WebSocket client send/receive
+frontend-v2/src/App.tsx             # Event handler wiring
+src/agent/nodes/simple.py           # Simple node streaming source
+src/agent/nodes/complex.py          # Complex node streaming source
+src/agent/nodes/router.py           # router_node() — router_metadata source
+src-tauri/src/main.rs               # TTS runtime events
+```
+
+## Architecture
+
+### WebSocket Endpoint
+
+```
+ws://<host>:8000/ws/chat/<thread_id>
+```
 
 `thread_id` is used as the LangGraph `configurable.thread_id` and is also the key for per-thread memory context caching (`src/agent/nodes/memory.py`).
 
-## Client -> Server: send payloads
+## API
 
-### 1) Normal chat message
+### Client → Server: Send Payloads
 
-The client sends a JSON *text* message (via `socket.send(JSON.stringify(...))`) with this shape:
+#### Chat Message
 
 ```json
 {
@@ -27,8 +46,8 @@ The client sends a JSON *text* message (via `socket.send(JSON.stringify(...))`) 
     {
       "name": "string",
       "type": "string (mime type or 'workspace_ref')",
-      "data": "string (base64) // only for non-workspace files",
-      "path": "string // optional (used by workspace references)"
+      "data": "string (base64)",
+      "path": "string"
     }
   ],
   "mode": "tools_on | tools_off",
@@ -39,48 +58,43 @@ The client sends a JSON *text* message (via `socket.send(JSON.stringify(...))`) 
 }
 ```
 
-Defaults applied by the server:
+Default values applied by server:
 
-- `mode` defaults to `tools_on`
-- `web_search_enabled` defaults to `true`
-- `response_style` defaults to `normal`
-- `project_id` defaults to `default`
-- `source` defaults to `text` (voice-triggered transcripts should send `source: "voice"`)
+| Field | Default |
+|-------|---------|
+| `mode` | `"tools_on"` |
+| `web_search_enabled` | `true` |
+| `response_style` | `"normal"` |
+| `project_id` | `"default"` |
+| `source` | `"text"` |
 
-### 2) Stop generation
-
-The client can interrupt the active graph task:
+#### Stop Generation
 
 ```json
 { "type": "stop" }
 ```
 
-The server cancels the background task for that `thread_id`.
+Cancels the background graph task for that `thread_id`.
 
-### 3) Security approval response
+#### Security Approval Response
 
 ```json
 { "type": "security_approval", "approved": true | false }
 ```
 
-Used to resume HITL-gated sensitive tool calls.
+Resumes HITL-gated sensitive tool calls.
 
-### 4) Ask-user response (structured answers supported)
+#### Ask-User Response
 
 ```json
 { "type": "ask_user_response", "answer": "string | object" }
 ```
 
-`answer` is forwarded without string coercion so structured router choices
-(for example `{ "route": "...", "toolbox": "..." }`) remain intact.
+`answer` is forwarded without string coercion — structured router choices (e.g. `{ "route": "...", "toolbox": "..." }`) remain intact.
 
-## File attachments: how the backend interprets `files[]`
+### File Attachment Handling
 
-Attachments arrive as objects inside the `files` array.
-
-### A) Workspace references (already exist on disk)
-
-The frontend can attach a workspace file without uploading bytes by sending:
+#### Workspace References
 
 ```json
 {
@@ -89,118 +103,81 @@ The frontend can attach a workspace file without uploading bytes by sending:
 }
 ```
 
-Server behavior:
+- Does not write file bytes
+- Appends marker to `user_input`: `[Attached Workspace File: <path>]`
+- Agent uses `read_workspace_file` if it needs content
 
-- it does **not** write file bytes
-- it appends a short marker to `user_input`:
-`[Attached Workspace File: <path>]`
-- the agent can later use `read_workspace_file` if it needs actual content
+#### Uploaded Files (base64)
 
-### B) Uploaded files (base64)
+For non-`workspace_ref` attachments, the server:
+1. Base64-decodes `data`
+2. Saves raw bytes into the active project workspace folder
 
-For all attachments that are not `workspace_ref`, the server:
+| MIME/Type | Behavior |
+|-----------|----------|
+| `image/*` | Forwarded inline as multimodal `image_url` part |
+| `application/pdf` / `.pdf` | NOT given to model inline. Injects workspace-read instruction. Model calls `read_workspace_file` (reads from `.processed/` cache) |
+| Other non-image | Same as PDF: injected as workspace-read instruction, use `read_workspace_file` for content |
 
-1. base64-decodes `data`
-2. saves the raw bytes into the active project workspace folder
+### Server → Client: Event Types
 
-Server behavior in `build_message_content()` depends on MIME/type:
-
-- Images (`type` starts with `image/`):
-  - forwarded inline to the model as a multimodal `image_url` part
-- PDFs (`type == application/pdf` or filename ends with `.pdf`):
-  - the model is **not** given inline extracted text
-  - instead the server injects an instruction like:
-  `[File: <name> uploaded to workspace. Use read_workspace_file tool to read it if needed.]`
-  - the expectation is that the model will call `read_workspace_file`, which reads from the `.processed/` cache when available
-- Other non-image files:
-  - same as PDFs: injected as a workspace-read instruction (no inline content)
-  - use `read_workspace_file` if you need the contents inside the model
-
-## Server -> Client: event types
-
-The backend forwards two categories of messages:
-
-1. **Custom status/error/file events** created by `GraphSession` and the file watcher
-2. **LangGraph events** forwarded/translated into UI-friendly events (`chunk`, `message`)
-
-### 1) `status`
+#### `status`
 
 ```json
-{ "type": "status", "content": "reasoning" | "idle" }
+{ "type": "status", "content": "reasoning | idle" }
 ```
 
-Sent:
+- Sent when graph run starts/finishes or client disconnects
 
-- when a graph run starts
-- when a graph run finishes (or a client disconnects)
-
-### 2) `chunk`
+#### `chunk`
 
 ```json
 { "type": "chunk", "content": "string", "metadata": {} }
 ```
 
-Sent during streaming (LangGraph `on_chat_model_stream`) for nodes:
-
-- `simple`
-- `complex_llm`
-- (legacy) `tool_executor` (not currently wired into the graph)
-
-When a `TokenBudgetTracker` is active (initialized from the router's `token_budget`), each chunk includes an optional `metadata` field:
+- Sent during streaming for nodes: `simple`, `complex_llm`
+- Optional `metadata` from `TokenBudgetTracker`:
 
 ```json
 {
-  "type": "chunk",
-  "content": "Hello, ",
-  "metadata": {
-    "tokens_used": 12,
-    "budget_remaining": 3988
-  }
+  "tokens_used": 12,
+  "budget_remaining": 3988
 }
 ```
 
-- `tokens_used` — cumulative tokens consumed so far (estimated as `len(text) // 4` per chunk)
-- `budget_remaining` — tokens remaining in the allocated budget
+- `tokens_used` — cumulative tokens consumed (estimated as `len(text) // 4` per chunk)
+- `budget_remaining` — tokens remaining in allocated budget
+- `metadata` is optional; frontend code not handling it continues to work
 
-The `metadata` field is optional. Frontend code that does not handle `metadata` continues to work without errors.
-
-### 3) `message`
+#### `message`
 
 ```json
 {
   "type": "message",
   "message": {
-    "type": "ai" | "tool" | "human" | "...",
+    "type": "ai | tool | human | ...",
     "content": "string",
-    "tool_calls": [ /* present on tool-calling AI messages */ ],
+    "tool_calls": [],
     "tool_name": "string",
     "tool_call_id": "string"
   }
 }
 ```
 
-How it appears in practice:
+- `AIMessage` with `tool_calls` forwarded for tool-call UI rendering
+- Tool lifecycle/output via `tool_execution` events (not `message`)
 
-- When an AI model emits tool calls, the server forwards an `AIMessage` containing `tool_calls` so the frontend can render tool-call UI.
-- When `ToolNode` executes tools, tool lifecycle/output is emitted via `tool_execution` events.
-
-The exact fields come from `serialize_message()` in `src/api/server.py`.
-
-### 4) `error`
+#### `error`
 
 ```json
 { "type": "error", "content": "string" }
 ```
 
-Emitted by `GraphSession._execute()` when graph execution raises an unhandled exception, or by `websocket_endpoint()` on connection-level failures.
-
 Contract (tested via `test_ws_error_event_shape`):
 - `type` must equal `"error"`
 - `content` must be a non-empty string
 
-### 5) `tool_execution`
-
-The backend emits tool lifecycle events in the current implementation:
+#### `tool_execution`
 
 Running:
 
@@ -228,18 +205,9 @@ Finished:
 }
 ```
 
-These are derived from `AIMessage.tool_calls` + `ToolMessage` outputs in `websocket_endpoint()`.
-Tool outputs are intentionally normalized into `tool_execution` events to avoid duplicate/misaligned chat message rendering.
+Derived from `AIMessage.tool_calls` + `ToolMessage` outputs. Tool outputs normalized into `tool_execution` events to avoid duplicate/misaligned chat message rendering.
 
-### 6) `file_status`
-
-```json
-{ "type": "file_status", "name": "string", "status": "processed" | "deleted" }
-```
-
-Sent by `notify_file_processed()` to trigger UI refresh of the workspace file panel.
-
-### 7) `model_info`
+#### `model_info`
 
 ```json
 {
@@ -267,26 +235,18 @@ Sent by `notify_file_processed()` to trigger UI refresh of the workspace file pa
 }
 ```
 
-Sent after `complex_llm` or `simple` node completes, when a `model_used` value is present in the node output (or when `fallback_chain` is present even without `model_used`).
+Sent after `complex_llm` or `simple` node completes when `model_used` is present (or `fallback_chain` is present without `model_used`).
 
-Fields:
+| Field | Description |
+|-------|-------------|
+| `model` | Model that produced the response (e.g. `"medium-default"`, `"large-cloud"`) |
+| `swapping` | Whether a model swap occurred |
+| `token_usage` | Optional prompt/completion token counts from API response |
+| `fallback_chain` | Optional ordered list of model attempts. Always has ≥1 entry and exactly one with `status == "success"`. Entries are chronological |
 
-- `model` — the model that produced the response (e.g. `"medium-default"`, `"large-cloud"`)
-- `swapping` — whether a model swap occurred
-- `token_usage` — (optional) prompt and completion token counts from the API response; present only when the model reports usage
-- `fallback_chain` — (optional) ordered list of model attempts; present only when `complex_llm_node` records fallback steps. Each entry is a `FallbackStep`:
-  - `model` — non-empty model identifier
-  - `status` — `"success"`, `"failed"`, or `"skipped"`
-  - `reason` — human-readable explanation
-  - `duration_ms` — time spent on this attempt (≥ 0)
+Populated by `complex_llm_node` and `simple_node` in every node output.
 
-The chain always has at least one entry and exactly one entry with `status == "success"`. Entries are ordered chronologically.
-
-The `fallback_chain` field is populated by `complex_llm_node` and `simple_node` in every node output. The websocket event forwarder in `server.py` includes it in the `model_info` event payload when present.
-
-`router_info` event is emitted following `router` node completion — see section 8 below.
-
-### 8) `router_info` (implemented)
+#### `router_info`
 
 ```json
 {
@@ -311,29 +271,19 @@ The `fallback_chain` field is populated by `complex_llm_node` and `simple_node` 
 }
 ```
 
-Sent after the `router` node completes its routing decision, **before** the first `chunk` event for that message.
+Sent after router node completes, before the first `chunk` event.
 
-Metadata fields:
+| Field | Values |
+|-------|--------|
+| `route` | `"simple"`, `"complex-default"`, `"complex-cloud"`, `"complex-vision"`, `"complex-longctx"` |
+| `confidence` | [0.0, 1.0] |
+| `classification_source` | `"keyword_bypass"`, `"deterministic"`, `"llm_classifier"`, `"hitl"` |
+| `swap_decision` | `"kept"`, `"swapped"`, `"not_needed"` |
+| `features` | Never contains raw message text |
 
-- `route` — the chosen route (e.g. `"simple"`, `"complex-default"`, `"complex-cloud"`, `"complex-vision"`, `"complex-longctx"`)
-- `confidence` — classification confidence in [0.0, 1.0]
-- `reasoning` — human-readable explanation of the routing decision
-- `swap_decision` — `"kept"`, `"swapped"`, or `"not_needed"`
-- `swap_from` / `swap_to` — previous and target model variants (null when no swap)
-- `classification_source` — `"keyword_bypass"`, `"deterministic"`, `"llm_classifier"`, or `"hitl"`
-- `token_budget` — allocated token budget for the response
-- `cloud_available` — whether cloud escalation was an option
-- `features` — key features that influenced the decision (never contains raw message text):
-  - `has_images` — whether the input contained images
-  - `task_category` — detected task type
-  - `estimated_tokens` — estimated input token count
-  - `web_intent` — whether web search intent was detected
+Telemetry data source: `src/agent/nodes/router.py` — `router_node()` populates `router_metadata` on every return path via `_build_router_metadata()`.
 
-The server forwarder (`server.py` `forward_events()`) emits this event at `on_chain_end` for the `router` node when `router_metadata` is present in the output. Non-serializable metadata fields are silently dropped with a warning log, so the event is never blocked by a single bad field.
-
-Telemetry data source: `src/agent/nodes/router.py` — `router_node()` populates `router_metadata` on every return path. The `_build_router_metadata()` helper constructs the dict with fields guarded by `_check_cloud_available()`, `_has_image_content()`, and per-path reasoning strings.
-
-### 9) `token_budget_update`
+#### `token_budget_update`
 
 ```json
 {
@@ -345,16 +295,16 @@ Telemetry data source: `src/agent/nodes/router.py` — `router_node()` populates
 }
 ```
 
-Sent after streaming completes (when the `complex_llm` or `simple` node finishes), providing a final summary of token budget consumption.
+Sent after streaming completes.
 
-Fields:
+| Field | Description |
+|-------|-------------|
+| `used` | Total tokens consumed during streaming |
+| `total` | Allocated budget (from router's `token_budget`) |
+| `remaining` | `max(0, total - used)` |
+| `percent` | Fraction of budget consumed (can exceed 1.0) |
 
-- `used` — total tokens consumed during streaming
-- `total` — the allocated budget (from the router's `token_budget`)
-- `remaining` — tokens remaining (`max(0, total - used)`)
-- `percent` — fraction of budget consumed (can exceed 1.0 if streaming overruns the budget)
-
-### 10) `cloud_budget_warning`
+#### `cloud_budget_warning`
 
 ```json
 {
@@ -366,21 +316,17 @@ Fields:
 }
 ```
 
-Sent when cumulative cloud token usage crosses a configured threshold. Thresholds default to 50%, 80%, and 95% of the daily limit.
+Sent when cumulative cloud token usage crosses a configured threshold. Default thresholds: 50%, 80%, 95% of daily limit.
 
-Fields:
+| Level | Trigger |
+|-------|---------|
+| `"info"` | 50% of limit |
+| `"warning"` | 80% of limit |
+| `"critical"` | 95% of limit |
 
-- `used` — cumulative cloud tokens consumed this session
-- `limit` — the configured daily token limit (default 500,000)
-- `percent` — usage as a percentage of the limit
-- `level` — severity level:
-  - `"info"` — usage crossed 50%
-  - `"warning"` — usage crossed 80%
-  - `"critical"` — usage crossed 95%
+Each level emitted at most once per session. Levels emitted in order: `"info"` → `"warning"` → `"critical"`. If `cloud_daily_token_limit` is 0 or negative, no warnings are emitted.
 
-Each level is emitted at most once per session. Levels are emitted in order: `"info"` → `"warning"` → `"critical"`. If `cloud_daily_token_limit` is 0 or negative, no warnings are emitted.
-
-### 11) `memory_updated`
+#### `memory_updated`
 
 ```json
 {
@@ -389,15 +335,9 @@ Each level is emitted at most once per session. Levels are emitted in order: `"i
 }
 ```
 
-Sent after `memory_write_node` saves new data and invalidates the memory context cache for the thread.
+Sent after `memory_write_node` saves new data and invalidates the memory context cache.
 
-Fields:
-
-- `thread_id` — the thread whose memory context was updated
-
-The frontend can use this event to know that the memory context is fresh and any cached state should be refreshed.
-
-### 12) `context_summarized`
+#### `context_summarized`
 
 ```json
 {
@@ -411,26 +351,35 @@ The frontend can use this event to know that the memory context is fresh and any
 
 Emitted when `auto_summarize_node` compresses older conversation history. Triggered when `active_tokens > 85%` of `context_window`.
 
-Fields:
-- `summary` — the generated summary text (3-5 bullet points)
-- `takeaways` — individual takeaway strings parsed from the summary
-- `messages_compressed` — number of messages that were compressed
-- `tokens_freed` — estimated token count saved
+Sent at `on_chain_end` for the `auto_summarize` node. When no summarization needed, no event is emitted.
 
-Sent at `on_chain_end` for the `auto_summarize` node in the WebSocket event forwarder. The event appears between `memory_inject` and `router` node events in the stream. When no summarization is needed, the graph flows directly from `memory_inject` to `router` and no `context_summarized` event is emitted.
+#### `file_status`
 
-## REST API: Consolidated Settings
+```json
+{ "type": "file_status", "name": "string", "status": "processed | deleted" }
+```
 
-### `GET /api/unified-settings`
+Sent by `notify_file_processed()` to trigger UI refresh of the workspace file panel.
 
-Returns all user-facing settings in a single response, merging fields from `GET /api/profile` and `GET /api/advanced-settings`.
+### TTS Runtime Event (Desktop Channel)
+
+Desktop shell emits on `owlynn://runtime-event` from `src-tauri/src/main.rs`:
+
+```json
+{ "type": "voice.tts_state", "speaking": true | false, "utterance_id": "string" }
+```
+
+Consumed in `frontend-v2/src/App.tsx`.
+
+### Consolidated Settings (`GET /api/unified-settings`)
+
+Returns all user-facing settings merged from `GET /api/profile` and `GET /api/advanced-settings`:
 
 ```json
 {
   "name": "string",
   "preferred_language": "en",
   "response_style": "concise",
-
   "small_llm_base_url": "http://127.0.0.1:1234/v1",
   "small_llm_model_name": "liquid/lfm2.5-1.2b",
   "llm_base_url": "http://127.0.0.1:1234/v1",
@@ -439,7 +388,6 @@ Returns all user-facing settings in a single response, merging fields from `GET 
   "cloud_llm_base_url": "https://api.deepseek.com/v1",
   "cloud_llm_model_name": "deepseek-chat",
   "deepseek_api_key": "••••••••",
-
   "temperature": 0.7,
   "top_p": 0.9,
   "max_tokens": 2048,
@@ -448,39 +396,49 @@ Returns all user-facing settings in a single response, merging fields from `GET 
   "show_thinking": false,
   "show_tool_execution": true,
   "lm_studio_fold_system": true,
-
   "cloud_escalation_enabled": true,
   "cloud_anonymization_enabled": true,
   "router_hitl_enabled": true,
   "router_clarification_threshold": 0.6,
   "custom_sensitive_terms": [],
   "redis_url": "redis://localhost:6379",
-
   "cloud_daily_token_limit": 500000,
   "cloud_budget_warning_thresholds": [0.5, 0.8, 0.95]
 }
 ```
 
-Notes:
+| Note | Detail |
+|------|--------|
+| API key masking | `deepseek_api_key` always masked (`••••••••` when present, `""` when absent) |
+| Default limits | `cloud_daily_token_limit` defaults to 500,000; `cloud_budget_warning_thresholds` defaults to `[0.5, 0.8, 0.95]` |
+| Backward compatibility | `GET /api/profile` and `GET /api/advanced-settings` unchanged |
+| Error fallback | If `get_profile()` raises exception, returns error response; frontend falls back to individual endpoints |
 
-- `deepseek_api_key` is always masked (`"••••••••"` when present, `""` when absent) — the raw key is never returned.
-- `cloud_daily_token_limit` defaults to 500,000 when not configured.
-- `cloud_budget_warning_thresholds` defaults to `[0.5, 0.8, 0.95]` when not configured.
-- The existing `GET /api/profile` and `GET /api/advanced-settings` endpoints remain unchanged for backward compatibility.
-- If `get_profile()` raises an exception, the endpoint returns an error response and the frontend falls back to the individual endpoints.
+## Key Decisions
 
-## Reference: where to change the contract
+| Decision | Rationale | Trade-off |
+|----------|-----------|-----------|
+| Single persistent WebSocket per thread | Real-time streaming for chat UX | Connection management complexity |
+| Structured router_info event | Frontend visibility into routing decisions | Additional WS event to handle |
+| fallback_chain in model_info | Debug unexpected fallbacks | Extra payload per model_info event |
+| ask_user_response preserves structured types | Router can ask structured questions | Frontend must handle object answers |
 
-- Client request payload: `frontend/script.js` (`buildChatWsPayload()`)
-- WebSocket forwarding and serialization: `src/api/server.py` (`websocket_endpoint()`, `serialize_message()`)
-- Streaming sources: `src/agent/nodes/simple.py`, `src/agent/nodes/complex.py`, and their tool calling behavior
-- Tool-call payload content: `serialize_message()` output consumed by `renderMessage()`
+## Testing
 
-## TTS Runtime Event (Desktop channel)
+```bash
+pytest tests/test_websocket_event_contract.py -v
+pytest tests/test_websocket_model_key_updates.py -v
+cd frontend-v2 && npx vitest run
+```
 
-The desktop shell emits a TTS event on `owlynn://runtime-event` from `src-tauri/src/main.rs`:
+## Configuration
 
-- `voice.tts_state`: `{ "type": "voice.tts_state", "speaking": true|false, "utterance_id": "string" }`
-
-This is consumed in `frontend-v2/src/App.tsx`.
-
+| Profile Field | Type | Default |
+|---------------|------|---------|
+| `cloud_daily_token_limit` | integer | `500000` |
+| `cloud_budget_warning_thresholds` | list | `[0.5, 0.8, 0.95]` |
+| `router_clarification_threshold` | float | `0.6` |
+| `router_hitl_enabled` | boolean | `true` |
+| `cloud_anonymization_enabled` | boolean | `true` |
+| `redis_url` | string | `redis://localhost:6379` |
+| `deepseek_api_key` | string | `""` |

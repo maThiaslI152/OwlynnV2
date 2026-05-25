@@ -1,140 +1,144 @@
+---
+last_verified: 2026-05-26
+auto_generated: false
+---
+
 # Extending the Agent (Developer Guide)
 
-This document is a practical “where do I change things?” guide for developers modifying Owlynn’s agent behavior.
+Reference for developers modifying Owlynn's agent behavior. Covers the LangGraph execution flow, tool contract, and frontend WebSocket event stream.
 
-It focuses on keeping three things consistent:
+## Overview
 
-- the LangGraph execution flow (`src/agent/graph.py` and nodes under `src/agent/nodes/`)
-- the tool contract between the large model and tool execution (`src/agent/tool_sets.py`, `src/agent/nodes/complex.py`, and `src/api/server.py`)
-- the frontend WebSocket event stream (`docs/CHAT_PROTOCOL.md`)
+Three subsystems must stay consistent when modifying agent behavior:
 
-## 1) Change routing behavior
+- LangGraph execution flow (`src/agent/graph.py` and nodes under `src/agent/nodes/`)
+- Tool contract between LLM and tool execution (`src/agent/tool_sets.py`, `src/agent/nodes/complex.py`, `src/api/server.py`)
+- Frontend WebSocket event stream (`docs/CHAT_PROTOCOL.md`)
 
-### Option A: edit `router_node()`
+## Entry Points
 
-Current control point: `src/agent/nodes/router.py`
+```text
+src/agent/nodes/router.py       # router_node() — routing behavior
+src/agent/graph.py              # route_decision() — route validation
+src/agent/nodes/simple.py        # simple_node() — simple answers
+src/agent/nodes/complex.py       # complex_llm_node() — tool-calling cycle
+src/agent/tool_sets.py           # ToolboxRegistry — tool binding
+src/agent/nodes/memory.py        # memory_inject_node(), memory_write_node()
+src/tools/                       # Tool implementations (@tool decorators)
+src/api/server.py                # serialize_message() — frontend contract
+docs/CHAT_PROTOCOL.md            # WebSocket event contract
+```
 
-What to change:
+## Architecture
 
-- keyword shortcuts (`simple_keywords`)
-- “web-ish” keyword forcing for `complex` (`_WEBISH_HINTS`)
+### Graph Topology
 
-Risk to consider:
+```
+START → memory_inject → router → simple → memory_write → END
+                               → complex_llm ↔ security_proxy ↔ tool_action → memory_write → END
+```
 
-- Routing currently decides `simple` vs `complex`, where `complex` enters the `complex_llm -> security_proxy -> tool_action` cycle.
-- If you accidentally route web/live-data questions to `simple`, you will prevent tool usage because the `simple` node explicitly tells the model: “Do not use tools.”
+### Consistency Constraints
 
-### Option B: change `route_decision()` validation
+- `complex_llm` → `security_proxy` → `tool_action` → loop back to `complex_llm` is the secure tool cycle
+- `simple` node explicitly tells the model "Do not use tools" — routing web/live-data questions to `simple` prevents tool usage
+- The frontend expects responses as `type: "chunk"` and/or `type: "message"` events from LangGraph streaming
+- Tool calls must appear in `AIMessage.tool_calls`; tool results as `ToolMessage` outputs
 
-Current control point: `src/agent/graph.py::route_decision()`
+## API
 
-This function validates/normalizes the `route` value into `simple|complex`. If you add additional route values, update the conditional mapping too.
+### Routing Behavior
 
-## 2) Change “simple” behavior
+`router_node()` → `src/agent/nodes/router.py`
+- Behavior: Classifies requests and selects route + toolbox categories
+- Change points: `simple_keywords` keyword bypass, `_WEBISH_HINTS` web intent forcing
+- Risk: Routing web/live-data questions to `simple` prevents tool usage (simple node disables tools)
 
-Current control point: `src/agent/nodes/simple.py`
+`route_decision()` → `src/agent/graph.py`
+- Behavior: Validates/normalizes `route` value into `simple|complex`
+- Change if: Adding additional route values — update the conditional mapping
 
-What to change:
+### Simple Node Behavior
 
-- `SIMPLE_PROMPT` (especially whether you keep “Do not use tools.”)
-- how `response_style` modifies system hints
+`simple_node()` → `src/agent/nodes/simple.py`
+- Behavior: Small_LLM direct answer, no tools, no memory context
+- Change points: `SIMPLE_PROMPT` (especially "Do not use tools." directive), `response_style` system hints
+- Contract: Returns single `AIMessage`, typically no tool calls
 
-Contract note:
+### Complex Node Behavior
 
-- The frontend expects responses as `type: "chunk"` and/or `type: "message"` events based on LangGraph streaming.
-- The `simple` node currently returns a single `AIMessage` and typically won’t involve tool calls.
+`complex_llm_node()` → `src/agent/nodes/complex.py`
+- Behavior: M-tier or Cloud model with dynamically-bound tools
+- Change points: `COMPLEX_PROMPT`, `COMPLEX_TOOL_GUIDANCE_WEB` / `_NO_WEB` guidance strings, tool list selection logic (`web_search_enabled`, `mode`)
+- Tool sets: resolved via `src/agent/tool_sets.py` (`resolve_tools()`)
 
-## 3) Change “complex” behavior and tool usage
+### Memory Injection
 
-Current control point: `src/agent/nodes/complex.py` (`complex_llm_node` and `complex_tool_action_node`)
+`memory_inject_node()` → `src/agent/nodes/memory.py`
+- Behavior: Builds `memory_context` from long-term memory search, user profile, enhanced personal assistant context
+- Cache: `MemoryContextCache` keyed by `thread_id`
+- Risk: Changing context format affects prompts in `simple_node()` and `complex_llm_node()`. Changing cache invalidation fields causes stale memory
 
-What to change:
+### Memory Writing
 
-- `COMPLEX_PROMPT` and guidance strings (`COMPLEX_TOOL_GUIDANCE_WEB` / `_NO_WEB`)
-- tool list selection logic (`web_search_enabled` and `mode`)
-- whether `tools_off` truly disables tool binding (`mode == "tools_off"`)
+`memory_write_node()` → `src/agent/nodes/memory.py`
+- Behavior: Records conversation summary + topics/interests, writes enriched facts to Mem0, invalidates memory context cache
+- Dependencies: Topic extraction/enrichment changes affect `docs/guides/personal_assistant_memory.md`
 
-### Tool sets
+## Key Decisions
 
-The actual tool sets used by the complex cycle come from `src/agent/tool_sets.py`.
-See `docs/TOOLS.md` for the exact list bound today.
+| Decision | Rationale | Trade-off |
+|----------|-----------|-----------|
+| Secure tool cycle (complex → proxy → action → loop) | Mandatory gating for destructive actions | Extra hop per tool call |
+| Simple node disables tools | Fast path for trivial queries | Misrouting web queries to simple breaks functionality |
+| Memory context cache per thread_id | Reduce repeated memory lookups | Stale data if cache invalidation incomplete |
+| Structured ask_user_response payloads | Preserved without backend string coercion | Frontend must handle object types |
 
-## 4) Add/modify a tool
-
-Safe workflow:
-
-1. Implement the tool in `src/tools/*` as a LangChain `@tool`
-2. Export it from `src/tools/__init__.py`
-3. Add it to the relevant list(s) in `src/agent/tool_sets.py`
-4. Update guidance text in `src/agent/nodes/complex.py` so the model knows when to call it
-5. Verify frontend rendering assumptions via `docs/CHAT_PROTOCOL.md`
-
-Frontend rendering depends on `src/api/server.py::serialize_message()`:
-
-- tool calls must appear in `AIMessage.tool_calls`
-- tool results must appear as `ToolMessage` outputs
-
-## 5) Rewire legacy `tool_selector` / `tool_executor` nodes (optional)
-
-The repo includes:
-
-- `src/agent/nodes/tool_selector.py`
-- `src/agent/nodes/tool_executor.py`
-
-But the active graph in `src/agent/graph.py` does **not** wire them today; it uses `complex_llm` + `security_proxy` + `tool_action`.
-
-If you want to use these legacy nodes, you must update at least:
-
-- `src/agent/graph.py` topology (edges and conditional routing)
-- `src/agent/state.py` fields produced/consumed (e.g., `selected_tool`, `tool_result`, `route`)
-- event forwarding expectations in `src/api/server.py` (if you introduce new message types)
-
-Practical recommendation:
-Prefer extending the existing secure cycle (`complex_llm` + `security_proxy` + `tool_action`) unless you have a strong reason to reintroduce separate selector/executor nodes.
-
-## 6) Change memory injection
-
-Current control point: `src/agent/nodes/memory.py::memory_inject_node()`
-
-What it does today:
-
-- builds `memory_context` from:
-  - long-term memory search results
-  - user profile
-  - enhanced personal assistant context
-- caches by `thread_id` (`MemoryContextCache`)
-
-Risks:
-
-- If you change the formatting, prompts in `simple_node()` and `complex_llm_node()` will see different context shapes.
-- If you change what fields invalidate the cache, memory may appear “stale” to developers.
-
-## 7) Change memory writing
-
-Current control point: `src/agent/nodes/memory.py::memory_write_node()`
-
-What it does today:
-
-- records conversation summary + topics/interests
-- writes enriched facts to Mem0
-- invalidates the memory context cache for the thread
-
-If you modify topic extraction/enrichment, update any assumptions in docs like:
-
-- `docs/guides/personal_assistant_memory.md`
-
-## 8) Update documentation + tests when contracts change
-
-Checklist when changing core behavior:
-
-- If you change frontend/backend WebSocket keys, update `docs/CHAT_PROTOCOL.md`.
-- If you change tool binding or tool guidance, update `docs/TOOLS.md`.
-- If you change routing/node topology, update `docs/AGENT_FLOW.md`.
+## Testing
 
 Minimum testing for developer changes:
 
-- Run `tests/run_tests.py`
-- Exercise at least one:
-  - simple greeting path (no tools)
-  - complex path with tool calling (e.g., `web_search` intent)
-  - memory write + recall (multi-turn)
+```bash
+python tests/run_tests.py
+pytest tests/ -k "test_router" -v
+pytest tests/ -k "test_complex" -v
+pytest tests/ -k "test_memory" -v
+cd frontend-v2 && npx vitest run
+```
+
+Exercise at minimum:
+- Simple greeting path (no tools)
+- Complex path with tool calling (e.g., `web_search` intent)
+- Memory write + recall (multi-turn)
+
+## Adding/Modifying a Tool
+
+1. Implement the tool in `src/tools/*` as a LangChain `@tool`
+2. Export from `src/tools/__init__.py`
+3. Add to relevant list(s) in `src/agent/tool_sets.py`
+4. Update guidance text in `src/agent/nodes/complex.py`
+5. Verify frontend rendering via `docs/CHAT_PROTOCOL.md`
+
+Frontend rendering depends on `serialize_message()` in `src/api/server.py`:
+- Tool calls must appear in `AIMessage.tool_calls`
+- Tool results must appear as `ToolMessage` outputs
+
+## Adding New Graph Nodes
+
+Update at minimum:
+- `src/agent/graph.py` — topology (edges and conditional routing)
+- `src/agent/state.py` — fields produced/consumed
+- `src/api/server.py` — event forwarding (new message types)
+
+Prefer extending the existing secure cycle (`complex_llm` + `security_proxy` + `tool_action`) over introducing a separate workflow.
+
+## Documentation Checklist
+
+When changing core behavior, update:
+
+| Change Type | Update |
+|------------|--------|
+| Frontend/backend WebSocket keys | `docs/CHAT_PROTOCOL.md` |
+| Tool binding or tool guidance | `docs/TOOLS.md` |
+| Routing/node topology | `docs/AGENT_FLOW.md` |
+| Memory context format | `docs/guides/personal_assistant_memory.md` |

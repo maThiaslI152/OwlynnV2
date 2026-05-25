@@ -1,10 +1,26 @@
+---
+last_verified: 2026-05-26
+auto_generated: false
+---
+
 # Web Search Architecture
 
 ## Overview
 
-`web_search` is the agent's single entry point for internet search. It uses a multi-tier fallback pipeline that tries progressively more resilient (but slower) strategies until one succeeds. No API keys are required.
+`web_search` is the agent's single entry point for internet search. Uses a multi-tier fallback pipeline with progressively more resilient (but slower) strategies. No API keys required.
 
-## Pipeline (in order)
+## Entry Points
+
+```text
+src/tools/web_tools.py              # web_search, fetch_webpage, fetch_webpage_dynamic
+src/tools/web_search_enhanced.py    # SearXNG integration
+src/config/settings.py              # WEB_RAG_* env vars
+docker-compose.yml                  # SearXNG container (port 8888)
+```
+
+## Architecture
+
+### Search Pipeline
 
 ```
 User query
@@ -22,35 +38,37 @@ User query
     └─ Tier 3:  Playwright ─────────────── headless Chromium, JavaScript rendered
 ```
 
-### Tier 0 — wttr.in (weather fast path)
+## API
 
-- **Trigger**: Any query containing weather keywords (weather, forecast, temperature, rain, etc.)
-- **How it works**: Extracts a location name via regex, calls `https://wttr.in/{location}?format=j1`, returns structured weather data (temp, feels-like, humidity, description)
-- **Requirements**: None — free API, no key
-- **Tier tag**: `tier0 / wttr`
+### Tier 0: wttr.in (Weather Fast Path)
 
-### Tier 0.5 — SearXNG
+- Trigger: Query containing weather keywords (weather, forecast, temperature, rain, etc.)
+- Behavior: Extracts location via regex, calls `https://wttr.in/{location}?format=j1`, returns structured weather data (temp, feels-like, humidity, description)
+- Requirements: None — free API, no key
+- Tier tag: `tier0 / wttr`
 
-- **Trigger**: `SEARXNG_URL` env var is set (e.g. `http://localhost:8888`)
-- **How it works**: Calls the SearXNG JSON API at `{SEARXNG_URL}/search?format=json`. Aggregates Google, Bing, DDG, and Wikipedia results through a single self-hosted instance
-- **Requirements**: Docker running `searxng/searxng:latest` on port 8888 (defined in `docker-compose.yml`) + `SEARXNG_URL` in `.env`
-- **Tier tag**: `tier0.5 / searxng`
+### Tier 0.5: SearXNG
 
-### Tier 1 — curl_cffi
+- Trigger: `SEARXNG_URL` env var is set
+- Behavior: Calls SearXNG JSON API at `{SEARXNG_URL}/search?format=json`. Aggregates Google, Bing, DDG, Wikipedia results
+- Requirements: Docker running `searxng/searxng:latest` on port 8888 + `SEARXNG_URL` in `.env`
+- Tier tag: `tier0.5 / searxng`
 
-- **Trigger**: All non-weather, non-Google queries after SearXNG fails
-- **How it works**: Uses `curl_cffi` with `impersonate="chrome120"` to mimic real browser TLS/HTTP fingerprints. Tries DDG HTML, DDG Lite, and Bing in sequence. Detects Cloudflare/anti-bot challenges and skips blocked sources
-- **Requirements**: `pip install curl_cffi` (silently skipped if not installed). Toggle via `WEB_SEARCH_ENABLE_CURL_CFFI=false`
-- **Tier tag**: `tier1 / curl_cffi`
+### Tier 1: curl_cffi
 
-### Tier 2 — DDGS (DuckDuckGo SDK)
+- Trigger: All non-weather, non-Google queries after SearXNG fails
+- Behavior: Uses `curl_cffi` with `impersonate="chrome120"` for real browser TLS/HTTP fingerprints. Tries DDG HTML, DDG Lite, Bing in sequence. Detects Cloudflare/anti-bot challenges, skips blocked sources
+- Requirements: `pip install curl_cffi` (silently skipped if not installed). Toggle: `WEB_SEARCH_ENABLE_CURL_CFFI=false`
+- Tier tag: `tier1 / curl_cffi`
 
-- **Trigger**: All remaining queries
-- **How it works**: Calls `duckduckgo_search.DDGS.text()` or `.news()` in a thread
-- **Requirements**: `pip install duckduckgo-search` (silently skipped if missing)
-- **Tier tag**: `tier2 / ddgs`
+### Tier 2: DDGS (DuckDuckGo SDK)
 
-### Tier 2C — HTTP parsers
+- Trigger: All remaining queries
+- Behavior: Calls `duckduckgo_search.DDGS.text()` or `.news()` in a thread
+- Requirements: `pip install duckduckgo-search` (silently skipped if missing)
+- Tier tag: `tier2 / ddgs`
+
+### Tier 2C: HTTP Parsers
 
 Three direct HTTP fallbacks, tried in order:
 
@@ -60,92 +78,97 @@ Three direct HTTP fallbacks, tried in order:
 | 2C-b | Bing | `bing.com/search` | `_parse_bing_html_results()` |
 | 2C-c | DDG Lite | `lite.duckduckgo.com/lite/` | `_parse_ddg_html_results()` |
 
-- **Requirements**: None — plain `httpx` + `beautifulsoup4`
-- **Tier tag**: `tier2 / httpx_ddg_html`, `httpx_bing_html`, `httpx_ddg_lite`
+Requirements: `httpx` + `beautifulsoup4` (in `requirements.txt`)
+Tier tag: `tier2 / httpx_ddg_html`, `httpx_bing_html`, `httpx_ddg_lite`
 
-### Tier 3 — Playwright (dynamic browser)
+### Tier 3: Playwright (Dynamic Browser)
 
-- **Trigger**: Last resort if every other tier fails
-- **How it works**: Launches headless Chromium, navigates to Bing or DDG, waits for JS rendering, parses HTML
-- **Requirements**: `playwright install chromium` (now installed). Toggle via `WEB_SEARCH_ENABLE_BROWSER_FALLBACK=false`
-- **Tier tag**: `tier3 / playwright_dynamic`
+- Trigger: Last resort if every other tier fails
+- Behavior: Launches headless Chromium, navigates to Bing or DDG, waits for JS rendering, parses HTML
+- Requirements: `playwright install chromium`. Toggle: `WEB_SEARCH_ENABLE_BROWSER_FALLBACK=false`
+- Tier tag: `tier3 / playwright_dynamic`
 
-### Google backend (special case)
+### Google Backend (Special Case)
 
-When `backend="google"` is passed, `web_search` skips the entire pipeline and uses a dedicated Playwright-based Google scraper (`_google_search_playwright`). This is **not** part of the auto-backend chain — it only fires when explicitly requested.
+When `backend="google"` is passed, `web_search` uses a dedicated Playwright-based Google scraper (`_google_search_playwright`). Not part of the auto-backend chain — only fires when explicitly requested.
 
-- **Note**: Google actively blocks headless browsers. This often returns `"Blocked by Google CAPTCHA/Bot detection"`.
-- **Tier tag**: N/A (dedicated path)
+Note: Google actively blocks headless browsers. Often returns `"Blocked by Google CAPTCHA/Bot detection"`.
 
-## `fetch_webpage` Tool
+### `fetch_webpage` Tool
 
 Fetches a single URL and returns readable text content.
 
-### Pipeline
+Pipeline:
 
-1. **URL unwrapping** — expands DuckDuckGo `/l/?uddg=` redirect URLs
-2. **SSRF check** — rejects private/internal IPs, resolved DNS must be public
-3. **HTTP fetch** — `httpx` with 15s timeout, Chrome UA, follows redirects
-4. **HTML to text** — strips `<script>`, `<style>`, `<nav>`, `<footer>`, `<header>`, `<aside>`, `<iframe>`, `<noscript>`. Extracts `<article>` / `<main>` / `<section>` / `<body>` text
-5. **SPA shell detection** — if extracted text < 100 chars, falls back to `<title>` + meta/OG tags
-6. **Focus-query ranking** — if `focus_query` is provided, chunks the text and returns embedding-ranked excerpts (via LM Studio embeddings)
-7. **Truncation** — caps at 4000 chars if no `focus_query`
+| Step | Detail |
+|------|--------|
+| URL unwrapping | Expands DuckDuckGo `/l/?uddg=` redirect URLs |
+| SSRF check | Rejects private/internal IPs, resolved DNS must be public |
+| HTTP fetch | `httpx` with 15s timeout, Chrome UA, follows redirects |
+| HTML→text | Strips `<script>`, `<style>`, `<nav>`, `<footer>`, `<header>`, `<aside>`, `<iframe>`, `<noscript>`. Extracts `<article>` / `<main>` / `<section>` / `<body>` text |
+| SPA detection | If text < 100 chars, falls back to `<title>` + meta/OG tags |
+| Focus-query ranking | If `focus_query` provided, chunks text and returns embedding-ranked excerpts (via LM Studio embeddings) |
+| Truncation | Caps at 4000 chars if no `focus_query` |
 
-### Requirements
+Requirements: `pip install httpx beautifulsoup4 lxml` (all in `requirements.txt`)
 
-- `pip install httpx beautifulsoup4 lxml` (all already in `requirements.txt`)
+### `fetch_webpage_dynamic` Tool
 
-## `fetch_webpage_dynamic` Tool
+Same as `fetch_webpage`, but uses Playwright for JavaScript rendering. 30s page load timeout. Defined but not exposed to agent via any toolbox — exists for manual/testing use.
 
-Same as `fetch_webpage`, but uses **Playwright** to render JavaScript before extracting text. 30s page load timeout.
+Requirements: `playwright install chromium`
 
-**Note**: This tool is defined but **not** exposed to the agent via any toolbox. It exists for manual/testing use.
+### Web RAG (Focus-Query Ranking)
 
-### Requirements
+When `focus_query` is provided to `web_search` or `fetch_webpage`, results are reranked by embedding similarity via local LM Studio.
 
-- `playwright install chromium`
+Flow:
+1. Text chunked (720 chars, 120 char overlap)
+2. Query and all chunks embedded via `POST http://127.0.0.1:1234/v1/embeddings`
+3. Top-K chunks (default 5) returned by cosine similarity as numbered "source pack"
 
-## Web RAG (Focus-Query Ranking)
+## Key Decisions
 
-When `focus_query` is provided to either `web_search` or `fetch_webpage`, the results are reranked by embedding similarity using your local LM Studio instance.
+| Decision | Rationale | Trade-off |
+|----------|-----------|-----------|
+| Multi-tier fallback pipeline | Resilience without API keys | Complex error handling across tiers |
+| SearXNG as tier 0.5 | Self-hosted, privacy-preserving metasearch | Requires Docker container |
+| curl_cffi TLS fingerprinting | Bypasses anti-bot detection | Additional dependency |
+| Playwright as last resort | Full JS rendering | Slowest tier, highest resource cost |
+| Removed API-key providers (Brave/Serper/Tavily) | Simplified stack, no key management | Fewer search backends |
 
-### How it works
+## Testing
 
-1. Text is chunked (720 chars, 120 char overlap)
-2. Query and all chunks are embedded via `POST http://127.0.0.1:1234/v1/embeddings`
-3. Top-K chunks (default 5) are returned by cosine similarity as a numbered "source pack"
+- Tiers are exercised manually or via integration tests
+- Env vars: `WEB_SEARCH_TIMEOUT_SECONDS`, `WEB_SEARCH_ENABLE_BROWSER_FALLBACK`, `WEB_SEARCH_ENABLE_CURL_CFFI`
 
-### Configuration
-
-All in `src/config/settings.py`:
+## Configuration
 
 | Setting | Env Var | Default | Description |
 |---------|---------|---------|-------------|
 | `WEB_RAG_ENABLED` | `WEB_RAG_ENABLED` | `true` | Master toggle |
-| `WEB_RAG_EMBED_MODEL` | `WEB_RAG_EMBED_MODEL` | `text-embedding-nomic-embed-text-v1.5@f16` | Embedding model name in LM Studio |
-| `WEB_RAG_TOP_K` | `WEB_RAG_TOP_K` | `5` | Number of ranked excerpts to return |
+| `WEB_RAG_EMBED_MODEL` | `WEB_RAG_EMBED_MODEL` | `text-embedding-nomic-embed-text-v1.5@f16` | Embedding model in LM Studio |
+| `WEB_RAG_TOP_K` | `WEB_RAG_TOP_K` | `5` | Ranked excerpts to return |
 | `WEB_RAG_CHUNK_CHARS` | `WEB_RAG_CHUNK_CHARS` | `720` | Max characters per chunk |
 | `WEB_RAG_CHUNK_OVERLAP` | `WEB_RAG_CHUNK_OVERLAP` | `120` | Overlap between chunks |
-| `WEB_RAG_MIN_CHARS_FOR_RANK` | `WEB_RAG_MIN_CHARS_FOR_RANK` | `1800` | Min text length to bother ranking |
+| `WEB_RAG_MIN_CHARS_FOR_RANK` | `WEB_RAG_MIN_CHARS_FOR_RANK` | `1800` | Min text length for ranking |
 | `WEB_SEARCH_RERANK_TOP_N` | `WEB_SEARCH_RERANK_TOP_N` | `8` | Search hits kept after reranking |
 
-If LM Studio is unreachable or the embed model isn't loaded, reranking silently falls back to original result order.
+If LM Studio unreachable or embed model not loaded, reranking silently falls back to original result order.
 
-## Externally Required Services
+### External Services
 
 | Service | Config | Port | Purpose |
 |---------|--------|------|---------|
 | LM Studio (local) | `http://127.0.0.1:1234` | 1234 | LLM inference + embeddings |
 | SearXNG (Docker) | `SEARXNG_URL=http://localhost:8888` | 8888 | Self-hosted metasearch |
 
-## Removed Providers
+### Removed Providers (April 2026)
 
-As of April 2026, the following API-key-based providers were removed from the pipeline to simplify the stack:
+API-key-based providers removed from pipeline:
 
-- **Brave Search API** (`BRAVE_SEARCH_API_KEY`)
-- **Serper.dev API** (`SERPER_API_KEY`)
-- **Tavily API** (`TAVILY_API_KEY`)
+- Brave Search API (`BRAVE_SEARCH_API_KEY`)
+- Serper.dev API (`SERPER_API_KEY`)
+- Tavily API (`TAVILY_API_KEY`)
 
-The `WEB_SEARCH_PROVIDER` env var (`auto`/`brave`/`serper`/`tavily`) was also removed — it is no longer read by any code.
-
-These removals affect only `src/tools/web_tools.py` and its tests. The env vars can remain in `.env` harmlessly.
+`WEB_SEARCH_PROVIDER` env var also removed. Removals affect `src/tools/web_tools.py` and its tests only.
