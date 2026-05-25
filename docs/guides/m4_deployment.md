@@ -7,7 +7,8 @@ The M4 Air has 24 GB unified memory shared between macOS, LM Studio, Podman cont
 | Component | Allocation | Notes |
 |-----------|-----------|-------|
 | LM Studio: Small model | ~730 MB | `liquid/lfm2.5-1.2b` — always loaded |
-| LM Studio: One M-tier model | up to ~8.3 GB | `qwen/qwen3.5-9b` is the largest at ~8.3 GB |
+| LM Studio: One M-tier model | up to ~2.5 GB | `gemma-4-e4b-uncensored-hauhaucs-aggressive` Q4_K_M |
+| LM Studio: Router model | up to ~1.7 GB | `ibm-grok4-ultrafast-coder-1b` Q8_0 |
 | LM Studio: Embeddings | ~500 MB | `multilingual-e5-small` for Qdrant |
 | **LM Studio subtotal** | **~10 GB** | |
 | Podman: Qdrant + SearXNG + Redis | ~1–2 GB | Redis capped at 512 MB via `mem_limit` |

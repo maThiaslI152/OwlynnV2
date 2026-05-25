@@ -5,7 +5,19 @@ auto_generated: false
 
 # Owlynn — Local AI Cowork Agent
 
+[![Python](https://img.shields.io/badge/python-3.12+-blue)](https://python.org)
+[![Node](https://img.shields.io/badge/node-18+-green)](https://nodejs.org)
+[![CI](https://img.shields.io/badge/CI-local_scripts%2Fci.sh-059669)](scripts/ci.sh)
+[![Frontend](https://img.shields.io/badge/frontend-React_19_%2B_Vite_8-61DAFB)](frontend-v2/)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+
 A private, local-first AI productivity agent. Runs entirely on your machine with LangGraph orchestration, three-tier LLM routing, and a Tauri desktop frontend. Optimized for Apple Silicon (M4 Air 24GB).
+
+## Goal
+
+Owlynn is a **desktop AI coworker** that keeps your data local. It reasons through complex tasks, calls tools (web search, file ops, document generation, notebook execution), remembers across sessions via semantic vector memory, and gates sensitive operations behind human approval — all without sending data to the cloud unless you explicitly opt in.
+
+**Target user**: Developers and power users on Apple Silicon who want an AI assistant that respects privacy, runs locally, and can be extended with custom tools and skills.
 
 ## Overview
 
@@ -52,13 +64,53 @@ The router uses the small LLM to classify requests into `simple` (greetings, qui
 | Backend | `FastAPI` + `LangGraph` + Python 3.12+ |
 | Frontend | React 19 + TypeScript (Vite 8) + Zustand 5, served via Tauri desktop shell |
 | Small LLM | `ibm-grok4-ultrafast-coder-1b` (Q8_0, routing) |
-| Medium LLM | `qwen3.5-9b-mlx` (MLX 4bit, reasoning + tool calling, swappable) |
+| Medium LLM | `gemma-4-e4b-uncensored-hauhaucs-aggressive` (Q4_K_M, reasoning + tool calling, swappable) |
 | Cloud LLM | `deepseek-chat` (DeepSeek API, optional escalation) |
 | Memory | Mem0 + Qdrant + JSON files |
 | Checkpointing | Redis (falls back to in-memory `MemorySaver`) |
 | Search | Multi-tier: wttr.in / SearXNG (self-hosted) → curl_cffi / DDGS → Playwright |
 | Testing | `pytest` + `hypothesis` (backend), `vitest` + `@testing-library/react` (frontend) |
 | Desktop | Tauri v2.10 (Rust, macOS vibrancy) |
+
+## Project Progress
+
+### Phase Completion
+
+| Phase | Status | Description |
+|-------|--------|-------------|
+| Phase 1: Stabilization | Done | Browser multi-switch harness, WS+CRUD timing tests, frontend cutover |
+| Phase 2: Reliability | Done | Route/fallback telemetry, WS contract tests, CI gate standardization |
+| Phase 3: Capability | Done | Enhanced summarize/context compression, project knowledge panel |
+| Phase 4: Governance | Done | ADR log (11 decisions), performance SLOs, release train alignment |
+| Phase 5: Live Test | Done | Dead test removal, tool awareness assertions — 203 passed |
+| Phase 6: MVP Hardening | Done | Env config, logging, dependency pinning, 89 new tests |
+| Phase 7: Test Fixes | Done | 13 skipped tests fixed. **724 passed, 0 failed, 5 skipped** (Redis/integration) |
+| **Phase 8: Bug Fixes** | **In Progress** | Fixing 8 bugs found in browser audit (see below) |
+
+Test suite: **724 backend** (pytest + hypothesis), **77 frontend** (vitest + testing-library). All passing.
+
+### Known Bugs (Phase 8)
+
+| Severity | Bug | Location |
+|----------|-----|----------|
+| **CRITICAL** | Persona/system prompt leaks into first assistant response | `src/agent/nodes/simple.py` / `complex.py` |
+| **HIGH** | Orchestration panel empty after message processing | `OrchestrationPanel.tsx` |
+| **HIGH** | Memory panel shows "Loading..." indefinitely | `MemoryPanel.tsx` |
+| MEDIUM | Chat auto-title defaults to "New Chat" | `src/api/server.py` |
+| MEDIUM | Safe Mode depends on Tauri IPC, no browser fallback | `SafeModePanel.tsx` |
+| LOW | Tool Execution panel shows permanent mock data | `ToolExecutionPanel.tsx` |
+| LOW | Workspace delete shows wrong operator note | `App.tsx` |
+| LOW | Audit & Verify sub-panel doesn't expand | `ToolExecutionPanel.tsx` |
+
+Full status: [`docs/STATUS.md`](docs/STATUS.md) | Bug analysis: [`docs/BUG-ANALYSIS.md`](docs/BUG-ANALYSIS.md)
+
+### Architectural Concerns
+
+- **Tauri IPC dependency**: SafeMode, ScreenAssist, TTS, and window sizing require Tauri — no browser fallbacks.
+- **Silent error handling**: Multiple try/catch blocks swallow errors silently.
+- **Loading states without timeouts**: Memory and Orchestration panels can hang indefinitely.
+
+Performance and memory SLOs: [`docs/PERFORMANCE_SLOS.md`](docs/PERFORMANCE_SLOS.md)
 
 ## Project Structure
 
@@ -140,18 +192,15 @@ docs/                Architecture and API documentation
 
 Models configured in `data/user_profile.json` or via the Settings UI:
 
-| Slot | Profile Key | Default | Description |
-|------|------------|---------|-------------|
-| Small LLM | `small_llm_model_name` | `liquid/lfm2.5-1.2b` | Routing model |
-| Medium LLM | `medium_models.default` | `qwen/qwen3.5-9b` | Reasoning model |
+| Slot | Profile Key | Model | Description |
+|------|------------|-------|-------------|
+| Small LLM | `small_llm_model_name` | `ibm-grok4-ultrafast-coder-1b` | Routing model (Q8_0) |
+| Medium LLM | `medium_models.default` | `gemma-4-e4b-uncensored-hauhaucs-aggressive` | Reasoning model (Q4_K_M) |
 | Medium Vision | `medium_models.vision` | — | Image inputs |
 | Medium LongCtx | `medium_models.longctx` | — | Large context windows |
 | Cloud LLM | `cloud_llm_model_name` | `deepseek-chat` | DeepSeek fallback |
 
-Verified local profile keys:
-
-- Small LLM: `ibm-grok4-ultrafast-coder-1b`
-- Medium LLM (default): `qwen3.5-9b-mlx`
+All local models served via LM Studio on port 1234.
 
 ## Prerequisites
 
@@ -162,6 +211,14 @@ Verified local profile keys:
 - Rust & Cargo for Tauri desktop build
 
 ## Testing
+
+Local CI via `scripts/ci.sh` (runs pre-push). See [`CONTRIBUTING.md`](CONTRIBUTING.md) for full development workflow.
+
+```bash
+./scripts/ci.sh              # Full suite (Python + frontend tests + build)
+./scripts/ci.sh --quick      # Skip frontend build
+./scripts/ci.sh --python-only
+```
 
 ### Backend (`pytest` + `hypothesis`)
 
@@ -175,7 +232,6 @@ pytest tests/ -v --hypothesis-show-statistics
 
 ```bash
 cd frontend-v2
-npm install
 npx vitest run
 ```
 
@@ -320,10 +376,18 @@ Managed by `src/memory/personal_assistant.py`:
 - [`docs/TOOLS.md`](docs/TOOLS.md)
 - [`docs/CHAT_PROTOCOL.md`](docs/CHAT_PROTOCOL.md)
 - [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md)
-- [`docs/HUMAN_PROJECT_GUIDE.md`](docs/HUMAN_PROJECT_GUIDE.md)
-- [`docs/AI_AGENT_PROJECT_GUIDE.md`](docs/AI_AGENT_PROJECT_GUIDE.md)
-- [`docs/AI_AGENT_INDEX.md`](docs/AI_AGENT_INDEX.md)
+- [`docs/STATUS.md`](docs/STATUS.md) — project status, known bugs, next steps
+- [`docs/ADR.md`](docs/ADR.md) — architecture decision records
+- [`docs/PERFORMANCE_SLOS.md`](docs/PERFORMANCE_SLOS.md) — latency, memory, CPU targets
+- [`docs/BUG-ANALYSIS.md`](docs/BUG-ANALYSIS.md) — bug inventory and audit reports
+- [`docs/HUMAN_PROJECT_GUIDE.md`](docs/HUMAN_PROJECT_GUIDE.md) — human workflow guide
+- [`docs/AI_AGENT_PROJECT_GUIDE.md`](docs/AI_AGENT_PROJECT_GUIDE.md) — AI agent execution guide
+- [`docs/AI_AGENT_INDEX.md`](docs/AI_AGENT_INDEX.md) — file-level navigation for AI agents
+
+## Contributing
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for development setup, code style, and testing guidelines. PRs welcome — please scope changes per the `docs/AI_AGENT_INDEX.md` concern areas and ensure all tests pass before submitting.
 
 ## License
 
-_License TBD_
+[MIT](LICENSE)

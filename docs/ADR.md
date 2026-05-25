@@ -69,7 +69,7 @@ Three-tier model system:
 | Tier | Model | Context | Location |
 |------|-------|---------|----------|
 | Small LLM | `ibm-grok4-ultrafast-coder-1b` (Q8_0) | 4K | Always local |
-| Medium LLM | `qwen3.5-9b-mlx` (MLX 4bit) | 100K | Local, default |
+| Medium LLM | `gemma-4-e4b-uncensored-hauhaucs-aggressive` (Q4_K_M) | 32K | Local, default |
 | Cloud LLM | DeepSeek API | — | Optional cloud |
 
 **Consequences:**

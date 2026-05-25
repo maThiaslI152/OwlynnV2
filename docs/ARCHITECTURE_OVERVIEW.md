@@ -30,9 +30,9 @@ frontend-v2/src/App.tsx      # React app shell
 | Key | Model | Role | VRAM | Context Window |
 |-----|-------|------|------|----------------|
 | Small_LLM | `ibm-grok4-ultrafast-coder-1b` (Q8_0) | Routing, simple answers, chat titles | ~1.7 GB | 4,096 |
-| Medium_Default | `qwen3.5-9b-mlx` (MLX 4bit) | General complex reasoning, tool calling | ~6 GB | 100,000 |
-| Medium_Vision | `qwen3.5-9b-mlx` (MLX 4bit) | Image/multimodal processing | ~6 GB | 100,000 |
-| Medium_LongCtx | `qwen3.5-9b-mlx` (MLX 4bit) | Extended context tasks | ~6 GB | 131,072 |
+| Medium_Default | `gemma-4-e4b-uncensored-hauhaucs-aggressive` (Q4_K_M) | General complex reasoning, tool calling | ~2.5 GB | 32,768 |
+| Medium_Vision | `gemma-4-e4b-uncensored-hauhaucs-aggressive` (Q4_K_M) | Image/multimodal processing | ~2.5 GB | 32,768 |
+| Medium_LongCtx | `gemma-4-e4b-uncensored-hauhaucs-aggressive` (Q4_K_M) | Extended context tasks | ~2.5 GB | 32,768 |
 | Cloud_LLM | `deepseek-chat` (DeepSeek API) | Frontier-quality reasoning (cloud) | N/A | 131,072 |
 
 Small_LLM and one M-tier model are served via LM Studio on port 1234 (OpenAI-compatible API). Cloud_LLM uses the DeepSeek API at `https://api.deepseek.com/v1`.

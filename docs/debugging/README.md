@@ -64,7 +64,7 @@ If missing: `docker-compose up -d` (see [memory.md](memory.md) for container-lev
 curl -s http://127.0.0.1:1234/v1/models | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'Models: {len(d.get(\"data\",[]))}')" 2>/dev/null || echo "LM Studio not reachable"
 ```
 
-Expected: At least 1 model loaded (typically `ibm-grok4-ultrafast-coder-1b` for small LLM, plus optionally `qwen3.5-9b-mlx` for medium).
+Expected: At least 1 model loaded (typically `ibm-grok4-ultrafast-coder-1b` for small LLM, plus optionally `gemma-4-e4b-uncensored-hauhaucs-aggressive` for medium).
 
 If missing: Launch LM Studio manually (see [llm-pool.md](llm-pool.md)).
 

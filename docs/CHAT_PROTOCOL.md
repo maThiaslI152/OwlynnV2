@@ -383,7 +383,7 @@ Returns all user-facing settings merged from `GET /api/profile` and `GET /api/ad
   "small_llm_base_url": "http://127.0.0.1:1234/v1",
   "small_llm_model_name": "liquid/lfm2.5-1.2b",
   "llm_base_url": "http://127.0.0.1:1234/v1",
-  "llm_model_name": "qwen/qwen3.5-9b",
+  "llm_model_name": "gemma-4-e4b-uncensored-hauhaucs-aggressive",
   "medium_models": {},
   "cloud_llm_base_url": "https://api.deepseek.com/v1",
   "cloud_llm_model_name": "deepseek-chat",

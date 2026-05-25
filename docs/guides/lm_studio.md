@@ -12,9 +12,9 @@ Download all three; the system auto-swaps based on task type:
 
 | Variant | Model Key | Role |
 |---------|-----------|------|
-| Default | `qwen3.5-9b-mlx` | General complex reasoning, tool calling |
-| Vision | `qwen3.5-9b-mlx` | Image/multimodal processing |
-| Long Context | `qwen3.5-9b-mlx` | Extended context tasks |
+| Default | `gemma-4-e4b-uncensored-hauhaucs-aggressive` | General complex reasoning, tool calling |
+| Vision | `gemma-4-e4b-uncensored-hauhaucs-aggressive` | Image/multimodal processing |
+| Long Context | `gemma-4-e4b-uncensored-hauhaucs-aggressive` | Extended context tasks |
 
 ### Swap Behavior
 

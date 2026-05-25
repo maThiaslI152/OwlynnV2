@@ -41,7 +41,7 @@ frontend-v2/src/App.tsx        # Frontend runtime
 | Key | Value |
 |-----|-------|
 | `small_llm_model_name` | `ibm-grok4-ultrafast-coder-1b` |
-| `medium_models.default` | `qwen3.5-9b-mlx` |
+| `medium_models.default` | `gemma-4-e4b-uncensored-hauhaucs-aggressive` |
 
 ### Core Capabilities Status
 

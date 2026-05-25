@@ -49,13 +49,13 @@ Measured from: user sends message → assistant first token received (streaming)
 |-----------|--------|-------|
 | Python agent (langgraph + LLM pool) | 2 GB | Peak during complex reasoning + tool execution |
 | Small LLM (`ibm-grok4-ultrafast-coder-1b`, Q8_0, LM Studio) | 1.5 GB | Always loaded |
-| Medium LLM (`qwen3.5-9b-mlx`, MLX 4bit, LM Studio) | 4 GB | Loaded on demand; stays warm for session |
+| Medium LLM (`gemma-4-e4b-uncensored-hauhaucs-aggressive`, Q4_K_M, LM Studio) | 2.5 GB | Loaded on demand; stays warm for session |
 | Qdrant (Docker) | 512 MB | Vector store for memory |
 | Redis (Docker) | 128 MB | Session state + LangGraph checkpoints |
 | SearxNG (Docker) | 256 MB | Local web search |
 | Frontend (Tauri + React) | 256 MB | Desktop shell + rendered UI |
-| **Total sustained** | **~8.6 GB** | Medium model loaded, all services running |
-| **Total peak** | **~10 GB** | During complex reasoning + web search + memory save |
+| **Total sustained** | **~7.1 GB** | Medium model loaded, all services running |
+| **Total peak** | **~8.5 GB** | During complex reasoning + web search + memory save |
 
 ### Storage
 
