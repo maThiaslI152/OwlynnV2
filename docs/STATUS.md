@@ -1,6 +1,6 @@
 # Owlynn Status
 
-Last updated: 2026-05-11 v4 (All 13 skipped tests fixed — TF-IDF, LLM overrides, WS mocks)
+Last updated: 2026-05-25 v5 (Browser audit — 8 bugs found, documented in BUG-ANALYSIS.md)
 
 ## Current Progress
 
@@ -98,45 +98,65 @@ must be used instead. `start.sh` now builds the frontend and launches the `.app`
 
 ## Current Bugs / Risks
 
-- **RESOLVED (2026-05-24) — Workspace creation fails with "Failed to create workspace":** 6 fixes applied in `frontend-v2/src/App.tsx`: (1) `handleCreateProject` now uses `apiUrl()` for Tauri runtime compatibility + error logging, (2) `loadProjects` reads `activeProjectId`/`currentThreadId` from refs to eliminate stale closure, (3) removed premature `loadProjects()` call from `handleSend`, (4) initial thread IDs use proper UUIDs instead of magic string `"default"`, (5) ref sync effects keep refs in sync with state, (6) `loadProjects` auto-switch simplified to stop fighting user navigation. All debug/agent-log code cleaned up. Build passes, 77 tests pass.
-- **RESOLVED (2026-05-24) — Chats not appearing on General Workspace sidebar:** Same root cause as above — fixed by the race condition and stale closure fixes in `loadProjects`. Chat registration on backend now has time to complete before the refresh triggered in the `assistant.message` handler.
-- **RESOLVED (2026-05-11) — 13 skipped tests fixed:** Skill matcher tests unblocked by adding `scikit-learn` to `requirements-dev.txt`. Graph integration tests now use `LLMPool.set_test_overrides()` instead of per-module patches. WS contract tests: `generate_chat_title_router_llm` mocked to prevent LM Studio connection before `start_run`.
-- **RESOLVED (2026-04-29) — Dead audit tests removed:** `test_frontend_audit_bugs.py` and `test_frontend_audit_preservation.py` referenced the removed `frontend/` directory (old HTML/JS frontend). Both files are deleted.
-- **RESOLVED (2026-04-29) — Known pre-existing failures skipped:** 11 tests across 3 files marked with `@pytest.mark.skip` — 5 WS contract tests (GraphSession.start_run mock not reaching WS handler), 5 routing tests (build_graph connects LM Studio before patches apply), 2 skill matcher tests (TF-IDF corpus needs actual skill files). These are tracked for fix in Phase 7.
-- **RESOLVED (2026-04-25) — LTM ValueError on memory search:** `mem0ai` v1.0.9's `Memory.search()` requires `user_id` as a keyword-only argument, but was passed inside the `filters` dict at all 6 call sites. Fixed by passing `user_id=...` as a keyword arg.
-- **RESOLVED (2026-04-25) — New chat reverts to old thread:** Race condition in `loadProjects()` overwrote `currentThreadId` before the backend registered the new chat. Fixed by preserving `currentThreadId` when the thread ID isn't yet in the API response.
-- **RESOLVED (2026-04-25) — Topics/interests not injected into simple LLM path:** The "Your Knowledge About User" context was only injected in the complex node. Fixed by extracting and injecting just the knowledge section into the simple node's system prompt.
-- **Live Talk removed (2026-04-29 v2):** All voice/Live Talk infrastructure removed. Only `speak_text` TTS remains for assistant audio responses. See [`docs/LIVE_TALK_DEFERRED.md`](LIVE_TALK_DEFERRED.md).
+### New — Browser Audit Session (2026-05-25)
+
+Full interactive browser audit conducted against running backend (port 8000) + frontend (port 5173). 8 bugs found across the following severity levels. Detailed analysis in [`docs/BUG-ANALYSIS.md`](BUG-ANALYSIS.md).
+
+| ID | Severity | Description | Location |
+|----|----------|-------------|----------|
+| BUG-1 | **CRITICAL** | Persona/system prompt leaks into first assistant response — agent outputs persona description instead of answering user question | `src/agent/nodes/simple.py` or `complex.py` |
+| BUG-2 | **HIGH** | Orchestration panel remains empty after message processing — no routing data displayed | `src/api/server.py` (router_info WS event) or `OrchestrationPanel.tsx` |
+| BUG-3 | **HIGH** | Memory panel shows "Loading..." indefinitely — topics/interests/memory context never resolve | `MemoryPanel.tsx` (fetch timeout/error handling) |
+| BUG-4 | **MEDIUM** | Chat auto-title defaults to "New Chat" — `generate_chat_title_router_llm` fails silently | `src/api/server.py` lines 1600-1614 |
+| BUG-5 | **MEDIUM** | Safe Mode dropdown depends on Tauri IPC with no browser fallback — produces "Cannot read properties of undefined (reading 'invoke')" error | `SafeModePanel.tsx` |
+| BUG-6 | **LOW** | Tool Execution panel shows permanent mock data entries ("workspace_search · pending", "browser_snapshot · queued") | `ToolExecutionPanel.tsx` |
+| BUG-7 | **LOW** | Workspace delete shows wrong operator note — reads "Chat thread deleted" instead of "Workspace deleted" | `App.tsx` `handleDeleteProject()` |
+| BUG-8 | **LOW** | Audit & Verify sub-panel doesn't expand on click — "Copy verify script", signing inputs, verify bundle controls unreachable | `ToolExecutionPanel.tsx` |
+
+### Architectural Concerns (Browser Audit)
+
+- **Tauri IPC dependency leakage:** SafeMode, ScreenAssist, TTS, and window sizing all require Tauri IPC and have no browser-only fallbacks. Blocks Safe Mode in browser deployments.
+- **Silent error handling:** Multiple try/catch blocks swallow errors without logging (chat title generation, profile updates, API calls).
+- **Loading states without timeouts:** Memory panel and Orchestration panel have no timeout/error fallback — show "Loading..." indefinitely.
+- **Mock data in production panels:** Tool Execution panel always shows demo entries regardless of actual tool activity.
+
+### Previously Resolved
+
+- **RESOLVED (2026-05-24) — Workspace creation fails with "Failed to create workspace":** 6 fixes applied in `frontend-v2/src/App.tsx`. See BUG-ANALYSIS.md for details.
+- **RESOLVED (2026-05-24) — Chats not appearing on General Workspace sidebar:** Same root cause as above.
+- **RESOLVED (2026-05-11) — 13 skipped tests fixed:** Skill matcher (scikit-learn), Graph LLM tests (LLMPool._test_overrides), WS contract tests (mock generate_chat_title_router_llm).
+- Legacy resolved items archived at end of this file.
+
+### Lingering Risks
+
 - Workspace switching can still cause stale UI state in edge transitions.
 - Frontend/backend event payload mismatches can surface in integration paths.
 - Cloud fallback + anonymization paths require continued regression protection.
 - Router selection may drift on borderline prompts or long-context/tool-heavy prompts.
 - CRUD and project-state invariants need continued hardening under repeated operations.
-- **RESOLVED — ObjC FFI type mismatch crash (2026-04-24):** `NSLocale localeWithLocaleIdentifier:` was passed a raw C string instead of `NSString `*, and `stringWithUTF8String:` calls used unterminated Rust `&str` pointers. All refactored to use `cocoa::foundation` typed bindings. See `[docs/archive/OBJC_FFI_CRASH.md](docs/archive/OBJC_FFI_CRASH.md)` for full analysis.
-- **RESOLVED — Autorelease pool crash (2026-04-24):** SFSpeechRecognizer callback objects accumulated on an implicit TLS pool. Explicit `-release` calls caused double-free on thread exit. Removed all release calls; objects leak instead of crashing.
-- **RESOLVED — Wake-word detection not firing (2026-04-24):** ObjC `float` confidence was read as `f64`, producing garbage values. Read as `f32` and cast.
-- **RESOLVED — PTT not sending to chat (2026-04-24):** `task.cancel()` doesn't produce final result. Changed to `task.finish()`.
-- **RESOLVED — Wake-word not activating (2026-04-24):** No final transcript sent on interim wake-word detection. Now sends `Transcript(is_final=true)` immediately alongside `WakeWord` event.
 
 ## Next Plan
 
 - **Phase 6 (MVP Hardening) is complete.**
 - **Phase 7 (2026-05-11) is complete.** All 13 skipped tests fixed. Core test suite: **705 passed, 0 failed, 5 skipped** (Redis/integration).
+- **Phase 8 (post-audit bug fixes):** Address 8 bugs found in the 2026-05-25 browser audit. Priority order: BUG-1 (persona leak, CRITICAL) → BUG-2 (orchestration panel) → BUG-3 (memory loading) → BUG-5 (Tauri fallback) → BUG-4 (chat titling) → BUG-6 (mock data) → BUG-7 (operator note) → BUG-8 (audit expand). See [`docs/BUG-ANALYSIS.md`](BUG-ANALYSIS.md) for full analysis.
 - All items in the Phase 6 checklist are resolved, including CoreML wake-word model integration.
-- **Recommended next phase**: Phase 7 — Post-MVP polish, covering bug fixes for known risks, performance optimization against SLOs, broader integration testing, and user-facing documentation for release.
+- **Recommended next phase**: Phase 8 — Bug fixes from browser audit, then broader integration testing and user-facing documentation for release.
 
-### Phase 7: Post-MVP Polish (Complete)
+### Phase 8: Browser Audit Bug Fixes
 
 | Item | Status |
 |------|--------|
-| Remove dead audit tests (test_frontend_audit_bugs.py, test_frontend_audit_preservation.py) | Done |
-| Add TrainingData/ / CoreML artifacts to .gitignore | Done |
-| Mark pre-existing test failures as skipped with clear reasons | Done |
-| Fix WS contract tests (GraphSession.start_run mock plumbing) | Done |
-| Fix sentence routing tests (mock graph init before LM Studio connection) | Done |
-| Fix skill matcher tests (TF-IDF corpus with actual skill files) | Done |
-| Add Python 3.12/3.13 compatibility note (Pydantic V1 deprecation) | Pending |
-| Verify CI passes green | Done |
+| BUG-1 — Fix persona/system prompt leak in first assistant response | Pending |
+| BUG-2 — Restore Orchestration panel routing data display | Pending |
+| BUG-3 — Fix Memory panel indefinite "Loading..." state | Pending |
+| BUG-4 — Fix chat auto-title generation (silent failure) | Pending |
+| BUG-5 — Add browser fallback for Safe Mode dropdown (no Tauri IPC dependency) | Pending |
+| BUG-6 — Remove mock data entries from Tool Execution panel | Pending |
+| BUG-7 — Fix workspace delete operator note text | Pending |
+| BUG-8 — Fix Audit & Verify sub-panel expand/collapse | Pending |
+| Architectural — Add loading timeouts and error states to Memory/Orchestration panels | Pending |
+| Architectural — Add error logging to silent try/catch blocks | Pending |
 
 ### Phase 6: MVP Hardening (Complete)
 

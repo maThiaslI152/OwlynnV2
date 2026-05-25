@@ -199,3 +199,16 @@ The system ensures users always get a response:
 6. **Model swap failure (ModelSwapError)** → Use currently-loaded M-tier variant.
 
 All fallbacks set `model_used` to a descriptive value with `-fallback` suffix.
+
+### 13. Frontend Inspector Panels
+
+The right inspector panel (or overlay in compact mode) provides real-time observability:
+
+- **Orchestration** — displays routing decision (route, model, confidence, source) from `router_info` WS event.
+- **Memory & Context** — shows tracked topics (`GET /api/topics`), interests (`GET /api/interests`), Mem0 long-term memory search (`GET /api/mem0/search`), and injected prompt context (`GET /api/memory-context`).
+- **Safe Mode** — controls safety level (Normal/Read-only/Confirmed Exec/Isolated) and execution policy (Auto-approve/HITL). Currently depends on Tauri IPC bridge.
+- **Screen Assist** — screen capture, preview, and annotation. Requires Tauri IPC bridge.
+- **Tool Execution** — logs tool calls with filtering (All/Risky/Error), export with SHA-256 hash chaining, and HMAC-signed audit verification.
+- **Action Proposals** — displays pending security approvals and interrupt choice selections.
+
+**Known issues (2026-05-25 browser audit):** Orchestration panel shows no routing data (BUG-2), Memory panel hangs on "Loading..." (BUG-3), Safe Mode dropdown errors in browser-only mode (BUG-5), Tool Execution shows mock data (BUG-6), Audit & Verify sub-panel won't expand (BUG-8). See [`docs/BUG-ANALYSIS.md`](BUG-ANALYSIS.md) for details.

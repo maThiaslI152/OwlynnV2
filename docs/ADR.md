@@ -345,3 +345,36 @@ so downstream nodes can use the matched skill's toolbox and prompt.
   skill's own `tools_used` field first, falling back to a category map, then to `["all"]`.
 - Profile settings `route_confidence_threshold` and `skill_clarification_threshold` replace
   the single `router_clarification_threshold` for independent tuning.
+
+---
+
+## Quality Audit: Browser Interactive Test (2026-05-25)
+
+**Context:** A full interactive browser audit was conducted against the running OwlynnV2
+stack (backend port 8000, frontend port 5173, LM Studio port 1234, Qdrant/Redis via Podman).
+All 28 user-facing features were tested, including chat, workspace management, inspector
+panels, safe mode, tool execution audit, and layout toggles.
+
+**Findings:** 19 of 28 features passed. 5 failed, 4 were untestable (require Tauri IPC or
+security-sensitive tool triggers). 8 bugs were documented with severity classification:
+
+| Severity | Count | Key Issue |
+|----------|-------|-----------|
+| Critical | 1 | Persona/system prompt leaks into first assistant response |
+| High | 2 | Orchestration and Memory panels fail to display data |
+| Medium | 2 | Safe Mode has no browser fallback; chat auto-titling fails silently |
+| Low | 3 | Mock data in production panel; wrong operator note text; audit panel won't expand |
+
+**Consequences:**
+
+- BUG-1 (persona leak) is a release blocker — corrupts every new conversation's first
+  interaction.
+- BUG-2 (orchestration) and BUG-3 (memory) degrade observability and personalization,
+  two of the inspector panel's core value propositions.
+- BUG-5 (Tauri dependency) reveals a coupling issue: several panels (SafeMode, ScreenAssist,
+  TTS, window sizing) have no browser-only fallback, limiting deployment flexibility.
+- All bugs are documented with file locations and hypotheses in [`docs/BUG-ANALYSIS.md`](BUG-ANALYSIS.md).
+- Phase 8 added to project roadmap (`docs/STATUS.md`) to track resolution of all 8 bugs
+  plus architectural hardening (loading timeouts, error logging).
+
+**Cross-references:** `docs/BUG-ANALYSIS.md`, `docs/STATUS.md` (Phase 8), `docs/AI_AGENT_INDEX.md`

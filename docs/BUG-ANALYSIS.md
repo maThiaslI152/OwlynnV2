@@ -1,292 +1,177 @@
-# Bug Analysis: Workspace Creation & Chat Display Issues
+# Bug Analysis: Browser Audit — OwlynnV2 Full Feature Test
 
-**Date:** 2026-05-23
-**Session:** Debug session 03f428
-
----
-
-## Symptoms Reported
-
-1. **"Failed to create workspace"** — Error shown when attempting to create a new workspace/project
-2. **"Chats did not appear on General Workspace but the conversation working fine"** — Chats are not visible in the sidebar for the "General Workspace" (default project), even though the WebSocket conversation proceeds normally
+**Date:** 2026-05-25  
+**Session:** Browser-based interactive audit of all frontend features  
+**Environment:** Backend on port 8000, Frontend on port 5173 (Vite), LM Studio on 1234, Qdrant/Redis via Podman  
+**Browser:** Cursor built-in browser
 
 ---
 
-## Architecture Overview
+## Audit Method
 
-```
-┌─────────────────────┐     HTTP/WebSocket     ┌──────────────────────┐
-│   Vite React App     │ ◄────────────────── ► │  FastAPI Backend      │
-│   (port 5173)        │                       │  (port 8000)          │
-│                      │   Vite proxy:          │                       │
-│  App.tsx             │   /api → :8000         │  server.py            │
-│  ├─ handleCreateProject()                     │  ├─ POST /api/projects│
-│  ├─ handleSend()      │                       │  ├─ GET  /api/projects│
-│  ├─ loadProjects()    │                       │  ├─ POST /api/projects│
-│  └─ projectThreadsRef │                       │  │   /{id}/chats      │
-│                      │                       │  └─ WS  /ws/chat/{id} │
-└─────────────────────┘                       └──────┬───────────────┘
-                                                      │
-                                                     ▼
-                                          ┌──────────────────────┐
-                                          │  project_manager      │
-                                          │  (project.py)         │
-                                          │                       │
-                                          │  ── data/projects.json│
-                                          │    {                  │
-                                          │     "default": {      │
-                                          │       id: "default",  │
-                                          │       name: "General  │
-                                          │         Workspace",   │
-                                          │       chats: [...]    │
-                                          │     },                │
-                                          │     "<uuid>": {...}   │
-                                          │    }                  │
-                                          └──────────────────────┘
-```
+Every user-facing feature was tested interactively through the built-in browser. The backend (`src/api/server.py` line 1-1830) and agent state (`src/agent/state.py`) were reviewed for context. Tests were conducted in "Normal" safe mode with "Auto-approve" execution policy.
 
 ---
 
-## Bug 1: "Failed to create workspace"
+## Feature Test Matrix
 
-### Code Location
-
-**Frontend:** `frontend-v2/src/App.tsx` lines 463-485
-
-```typescript
-const handleCreateProject = useCallback(async (projectName: string) => {
-    const trimmedName = projectName.trim()
-    if (!trimmedName) return
-    try {
-      const response = await fetch('/api/projects', {       // ← Step 1: POST
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: trimmedName }),
-      })
-      if (!response.ok) throw new Error('create failed')    // ← Step 2: check
-      const created = (await response.json()) as ProjectCreateResponse
-      const newThreadId = makeThreadId()
-      projectThreadsRef.current = { ...projectThreadsRef.current, [created.id]: newThreadId }
-      clearSession()
-      setActiveProjectId(created.id)                         // ← Step 3: React state set
-      setCurrentThreadId(newThreadId)
-      setActiveChatId(newThreadId)
-      setOperatorNote('Switched to new workspace.')
-      await loadProjects()                                   // ← Step 4: refresh
-    } catch {
-      setOperatorNote('Failed to create workspace.')         // ← Step 5: silent catch-all
-    }
-  }, [clearSession, loadProjects])
-```
-
-**Backend:** `src/api/server.py` lines 561-565 → `src/memory/project.py` lines 114-129
-
-### Hypothesis A1 — Network/fetch error (HIGH PROBABILITY)
-
-**Mechanism:** The `catch` block in `handleCreateProject` swallows ALL errors. When running in Tauri dev mode on macOS, the Tauri application's WebView may have different network capabilities than a browser:
-
-- Tauri uses a custom WebView (WKWebView on macOS) which may block localhost requests differently
-- The API runs at `http://127.0.0.1:8000` but Tauri may route localhost differently
-- In Tauri context, `isTauriRuntime = true`, but the `fetch('/api/projects')` path is RELATIVE — it relies on Vite's proxy to forward to port 8000. But Tauri may serve from a different origin that doesn't proxy `/api/*`.
-
-**Evidence:** The terminal log from `909937.txt` shows the frontend WAS able to connect via Vite proxy (HMR working), but also shows ECONNREFUSED errors for `/api/projects` when the backend was down. In Tauri production/dev, the frontend may not be served by Vite's dev server but directly by Tauri's WebView, so Vite proxy is bypassed.
-
-**How to verify:**
-```javascript
-// In handleCreateProject, add logging before the try/catch:
-console.log('[create] isTauriRuntime:', isTauriRuntime, 'apiBase:', apiBase)
-// And use apiUrl() instead of relative paths:
-const url = apiUrl('/api/projects')
-```
-
-### Hypothesis A2 — Backend UUID collision or `get_project_workspace` crash (LOW PROBABILITY)
-
-**Mechanism:** `project_manager.create_project()` calls `get_project_workspace(pid)` at line 128 of `project.py`. This creates the workspace directory via `Path.mkdir()`. On macOS, if there are filesystem permission issues or the path is invalid, this could fail with an OSError, propagating back to the FastAPI endpoint as a 500 error, which triggers `!response.ok`.
-
-**How to verify:** Check backend logs for any exceptions during project creation. Also check that `WORKSPACE_DIR/projects/<id>/` is being created successfully.
-
-### Hypothesis A3 — `loadProjects()` throws after successful creation (MEDIUM PROBABILITY)
-
-**Mechanism:** Even if the POST succeeds, `loadProjects()` is called afterward. If `loadProjects()` fails (e.g., the GET `/api/projects` returns an error), the catch-all handler shows "Failed to create workspace." — even though the project WAS created successfully on the backend.
-
-**Evidence:** The data file `data/projects.json` already contains 4 projects (default, tws, TestCreate, ViteProxyTest), so creation works sometimes. The `TestCreate` and `ViteProxyTest` projects have empty `chats` arrays, suggesting they were created via the UI but never used.
-
-**How to verify:** Check `data/projects.json` after a "Failed to create workspace" error — if the project exists in the JSON, the error is in `loadProjects()`.
-
-### Hypothesis A4 — React stale closure race in `loadProjects` (MEDIUM PROBABILITY)
-
-**Mechanism:** `loadProjects` is a `useCallback` with dependencies `[activeProjectId, currentThreadId]`. When `handleCreateProject` runs:
-
-1. `setActiveProjectId(created.id)` — React state update (batched, not immediate)
-2. `await loadProjects()` — calls the current closure of `loadProjects`, which still captures OLD `activeProjectId`
-
-Since `loadProjects` checks whether `activeProjectId` exists in loaded projects:
-```typescript
-const activeExists = mapped.some((project) => project.id === activeProjectId)
-```
-If `activeProjectId` is still `"default"` (stale), it enters the `else` branch and auto-switches to the latest chat of the "default" project — potentially overriding the state updates that `handleCreateProject` just made. While this wouldn't throw, it causes confusing state. Combined with potential fetch errors, it degrades the experience.
-
-**How to verify:** Add console.log to `loadProjects` to see what `activeProjectId` is at call time.
-
-### Hypothesis A5 — `generate_chat_title_router_llm` crash in WebSocket (VERY LOW PROBABILITY)
-
-The chat title generation is wrapped in `try/except` at server.py line 1588-1591, so it shouldn't crash. But worth noting.
+| # | Feature | Status | Notes |
+|---|---------|--------|-------|
+| 1 | WebSocket Connection | PASS | Shows "connected" in inspector header |
+| 2 | Workspace Create | PASS | Creates new workspace, switches to it, shows operator note |
+| 3 | Workspace Rename | PASS | Inline rename input appears, updates active name |
+| 4 | Workspace Delete | PASS* | Deletes successfully but shows wrong operator note (BUG-7) |
+| 5 | Workspace Switch | PASS | Falls back to default workspace on delete |
+| 6 | Chat Create (+ New) | PASS | Creates new thread, resets conversation |
+| 7 | Chat Rename | PASS | Edit/delete buttons appear on chat items |
+| 8 | Chat Delete | PASS | Shows confirm dialog, removes from list |
+| 9 | Message Send | PASS | Clears input, disables send button |
+| 10 | Message Receive | PASS* | Receives response but content is wrong (BUG-1) |
+| 11 | Streaming Indicator | PASS | "Thinking..." animation during response |
+| 12 | Suggestion Buttons | PASS | Shown in empty state, disabled when disconnected |
+| 13 | Composer Enable/Disable | PASS | Disabled when not connected |
+| 14 | Operator Note | PASS | Shows contextual messages (new workspace, errors, audit status) |
+| 15 | Full/Compact Toggle | PASS | Both modes render correctly |
+| 16 | Inspector Overlay | PASS | Opens in compact mode with all panels |
+| 17 | Orchestration Panel | FAIL | Empty after message processing (BUG-2) |
+| 18 | Memory Panel | FAIL | Shows "Loading..." indefinitely (BUG-3) |
+| 19 | Safe Mode Dropdown | FAIL | Depends on Tauri IPC, errors in browser (BUG-5) |
+| 20 | Execution Policy Dropdown | UNTESTED | Requires backend interaction |
+| 21 | Screen Assist | UNTESTED | Requires Tauri IPC bridge |
+| 22 | Tool Execution Filters | PASS | All/Risky/Error buttons clickable |
+| 23 | Tool Execution Export | PASS | Shows appropriate message when no data |
+| 24 | Tool Exec Audit & Verify | FAIL | Panel doesn't expand (BUG-8) |
+| 25 | Action Proposals | PASS | Shows "No pending proposals" correctly |
+| 26 | Project Knowledge | PASS | Shows empty state with hint text |
+| 27 | Chat Auto-Title | FAIL | Defaults to "New Chat" (BUG-4) |
+| 28 | Security Approval | UNTESTED | No security-sensitive tool calls triggered |
 
 ---
 
-## Bug 2: "Chats did not appear on General Workspace"
+## Bugs Found
 
-### Data Evidence
+### BUG-1 (CRITICAL): Persona/System Prompt Leaks into First Response
 
-The `data/projects.json` file shows:
-```json
-"default": {
-    "id": "default",
-    "name": "General Workspace",
-    "chats": [{
-        "id": "thread-2658ab49-571a-45bf-a90e-cf93c6e8bc77",
-        "name": "New Chat",
-        "created_at": 1779553952.387603
-    }],
-}
-```
+**Symptom:** When sending "Hello, what is 2+2?", the assistant responded with a persona description instead of answering the question:
 
-So the chat IS registered on the backend. The problem is on the **frontend**.
+> "Owlynn (you) is a helpful assistant specializing in programming languages like Python and JavaScript. They provide short, direct answers for common questions such as: How to install dependencies. Best practices for error handling..."
 
-### Code Location
+The system prompt/persona text is leaking into the output as if it were the assistant's response.
 
-**Chat registration (backend):** `src/api/server.py` lines 1584-1599
-```python
-# On first user message in a thread, register the chat in the project
-if thread_id not in sessions or not sessions[thread_id].event_buffer:
-    chat_id = thread_id
-    ...
-    project_manager.add_chat_to_project(project_id, {
-        "id": chat_id,
-        "name": title or "New Chat",
-        "created_at": time_module.time(),
-    })
-```
+**Location:** Likely in `src/agent/nodes/simple.py` or `src/agent/nodes/complex.py` — the initial system message may be getting included in the `messages` list incorrectly.
 
-**Frontend listing:** `loadProjects()` in `frontend-v2/src/App.tsx` lines 72-125
-
-### Hypothesis B1 — Race condition: frontend `loadProjects()` before backend registers chat (HIGH PROBABILITY)
-
-**Mechanism:** In `handleSend()` (line 330-346):
-```typescript
-wsClientRef.current?.send({
-    type: 'user.message',
-    ...
-    project_id: activeProjectId,
-})
-void loadProjects()   // ← called IMMEDIATELY after WS send
-```
-
-The backend processes the WebSocket message **asynchronously**. The chat is registered during message processing (line 1584-1599). When `loadProjects()` is called right after `wsClientRef.current?.send()`, the WebSocket message hasn't reached the backend yet or hasn't been processed, so the chat isn't registered yet. The `GET /api/projects` returns before the chat is added.
-
-**Timing:**
-```
-Frontend                          Backend
-  │                                 │
-  ├─ WS.send(message) ────────────► │ (async receive)
-  ├─ fetch('/api/projects') ──────► │ GET /api/projects
-  │   ◄── returns without chat ─── │ (chat not registered yet)
-  │                                 │ ← process WS message
-  │                                 │ ← register chat in projects.json
-```
-
-**However:** The `assistant.message` event handler (line 221) also calls `loadProjectsRef.current()`, so the second call should pick up the chat. But this depends on timing too.
-
-### Hypothesis B2 — Thread ID mismatch between frontend and backend (HIGH PROBABILITY)
-
-**Mechanism:**
-- Initial `currentThreadId` is `'default'` (from `useState('default')` on line 63)
-- Initial `activeChatId` is `'default'` (same line)
-- When the app first loads, WebSocket connects to `ws://.../ws/chat/default`
-- The backend uses `thread_id = "default"` for LangGraph state
-- When `handleSend` is called, the message goes to the `"default"` WebSocket
-- **BUT**: `handleNewChat()` (line 396) creates a NEW `thread-<uuid>` and only updates local state — it does NOT trigger chat registration on the backend
-
-The backend's `add_chat_to_project` registers the chat with `chat_id = thread_id`. But the frontend uses `currentThreadId` which initially is `"default"`. So:
-
-1. User opens app → WebSocket connects to `/ws/chat/default`
-2. User types first message → backend registers chat with `id = "default"` in projects.json
-3. User creates a "New Chat" → frontend creates `thread-xxx`, reconnects WebSocket to `/ws/chat/thread-xxx`
-4. Backend registers a NEW chat with `id = "thread-xxx"` 
-5. But `loadProjects()` determines chat display based on `activeChatId` matching
-
-This could cause the **chat list not reflecting the actual conversation**.
-
-### Hypothesis B3 — `loadProjects()` auto-switch logic resets chat state (MEDIUM PROBABILITY)
-
-**Mechanism:** In `loadProjects()` lines 106-117:
-```typescript
-const activeProject = mapped.find((p) => p.id === activeProjectId)
-if (activeProject && activeProject.chats.length > 0) {
-    const currentExists = currentThreadId && activeProject.chats.some((c) => c.id === currentThreadId)
-    if (!currentExists) {
-        projectThreadsRef.current[activeProjectId] = currentThreadId  // keeps old value
-    } else {
-        const sorted = [...activeProject.chats].sort(...)
-        const latestChatId = sorted[0].id
-        projectThreadsRef.current[activeProjectId] = latestChatId
-        setCurrentThreadId(latestChatId)     // auto-switches!
-        setActiveChatId(latestChatId)        // auto-switches!
-    }
-}
-```
-
-When `currentThreadId` starts as `"default"` and the registered chat id is `"thread-xxx"`:
-- `currentExists` = false (no chat with id `"default"`)
-- The `!currentExists` branch executes, keeping the stale `currentThreadId`
-- But the backend's thread_id is the WebSocket path, which IS `"default"` on initial connection
-
-This logic is fragile — it auto-switches the active chat based on the latest chat, which can disorient the user and cause the chat list to appear out of sync.
-
-### Hypothesis B4 — `activeChatId` misalignment with WebSocket thread (MEDIUM PROBABILITY)
-
-**Mechanism:** The WebSocket connects to `/ws/chat/{currentThreadId}`, but `activeChatId` may not match `currentThreadId` after `loadProjects()` auto-switches. This means:
-- Messages are sent on one thread but displayed as if on another
-- Chats in the sidebar reflect project registration but don't align with active conversation
+**Severity:** Critical — corrupts the first interaction with every new conversation.
 
 ---
 
-## Summary of Interactions
+### BUG-2 (HIGH): Orchestration Panel Remains Empty After Message Processing
 
-Both bugs may stem from the same root cause: **improper state management across WebSocket reconnections and React stale closures**.
+**Symptom:** After the agent processes a message, the Orchestration panel in the inspector shows nothing. The initial "No routing information yet" message disappears, but no routing data (model, route, confidence, source) appears.
 
-```
-Problem cascade:
-  1. State initialized with magic string "default" as thread ID
-  2. loadProjects() depends on activeProjectId/currentThreadId via useCallback closure
-  3. handleCreateProject() calls loadProjects() with potentially stale activeProjectId
-  4. WebSocket sends project_id but thread_id comes from URL path, not payload
-  5. Chat registration is asynchronous and races with loadProjects()
-  6. loadProjects() auto-switches active chat, fighting with manual user navigation
-```
+**Expected:** Panel should show the model used (e.g., "gemma-4-e2b-heretic-uncensored-mlx"), route ("simple"/"complex-default"), confidence gauge, and source.
+
+**Location:** 
+- Backend: `src/api/server.py` line 1388-1404 — `router_info` WebSocket event emission in `on_chain_end` for node `"router"`
+- Frontend: `OrchestrationPanel.tsx` — reads `routerMetadata` from store
+
+**Hypothesis:** Either the `router_info` event is not being emitted (router node may not have set `router_metadata` in state), or the frontend store isn't receiving/processing the event correctly.
 
 ---
 
-## Recommended Fixes (Priority Order)
+### BUG-3 (HIGH): Memory Panel Shows "Loading..." Indefinitely
 
-### Fix 1: Instrument error handling to determine actual cause
-Add detailed error logging to `handleCreateProject` instead of the silent catch-all.
+**Symptom:** The Memory & Context panel shows "Loading..." and never resolves to show tracked topics, interests, or memory context.
 
-### Fix 2: Fix the stale closure in `loadProjects`
-- Use refs for `activeProjectId` and `currentThreadId` inside `loadProjects`, or
-- Remove these from the `useCallback` dependency array and read them from refs
+**Expected:** Panel should show tracked topics (from `GET /api/topics`), interests (from `GET /api/interests`), and provide access to Mem0 search and memory context display.
 
-### Fix 3: Fix the race in chat registration
-- Add the chat to the project BEFORE responding to the WebSocket, not during processing, or
-- Move the `loadProjects()` call in `handleSend` to the `assistant.message` event handler (it's already there at line 221, possibly redundant)
+**Location:** Frontend `MemoryPanel.tsx` — the data fetching for topics/interests may be:
+1. Failing silently (API returns error)
+2. Hanging (no timeout on fetch)
+3. Not being triggered at all
 
-### Fix 4: Eliminate "default" as thread ID
-- Initialize `currentThreadId` with a proper UUID instead of the magic string "default"
-- This avoids collision with project IDs and makes thread IDs truly unique
+---
 
-### Fix 5: Send `chat_id` explicitly in WebSocket messages
-- Currently, thread_id is embedded in the WS URL path. Instead, send it in the message payload for clarity and consistency.
+### BUG-4 (MEDIUM): Chat Auto-Title Defaults to "New Chat"
 
-### Fix 6: Separate project/chat navigation from auto-switch logic
-- `loadProjects()` should only update the project/chat LIST, not auto-navigate
-- Navigation should be a separate, explicit user action
+**Symptom:** When a new chat is created via the first message, the chat title should be auto-generated from the message content (e.g., "Math question" or "2+2 calculation"). Instead, it defaults to "New Chat".
+
+**Location:** `src/api/server.py` lines 1600-1614 — `generate_chat_title_router_llm(user_input[:1000], file_names=file_names)` is wrapped in try/except. On failure, `title` is set to `""`, resulting in "New Chat".
+
+**Hypothesis:** The router LLM for title generation is either:
+- Not loaded/available
+- Returning an error that's silently caught
+- The `generate_chat_title_router_llm` function is failing
+
+---
+
+### BUG-5 (MEDIUM): Safe Mode Dropdown Requires Tauri IPC, No Browser Fallback
+
+**Symptom:** Changing the safe mode from the dropdown produces error: `"Safe Mode error: Cannot read properties of undefined (reading 'invoke')"`. The dropdown visually resets to "Normal" after selection.
+
+**Location:** `SafeModePanel.tsx` — calls `tauriBridge.set_safe_mode()` which invokes `window.__TAURI__` IPC. In browser-only mode, `window.__TAURI__` is undefined.
+
+**Fix:** The SafeModePanel should either:
+1. Fall back to a REST API call (`POST /api/advanced-settings`) for mode changes
+2. Disable the dropdown in non-Tauri environments with a tooltip explaining it's Tauri-only
+3. Use the unified settings endpoint consistently instead of Tauri bridge
+
+---
+
+### BUG-6 (LOW): Tool Execution Panel Shows Mock/Preview Data Permanently
+
+**Symptom:** Even when no tools have been executed in the current session, the Tool Execution panel shows:
+- "workspace_search · pending"
+- "browser_snapshot · queued"
+
+These appear to be mock/demo entries from the empty state preview.
+
+**Location:** `ToolExecutionPanel.tsx` — the empty state preview renders these as mock entries.
+
+**Fix:** Remove mock entries or conditionally render them only when `toolExecutionHistory.length === 0 && !latestToolExecution`. They should not persist after real tool activity begins.
+
+---
+
+### BUG-7 (LOW): Workspace Delete Shows Wrong Operator Note
+
+**Symptom:** After deleting a workspace (non-default), the operator note reads: `"Chat thread-<uuid> deleted."` instead of something like `"Workspace <name> deleted."` or `"Project deleted."`.
+
+**Location:** `App.tsx` `handleDeleteProject()` — the operator note text references "Chat thread" when it should reference the project/workspace.
+
+---
+
+### BUG-8 (LOW): Audit & Verify Sub-Panel Doesn't Expand
+
+**Symptom:** Clicking the "+ Audit & Verify" button in the Tool Execution panel focuses the button but does not expand the sub-panel containing "Copy verify script", "Signing key", "Signing secret", "Verify bundle", and "Export report" controls.
+
+**Location:** `ToolExecutionPanel.tsx` — the expand/collapse toggle for the audit section may not be wired correctly, or the expanded state is not being set.
+
+---
+
+## Architecture Observations
+
+### Strengths
+1. **Clean three-panel layout** with responsive compact/full mode toggle
+2. **Real-time WebSocket communication** handles streaming, interrupts, and tool execution events
+3. **Comprehensive inspector panels** for debugging (orchestration, memory, tool execution, action proposals)
+4. **Audit trail export** with SHA-256 hash chaining and HMAC signing support
+5. **Workspace/project isolation** with per-project knowledge bases and chat organization
+
+### Concerns
+1. **Tauri dependency leakage** — SafeMode, ScreenAssist, TTS, and window sizing all require Tauri IPC and have no browser-only fallbacks
+2. **Silent error handling** — Many try/catch blocks in the frontend swallow errors without logging (e.g., chat title generation, profile updates)
+3. **Stale closure patterns** — `useCallback` with complex dependency chains (documented in prior session)
+4. **Loading states without timeouts** — Memory panel and orchestration panel have no timeout/error fallback
+5. **Mock data in production panels** — Tool Execution panel always shows mock entries regardless of actual tool activity
+
+---
+
+## Recommended Priority Actions
+
+1. **Fix BUG-1 (Persona Leak)** — Critical, affects every new conversation
+2. **Fix BUG-2 (Orchestration Panel)** — Core observability feature, needed for debugging
+3. **Fix BUG-3 (Memory Loading)** — Core feature, needed for personalization
+4. **Fix BUG-5 (Tauri Fallback)** — Blocks Safe Mode in browser deployments
+5. **Fix BUG-4 (Chat Titling)** — Quality of life, auto-generated titles improve navigation
+6. **Fix BUG-6 (Mock Data)** — Remove demo entries for clean production UI
+7. **Fix BUG-7 (Operator Note)** — Correct the delete message text
+8. **Fix BUG-8 (Audit Expand)** — Enable the audit verification features

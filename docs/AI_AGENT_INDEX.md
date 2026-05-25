@@ -38,7 +38,9 @@ Use it to locate the right source files, contracts, and tests before making chan
 - `frontend-v2/src/state/useAppStore.ts`
 - `frontend-v2/src/components/MemoryPanel.tsx`
 - `frontend-v2/src/components/AppShell.tsx`
-- Bug analysis: `docs/BUG-ANALYSIS.md` (workspace creation failures, chat display issues)
+- Bug analysis: `docs/BUG-ANALYSIS.md`
+  - Session 03f428: workspace creation failures, chat display issues, stale closure races
+  - Session 2026-05-25: full browser audit — persona leak (CRITICAL), orchestration/memory panel failures, Tauri IPC fallback gaps, tool execution mock data, audit panel expand bug, operator note text bugs
 - Tests:
   - `tests/test_crud_operations.py`
   - `tests/test_crud_properties.py`
@@ -69,9 +71,24 @@ Use it to locate the right source files, contracts, and tests before making chan
 - WebSocket contract: `docs/CHAT_PROTOCOL.md`
 - Active status and risks: `docs/STATUS.md`
 - Architecture decisions: `docs/ADR.md`
-- Live Talk deferred status (removed): `docs/LIVE_TALK_DEFERRED.md`
 - Performance & memory SLOs: `docs/PERFORMANCE_SLOS.md`
+- Bug analysis and audit reports: `docs/BUG-ANALYSIS.md`
 - Engineering improvement backlog: `docs/ENGINEERING_IMPROVEMENTS.md`
+
+## Bug Tracking & Quality Audit
+
+- **Bug inventory:** `docs/BUG-ANALYSIS.md` contains all documented bugs from active sessions
+  - **Session 03f428 (2026-05-23):** Workspace creation failures, chat display race conditions
+  - **Session 2026-05-25:** Full browser interactive audit — 8 bugs found (1 critical, 2 high, 2 medium, 3 low)
+- **Quick bug reference:**
+  - BUG-1 (CRITICAL): Persona/system prompt leaks into first assistant response
+  - BUG-2 (HIGH): Orchestration panel empty after message processing
+  - BUG-3 (HIGH): Memory panel shows "Loading..." indefinitely
+  - BUG-4 (MEDIUM): Chat auto-title defaults to "New Chat"
+  - BUG-5 (MEDIUM): Safe Mode dropdown depends on Tauri IPC, no browser fallback
+  - BUG-6 (LOW): Tool Execution panel shows permanent mock data
+  - BUG-7 (LOW): Workspace delete shows wrong operator note
+  - BUG-8 (LOW): Audit & Verify sub-panel doesn't expand
 
 ## Before You Commit (Agent Checklist)
 
