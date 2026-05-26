@@ -13,6 +13,7 @@ export interface UserMessageEvent {
   content: string
   message?: string
   project_id?: string
+  persona_id?: string
   source?: 'text' | 'voice'
 }
 

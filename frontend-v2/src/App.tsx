@@ -435,6 +435,7 @@ function App() {
   }, [addMessage, executionPolicy, handleInterrupt, latestToolExecution, pushToolExecution, setLatestToolExecution, setOperatorNote, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setTtsSpeaking, upsertActionProposal, updateActionProposalStatus])
 
   const handleSend = useCallback((content: string) => {
+    const activePersonaId = useAppStore.getState().activePersonaId
     const message: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
@@ -448,6 +449,7 @@ function App() {
       content: message.content,
       message: message.content,
       project_id: activeProjectId,
+      persona_id: activePersonaId,
     })
   }, [addMessage, activeProjectId])
 

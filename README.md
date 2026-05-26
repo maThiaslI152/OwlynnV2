@@ -240,13 +240,50 @@ npx vitest run
 ```bash
 git clone <repo-url> && cd owlynn
 pip install -r requirements.txt
-cp .env.example .env
-# Edit .env with your settings
-./start.sh
-# Backend only: uvicorn src.api.server:app --host 127.0.0.1 --port 8000
+cp .env.example .env   # edit with your settings
 ```
 
-The app opens at `http://127.0.0.1:8000` or as a Tauri desktop window.
+Then choose your launch mode:
+
+### 1. Full Stack (Tauri Desktop)
+
+```bash
+./start.sh
+```
+
+Launches: Podman containers (Qdrant, Redis) → LM Studio check → Backend (port 8000) → Frontend dev server (port 5173) → Tauri desktop app. All services share one terminal; Ctrl+C stops everything.
+
+### 2. Browser-Only (Backend + Frontend Dev Server)
+
+Best for development and browser-based testing. Start the backend first, then the frontend Vite dev server:
+
+```bash
+# Terminal 1 — backend
+export PYTHONPATH="$(pwd):$PYTHONPATH"
+source .venv/bin/activate
+uvicorn src.api.server:app --host 127.0.0.1 --port 8000
+
+# Terminal 2 — frontend dev server (hot reload)
+cd frontend-v2 && npm run dev -- --host 127.0.0.1
+```
+
+Open `http://127.0.0.1:5173` in your browser. This bypasses the Tauri shell entirely — Safe Mode and Screen Assist won't work without Tauri IPC, but chat, tools, and panels all function.
+
+### 3. CLI / Headless (Backend Only)
+
+```bash
+export PYTHONPATH="$(pwd):$PYTHONPATH"
+source .venv/bin/activate
+uvicorn src.api.server:app --host 127.0.0.1 --port 8000
+```
+
+Backend available at `http://127.0.0.1:8000`. Use `curl`, the REST API, or the WebSocket endpoint (`ws://127.0.0.1:8000/ws/chat/{thread_id}`) to interact programmatically. Full API reference in [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md).
+
+| Mode | Backend | Frontend HMR | Tauri IPC | Best For |
+|------|---------|-------------|-----------|----------|
+| `./start.sh` | Yes | No (prod build) | Yes | Daily use, full features |
+| Browser | Yes | Yes | No | Dev, browser testing |
+| CLI | Yes | No | No | Scripting, API testing |
 
 ## API
 

@@ -21,7 +21,7 @@ from langchain_core.messages import AIMessage
 from src.agent.state import AgentState
 from src.memory.memory_manager import save_memory, search_memories
 from src.memory.user_profile import get_profile
-from src.memory.persona import get_persona
+from src.memory.persona_manager import get_persona_by_id
 import asyncio
 import logging
 from datetime import datetime, timedelta
@@ -149,11 +149,13 @@ async def memory_inject_node(state: AgentState) -> AgentState:
     # Check cache first (M4 optimization - avoid rebuilding context repeatedly)
     cached_context = MemoryContextCache.get(thread_id)
     if cached_context:
-        persona = get_persona()
+        persona_id = state.get("persona_id") or "default"
+        persona = get_persona_by_id(persona_id)
+        persona_summary = f"You are {persona['name']}, a {persona['role']}. Tone: {persona['tone']}. {persona['instructions']}"
         audit_debug("memory.inject", "context_from_cache", context_chars=len(cached_context))
         return {
             "memory_context": cached_context,
-            "persona": persona.get("role", "None")
+            "persona": persona_summary
         }
     
     # Semantic search against long-term memory.
@@ -194,7 +196,8 @@ async def memory_inject_node(state: AgentState) -> AgentState:
     profile = get_profile()
 
     # Pull persona summary
-    persona = get_persona()
+    persona_id = state.get("persona_id") or "default"
+    persona = get_persona_by_id(persona_id)
     
     # Get enhanced memory context with topics and interests
     enhanced_context = get_memory_context_for_prompt()
@@ -228,9 +231,10 @@ async def memory_inject_node(state: AgentState) -> AgentState:
     MemoryContextCache.set(thread_id, memory_context)
     audit_info("memory.inject", "context_assembled", context_chars=len(memory_context), result_count=len(results))
     
+    persona_summary = f"You are {persona['name']}, a {persona['role']}. Tone: {persona['tone']}. {persona['instructions']}"
     return {
         "memory_context": memory_context,
-        "persona": persona.get("role", "None")
+        "persona": persona_summary
     }
 
 def format_memory_context(results: list, profile: dict, enhanced_context: str = "", project_instructions: str = "") -> str:

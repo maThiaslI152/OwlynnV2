@@ -50,7 +50,7 @@ async def test_sentence_matrix_simple_route_and_response(
         app = build_graph().compile()
 
         with patch("src.agent.nodes.memory.get_profile", return_value={}), \
-             patch("src.agent.nodes.memory.get_persona", return_value={"role": "assistant"}), \
+             patch("src.agent.nodes.memory.get_persona_by_id", return_value={"id": "default", "name": "Owlynn", "role": "assistant", "tone": "friendly", "instructions": ""}), \
              patch("src.agent.nodes.memory.get_memory_context_for_prompt", return_value=""), \
              patch("src.agent.nodes.memory.record_conversation", return_value=None), \
              patch("src.memory.long_term.memory", None):
@@ -91,7 +91,7 @@ async def test_sentence_matrix_complex_route_and_response(
         app = build_graph().compile()
 
         with patch("src.agent.nodes.memory.get_profile", return_value={}), \
-             patch("src.agent.nodes.memory.get_persona", return_value={"role": "assistant"}), \
+             patch("src.agent.nodes.memory.get_persona_by_id", return_value={"id": "default", "name": "Owlynn", "role": "assistant", "tone": "friendly", "instructions": ""}), \
              patch("src.agent.nodes.memory.get_memory_context_for_prompt", return_value=""), \
              patch("src.agent.nodes.memory.record_conversation", return_value=None), \
              patch("src.memory.long_term.memory", None):

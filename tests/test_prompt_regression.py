@@ -36,7 +36,7 @@ async def test_prompt_regression_small_route():
         app = build_graph().compile()
 
         with patch("src.agent.nodes.memory.get_profile", return_value={}), \
-             patch("src.agent.nodes.memory.get_persona", return_value={"role": "assistant"}), \
+             patch("src.agent.nodes.memory.get_persona_by_id", return_value={"id": "default", "name": "Owlynn", "role": "assistant", "tone": "friendly", "instructions": ""}), \
              patch("src.agent.nodes.memory.get_memory_context_for_prompt", return_value=""), \
              patch("src.agent.nodes.memory.record_conversation", return_value=None), \
              patch("src.memory.long_term.memory", None):
@@ -81,7 +81,7 @@ async def test_prompt_regression_complex_route():
         app = build_graph().compile()
 
         with patch("src.agent.nodes.memory.get_profile", return_value={}), \
-             patch("src.agent.nodes.memory.get_persona", return_value={"role": "assistant"}), \
+             patch("src.agent.nodes.memory.get_persona_by_id", return_value={"id": "default", "name": "Owlynn", "role": "assistant", "tone": "friendly", "instructions": ""}), \
              patch("src.agent.nodes.memory.get_memory_context_for_prompt", return_value=""), \
              patch("src.agent.nodes.memory.record_conversation", return_value=None), \
              patch("src.memory.long_term.memory", None):
@@ -113,11 +113,11 @@ async def test_prompt_regression_memory_injection():
     }
 
     with patch("src.agent.nodes.memory.get_profile", return_value={"name": "Tim"}), \
-         patch("src.agent.nodes.memory.get_persona", return_value={"role": "helpful assistant"}), \
+         patch("src.agent.nodes.memory.get_persona_by_id", return_value={"id": "default", "name": "Owlynn", "role": "helpful assistant", "tone": "friendly", "instructions": ""}), \
          patch("src.agent.nodes.memory.get_memory_context_for_prompt", return_value=marker), \
          patch("src.memory.long_term.memory", None):
         result = await memory_inject_node(state)
 
     assert "memory_context" in result
     assert marker in result["memory_context"]
-    assert result["persona"] == "helpful assistant"
+    assert "helpful assistant" in result["persona"]

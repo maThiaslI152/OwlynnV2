@@ -22,7 +22,7 @@ from src.config.log_middleware import log_node
 logger = logging.getLogger(__name__)
 
 SIMPLE_PROMPT = (
-    "You are Owlynn, a helpful assistant. "
+    "{persona_prefix} "
     "Today is {current_date}. "
     "Give short, direct answers (1-3 sentences). "
     "No reasoning steps, no preamble, no meta commentary. "
@@ -82,7 +82,14 @@ async def simple_node(state: AgentState) -> AgentState:
             knowledge = parts[1].split("===")[0].strip()
             if knowledge:
                 memory_hint = f"\n{knowledge}"
+    persona_desc = state.get("persona")
+    if persona_desc and persona_desc != "None":
+        persona_prefix = persona_desc
+    else:
+        persona_prefix = "You are Owlynn, a helpful assistant."
+        
     system = SystemMessage(content=SIMPLE_PROMPT.format(
+        persona_prefix=persona_prefix,
         current_date=date.today().strftime('%B %d, %Y'),
         style_hint=style_hint,
         memory_hint=memory_hint,

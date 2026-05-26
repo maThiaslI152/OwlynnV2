@@ -48,20 +48,77 @@ from src.config.audit_log import audit_info, audit_debug
 
 connected_websockets = set()
 
-def notify_file_processed(filename, status="processed"):
-    """Callback for FileWatcher background thread to broadcast over websockets."""
+def notify_file_processed(filepath_or_name, status="processed"):
+    """Callback for FileWatcher background thread to broadcast over websockets and auto-index projects."""
     import asyncio
+    import os
+    
+    # Gracefully handle both full path and legacy plain filename
+    filepath = os.path.abspath(filepath_or_name) if (isinstance(filepath_or_name, str) and (os.path.isabs(filepath_or_name) or os.path.exists(filepath_or_name))) else filepath_or_name
+    filename = os.path.basename(filepath) if isinstance(filepath, str) else str(filepath)
+    
     loop = getattr(app.state, "loop", None)
     if not loop:
         logger.warning("Loop not preserved, cannot notify websocket clients.")
         return
         
+    # Broadcast to all active websockets
     for ws in list(connected_websockets):
         try:
             coro = ws.send_json({"type": "file_status", "name": filename, "status": status})
             asyncio.run_coroutine_threadsafe(coro, loop)
         except Exception as e:
             logger.warning("Failed to send ws notification: %s", e)
+            
+    # Auto-index into project knowledge base if it's inside a project workspace and is successfully processed
+    if status == "processed" and isinstance(filepath, str) and os.path.exists(filepath):
+        try:
+            rel_path = os.path.relpath(filepath, WORKSPACE_DIR)
+            parts = rel_path.split(os.sep)
+            if len(parts) >= 3 and parts[0] == "projects":
+                project_id = parts[1]
+                if project_id != "default":
+                    # Read the processed text format in .processed/
+                    project_workspace = get_project_workspace(project_id)
+                    processed_dir = os.path.join(project_workspace, ".processed")
+                    cache_path = os.path.join(processed_dir, filename + ".txt")
+                    if not os.path.exists(cache_path):
+                        cache_path = os.path.join(processed_dir, filename + ".md")
+                        
+                    if os.path.exists(cache_path):
+                        with open(cache_path, "r", encoding="utf-8") as f:
+                            text = f.read()
+                        
+                        if text and len(text.strip()) > 50:
+                            async def index_task():
+                                try:
+                                    # Chunk the text: 1500 chars with 200 chars overlap
+                                    chunks = []
+                                    chunk_size = 1500
+                                    overlap = 200
+                                    start = 0
+                                    content_len = len(text)
+                                    while start < content_len:
+                                        end = start + chunk_size
+                                        chunk = text[start:end].strip()
+                                        if chunk:
+                                            chunks.append(chunk)
+                                        start += chunk_size - overlap
+                                    
+                                    # Index each chunk (up to 20 chunks to prevent performance issues)
+                                    for i, chunk_text in enumerate(chunks[:20]):
+                                        await project_manager.add_knowledge(
+                                            project_id,
+                                            f"{filename}#chunk{i}",
+                                            chunk_text
+                                        )
+                                    logger.info("Auto-indexed %d chunks of %s into project %s knowledge base", len(chunks[:20]), filename, project_id)
+                                except Exception as e:
+                                    logger.error("Failed to auto-index file %s: %s", filepath, e)
+                                    
+                            asyncio.run_coroutine_threadsafe(index_task(), loop)
+        except Exception as e:
+            logger.error("Error in watcher auto-indexing: %s", e)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -244,6 +301,21 @@ async def api_update_persona(body: dict):
         except Exception:
             pass
     return get_persona()
+
+@app.get("/api/personas")
+async def api_list_personas():
+    """List all available personas (built-in + custom)."""
+    from src.memory.persona_manager import list_personas
+    return list_personas()
+
+@app.post("/api/personas")
+async def api_create_persona(body: dict):
+    """Save a new custom persona definition."""
+    from src.memory.persona_manager import save_custom_persona
+    success = save_custom_persona(body)
+    if success:
+        return {"status": "ok", "message": f"Saved custom persona: {body.get('id')}"}
+    return {"status": "error", "message": "Failed to save persona (ensure 'id' is unique and not a built-in)"}
 
 @app.get("/api/system-settings")
 async def api_get_system_settings():
@@ -1687,6 +1759,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                 web_search_enabled = True
             response_style = (payload.get("response_style") or "normal").strip()
             project_id = payload.get("project_id", "default")
+            persona_id = payload.get("persona_id", "default")
             base_dir = get_project_workspace(project_id)
 
             # Handle Workspace References
@@ -1748,6 +1821,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                     "web_search_enabled": bool(web_search_enabled),
                     "response_style": response_style,
                     "project_id": project_id,
+                    "persona_id": persona_id,
                     "thread_id": thread_id,
                 },
                 config=config
@@ -1952,3 +2026,154 @@ def extract_text_file(name: str, mime: str, raw_bytes: bytes) -> str:
         except Exception:
             return ""
     return ""
+
+
+async def openai_stream_generator(lc_messages, project_id, persona_id, auto_approve_sensitive):
+    """Generator for streaming OpenAI SSE format completion chunks."""
+    import time
+    import uuid
+    import json
+    
+    chat_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
+    created_time = int(time.time())
+    
+    config = {"configurable": {"thread_id": f"api-{uuid.uuid4().hex[:8]}"}}
+    inputs = {
+        "messages": lc_messages,
+        "project_id": project_id,
+        "persona_id": persona_id,
+        "mode": "api",
+        "auto_approve_sensitive": auto_approve_sensitive,
+    }
+    
+    try:
+        async for event in app.state.agent.astream_events(inputs, config=config, version="v2"):
+            kind = event.get("event")
+            metadata = event.get("metadata", {})
+            node = metadata.get("langgraph_node")
+            
+            if kind == "on_chat_model_stream" and node in ["simple", "complex_llm"]:
+                chunk = event["data"]["chunk"]
+                if chunk.content:
+                    text = _stringify_lc_message_content(chunk.content)
+                    if text and not text.strip().startswith("[Internal reminder"):
+                        # Format as SSE chunk
+                        chunk_payload = {
+                            "id": chat_id,
+                            "object": "chat.completion.chunk",
+                            "created": created_time,
+                            "model": "gemma-4",
+                            "choices": [
+                                {
+                                    "index": 0,
+                                    "delta": {"content": text},
+                                    "finish_reason": None
+                                }
+                            ]
+                        }
+                        yield f"data: {json.dumps(chunk_payload, ensure_ascii=False)}\n\n"
+                        
+        # Final finish reason stop chunk
+        stop_payload = {
+            "id": chat_id,
+            "object": "chat.completion.chunk",
+            "created": created_time,
+            "model": "gemma-4",
+            "choices": [
+                {
+                    "index": 0,
+                    "delta": {},
+                    "finish_reason": "stop"
+                }
+            ]
+        }
+        yield f"data: {json.dumps(stop_payload, ensure_ascii=False)}\n\n"
+        yield "data: [DONE]\n\n"
+    except Exception as e:
+        logger.error("Error in OpenAI stream generator: %s", e)
+        yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+
+@app.post("/v1/chat/completions")
+async def api_openai_chat_completions(body: dict):
+    """OpenAI-compatible local API completions endpoint."""
+    import time
+    import uuid
+    from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+    from fastapi.responses import StreamingResponse
+    
+    # Extract request params
+    messages = body.get("messages", [])
+    model = body.get("model", "gemma-4")
+    stream = bool(body.get("stream", False))
+    project_id = body.get("project_id", "default")
+    persona_id = body.get("persona_id", "default")
+    auto_approve_sensitive = bool(body.get("auto_approve_sensitive", False))
+    
+    # Map messages to LangChain types
+    lc_messages = []
+    for msg in messages:
+        role = msg.get("role", "user")
+        content = msg.get("content", "")
+        if role == "user":
+            lc_messages.append(HumanMessage(content=content))
+        elif role == "assistant":
+            lc_messages.append(AIMessage(content=content))
+        elif role == "system":
+            lc_messages.append(SystemMessage(content=content))
+            
+    if stream:
+        return StreamingResponse(
+            openai_stream_generator(lc_messages, project_id, persona_id, auto_approve_sensitive),
+            media_type="text/event-stream"
+        )
+        
+    # Non-streaming invocation
+    config = {"configurable": {"thread_id": f"api-{uuid.uuid4().hex[:8]}"}}
+    inputs = {
+        "messages": lc_messages,
+        "project_id": project_id,
+        "persona_id": persona_id,
+        "mode": "api",
+        "auto_approve_sensitive": auto_approve_sensitive,
+    }
+    
+    try:
+        output = await app.state.agent.ainvoke(inputs, config=config)
+        
+        # Extract assistant response
+        assistant_content = ""
+        if "messages" in output and output["messages"]:
+            # Find the last AIMessage
+            for msg in reversed(output["messages"]):
+                if isinstance(msg, AIMessage):
+                    assistant_content = _stringify_lc_message_content(msg.content).strip()
+                    break
+                    
+        # OpenAI completion response schema
+        completion_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
+        response_payload = {
+            "id": completion_id,
+            "object": "chat.completion",
+            "created": int(time.time()),
+            "model": model,
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": assistant_content
+                    },
+                    "finish_reason": "stop"
+                }
+            ],
+            "usage": {
+                "prompt_tokens": -1,
+                "completion_tokens": -1,
+                "total_tokens": -1
+            }
+        }
+        return response_payload
+    except Exception as e:
+        logger.error("Error in non-streaming completions API: %s", e)
+        return {"error": str(e)}

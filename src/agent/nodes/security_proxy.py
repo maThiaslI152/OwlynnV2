@@ -145,31 +145,37 @@ async def security_proxy_node(state: AgentState) -> AgentState:
             "pending_tool_names": [str(c.get("name", "unknown")) for c in safe_calls],
         }
 
-    # ── Dedup: skip second interrupt when plan_review already approved ────
-    if state.get("plan_review_approved"):
-        # Still run policy classification (defense in depth) but skip HITL
-        logger.info("[security_proxy] Plan review already approved — skipping duplicate interrupt")
-        log_hitl_event("hitl_skipped", decision="plan_review_dedup",
-                        sensitive_count=len(sensitive_calls))
-        return {
-            "execution_approved": True,
-            "security_decision": "approved",
-            "security_reason": "Plan review approved; security proxy skipped duplicate interrupt.",
-            "pending_tool_names": [str(c.get("name", "unknown")) for c in tool_calls],
-        }
+    # ── API Mode Bypass / Auto-Approval ────────────────────────────────────
+    if state.get("mode") == "api":
+        approved = bool(state.get("auto_approve_sensitive", False))
+        logger.info("[security_proxy] API mode detected — auto_approve=%s", approved)
+        log_hitl_event("hitl_skipped", decision="api_mode_auto", approved=approved)
+    else:
+        # ── Dedup: skip second interrupt when plan_review already approved ────
+        if state.get("plan_review_approved"):
+            # Still run policy classification (defense in depth) but skip HITL
+            logger.info("[security_proxy] Plan review already approved — skipping duplicate interrupt")
+            log_hitl_event("hitl_skipped", decision="plan_review_dedup",
+                            sensitive_count=len(sensitive_calls))
+            return {
+                "execution_approved": True,
+                "security_decision": "approved",
+                "security_reason": "Plan review approved; security proxy skipped duplicate interrupt.",
+                "pending_tool_names": [str(c.get("name", "unknown")) for c in tool_calls],
+            }
 
-    decision = interrupt(
-        {
-            "type": "security_approval_required",
-            "title": "Sensitive tool request blocked pending approval",
-            "reason": "One or more tool calls are marked sensitive by policy.",
-            "sensitive_tool_calls": sensitive_calls,
-            "safe_tool_calls": safe_calls,
-            "risk_categories": sorted({str(c.get("risk_category", "sensitive_tool_execution")) for c in sensitive_calls}),
-            "instruction": "Resume with {\"approved\": true} to allow, or {\"approved\": false} to deny.",
-        }
-    )
-    approved = _normalize_approval(decision)
+        decision = interrupt(
+            {
+                "type": "security_approval_required",
+                "title": "Sensitive tool request blocked pending approval",
+                "reason": "One or more tool calls are marked sensitive by policy.",
+                "sensitive_tool_calls": sensitive_calls,
+                "safe_tool_calls": safe_calls,
+                "risk_categories": sorted({str(c.get("risk_category", "sensitive_tool_execution")) for c in sensitive_calls}),
+                "instruction": "Resume with {\"approved\": true} to allow, or {\"approved\": false} to deny.",
+            }
+        )
+        approved = _normalize_approval(decision)
 
     if approved:
         approved_tools = [str(c.get("name", "unknown")) for c in tool_calls]

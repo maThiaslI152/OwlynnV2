@@ -91,6 +91,7 @@ interface AppState {
   interruptQuestion: string | null
   interruptChoices: InterruptChoice[] | null
   inlineSecurityPrompt: InlineSecurityPrompt | null
+  activePersonaId: string
   setConnectionState: (state: ConnectionState) => void
   addMessage: (message: ChatMessage) => void
   appendStreamChunk: (chunk: string) => void
@@ -117,6 +118,7 @@ interface AppState {
   appendConversationItem: (item: ConversationItem) => void
   updateConversationItemStatus: (id: string, status: 'pending' | 'approved' | 'rejected' | 'dismissed' | 'running' | 'success' | 'error') => void
   clearSession: () => void
+  setActivePersonaId: (id: string) => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -143,6 +145,7 @@ export const useAppStore = create<AppState>((set) => ({
   interruptQuestion: null,
   interruptChoices: null,
   inlineSecurityPrompt: null,
+  activePersonaId: 'default',
   setConnectionState: (connectionState) => set({ connectionState }),
   addMessage: (message) =>
     set((state) => ({
@@ -264,4 +267,5 @@ export const useAppStore = create<AppState>((set) => ({
       interruptChoices: null,
       inlineSecurityPrompt: null,
     }),
+  setActivePersonaId: (activePersonaId) => set({ activePersonaId }),
 }))

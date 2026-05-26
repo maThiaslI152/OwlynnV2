@@ -19,6 +19,7 @@ from src.tools.notebook import notebook_run, notebook_reset
 from src.tools.todo import todo_add, todo_list, todo_complete
 from src.tools.ask_user import ask_user
 from src.tools.skills import list_skills, invoke_skill
+from src.tools.rag_tools import search_workspace_docs
 
 # Full tool set with web search enabled
 COMPLEX_TOOLS_WITH_WEB: list = [
@@ -35,6 +36,7 @@ COMPLEX_TOOLS_WITH_WEB: list = [
     recall_memories,
     recall_all_memories,
     forget_memory,
+    search_workspace_docs,
     # Computation
     notebook_run,
     notebook_reset,
@@ -64,6 +66,7 @@ COMPLEX_TOOLS_NO_WEB: list = [
     recall_memories,
     recall_all_memories,
     forget_memory,
+    search_workspace_docs,
     notebook_run,
     notebook_reset,
     create_docx,
@@ -87,7 +90,7 @@ TOOLBOX_REGISTRY: dict[str, list] = {
     "data_viz": [create_docx, create_xlsx, create_pptx, create_pdf,
                  notebook_run, notebook_reset],
     "productivity": [todo_add, todo_list, todo_complete, list_skills, invoke_skill],
-    "memory": [recall_memories, recall_all_memories, forget_memory],
+    "memory": [recall_memories, recall_all_memories, forget_memory, search_workspace_docs],
 }
 
 ALWAYS_INCLUDED_TOOLS: list = [ask_user]

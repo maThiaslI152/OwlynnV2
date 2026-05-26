@@ -56,6 +56,7 @@ class AgentState(TypedDict):
     model_used: str | None
     memory_context: str | None     # Formatted context string
     persona: str | None            # Persona summary string
+    persona_id: str | None         # Active persona ID (e.g. 'coder', 'writer', 'default')
 
     # Which M-tier variant is currently loaded ("default", "vision", "longctx", or None)
     current_medium_model: str | None

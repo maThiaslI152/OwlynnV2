@@ -63,10 +63,13 @@ def mock_profile():
 @pytest.fixture
 def mock_persona():
     """Mock the persona."""
-    with patch("src.agent.nodes.memory.get_persona") as mock:
+    with patch("src.agent.nodes.memory.get_persona_by_id") as mock:
         mock.return_value = {
+            "id": "default",
+            "name": "Owlynn",
             "role": "helpful assistant",
-            "system_prompt": "You are helpful.",
+            "tone": "friendly",
+            "instructions": "Help with tasks.",
         }
         yield mock
 
@@ -202,7 +205,7 @@ class TestMemoryInjectNode:
         state = _make_state(messages=[_human_msg("Hello")])
         result = await memory_inject_node(state)
         assert "memory_context" in result
-        assert result["persona"] == "helpful assistant"
+        assert "helpful assistant" in result["persona"]
         assert "TestUser" in str(result["memory_context"])
 
     @pytest.mark.asyncio

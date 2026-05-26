@@ -147,12 +147,12 @@ class FileWatcherHandler(FileSystemEventHandler):
 
             logger.info(f"[Watcher] Successfully processed {filename} -> {output_path}")
             if self.on_processed_callback:
-                self.on_processed_callback(filename, "processed")
+                self.on_processed_callback(filepath, "processed")
 
         except Exception as e:
             logger.error(f"[Watcher] Failed to process {filename}: {e}")
             if self.on_processed_callback:
-                self.on_processed_callback(filename, "error")
+                self.on_processed_callback(filepath, "error")
 
     def _process_pdf(self, filepath, output_path):
         import fitz # PyMuPDF
