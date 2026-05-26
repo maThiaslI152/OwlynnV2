@@ -226,6 +226,7 @@ _session_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 # Profile fields that require clearing cached LLM instances when changed
 _LLM_SENSITIVE_FIELDS = {
     "cloud_llm_base_url", "cloud_llm_model_name", "deepseek_api_key",
+    "cloud_request_timeout",
     "llm_base_url", "llm_model_name", "large_llm_base_url", "large_llm_model_name",
     "medium_models", "small_llm_base_url", "small_llm_model_name",
 }
@@ -267,8 +268,46 @@ _UNIFIED_SETTINGS_CLOUD_BUDGET_DEFAULTS = {
 
 @app.get("/api/usage")
 async def api_get_usage():
-    """Return cumulative cloud token usage for the current session."""
-    return _session_usage
+    """Return cumulative cloud token usage and cost for the current session."""
+    from src.agent.cloud_cost_tracker import get_cost_tracker
+    tracker = get_cost_tracker()
+    return {
+        "session": _session_usage,
+        "cost": tracker.summary(),
+    }
+
+
+@app.get("/api/cloud-status")
+async def api_cloud_status():
+    """Return cloud LLM connectivity status.
+
+    Response::
+
+        {
+            "available": true,       // API reachable
+            "key_valid": true,       // Key accepted (200 or 429)
+            "model": "deepseek-v4",  // Configured model
+            "error": ""              // Diagnostic message if false
+        }
+    """
+    from src.agent.graph import _check_cloud_connectivity
+    return await _check_cloud_connectivity()
+
+
+@app.post("/api/cloud-verify-key")
+async def api_cloud_verify_key(body: dict):
+    """Verify a DeepSeek API key without persisting it.
+
+    Request body: ``{"api_key": "sk-..."}``
+
+    Response::
+
+        {"valid": true, "message": "Key is valid"}
+    """
+    from src.config.secret_store import verify_deepseek_api_key
+    api_key = (body.get("api_key") or "").strip()
+    valid, message = verify_deepseek_api_key(api_key)
+    return {"valid": valid, "message": message}
 
 @app.get("/api/profile")
 async def api_get_profile():
@@ -395,6 +434,8 @@ async def api_get_advanced_settings():
 async def api_get_unified_settings():
     """Get merged profile and advanced settings in one payload."""
     try:
+        from src.config.secret_store import resolve_deepseek_api_key
+
         profile = get_profile()
         unified = dict(profile)
         unified.update({
@@ -408,21 +449,39 @@ async def api_get_unified_settings():
         })
 
         # Never expose raw API keys to the frontend.
-        deepseek_key = (profile.get("deepseek_api_key") or "").strip()
+        # Check Keychain first, then env var, then (deprecated) profile.
+        deepseek_key = resolve_deepseek_api_key()
         unified["deepseek_api_key"] = "••••••••" if deepseek_key else ""
         return unified
     except Exception as e:
         return {"error": str(e)}
 
+
 @app.put("/api/unified-settings")
 async def api_update_unified_settings(body: dict):
-    """Update unified profile and advanced settings in one payload."""
+    """Update unified profile and advanced settings in one payload.
+
+    The ``deepseek_api_key`` field is stored in macOS Keychain (not profile).
+    Pass ``""`` (empty string) to delete the key.
+    """
     try:
+        from src.config.secret_store import store_deepseek_api_key, delete_deepseek_api_key
+
         # Allowed fields: profile VALID_FIELDS + advanced settings defaults + cloud budget
         allowed = set(VALID_FIELDS.keys()) | set(_ADVANCED_SETTINGS_DEFAULTS.keys()) | set(_UNIFIED_SETTINGS_CLOUD_BUDGET_DEFAULTS.keys())
         updated = []
         for field, value in body.items():
-            if field in allowed:
+            if field == "deepseek_api_key":
+                # Secure storage path — Keychain, not profile
+                key_value = str(value).strip() if value else ""
+                if key_value and key_value != "••••••••":
+                    store_deepseek_api_key(key_value)
+                    updated.append(field)
+                elif not key_value:
+                    delete_deepseek_api_key()
+                    updated.append(field)
+                # If sent as "••••••••", ignore — it's the masked placeholder
+            elif field in allowed:
                 update_profile(field, value)
                 updated.append(field)
         return {"status": "ok", "updated": updated}

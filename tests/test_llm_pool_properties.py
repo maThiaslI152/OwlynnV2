@@ -167,7 +167,7 @@ class TestAPIKeyResolution:
         with fresh_pool():
             profile = {**PROFILE, "deepseek_api_key": profile_key}
 
-            with patch("src.agent.llm.DEEPSEEK_API_KEY", env_key), \
+            with patch("src.config.secret_store.resolve_deepseek_api_key", return_value=env_key), \
                  patch("src.agent.llm.get_profile", return_value=profile), \
                  patch("src.agent.llm.ChatOpenAI") as MockChat:
                 MockChat.return_value = MagicMock()
@@ -183,7 +183,7 @@ class TestAPIKeyResolution:
         with fresh_pool():
             profile = {**PROFILE, "deepseek_api_key": profile_key}
 
-            with patch("src.agent.llm.DEEPSEEK_API_KEY", ""), \
+            with patch("src.config.secret_store.resolve_deepseek_api_key", return_value=profile_key), \
                  patch("src.agent.llm.get_profile", return_value=profile), \
                  patch("src.agent.llm.ChatOpenAI") as MockChat:
                 MockChat.return_value = MagicMock()
@@ -200,7 +200,7 @@ class TestAPIKeyResolution:
             profile = {**PROFILE, "deepseek_api_key": ""}
             env_val = empty_env if empty_env is not None else ""
 
-            with patch("src.agent.llm.DEEPSEEK_API_KEY", env_val), \
+            with patch("src.config.secret_store.resolve_deepseek_api_key", return_value=""), \
                  patch("src.agent.llm.get_profile", return_value=profile):
                 with pytest.raises(CloudUnavailableError):
                     await LLMPool.get_cloud_llm()

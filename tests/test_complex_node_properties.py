@@ -94,6 +94,11 @@ def _make_mock_llm():
     return mock_llm
 
 
+async def _passthrough_cloud_retry(bound_llm, prompt_messages, *, fallback_chain, model_label, route):
+    """Bypass circuit breaker / cost tracker — just call ainvoke directly."""
+    return await bound_llm.ainvoke(prompt_messages)
+
+
 # ═════════════════════════════════════════════════════════════════════════
 # Property 7: Model Provenance Matches Route
 # ═════════════════════════════════════════════════════════════════════════
@@ -116,7 +121,8 @@ class TestModelProvenanceMatchesRoute:
 
         with patch("src.agent.nodes.complex.get_medium_llm", new_callable=AsyncMock, return_value=mock_llm), \
              patch("src.agent.nodes.complex.get_cloud_llm", new_callable=AsyncMock, return_value=mock_llm), \
-             patch("src.agent.nodes.complex.get_profile", return_value=profile):
+             patch("src.agent.nodes.complex.get_profile", return_value=profile), \
+             patch("src.agent.nodes.complex._invoke_with_cloud_retry", side_effect=_passthrough_cloud_retry):
             from src.agent.nodes.complex import complex_llm_node
             result = await complex_llm_node(state)
 
@@ -155,7 +161,8 @@ class TestModelProvenanceMatchesRoute:
 
         with patch("src.agent.nodes.complex.get_medium_llm", new_callable=AsyncMock, return_value=mock_llm), \
              patch("src.agent.nodes.complex.get_cloud_llm", new_callable=AsyncMock, return_value=mock_llm), \
-             patch("src.agent.nodes.complex.get_profile", return_value=profile):
+             patch("src.agent.nodes.complex.get_profile", return_value=profile), \
+             patch("src.agent.nodes.complex._invoke_with_cloud_retry", side_effect=_passthrough_cloud_retry):
             from src.agent.nodes.complex import complex_llm_node
             result = await complex_llm_node(state)
 
@@ -256,7 +263,8 @@ class TestModelProvenanceMatchesRoute:
 
         with patch("src.agent.nodes.complex.get_medium_llm", new_callable=AsyncMock, return_value=mock_llm), \
              patch("src.agent.nodes.complex.get_cloud_llm", new_callable=AsyncMock, return_value=mock_llm), \
-             patch("src.agent.nodes.complex.get_profile", return_value=profile):
+             patch("src.agent.nodes.complex.get_profile", return_value=profile), \
+             patch("src.agent.nodes.complex._invoke_with_cloud_retry", side_effect=_passthrough_cloud_retry):
             from src.agent.nodes.complex import complex_llm_node
             result = await complex_llm_node(state)
 
@@ -311,6 +319,7 @@ class TestCloudOnlyAnonymization:
         with patch("src.agent.nodes.complex.get_medium_llm", new_callable=AsyncMock, return_value=mock_llm), \
              patch("src.agent.nodes.complex.get_cloud_llm", new_callable=AsyncMock, return_value=mock_llm), \
              patch("src.agent.nodes.complex.get_profile", return_value=profile), \
+             patch("src.agent.nodes.complex._invoke_with_cloud_retry", side_effect=_passthrough_cloud_retry), \
              patch("src.agent.nodes.complex.anonymize") as mock_anon:
             mock_anon.return_value = (text, {})
             from src.agent.nodes.complex import complex_llm_node
@@ -332,6 +341,7 @@ class TestCloudOnlyAnonymization:
         with patch("src.agent.nodes.complex.get_medium_llm", new_callable=AsyncMock, return_value=mock_llm), \
              patch("src.agent.nodes.complex.get_cloud_llm", new_callable=AsyncMock, return_value=mock_llm), \
              patch("src.agent.nodes.complex.get_profile", return_value=profile), \
+             patch("src.agent.nodes.complex._invoke_with_cloud_retry", side_effect=_passthrough_cloud_retry), \
              patch("src.agent.nodes.complex.anonymize") as mock_anon:
             mock_anon.return_value = (text, {})
             from src.agent.nodes.complex import complex_llm_node
@@ -356,6 +366,7 @@ class TestCloudOnlyAnonymization:
         with patch("src.agent.nodes.complex.get_medium_llm", new_callable=AsyncMock, return_value=mock_llm), \
              patch("src.agent.nodes.complex.get_cloud_llm", new_callable=AsyncMock, return_value=mock_llm), \
              patch("src.agent.nodes.complex.get_profile", return_value=profile), \
+             patch("src.agent.nodes.complex._invoke_with_cloud_retry", side_effect=_passthrough_cloud_retry), \
              patch("src.agent.nodes.complex.anonymize") as mock_anon:
             mock_anon.return_value = ("anonymized", {"[EMAIL_1]": "[email]"})
             from src.agent.nodes.complex import complex_llm_node

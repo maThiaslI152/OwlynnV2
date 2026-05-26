@@ -5,7 +5,7 @@ This module provides helpers to initialize the LangChain ChatOpenAI client
 configured to connect to a local LM Studio server, with pooling to avoid
 re-initialization overhead on Mac M4.
 
-Three-slot pool: small (always loaded) + medium (swappable) + cloud (DeepSeek).
+Three-slot pool: small (always loaded) + medium (swappable) + cloud (DeepSeek V4).
 """
 
 import asyncio
@@ -14,7 +14,7 @@ from typing import Optional
 
 from langchain_openai import ChatOpenAI
 
-from src.config.settings import DEEPSEEK_API_KEY
+from src.config.settings import DEEPSEEK_API_KEY, M4_MAC_OPTIMIZATION
 from src.memory.user_profile import get_profile
 
 logger = logging.getLogger(__name__)
@@ -144,16 +144,19 @@ class LLMPool:
 
         return cls._medium_llm
 
-    # ── cloud (DeepSeek API) ─────────────────────────────────────────────
+    # ── cloud (DeepSeek V4 API) ──────────────────────────────────────────
 
     @classmethod
     async def get_cloud_llm(cls) -> ChatOpenAI:
-        """Get or create cached Cloud LLM (DeepSeek API) instance.
+        """Get or create cached Cloud LLM (DeepSeek V4 API) instance.
+
+        Resolves API key via secret store (Keychain → env var → profile).
+        Configures a 180s request timeout to prevent hangs on slow API responses.
 
         Raises
         ------
         CloudUnavailableError
-            If no valid API key is found in env var or profile.
+            If no valid API key is found in any source.
         """
         if "cloud" in cls._test_overrides:
             audit_debug("agent.model", "pool_test_override", slot="cloud")
@@ -167,17 +170,25 @@ class LLMPool:
                 audit_debug("agent.model", "pool_cache_hit", slot="cloud")
                 return cls._cloud_llm
 
-            api_key = cls._resolve_deepseek_api_key()
+            from src.config.secret_store import resolve_deepseek_api_key
+            api_key = resolve_deepseek_api_key()
             if not api_key:
                 audit_warn("agent.model", "pool_no_api_key", slot="cloud")
                 raise CloudUnavailableError(
-                    "No DeepSeek API key configured. Set DEEPSEEK_API_KEY env var "
-                    "or deepseek_api_key in user profile."
+                    "No DeepSeek API key configured. Set DEEPSEEK_API_KEY env var, "
+                    "store in macOS Keychain via Settings, or set deepseek_api_key "
+                    "in user profile."
                 )
 
             profile = get_profile()
             base_url = profile.get("cloud_llm_base_url", "https://api.deepseek.com/v1")
-            model = profile.get("cloud_llm_model_name", "deepseek-chat")
+            model = profile.get("cloud_llm_model_name", "deepseek-v4")
+
+            # Resolve timeout: profile override → M4 optimization → default 180s
+            timeout = float(
+                profile.get("cloud_request_timeout")
+                or M4_MAC_OPTIMIZATION.get("medium_model", {}).get("cloud_timeout", 180)
+            )
 
             cls._cloud_llm = ChatOpenAI(
                 model=model,
@@ -186,6 +197,7 @@ class LLMPool:
                 streaming=True,
                 max_tokens=8192,
                 temperature=0.4,
+                request_timeout=timeout,
             )
             audit_info("agent.model", "pool_instance_created", slot="cloud", model=model)
 
@@ -213,7 +225,12 @@ class LLMPool:
 
     @staticmethod
     def _resolve_deepseek_api_key() -> str:
-        """Env var → profile → empty string."""
+        """Env var → profile → empty string.
+
+        Kept for backward compatibility with existing callers.
+        Prefer ``resolve_deepseek_api_key()`` from ``src.config.secret_store``
+        for new code — it includes Keychain lookup.
+        """
         if DEEPSEEK_API_KEY:
             return DEEPSEEK_API_KEY
         profile = get_profile()

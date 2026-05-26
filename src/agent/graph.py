@@ -186,6 +186,59 @@ def build_graph():
 from langgraph.checkpoint.memory import MemorySaver
 from src.config.settings import MCP_CONFIG_PATH, REDIS_URL
 from src.tools.mcp_client import mcp_manager
+from src.config.secret_store import resolve_deepseek_api_key
+from src.agent.cloud_circuit_breaker import reset_circuit_breaker
+from src.agent.cloud_cost_tracker import reset_cost_tracker
+
+
+async def _check_cloud_connectivity() -> dict:
+    """Non-blocking cloud connectivity check for startup diagnostics.
+
+    Returns a dict with ``available``, ``key_valid``, and ``model`` keys.
+    """
+    result: dict = {"available": False, "key_valid": False, "model": "", "error": ""}
+    try:
+        api_key = resolve_deepseek_api_key()
+        if not api_key:
+            result["error"] = "No API key configured"
+            return result
+
+        from src.memory.user_profile import get_profile
+        profile = get_profile()
+
+        import httpx
+        base_url = profile.get("cloud_llm_base_url", "https://api.deepseek.com/v1")
+        model = profile.get("cloud_llm_model_name", "deepseek-v4")
+        result["model"] = model
+
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.post(
+                f"{base_url}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "messages": [{"role": "user", "content": "hi"}],
+                    "model": model,
+                    "max_tokens": 1,
+                },
+            )
+            if response.status_code == 200:
+                result["available"] = True
+                result["key_valid"] = True
+            elif response.status_code in (401, 403):
+                result["key_valid"] = False
+                result["error"] = f"Invalid API key (HTTP {response.status_code})"
+            else:
+                result["available"] = True  # API reachable
+                result["key_valid"] = True
+                result["error"] = f"Unexpected response: HTTP {response.status_code}"
+    except Exception as e:
+        result["error"] = str(e)
+
+    return result
+
 
 async def init_agent(checkpointer=None):
     """Initializes the agent with Redis checkpointer (falls back to MemorySaver)."""
@@ -193,6 +246,14 @@ async def init_agent(checkpointer=None):
         await mcp_manager.initialize(str(MCP_CONFIG_PATH))
     except Exception:
         pass
+
+    # Reset cloud subsystems for fresh session
+    reset_circuit_breaker()
+    reset_cost_tracker()
+
+    # Non-blocking cloud connectivity check
+    import asyncio as _asyncio
+    _asyncio.ensure_future(_log_cloud_connectivity())
 
     builder = build_graph()
 
@@ -207,3 +268,23 @@ async def init_agent(checkpointer=None):
             checkpointer = MemorySaver()
 
     return builder.compile(checkpointer=checkpointer)
+
+
+async def _log_cloud_connectivity():
+    """Log cloud connectivity status after startup."""
+    status = await _check_cloud_connectivity()
+    if status["available"] and status["key_valid"]:
+        logger.info(
+            "[cloud-check] DeepSeek V4 reachable — model=%s, key=valid",
+            status.get("model", "unknown"),
+        )
+    elif status["available"]:
+        logger.warning(
+            "[cloud-check] DeepSeek V4 reachable but key invalid: %s",
+            status.get("error", "unknown"),
+        )
+    else:
+        logger.warning(
+            "[cloud-check] DeepSeek V4 unreachable: %s",
+            status.get("error", "unknown"),
+        )

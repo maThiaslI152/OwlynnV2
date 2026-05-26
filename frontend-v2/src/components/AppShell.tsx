@@ -281,6 +281,8 @@ export function AppShell({
   const messages = useAppStore((s) => s.messages)
   const conversationItems = useAppStore((s) => s.conversationItems)
   const operatorNote = useAppStore((s) => s.operatorNote)
+  const cloudStatus = useAppStore((s) => s.cloudStatus)
+  const setCloudStatus = useAppStore((s) => s.setCloudStatus)
   const windowMode = useAppStore((s) => s.windowMode)
   const setWindowMode = useAppStore((s) => s.setWindowMode)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -327,6 +329,27 @@ export function AppShell({
   const hasPendingHitl = conversationItems.some(
     (item) => item.kind === 'hitl_prompt' && item.status === 'pending'
   )
+
+  // Fetch cloud LLM status on mount and when connection changes
+  useEffect(() => {
+    let disposed = false
+    const fetchCloudStatus = async () => {
+      try {
+        const response = await fetch('/api/cloud-status')
+        if (!response.ok) return
+        const status = await response.json()
+        if (!disposed) setCloudStatus(status)
+      } catch {
+        if (!disposed) setCloudStatus(null)
+      }
+    }
+    if (connectionState === 'connected') {
+      void fetchCloudStatus()
+    } else {
+      setCloudStatus(null)
+    }
+    return () => { disposed = true }
+  }, [connectionState, setCloudStatus])
 
   // ESC key closes inspector overlay in compact mode
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -554,6 +577,18 @@ export function AppShell({
                 <span className={`connection-dot connection-dot-${connectionState}`} />
                 <span className="connection-label">{connectionState}</span>
               </span>
+              {cloudStatus && (
+                <span className="connection-status" title={
+                  cloudStatus.available && cloudStatus.key_valid
+                    ? `Cloud: ${cloudStatus.model} (connected)` 
+                    : cloudStatus.error || 'Cloud unavailable'
+                }>
+                  <span className={`connection-dot ${
+                    cloudStatus.available && cloudStatus.key_valid ? 'connection-dot-connected' : 'connection-dot-error'
+                  }`} />
+                  <span className="connection-label">cloud</span>
+                </span>
+              )}
             </div>
           )}
         </header>

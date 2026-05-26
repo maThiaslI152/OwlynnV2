@@ -162,6 +162,11 @@ def _extract_all_text_from_messages(messages: list) -> str:
     return "\n".join(parts)
 
 
+async def _passthrough_cloud_retry(bound_llm, prompt_messages, *, fallback_chain, model_label, route):
+    """Bypass circuit breaker / cost tracker — just call ainvoke directly."""
+    return await bound_llm.ainvoke(prompt_messages)
+
+
 # ═════════════════════════════════════════════════════════════════════════
 # Property 1: Bug Condition — Fallback Models Receive Anonymized Input
 #
@@ -211,7 +216,7 @@ class TestBugConditionFallbackAnonymizationLeak:
         with patch("src.agent.nodes.complex.get_cloud_llm", side_effect=_get_cloud_llm), \
              patch("src.agent.nodes.complex.get_medium_llm", side_effect=_get_medium_llm), \
              patch("src.agent.nodes.complex.get_profile", return_value=profile), \
-             patch("src.agent.nodes.complex.asyncio.sleep", new_callable=AsyncMock):
+             patch("src.agent.nodes.complex._invoke_with_cloud_retry", side_effect=_passthrough_cloud_retry):
             from src.agent.nodes.complex import complex_llm_node
             result = await complex_llm_node(state)
 
@@ -260,7 +265,7 @@ class TestBugConditionFallbackAnonymizationLeak:
         with patch("src.agent.nodes.complex.get_cloud_llm", side_effect=_get_cloud_llm), \
              patch("src.agent.nodes.complex.get_medium_llm", side_effect=_get_medium_llm), \
              patch("src.agent.nodes.complex.get_profile", return_value=profile), \
-             patch("src.agent.nodes.complex.asyncio.sleep", new_callable=AsyncMock):
+             patch("src.agent.nodes.complex._invoke_with_cloud_retry", side_effect=_passthrough_cloud_retry):
             from src.agent.nodes.complex import complex_llm_node
             result = await complex_llm_node(state)
 
@@ -447,7 +452,8 @@ class TestPreservationCloudAnonymization:
 
         with patch("src.agent.nodes.complex.get_cloud_llm", side_effect=_get_cloud_llm), \
              patch("src.agent.nodes.complex.get_medium_llm", side_effect=_get_medium_llm), \
-             patch("src.agent.nodes.complex.get_profile", return_value=profile):
+             patch("src.agent.nodes.complex.get_profile", return_value=profile), \
+             patch("src.agent.nodes.complex._invoke_with_cloud_retry", side_effect=_passthrough_cloud_retry):
             from src.agent.nodes.complex import complex_llm_node
             result = await complex_llm_node(state)
 
@@ -561,6 +567,7 @@ class TestPreservationCloudAnonymization:
         with patch("src.agent.nodes.complex.get_cloud_llm", side_effect=_get_cloud_llm), \
              patch("src.agent.nodes.complex.get_medium_llm", side_effect=_get_medium_llm), \
              patch("src.agent.nodes.complex.get_profile", return_value=profile), \
+             patch("src.agent.nodes.complex._invoke_with_cloud_retry", side_effect=_passthrough_cloud_retry), \
              patch("src.agent.anonymization.anonymize", wraps=__import__("src.agent.anonymization", fromlist=["anonymize"]).anonymize) as mock_anon:
             from src.agent.nodes.complex import complex_llm_node
             result = await complex_llm_node(state)
@@ -617,7 +624,8 @@ class TestPreservationCloudAnonymization:
 
         with patch("src.agent.nodes.complex.get_cloud_llm", side_effect=_get_cloud_llm), \
              patch("src.agent.nodes.complex.get_medium_llm", side_effect=_get_medium_llm), \
-             patch("src.agent.nodes.complex.get_profile", return_value=profile):
+             patch("src.agent.nodes.complex.get_profile", return_value=profile), \
+             patch("src.agent.nodes.complex._invoke_with_cloud_retry", side_effect=_passthrough_cloud_retry):
             from src.agent.nodes.complex import complex_llm_node
             result = await complex_llm_node(state)
 
@@ -662,7 +670,8 @@ def test_auth_fallback_preserves_original_input_and_emits_auth_note():
     async def _run():
         with patch("src.agent.nodes.complex.get_cloud_llm", side_effect=_get_cloud_llm), \
              patch("src.agent.nodes.complex.get_medium_llm", side_effect=_get_medium_llm), \
-             patch("src.agent.nodes.complex.get_profile", return_value=profile):
+             patch("src.agent.nodes.complex.get_profile", return_value=profile), \
+             patch("src.agent.nodes.complex._invoke_with_cloud_retry", side_effect=_passthrough_cloud_retry):
             from src.agent.nodes.complex import complex_llm_node
             return await complex_llm_node(state)
 
@@ -702,7 +711,7 @@ def test_non_auth_cloud_fallback_preserves_original_input(error_type: str):
         with patch("src.agent.nodes.complex.get_cloud_llm", side_effect=_get_cloud_llm), \
              patch("src.agent.nodes.complex.get_medium_llm", side_effect=_get_medium_llm), \
              patch("src.agent.nodes.complex.get_profile", return_value=profile), \
-             patch("src.agent.nodes.complex.asyncio.sleep", new_callable=AsyncMock):
+             patch("src.agent.nodes.complex._invoke_with_cloud_retry", side_effect=_passthrough_cloud_retry):
             from src.agent.nodes.complex import complex_llm_node
             return await complex_llm_node(state)
 

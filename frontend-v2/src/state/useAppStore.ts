@@ -85,6 +85,7 @@ interface AppState {
   operatorNote: string
   routerMetadata: Record<string, unknown> | null
   modelInfo: string | null
+  cloudStatus: { available: boolean; key_valid: boolean; model: string; error: string } | null
   contextCompression: CompressionInfo | null
   memoryUpdatedAt: number | null
   ttsSpeaking: boolean
@@ -109,6 +110,7 @@ interface AppState {
   setOperatorNote: (note: string) => void
   setRouterMetadata: (meta: Record<string, unknown>) => void
   setModelInfo: (model: string | null) => void
+  setCloudStatus: (status: { available: boolean; key_valid: boolean; model: string; error: string } | null) => void
   setContextCompression: (info: CompressionInfo | null) => void
   setMemoryUpdatedAt: (ts: number) => void
   setTtsSpeaking: (speaking: boolean) => void
@@ -141,6 +143,7 @@ export const useAppStore = create<AppState>((set) => ({
   operatorNote: '',
   routerMetadata: null,
   modelInfo: null,
+  cloudStatus: null,
   contextCompression: null,
   memoryUpdatedAt: null,
   ttsSpeaking: false,
@@ -231,6 +234,7 @@ export const useAppStore = create<AppState>((set) => ({
   setOperatorNote: (operatorNote) => set({ operatorNote }),
   setRouterMetadata: (routerMetadata) => set({ routerMetadata }),
   setModelInfo: (modelInfo) => set({ modelInfo }),
+  setCloudStatus: (cloudStatus) => set({ cloudStatus }),
   setContextCompression: (contextCompression) => set({ contextCompression }),
   setMemoryUpdatedAt: (memoryUpdatedAt) => set({ memoryUpdatedAt }),
   setTtsSpeaking: (ttsSpeaking) => set({ ttsSpeaking }),

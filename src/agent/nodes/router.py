@@ -11,6 +11,7 @@ from langgraph.types import interrupt
 
 from src.agent.state import AgentState
 from src.agent.llm import get_small_llm, LLMPool
+from src.config.secret_store import resolve_deepseek_api_key
 from src.config.settings import MEDIUM_DEFAULT_CONTEXT, MEDIUM_LONGCTX_CONTEXT, CLOUD_CONTEXT
 from src.memory.user_profile import get_profile
 from src.tools.skills import SkillMatcher, MatchResult, _default_loader as _skill_loader
@@ -269,8 +270,8 @@ def _check_cloud_available() -> bool:
     profile = get_profile()
     if not profile.get("cloud_escalation_enabled", True):
         return False
-    # Check API key via LLMPool's resolution logic
-    api_key = LLMPool._resolve_deepseek_api_key()
+    # Check API key via secret store resolution (Keychain → env var → profile)
+    api_key = resolve_deepseek_api_key()
     return bool(api_key)
 
 

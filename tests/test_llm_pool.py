@@ -104,7 +104,7 @@ async def test_get_medium_llm_variant_tracking():
 @pytest.mark.anyio
 async def test_get_cloud_llm_raises_without_api_key():
     """CloudUnavailableError when no API key is configured."""
-    with patch("src.agent.llm.DEEPSEEK_API_KEY", ""), \
+    with patch("src.config.secret_store.resolve_deepseek_api_key", return_value=""), \
          patch("src.agent.llm.get_profile", return_value=PROFILE):
         with pytest.raises(CloudUnavailableError):
             await LLMPool.get_cloud_llm()
@@ -115,7 +115,7 @@ async def test_get_cloud_llm_uses_env_var_first():
     """Env var takes priority over profile key."""
     profile_with_key = {**PROFILE, "deepseek_api_key": "profile-key"}
 
-    with patch("src.agent.llm.DEEPSEEK_API_KEY", "env-key"), \
+    with patch("src.config.secret_store.resolve_deepseek_api_key", return_value="env-key"), \
          patch("src.agent.llm.get_profile", return_value=profile_with_key), \
          patch("src.agent.llm.ChatOpenAI") as MockChat:
         MockChat.return_value = MagicMock()
@@ -131,7 +131,7 @@ async def test_get_cloud_llm_falls_back_to_profile_key():
     """Profile key used when env var is empty."""
     profile_with_key = {**PROFILE, "deepseek_api_key": "profile-key"}
 
-    with patch("src.agent.llm.DEEPSEEK_API_KEY", ""), \
+    with patch("src.config.secret_store.resolve_deepseek_api_key", return_value="profile-key"), \
          patch("src.agent.llm.get_profile", return_value=profile_with_key), \
          patch("src.agent.llm.ChatOpenAI") as MockChat:
         MockChat.return_value = MagicMock()
@@ -143,8 +143,8 @@ async def test_get_cloud_llm_falls_back_to_profile_key():
 
 @pytest.mark.anyio
 async def test_get_cloud_llm_config():
-    """Cloud LLM has streaming=True, max_tokens=8192, no extra_body."""
-    with patch("src.agent.llm.DEEPSEEK_API_KEY", "test-key"), \
+    """Cloud LLM has streaming=True, max_tokens=8192, request_timeout."""
+    with patch("src.config.secret_store.resolve_deepseek_api_key", return_value="test-key"), \
          patch("src.agent.llm.get_profile", return_value=PROFILE), \
          patch("src.agent.llm.ChatOpenAI") as MockChat:
         MockChat.return_value = MagicMock()
@@ -154,7 +154,7 @@ async def test_get_cloud_llm_config():
     assert call_kwargs["streaming"] is True
     assert call_kwargs["max_tokens"] == 8192
     assert call_kwargs["temperature"] == 0.4
-    assert "extra_body" not in call_kwargs
+    assert call_kwargs["request_timeout"] == 180
 
 
 @pytest.mark.anyio

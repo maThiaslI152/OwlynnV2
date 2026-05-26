@@ -35,6 +35,9 @@ beautifulsoup4>=4.12
 httpx>=0.24
 curl_cffi>=0.7
 
+# Secure API key storage (macOS Keychain)
+keyring>=25.0
+
 # Redis-backed LangGraph checkpointer
 langgraph-checkpoint-redis>=0.3.6
 

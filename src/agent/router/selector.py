@@ -36,12 +36,12 @@ def _check_cloud_available() -> bool:
     """
     try:
         from src.memory.user_profile import get_profile
-        from src.agent.llm import LLMPool
+        from src.config.secret_store import resolve_deepseek_api_key
 
         profile = get_profile()
         if not profile.get("cloud_escalation_enabled", True):
             return False
-        api_key = LLMPool._resolve_deepseek_api_key()
+        api_key = resolve_deepseek_api_key()
         return bool(api_key)
     except Exception:
         return False
