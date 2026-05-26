@@ -1,3 +1,7 @@
+---
+purpose: "Debugging guide for tools and toolbox registry: category listing, HITL gating, web search tiers, and common tool failures."
+---
+
 # Debugging: Tools & ToolboxRegistry
 
 **Quick Reference:** 20 tools across 5 toolbox categories. Dynamically bound via `src/agent/tool_sets.py` (ToolboxRegistry) based on router classification. HITL gating via `src/agent/nodes/security_proxy.py`. Key files: `src/agent/tool_sets.py`, `src/agent/nodes/security_proxy.py`, `src/tools/*.py`.

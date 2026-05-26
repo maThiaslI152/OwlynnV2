@@ -1,3 +1,7 @@
+---
+purpose: "Debugging guide for the React/TypeScript frontend: WebSocket issues, state management, component failures, and build problems."
+---
+
 # Debugging: Frontend
 
 **Quick Reference:** React 19 + TypeScript (Vite 8). Zustand 5 state management. WebSocket streaming via `frontend-v2/src/lib/wsClient.ts`. Key files: `frontend-v2/src/state/useAppStore.ts`, `frontend-v2/src/lib/wsClient.ts`, `frontend-v2/src/App.tsx`, `frontend-v2/src/components/*.tsx`.

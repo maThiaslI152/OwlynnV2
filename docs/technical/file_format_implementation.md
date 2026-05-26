@@ -1,3 +1,8 @@
+---
+last_verified: 2026-05-26
+auto_generated: false
+purpose: "Implementation details for file format processing: pipeline, code changes, handler methods, optional dependencies, and extension guide."
+---
 # File Format Support Implementation Summary
 
 ## What Was Added

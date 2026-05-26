@@ -1,3 +1,7 @@
+---
+purpose: "Debugging guide for the FastAPI backend: failure modes, WebSocket issues, CRUD and settings operations."
+---
+
 # Debugging: Backend API
 
 **Quick Reference:** FastAPI server on `127.0.0.1:8000`, Uvicorn with WebSocket support. Key files: `src/api/server.py` (~1830 lines), `src/config/settings.py`, `src/config/logging_config.py`.

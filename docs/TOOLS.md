@@ -1,6 +1,7 @@
 ---
 last_verified: 2026-05-26
 auto_generated: false
+purpose: "Tool reference organized by toolbox category (web_search, file_ops, data_viz, productivity, memory) with security gating policy."
 ---
 
 # Tools Reference

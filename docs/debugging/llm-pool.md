@@ -1,3 +1,7 @@
+---
+purpose: "Debugging guide for LLM pool, model swapping, cloud connectivity (DeepSeek), and LM Studio integration issues."
+---
+
 # Debugging: LLM Pool & SwapManager
 
 **Quick Reference:** Three-tier LLM architecture managed by `src/agent/llm.py` (LLMPool) and `src/agent/swap_manager.py` (SwapManager). Models served via LM Studio on port 1234. Cloud via DeepSeek API. Key files: `src/agent/llm.py`, `src/agent/swap_manager.py`, `src/agent/router/budget.py`.
@@ -124,7 +128,7 @@ INFO:src.agent.llm:Requesting medium LLM variant 'vision', current: 'default'
 INFO:src.agent.llm:Triggering swap from default to vision
 
 # Cloud LLM usage
-INFO:src.agent.llm:Escalating to Cloud_LLM (deepseek-chat)
+INFO:src.agent.llm:Escalating to Cloud_LLM (deepseek-v4)
 
 # Fallback chain
 WARNING:src.agent.llm:Cloud LLM failed (401 Unauthorized), falling back to medium-default
@@ -256,7 +260,7 @@ INFO:src.agent.llm:Cloud budget: 420000/500000 (84%) — WARNING
    curl -s -w "\nHTTP %{http_code}" https://api.deepseek.com/v1/chat/completions \
      -H "Content-Type: application/json" \
      -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
-     -d '{"model":"deepseek-chat","messages":[{"role":"user","content":"Hello"}]}' | head -20
+     -d '{"model":"deepseek-v4","messages":[{"role":"user","content":"Hello"}]}' | head -20
    ```
 
 3. Common responses:

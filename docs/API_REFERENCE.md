@@ -1,11 +1,14 @@
 ---
 last_verified: 2026-05-26
 auto_generated: false
+purpose: "Complete REST endpoint reference for all API endpoints (health, profile, memory, files, projects, tools) and WebSocket entry."
 ---
 
 # API Reference
 
 Backend endpoints exposed by `src/api/server.py`. Written for developers modifying backend behavior.
+
+Related documents: `docs/CHAT_PROTOCOL.md` (WebSocket events), `docs/PROJECT_GUIDE.md` (navigation).
 
 ## Overview
 
@@ -37,8 +40,19 @@ Base URL: `http://<host>:8000`
 ### Usage
 
 `GET /api/usage`
-- Returns cumulative session token usage for cloud (DeepSeek) API calls
-- Response: `{ "prompt_tokens": 5000, "completion_tokens": 2000, "total_tokens": 7000, "session_id": "..." }`
+- Returns cumulative session token usage and cost tracker summary for cloud (DeepSeek) API calls
+- Response: `{ "prompt_tokens": 5000, "completion_tokens": 2000, "total_tokens": 7000, "estimated_cost_usd": 0.015, "session_id": "..." }`
+
+### Cloud Status
+
+`GET /api/cloud-status`
+- Returns cloud connectivity status including key validity and model info
+- Response: `{ "available": true, "key_valid": true, "model": "deepseek-v4", "error": null }`
+
+`POST /api/cloud-verify-key`
+- Tests an API key without persisting it
+- Body: `{ "api_key": "sk-..." }`
+- Response: `{ "valid": true | false, "message": "..." }`
 
 ### Chat (WebSocket)
 
@@ -243,7 +257,7 @@ WebSocket request payload keys parsed in `websocket_endpoint()` and passed into 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `cloud_llm_base_url` | string | `"https://api.deepseek.com/v1"` | DeepSeek cloud API base URL |
-| `cloud_llm_model_name` | string | `"deepseek-chat"` | Cloud model name |
+| `cloud_llm_model_name` | string | `"deepseek-v4"` | Cloud model name |
 | `deepseek_api_key` | string | `""` | DeepSeek API key (env var `DEEPSEEK_API_KEY` takes priority) |
 | `medium_models` | object | `{"default": "gemma-4-e4b-uncensored-hauhaucs-aggressive", ...}` | M-tier model key mapping |
 | `cloud_escalation_enabled` | boolean | `true` | Allow routing to cloud |

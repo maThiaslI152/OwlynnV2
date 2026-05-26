@@ -1,3 +1,8 @@
+---
+last_verified: 2026-05-26
+auto_generated: false
+purpose: "Tauri CSP and permission audit checklist for production security signoff before Phase C gates."
+---
 # Tauri CSP + Permission Audit Checklist
 
 Use this checklist before declaring Phase C security gates complete.

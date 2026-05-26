@@ -1,3 +1,8 @@
+---
+last_verified: 2026-05-26
+auto_generated: false
+purpose: "Feature comparison of Owlynn vs Open WebUI, AnythingLLM, Jan, LM Studio, GPT4All across 8 dimensions with prioritized recommendations."
+---
 # Competitive Feature Gap Analysis — Owlynn vs. Leading Local AI Assistants
 
 **Date:** 2026-05-22
@@ -27,7 +32,7 @@ Before comparing, here is what Owlynn already has (documented in `docs/ARCHITECT
 | Desktop shell | Tauri v2 (Rust), macOS transparent titlebar, CSS frosted glass |
 | Agent orchestration | LangGraph 9-node graph with `memory_inject → router → complex_llm ↔ security_proxy ↔ tool_action → memory_write` |
 | Model routing | 5-way with 3 tiers: Small (always loaded, routing + simple), Medium (3 swappable local variants via LM Studio), Cloud (DeepSeek v4 — 1M token context window, ~$0.27/M input tokens, all cloud traffic passes through PII anonymization) |
-| Tools (23) | File ops, web search/fetch, Python notebook, document gen (docx/xlsx/pptx/pdf), tasks, skill chains, MCP STDIO |
+| Tools (22) | File ops, web search/fetch, Python notebook, document gen (docx/xlsx/pptx/pdf), tasks, skill chains, MCP STDIO |
 | Security | `security_proxy` node with HITL approval on sensitive tools, HMAC audit trail, PII anonymization for cloud |
 | Memory | Three-tier: JSON short-term, Mem0+Qdrant long-term (multilingual-e5-small embeddings), auto topic/interest extraction |
 | Context management | Auto-summarization at 85% tokens via Small_LLM, multi-level compression with prior-summary awareness |
@@ -188,7 +193,7 @@ Before comparing, here is what Owlynn already has (documented in `docs/ARCHITECT
 | | |
 |---|---|
 | **Who has it** | Open WebUI (plugin marketplace, Pipelines framework), Jan (extension system), AnythingLLM (agent skills marketplace) |
-| **Owlynn status** | Owlynn has 23 built-in tools and a **skill chain** system (`.md` prompt templates in `skills/`) plus **MCP STDIO** integration. However: |
+| **Owlynn status** | Owlynn has 22 built-in tools and a **skill chain** system (`.md` prompt templates in `skills/`) plus **MCP STDIO** integration. However: |
 |  | - Skills are prompt templates, not code — they can't add new capabilities |
 |  | - MCP STDIO is the closest to an extension mechanism but requires running separate servers |
 |  | - No marketplace or community contribution model |
@@ -298,7 +303,7 @@ Before comparing, here is what Owlynn already has (documented in `docs/ARCHITECT
 | | |
 |---|---|
 | **Who has it** | Open WebUI (15+ providers) |
-| **Owlynn status** | 5 tiers: wttr.in (weather), SearXNG (self-hosted), Brave/Serper/Tavily APIs, curl_cffi scraping, Playwright. |
+| **Owlynn status** | 5 tiers: wttr.in (weather), SearXNG (self-hosted), curl_cffi scraping, DDGS, Playwright. |
 | **Effort** | Quick Win (1–2 hours per provider) |
 | **Impact** | **Low.** Owlynn's current search pipeline is already robust. Adding providers is marginal improvement. |
 | **Technical approach** | Prioritize the ones that add genuinely new capabilities: |
@@ -435,7 +440,7 @@ Deliverables: Nice-to-haves as user base grows.
 | Programmatic API | None | OpenAI-compatible | Jan (best: built-in API) |
 | Document RAG | None | Auto-indexing + Docling | GPT4All (best: LocalDocs) |
 | Model management UX | LM Studio only | In-app browser + presets | LM Studio (best: HF integration) |
-| Tool ecosystem | 23 built-in + MCP | Plugin system + MCP | Open WebUI (best: marketplace) |
+| Tool ecosystem | 22 built-in + MCP | Plugin system + MCP | Open WebUI (best: marketplace) |
 | Custom agents | Single persona | Persona system | AnythingLLM (best: agent builder) |
 | Voice input | None | Push-to-talk Whisper | Open WebUI (best: Whisper) |
 | CLI / automation | None | CLI + Python SDK | LM Studio (best: `lms` + SDK) |

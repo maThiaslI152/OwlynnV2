@@ -1,3 +1,7 @@
+---
+purpose: "Debugging guide for the memory system: short-term JSON storage, long-term Mem0/Qdrant, memory injection/write nodes, and common failures."
+---
+
 # Debugging: Memory System
 
 **Quick Reference:** Dual memory architecture: short-term (JSON file-based, 200-entry cap, managed by `src/memory/memory_manager.py`) + long-term (Mem0 + Qdrant vector search, managed by `src/memory/long_term.py`). Redis for LangGraph checkpointing. Key files: `src/memory/memory_manager.py`, `src/memory/long_term.py`, `src/memory/personal_assistant.py`, `src/memory/user_profile.py`, `src/memory/persona.py`, `src/agent/nodes/memory.py` (inject/write nodes).

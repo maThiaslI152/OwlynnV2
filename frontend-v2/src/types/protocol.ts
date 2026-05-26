@@ -1,5 +1,12 @@
 export type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'error'
 
+export interface CloudStatus {
+  available: boolean
+  key_valid: boolean
+  model: string
+  error: string
+}
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
@@ -42,6 +49,7 @@ export interface AssistantMessageEvent {
   }
 }
 
+// --- Voice events (reserved -- Live Talk removed 2026-04-29, types kept for forward compat) ---
 export interface VoiceStateEvent {
   type: 'voice.state'
   state: 'idle' | 'recording' | 'transcribing' | 'speaking' | 'interrupted' | 'approval_pending'
@@ -76,6 +84,7 @@ export interface VoiceStartedEvent {
   type: 'voice.started'
   mode: 'wake_word' | 'ptt'
 }
+// --- End voice events ---
 
 export interface SafeModeChangedEvent {
   type: 'safe_mode.changed'
@@ -138,6 +147,7 @@ export interface ToolExecutionEvent {
 }
 
 export type ClientEvent = UserMessageEvent | SecurityApprovalClientEvent | AskUserResponseClientEvent
+
 export interface ChunkEvent {
   type: 'chunk'
   content: string
@@ -148,10 +158,45 @@ export interface StatusEvent {
   content: string
 }
 
+// Emitted by server.py on graph execution error
+export interface ErrorEvent {
+  type: 'error'
+  content: string
+}
+
+// Emitted by server.py notify_file_processed() broadcast
+export interface FileStatusEvent {
+  type: 'file_status'
+  name: string
+  status: 'processed' | 'deleted'
+}
+
+// Emitted by server.py after streaming completes
+export interface TokenBudgetUpdateEvent {
+  type: 'token_budget_update'
+  used: number
+  total: number
+  remaining: number
+  percent: number
+}
+
+// Emitted by server.py when cumulative cloud token usage crosses thresholds
+export interface CloudBudgetWarningEvent {
+  type: 'cloud_budget_warning'
+  used: number
+  limit: number
+  percent: number
+  level: 'info' | 'warning' | 'critical'
+}
+
 export type ServerEvent =
   | AssistantMessageEvent
   | ChunkEvent
   | StatusEvent
+  | ErrorEvent
+  | FileStatusEvent
+  | TokenBudgetUpdateEvent
+  | CloudBudgetWarningEvent
   | VoiceStateEvent
   | VoiceTranscriptEvent
   | VoiceWakeWordEvent

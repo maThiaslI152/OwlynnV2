@@ -1,3 +1,7 @@
+---
+purpose: "Debugging guide for performance profiling: resource monitoring, latency analysis, token throughput, and common bottlenecks."
+---
+
 # Debugging: Profiling & Performance
 
 **Quick Reference:** Resource monitoring and performance profiling for the full Owlynn stack. Targets defined in `docs/PERFORMANCE_SLOS.md` for Mac Air M4 (16 GB). Key metrics: memory (~8.6 GB sustained), latency (simple <2s, complex <8s), throughput (30+ tok/s medium, 80+ tok/s small).

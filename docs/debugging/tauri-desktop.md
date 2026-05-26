@@ -1,3 +1,7 @@
+---
+purpose: "Debugging guide for the Tauri desktop shell: window issues, TTS, screen capture, IPC bridge, and CSP/permission errors."
+---
+
 # Debugging: Tauri Desktop Shell
 
 **Quick Reference:** Tauri v2.10 desktop shell for macOS. Handles window vibrancy, screen capture, TTS (`say`), and CSP enforcement. Key files: `src-tauri/src/main.rs`, `src-tauri/src/voice/mod.rs`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`.

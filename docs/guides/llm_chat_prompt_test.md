@@ -1,7 +1,7 @@
 # LLM Chat Prompt Test
 
 Use this test pack to verify that chat behavior matches the intended architecture:
-- small vs large model routing
+- small vs medium/cloud model routing
 - LangGraph path selection
 - memory write/recall behavior
 - tool request behavior
@@ -34,7 +34,7 @@ Tip: Keep "show tool execution" enabled in settings so tool calls are visible.
 
 ---
 
-## Test 2 - Large Route (Complex Reasoning)
+## Test 2 - Complex/Cloud Route (Deep Reasoning)
 
 ### Prompt
 `Design a 3-phase migration plan from monolith to microservices for a 20-person engineering team, including risks, rollback strategy, and weekly milestones.`
@@ -88,11 +88,11 @@ Tip: Keep "show tool execution" enabled in settings so tool calls are visible.
 ## Test 5 - Combined End-to-End Flow
 
 ### Prompt
-`I am building a LangGraph-based assistant. First, remember that my stack is FastAPI + Tauri. Then provide a short architecture split: what should run in a small model path vs large model path. Finally, if needed, request tools to validate external facts.`
+`I am building a LangGraph-based assistant. First, remember that my stack is FastAPI + Tauri. Then provide a short architecture split: what should run in the small model (simple) path vs medium/cloud (complex) path. Finally, if needed, request tools to validate external facts.`
 
 ### Expected
 - Handles memory instruction.
-- Provides a clear small/large split recommendation.
+- Provides a clear small/medium/cloud split recommendation.
 - Requests tools only when external verification is actually needed.
 
 ### Pass Criteria
@@ -107,7 +107,7 @@ Tip: Keep "show tool execution" enabled in settings so tool calls are visible.
 
 If you want a machine-checkable output, run this as a separate prompt:
 
-`For this message, return JSON only with keys: route_guess, model_guess, used_tool(bool), tool_names(array), memory_used(bool), confidence(0-1), answer. Then answer: "Explain when to use small vs large model routing in LangGraph chat systems."`
+`For this message, return JSON only with keys: route_guess, model_guess, used_tool(bool), tool_names(array), memory_used(bool), confidence(0-1), answer. Then answer: "Explain when to use small (simple) vs medium/cloud (complex) model routing in LangGraph chat systems."`
 
 ### Expected
 - Valid JSON output.

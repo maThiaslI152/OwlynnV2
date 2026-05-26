@@ -1,3 +1,8 @@
+---
+last_verified: 2026-05-26
+auto_generated: false
+purpose: "LM Studio setup guide: model download references, swap behavior, Jinja template troubleshooting."
+---
 # LM Studio Setup
 
 ## Models to Download

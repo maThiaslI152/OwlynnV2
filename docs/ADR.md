@@ -1,6 +1,7 @@
 ---
 last_verified: 2026-05-26
 auto_generated: false
+purpose: "Architecture Decision Record log with 14 decisions covering Tauri shell, LangGraph, model architecture, transport, memory, security, and HITL."
 ---
 
 # Architecture Decision Log (ADR)

@@ -1,3 +1,8 @@
+---
+last_verified: 2026-05-26
+auto_generated: false
+purpose: "Operator runbook for producing and validating tool-execution audit artifacts (JSONL bundles, manifest, verify report)."
+---
 # Audit Export + Verify Runbook
 
 This runbook defines the operator workflow for producing and validating tool-execution audit artifacts from `frontend-v2`.

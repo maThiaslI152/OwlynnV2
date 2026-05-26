@@ -1,6 +1,7 @@
 ---
 last_verified: 2026-05-26
 auto_generated: false
+purpose: "Developer guide for modifying agent behavior: LangGraph flow, tool contract, WebSocket events, and consistency constraints."
 ---
 
 # Extending the Agent (Developer Guide)

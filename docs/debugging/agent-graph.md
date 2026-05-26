@@ -1,3 +1,7 @@
+---
+purpose: "Debugging guide for the LangGraph agent graph: topology, node behavior, routing, and common failures."
+---
+
 # Debugging: Agent Graph (LangGraph)
 
 **Quick Reference:** Stateful cyclic LangGraph orchestrating conversation flow. Key files: `src/agent/graph.py` (graph builder + checkpoint config), `src/agent/state.py` (AgentState definition), `src/agent/nodes/router.py` (routing logic), `src/agent/nodes/simple.py` (simple answers), `src/agent/nodes/complex.py` (tool-calling responses), `src/agent/nodes/security_proxy.py` (HITL gate), `src/agent/nodes/summarize.py` (context compression).

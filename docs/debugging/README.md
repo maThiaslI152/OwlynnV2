@@ -1,3 +1,8 @@
+---
+last_verified: 2026-05-26
+auto_generated: false
+purpose: "Debugging guide index with symptom-to-document mapping, quick health check, and decision tree for troubleshooting."
+---
 # Debugging Guide — Index
 
 Entry point for AI agents and developers troubleshooting OwlynnV2. This index maps symptoms to the appropriate subsystem debug doc. Start with the [Quick Health Check](#quick-health-check) below, then follow the decision tree.

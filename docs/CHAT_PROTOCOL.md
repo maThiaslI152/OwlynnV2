@@ -1,11 +1,14 @@
 ---
 last_verified: 2026-05-26
 auto_generated: false
+purpose: "WebSocket event contract between frontend and backend: all server-to-client event types and client-to-server payloads."
 ---
 
 # Chat & Events Protocol
 
 Developer-facing JSON contract between the frontend WebSocket client (`frontend-v2`), the backend WebSocket handler (`src/api/server.py`), and the LangGraph execution stream forwarded to the browser.
+
+Related documents: `docs/API_REFERENCE.md` (REST endpoints), `docs/PROJECT_GUIDE.md` (navigation), `frontend-v2/src/types/protocol.ts` (TypeScript types).
 
 ## Overview
 
@@ -121,7 +124,9 @@ For non-`workspace_ref` attachments, the server:
 
 ### Server → Client: Event Types
 
-#### `status`
+Note: All events below define the contract for frontend/backend compatibility. Events marked with (emitted) are actively broadcast by `src/api/server.py`. Events without this marker are documented for future implementation. Frontend code should handle unknown event types gracefully.
+
+#### `status` (emitted)
 
 ```json
 { "type": "status", "content": "reasoning | idle" }
@@ -129,7 +134,7 @@ For non-`workspace_ref` attachments, the server:
 
 - Sent when graph run starts/finishes or client disconnects
 
-#### `chunk`
+#### `chunk` (emitted)
 
 ```json
 { "type": "chunk", "content": "string", "metadata": {} }
@@ -149,7 +154,7 @@ For non-`workspace_ref` attachments, the server:
 - `budget_remaining` — tokens remaining in allocated budget
 - `metadata` is optional; frontend code not handling it continues to work
 
-#### `message`
+#### `message` (emitted)
 
 ```json
 {
@@ -167,7 +172,7 @@ For non-`workspace_ref` attachments, the server:
 - `AIMessage` with `tool_calls` forwarded for tool-call UI rendering
 - Tool lifecycle/output via `tool_execution` events (not `message`)
 
-#### `error`
+#### `error` (emitted)
 
 ```json
 { "type": "error", "content": "string" }
@@ -177,7 +182,7 @@ Contract (tested via `test_ws_error_event_shape`):
 - `type` must equal `"error"`
 - `content` must be a non-empty string
 
-#### `tool_execution`
+#### `tool_execution` (emitted)
 
 Running:
 
@@ -207,7 +212,7 @@ Finished:
 
 Derived from `AIMessage.tool_calls` + `ToolMessage` outputs. Tool outputs normalized into `tool_execution` events to avoid duplicate/misaligned chat message rendering.
 
-#### `model_info`
+#### `model_info` (emitted)
 
 ```json
 {
@@ -246,7 +251,7 @@ Sent after `complex_llm` or `simple` node completes when `model_used` is present
 
 Populated by `complex_llm_node` and `simple_node` in every node output.
 
-#### `router_info`
+#### `router_info` (emitted)
 
 ```json
 {
@@ -326,7 +331,7 @@ Sent when cumulative cloud token usage crosses a configured threshold. Default t
 
 Each level emitted at most once per session. Levels emitted in order: `"info"` → `"warning"` → `"critical"`. If `cloud_daily_token_limit` is 0 or negative, no warnings are emitted.
 
-#### `memory_updated`
+#### `memory_updated` (emitted)
 
 ```json
 {
@@ -337,7 +342,7 @@ Each level emitted at most once per session. Levels emitted in order: `"info"` �
 
 Sent after `memory_write_node` saves new data and invalidates the memory context cache.
 
-#### `context_summarized`
+#### `context_summarized` (emitted)
 
 ```json
 {
@@ -353,7 +358,7 @@ Emitted when `auto_summarize_node` compresses older conversation history. Trigge
 
 Sent at `on_chain_end` for the `auto_summarize` node. When no summarization needed, no event is emitted.
 
-#### `file_status`
+#### `file_status` (emitted)
 
 ```json
 { "type": "file_status", "name": "string", "status": "processed | deleted" }
@@ -386,7 +391,7 @@ Returns all user-facing settings merged from `GET /api/profile` and `GET /api/ad
   "llm_model_name": "gemma-4-e4b-uncensored-hauhaucs-aggressive",
   "medium_models": {},
   "cloud_llm_base_url": "https://api.deepseek.com/v1",
-  "cloud_llm_model_name": "deepseek-chat",
+  "cloud_llm_model_name": "deepseek-v4",
   "deepseek_api_key": "••••••••",
   "temperature": 0.7,
   "top_p": 0.9,

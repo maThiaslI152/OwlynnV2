@@ -1,11 +1,14 @@
 ---
 last_verified: 2026-05-26
 auto_generated: false
+purpose: "Full architecture reference for the three-tier LLM, LangGraph flow, router, nodes, swap manager, toolbox, anonymization, and infrastructure."
 ---
 
 # Architecture Overview
 
 Owlynn is a local-first AI productivity agent built with LangGraph for orchestration and FastAPI for the backend. Optimized for Apple Silicon (M4 Air 24GB) with a three-tier S/M(swap)/L hybrid LLM architecture.
+
+Related documents: `docs/PROJECT_GUIDE.md` (navigation), `docs/AGENT_FLOW.md` (node-by-node), `docs/PERFORMANCE_SLOS.md` (resource budgets), `docs/TOOLS.md` (tool reference), `docs/API_REFERENCE.md` (endpoints).
 
 ## Overview
 
@@ -33,7 +36,7 @@ frontend-v2/src/App.tsx      # React app shell
 | Medium_Default | `gemma-4-e4b-uncensored-hauhaucs-aggressive` (Q4_K_M) | General complex reasoning, tool calling | ~2.5 GB | 32,768 |
 | Medium_Vision | `gemma-4-e4b-uncensored-hauhaucs-aggressive` (Q4_K_M) | Image/multimodal processing | ~2.5 GB | 32,768 |
 | Medium_LongCtx | `gemma-4-e4b-uncensored-hauhaucs-aggressive` (Q4_K_M) | Extended context tasks | ~2.5 GB | 32,768 |
-| Cloud_LLM | `deepseek-chat` (DeepSeek API) | Frontier-quality reasoning (cloud) | N/A | 131,072 |
+| Cloud_LLM | `deepseek-v4` (DeepSeek API) | Frontier-quality reasoning (cloud) | N/A | 131,072 |
 
 Small_LLM and one M-tier model are served via LM Studio on port 1234 (OpenAI-compatible API). Cloud_LLM uses the DeepSeek API at `https://api.deepseek.com/v1`.
 

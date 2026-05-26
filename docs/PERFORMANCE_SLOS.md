@@ -1,6 +1,7 @@
 ---
 last_verified: 2026-05-26
 auto_generated: false
+purpose: "Performance and memory SLOs for M4 Air 24GB target: latency, memory budget, storage, CPU/thermal, throughput, and availability."
 ---
 
 # Performance & Memory SLOs

@@ -1,6 +1,7 @@
 ---
 last_verified: 2026-05-26
 auto_generated: false
+purpose: "LangGraph node-by-node reference: memory_inject, router, simple, complex_llm, security_proxy, tool_action, memory_write."
 ---
 
 # Agent Flow (LangGraph)

@@ -1,3 +1,8 @@
+---
+last_verified: 2026-05-26
+auto_generated: false
+purpose: "Prioritized engineering improvement suggestions: CI automation, frontend test coverage, service resilience, structured logging, security hardening."
+---
 # Engineering improvement suggestions
 
 This document captures prioritized improvement ideas for Owlynn. It is **advisory**: nothing here is a commitment until tracked in issues or `docs/STATUS.md`.

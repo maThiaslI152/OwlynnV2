@@ -1,13 +1,14 @@
 ---
 last_verified: 2026-05-26
 auto_generated: false
+purpose: "Quick setup guide for Owlynn chat: configuration, render capabilities (react-markdown), status indicators, interactive features, and troubleshooting."
 ---
 
 # Owlynn Enhanced Chat — Quick Start Guide
 
 ## Overview
 
-Owlynn chat supports code highlighting (190+ languages), rich text formatting, tool execution visibility, model information badges, and real-time streaming via WebSocket.
+Owlynn chat supports markdown rendering (tables, lists, code blocks), tool execution visibility, model information badges, and real-time streaming via WebSocket.
 
 ## Entry Points
 
@@ -26,7 +27,7 @@ src/api/server.py                              # Backend streaming
 export DEEPSEEK_API_KEY=sk-...
 ```
 
-Or: Settings → Profile → Cloud section (masked field). Cloud escalation is optional — all local models work without it.
+Or: Settings -> Profile -> Cloud section (masked field). Cloud escalation is optional -- all local models work without it.
 
 ### Redis (Short-Term Memory Backend)
 
@@ -52,9 +53,8 @@ Expected output: `PONG`. Falls back to in-memory `MemorySaver` if Redis unavaila
 
 | Feature | Detail |
 |---------|--------|
-| Code highlighting | 190+ languages, dark theme (VS Code style), triggered by markdown code fences |
+| Code blocks | Syntax-highlighted via react-markdown + rehype, triggered by markdown code fences |
 | Rich text | Tables, lists, bold, italic, `inline code` |
-| Math | KaTeX-compatible equation rendering |
 | Links | Formatted clickable links |
 | Tool execution cards | Colored cards showing input, output, duration, status (running/success/error) |
 | Model badge | Response footer showing which model was used |
@@ -72,7 +72,7 @@ Expected output: `PONG`. Falls back to in-memory `MemorySaver` if Redis unavaila
 
 | Color | Content |
 |-------|---------|
-| Orange/Anthropic | Assistant responses & tool execution |
+| Orange | Assistant responses & tool execution |
 | Light Gray | User messages |
 | Dark Gray | Code blocks and terminal output |
 | Red | Errors and warnings |
@@ -81,15 +81,15 @@ Expected output: `PONG`. Falls back to in-memory `MemorySaver` if Redis unavaila
 
 | Feature | Behavior |
 |---------|----------|
-| Copy button | Copies response content to clipboard, shows "✅ Copied" for 2 seconds |
+| Copy button | Copies response content to clipboard, shows confirmation for 2 seconds |
 | Regenerate button | Re-runs the last query, removes current response, sends same prompt again |
-| Message actions | `📋 Copy  ↻ Regenerate  🔹 model-name` at bottom of each AI response |
+| Message actions | Copy, Regenerate, and model-name footer at bottom of each AI response |
 
 ## Key Decisions
 
 | Decision | Rationale | Trade-off |
 |----------|-----------|-----------|
-| Syntax highlighting in browser | Fast, zero server overhead | Requires highlight.js bundle |
+| Markdown rendering via react-markdown | Standard React ecosystem, GFM table support | Requires rehype-sanitize for XSS protection |
 | WebSocket streaming for real-time UX | Immediate token display | Connection management complexity |
 | DOMPurify sanitization | XSS protection | Slight rendering overhead |
 
@@ -99,10 +99,10 @@ Expected output: `PONG`. Falls back to in-memory `MemorySaver` if Redis unavaila
 
 | Issue | Check |
 |-------|-------|
-| Code not highlighting | Use proper markdown: ` ```python`. Check `console.log(hljs)` returns an object. Refresh page |
+| Code not highlighting | Use proper markdown: ` ```python`. Verify react-markdown + rehype-raw pipeline. Refresh page |
 | Tool cards not showing | Tool calls rendered via `type: "message"` events (`AIMessage.tool_calls`, `ToolMessage` outputs). `type: "tool_execution"` is optional. Check WS connection (green dot in sidebar) |
 | Model badge not showing | `type: "model_info"` emitted by backend after node completion. Verify WS connection. Check browser console |
-| Memory panel "Loading..." indefinitely | No timeout/error fallback — known as BUG-3. Refresh page or restart backend |
+| Memory panel "Loading..." indefinitely | No timeout/error fallback -- known as BUG-3. Refresh page or restart backend |
 
 ### Browser Support
 

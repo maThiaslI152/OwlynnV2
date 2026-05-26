@@ -1,3 +1,7 @@
+---
+purpose: "Browser audit results: feature test matrix, failure analysis, and cross-browser observations from May 25, 2026 session."
+---
+
 # Browser Verification — May 25, 2026 Audit
 
 Two test sessions. Session 1 used Qwen 3.5 9B fp16 (crashed). Session 2 switched to Gemma 4 E4B Q4_K_M (stable).

@@ -1,13 +1,14 @@
 ---
 last_verified: 2026-05-26
 auto_generated: false
+purpose: "Project status tracker: phase progress, test counts, active bugs (7), bug fix priority list, and lingering risks."
 ---
 
 # Owlynn Status
 
 ## Overview
 
-Project status tracker. Last updated: 2026-05-25 v5 (Browser audit — 8 bugs found, documented in `BUG-ANALYSIS.md`).
+Project status tracker. Last updated: 2026-05-26 (Documentation audit).
 
 ## Entry Points
 
@@ -60,8 +61,8 @@ frontend-v2/src/App.tsx        # Frontend runtime
 
 | Suite | Status | Count |
 |-------|--------|-------|
-| Backend core | Pass | 203 passed |
-| Frontend-v2 (vitest) | Pass | 50 passed |
+| Backend core (pytest) | Pass | 705+ passed (Phase 7), 0 failed, 5 skipped (Redis/integration) |
+| Frontend-v2 (vitest) | Pass | 77+ passed |
 | Frontend-v2 (build) | Pass | Build passes |
 
 ## Architecture

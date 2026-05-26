@@ -1,3 +1,7 @@
+---
+purpose: "Detailed memory budget analysis on M4 Air 24GB: per-component VRAM usage, Qdrant and embedding overhead, peak/total utilization."
+---
+
 # Memory Analysis — May 25, 2026
 
 Full memory budget for OwlynnV2 on Mac M4 Air (24 GB unified memory) with local Qwen 3.5 9B via LM Studio + MLX.

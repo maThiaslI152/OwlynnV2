@@ -65,7 +65,7 @@ The router uses the small LLM to classify requests into `simple` (greetings, qui
 | Frontend | React 19 + TypeScript (Vite 8) + Zustand 5, served via Tauri desktop shell |
 | Small LLM | `ibm-grok4-ultrafast-coder-1b` (Q8_0, routing) |
 | Medium LLM | `gemma-4-e4b-uncensored-hauhaucs-aggressive` (Q4_K_M, reasoning + tool calling, swappable) |
-| Cloud LLM | `deepseek-chat` (DeepSeek API, optional escalation) |
+| Cloud LLM | `deepseek-v4` (DeepSeek API, optional escalation) |
 | Memory | Mem0 + Qdrant + JSON files |
 | Checkpointing | Redis (falls back to in-memory `MemorySaver`) |
 | Search | Multi-tier: wttr.in / SearXNG (self-hosted) → curl_cffi / DDGS → Playwright |
@@ -84,10 +84,10 @@ The router uses the small LLM to classify requests into `simple` (greetings, qui
 | Phase 4: Governance | Done | ADR log (11 decisions), performance SLOs, release train alignment |
 | Phase 5: Live Test | Done | Dead test removal, tool awareness assertions — 203 passed |
 | Phase 6: MVP Hardening | Done | Env config, logging, dependency pinning, 89 new tests |
-| Phase 7: Test Fixes | Done | 13 skipped tests fixed. **724 passed, 0 failed, 5 skipped** (Redis/integration) |
+| Phase 7: Test Fixes | Done | 13 skipped tests fixed. **705+ passed, 0 failed, 5 skipped** (Redis/integration) |
 | **Phase 8: Bug Fixes** | **In Progress** | Fixing 8 bugs found in browser audit (see below) |
 
-Test suite: **724 backend** (pytest + hypothesis), **77 frontend** (vitest + testing-library). All passing.
+Test suite: **705+ backend** (pytest + hypothesis), **77+ frontend** (vitest + testing-library). All passing.
 
 ### Known Bugs (Phase 8)
 
@@ -198,7 +198,7 @@ Models configured in `data/user_profile.json` or via the Settings UI:
 | Medium LLM | `medium_models.default` | `gemma-4-e4b-uncensored-hauhaucs-aggressive` | Reasoning model (Q4_K_M) |
 | Medium Vision | `medium_models.vision` | — | Image inputs |
 | Medium LongCtx | `medium_models.longctx` | — | Large context windows |
-| Cloud LLM | `cloud_llm_model_name` | `deepseek-chat` | DeepSeek fallback |
+| Cloud LLM | `cloud_llm_model_name` | `deepseek-v4` | DeepSeek fallback |
 
 All local models served via LM Studio on port 1234.
 
@@ -380,13 +380,11 @@ Managed by `src/memory/personal_assistant.py`:
 - [`docs/ADR.md`](docs/ADR.md) — architecture decision records
 - [`docs/PERFORMANCE_SLOS.md`](docs/PERFORMANCE_SLOS.md) — latency, memory, CPU targets
 - [`docs/BUG-ANALYSIS.md`](docs/BUG-ANALYSIS.md) — bug inventory and audit reports
-- [`docs/HUMAN_PROJECT_GUIDE.md`](docs/HUMAN_PROJECT_GUIDE.md) — human workflow guide
-- [`docs/AI_AGENT_PROJECT_GUIDE.md`](docs/AI_AGENT_PROJECT_GUIDE.md) — AI agent execution guide
-- [`docs/AI_AGENT_INDEX.md`](docs/AI_AGENT_INDEX.md) — file-level navigation for AI agents
+- [`docs/PROJECT_GUIDE.md`](docs/PROJECT_GUIDE.md) — merged navigation, architecture, and development rules
 
 ## Contributing
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) for development setup, code style, and testing guidelines. PRs welcome — please scope changes per the `docs/AI_AGENT_INDEX.md` concern areas and ensure all tests pass before submitting.
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for development setup, code style, and testing guidelines. PRs welcome — please scope changes per the `docs/PROJECT_GUIDE.md` concern areas and ensure all tests pass before submitting.
 
 ## License
 

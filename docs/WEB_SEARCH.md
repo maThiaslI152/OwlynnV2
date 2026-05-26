@@ -1,6 +1,7 @@
 ---
 last_verified: 2026-05-26
 auto_generated: false
+purpose: "Multi-tier web search pipeline documentation (wttr.in, SearXNG, curl_cffi, DDGS, Playwright) and web RAG with embedding ranking."
 ---
 
 # Web Search Architecture

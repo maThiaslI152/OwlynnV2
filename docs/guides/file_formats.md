@@ -1,3 +1,8 @@
+---
+last_verified: 2026-05-26
+auto_generated: false
+purpose: "Complete file format support guide covering 20+ formats, processing pipeline, cache system, and extension instructions."
+---
 # File Format Support Guide
 
 Owlynn can automatically understand and process a wide variety of file formats. When you upload files to the chat, they are automatically converted to readable formats and cached for fast retrieval.

@@ -1,3 +1,8 @@
+---
+last_verified: 2026-05-26
+auto_generated: false
+purpose: "Machine-readable verification report schema (owlynn.audit.verify-report.v1) with required and optional fields."
+---
 # Audit Verify Report Schema
 
 This document defines the machine-readable verification report emitted by the in-app audit verifier.
