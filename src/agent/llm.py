@@ -19,6 +19,8 @@ from src.memory.user_profile import get_profile
 
 logger = logging.getLogger(__name__)
 
+from src.config.audit_log import audit_info, audit_debug, audit_warn
+
 
 class CloudUnavailableError(Exception):
     """Raised when no valid DeepSeek API key is configured."""
@@ -52,6 +54,7 @@ class LLMPool:
     async def get_small_llm(cls) -> ChatOpenAI:
         """Get or create cached small LLM instance."""
         if "small" in cls._test_overrides:
+            audit_debug("agent.model", "pool_test_override", slot="small")
             return cls._test_overrides["small"]
         if cls._small_llm is None:
             try:
@@ -68,10 +71,12 @@ class LLMPool:
                             max_tokens=512,
                             extra_body={"max_output_tokens": 512},
                         )
+                        audit_info("agent.model", "pool_instance_created", slot="small", model=model)
             except Exception:
                 profile = get_profile()
                 base_url = profile.get("small_llm_base_url", "http://127.0.0.1:1234/v1")
                 model = profile.get("small_llm_model_name", "liquid/lfm2.5-1.2b")
+                audit_info("agent.model", "pool_instance_created", slot="small", model=model, source="fallback")
                 return ChatOpenAI(
                     model=model,
                     api_key="sk-local-no-key-needed",
@@ -80,6 +85,8 @@ class LLMPool:
                     max_tokens=512,
                     extra_body={"max_output_tokens": 512},
                 )
+        else:
+            audit_debug("agent.model", "pool_cache_hit", slot="small")
         return cls._small_llm
 
     # ── medium (swappable local slot) ────────────────────────────────────
@@ -103,11 +110,13 @@ class LLMPool:
         if "medium" in cls._test_overrides:
             return cls._test_overrides["medium"]
         if cls._current_medium_variant == variant and cls._medium_llm is not None:
+            audit_debug("agent.model", "pool_cache_hit", slot="medium", variant=variant)
             return cls._medium_llm
 
         async with cls._lock:
             # Double-check after acquiring lock
             if cls._current_medium_variant == variant and cls._medium_llm is not None:
+                audit_debug("agent.model", "pool_cache_hit", slot="medium", variant=variant)
                 return cls._medium_llm
 
             # Lazy-init swap manager
@@ -131,6 +140,7 @@ class LLMPool:
                 extra_body={"max_output_tokens": 4096},
             )
             cls._current_medium_variant = variant
+            audit_info("agent.model", "pool_instance_created", slot="medium", variant=variant, model=model_name)
 
         return cls._medium_llm
 
@@ -146,16 +156,20 @@ class LLMPool:
             If no valid API key is found in env var or profile.
         """
         if "cloud" in cls._test_overrides:
+            audit_debug("agent.model", "pool_test_override", slot="cloud")
             return cls._test_overrides["cloud"]
         if cls._cloud_llm is not None:
+            audit_debug("agent.model", "pool_cache_hit", slot="cloud")
             return cls._cloud_llm
 
         async with cls._lock:
             if cls._cloud_llm is not None:
+                audit_debug("agent.model", "pool_cache_hit", slot="cloud")
                 return cls._cloud_llm
 
             api_key = cls._resolve_deepseek_api_key()
             if not api_key:
+                audit_warn("agent.model", "pool_no_api_key", slot="cloud")
                 raise CloudUnavailableError(
                     "No DeepSeek API key configured. Set DEEPSEEK_API_KEY env var "
                     "or deepseek_api_key in user profile."
@@ -173,6 +187,7 @@ class LLMPool:
                 max_tokens=8192,
                 temperature=0.4,
             )
+            audit_info("agent.model", "pool_instance_created", slot="cloud", model=model)
 
         return cls._cloud_llm
 

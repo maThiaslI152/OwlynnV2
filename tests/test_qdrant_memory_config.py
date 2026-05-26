@@ -8,7 +8,7 @@ import pytest
 def test_long_term_source_uses_lmstudio_nomic_embedder():
     root = Path(__file__).resolve().parents[1]
     text = (root / "src/memory/long_term.py").read_text(encoding="utf-8")
-    assert '"model": "text-embedding-nomic-embed-text-v1.5@f16"' in text
+    assert '"model": "text-embedding-nomic-embed-text-v1.5-embedding"' in text
     assert '"collection_name": "cowork_memory_nomic"' in text
     assert '"provider": "lmstudio"' in text
     assert '"provider": "qdrant"' in text

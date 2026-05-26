@@ -21,7 +21,7 @@ from src.agent.swap_manager import ModelSwapError, SwapManager
 VALID_VARIANTS = ["default", "vision", "longctx"]
 
 DEFAULT_MEDIUM_MODELS = {
-    "default": "qwen/qwen3.5-9b",
+    "default": "medium-default-model",
     "vision": "zai-org/glm-4.6v-flash",
     "longctx": "LFM2 8B A1B GGUF Q8_0",
 }

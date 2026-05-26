@@ -26,6 +26,12 @@ export interface AskUserResponseClientEvent {
   answer: Record<string, unknown>
 }
 
+export interface PlanReviewResponseClientEvent {
+  type: 'plan_review_response'
+  approved: boolean
+  feedback?: string
+}
+
 export interface AssistantMessageEvent {
   type: 'assistant.message'
   id?: string
@@ -137,7 +143,7 @@ export interface ToolExecutionEvent {
   duration?: number
 }
 
-export type ClientEvent = UserMessageEvent | SecurityApprovalClientEvent | AskUserResponseClientEvent
+export type ClientEvent = UserMessageEvent | SecurityApprovalClientEvent | AskUserResponseClientEvent | PlanReviewResponseClientEvent
 export interface ChunkEvent {
   type: 'chunk'
   content: string

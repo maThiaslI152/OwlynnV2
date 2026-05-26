@@ -147,7 +147,7 @@ Flow:
 | Setting | Env Var | Default | Description |
 |---------|---------|---------|-------------|
 | `WEB_RAG_ENABLED` | `WEB_RAG_ENABLED` | `true` | Master toggle |
-| `WEB_RAG_EMBED_MODEL` | `WEB_RAG_EMBED_MODEL` | `text-embedding-nomic-embed-text-v1.5@f16` | Embedding model in LM Studio |
+| `WEB_RAG_EMBED_MODEL` | `WEB_RAG_EMBED_MODEL` | `text-embedding-nomic-embed-text-v1.5-embedding` | Embedding model in LM Studio |
 | `WEB_RAG_TOP_K` | `WEB_RAG_TOP_K` | `5` | Ranked excerpts to return |
 | `WEB_RAG_CHUNK_CHARS` | `WEB_RAG_CHUNK_CHARS` | `720` | Max characters per chunk |
 | `WEB_RAG_CHUNK_OVERLAP` | `WEB_RAG_CHUNK_OVERLAP` | `120` | Overlap between chunks |

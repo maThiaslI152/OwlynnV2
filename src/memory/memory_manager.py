@@ -13,6 +13,8 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+from src.config.audit_log import audit_info, audit_debug, audit_warn
+
 _MEMORIES_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "memories.json"
 _MAX_MEMORIES = 200
 _SEARCH_WINDOW = 50
@@ -55,18 +57,26 @@ def save_memory(fact: str) -> str:
         return "Empty fact — nothing saved."
 
     memories = _read_file()
+    before_count = len(memories)
 
     # Avoid exact duplicates (case-insensitive)
     if any(m.get("fact", "").lower().strip() == fact.lower() for m in memories):
+        audit_debug("memory.stm", "save_skipped_duplicate", total_count=before_count)
         return f"Memory already exists: '{fact}'"
 
     memories.append({"fact": fact, "timestamp": datetime.now().isoformat()})
 
     # Cap at max
+    capped = False
     if len(memories) > _MAX_MEMORIES:
+        capped = True
         memories = memories[-_MAX_MEMORIES:]
 
     _write_file(memories)
+    after_count = len(memories)
+    audit_info("memory.stm", "saved",
+                total_count=after_count, was_dedup=False,
+                was_capped=capped, removed=capped)
     return f"✅ Remembered: '{fact}'"
 
 
@@ -92,10 +102,18 @@ def search_memories(query: str, top_k: int = 8) -> list[dict]:
 
     if scored:
         scored.sort(key=lambda x: -x[0])
-        return [m for _, m in scored[:top_k]]
+        result = [m for _, m in scored[:top_k]]
+        audit_debug("memory.stm", "searched",
+                     query_word_count=len(query_words), match_count=len(result),
+                     total_count=len(memories))
+        return result
 
     # Fallback: most recent
-    return window[-top_k:]
+    result = window[-top_k:]
+    audit_debug("memory.stm", "searched_fallback",
+                 query_word_count=len(query_words), match_count=0,
+                 total_count=len(memories))
+    return result
 
 
 def delete_memory(fact: str) -> bool:
@@ -105,7 +123,9 @@ def delete_memory(fact: str) -> bool:
     filtered = [m for m in memories if m.get("fact") != fact]
     if len(filtered) < before:
         _write_file(filtered)
+        audit_info("memory.stm", "deleted", total_before=before, total_after=len(filtered))
         return True
+    audit_debug("memory.stm", "delete_not_found", total_count=before)
     return False
 
 
@@ -113,6 +133,7 @@ def clear_all_memories() -> int:
     """Delete every memory. Returns count removed."""
     count = len(_read_file())
     _write_file([])
+    audit_info("memory.stm", "cleared", removed_count=count)
     return count
 
 

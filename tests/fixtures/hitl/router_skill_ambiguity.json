@@ -1,0 +1,28 @@
+{
+  "type": "ask_user",
+  "question": "I'm not sure which approach fits best — multiple matching skills found\nWhich would help you most?",
+  "choices": [
+    {
+      "label": "Web Development — Build and debug web applications (87%)",
+      "route": "complex-default",
+      "toolbox": ["file_ops", "web_search"],
+      "skill_name": "web_development",
+      "allows_user_input": false
+    },
+    {
+      "label": "Data Analysis — Analyze and visualize datasets (72%)",
+      "route": "complex-default",
+      "toolbox": ["data_viz", "file_ops"],
+      "skill_name": "data_analysis",
+      "allows_user_input": false
+    },
+    {
+      "label": "Others (describe what you need)",
+      "route": "complex-default",
+      "toolbox": ["all"],
+      "skill_name": null,
+      "allows_user_input": true
+    }
+  ],
+  "clarification_reason": "Multiple skills matched with similar confidence scores."
+}

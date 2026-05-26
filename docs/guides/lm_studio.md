@@ -26,7 +26,7 @@ Download all three; the system auto-swaps based on task type:
 
 ## Jinja Template Issues — `No user query found in messages`
 
-LM Studio applies the model's **Jinja chat template** to the `/v1/chat/completions` payload. Some **Qwen 3.x** templates expect a normal **user** role in the message list. Owlynn mitigates this in two ways:
+LM Studio applies the model's **Jinja chat template** to the `/v1/chat/completions` payload. Some model templates (e.g., legacy Qwen 3.x variants no longer in use) expect a normal **user** role in the message list. Owlynn mitigates this in two ways:
 
 1. **Router** uses a `HumanMessage` (not system-only) for routing.
 2. **`lm_studio_fold_system`** (default **on** in profile defaults): system instructions are **prepended into the first user message** so the API sees a clear user turn. Disable in `data/user_profile.json` if your backend requires a separate system role:

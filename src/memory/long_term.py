@@ -11,6 +11,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+from src.config.audit_log import audit_info, audit_warn
+
 from mem0 import Memory  # noqa: E402
 
 config = {
@@ -26,7 +28,7 @@ config = {
     "embedder": {
         "provider": "lmstudio",
         "config": {
-            "model": "text-embedding-nomic-embed-text-v1.5@f16",
+            "model": "text-embedding-nomic-embed-text-v1.5-embedding",
             "embedding_dims": 768,
             "lmstudio_base_url": "http://127.0.0.1:1234/v1",
         },
@@ -40,8 +42,13 @@ try:
     # We use setdefault so any user-provided key takes precedence.
     os.environ.setdefault("OPENAI_API_KEY", "sk-dummy-key")
     memory = Memory.from_config(config)
+    audit_info("memory.ltm", "mem0_init",
+               provider="qdrant", collection=config["vector_store"]["config"]["collection_name"],
+               embedding_model=config["embedder"]["config"]["model"], dims=768)
 except Exception as e:
     logger.warning("Failed to initialize Mem0/Qdrant connection: %s", e)
+    audit_warn("memory.ltm", "mem0_init_failed", reason=str(e)[:120],
+               host=config["vector_store"]["config"]["host"])
     memory = None
 finally:
     # Clean up the dummy key so it doesn't leak to other OpenAI SDK usage

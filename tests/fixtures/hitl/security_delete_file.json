@@ -1,0 +1,27 @@
+{
+  "type": "security_approval_required",
+  "title": "Sensitive tool request blocked pending approval",
+  "reason": "One or more tool calls are marked sensitive by policy.",
+  "sensitive_tool_calls": [
+    {
+      "name": "delete_workspace_file",
+      "args": {"path": "/workspace/important_data.csv"},
+      "risk_category": "destructive_action",
+      "risk_label": "destructive_action",
+      "risk_confidence": 0.98,
+      "risk_rationale": "Policy detected delete/drop semantics that can irreversibly modify workspace state.",
+      "remediation_hint": "Confirm target paths and create a backup/snapshot before execution."
+    }
+  ],
+  "safe_tool_calls": [],
+  "risk_categories": ["destructive_action"],
+  "instruction": "Resume with {\"approved\": true} to allow, or {\"approved\": false} to deny.",
+  "tool_name": "delete_workspace_file",
+  "tool_args": "{\"path\": \"/workspace/important_data.csv\"}",
+  "sensitive_count": 1,
+  "risk_label": "destructive_action",
+  "risk_confidence": 0.98,
+  "risk_rationale": "Policy detected delete/drop semantics that can irreversibly modify workspace state.",
+  "remediation_hint": "Confirm target paths and create a backup/snapshot before execution.",
+  "conversation_snippet": "User: Can you clean up unused data files?\nOwlynn: I'll identify and remove files that are no longer referenced."
+}

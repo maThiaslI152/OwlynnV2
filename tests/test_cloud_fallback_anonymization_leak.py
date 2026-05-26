@@ -93,7 +93,7 @@ def _mock_profile() -> dict:
         "custom_sensitive_terms": [],
         "lm_studio_fold_system": True,
         "medium_models": {
-            "default": "qwen/qwen3.5-9b",
+            "default": "medium-default-model",
             "vision": "zai-org/glm-4.6v-flash",
             "longctx": "LFM2 8B A1B GGUF Q8_0",
         },
@@ -312,7 +312,7 @@ def _mock_profile_anon_disabled() -> dict:
         "custom_sensitive_terms": [],
         "lm_studio_fold_system": True,
         "medium_models": {
-            "default": "qwen/qwen3.5-9b",
+            "default": "medium-default-model",
             "vision": "zai-org/glm-4.6v-flash",
             "longctx": "LFM2 8B A1B GGUF Q8_0",
         },

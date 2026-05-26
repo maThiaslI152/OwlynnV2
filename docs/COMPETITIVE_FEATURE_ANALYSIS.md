@@ -158,7 +158,7 @@ Before comparing, here is what Owlynn already has (documented in `docs/ARCHITECT
 |  | 1. **Watch folders** — Monitor workspace directories for new/changed files (use `watchfiles` Python package) |
 |  | 2. **Parse documents** — Support PDF (PyMuPDF, already used), .docx (python-docx), .md, .txt, .py, .ts, .tsx, .json |
 |  | 3. **Chunk** — Use `langchain.text_splitter.RecursiveCharacterTextSplitter` with overlap |
-|  | 4. **Embed** — Use Owlynn's existing embedding model (`nomic-embed-text-v1.5` via LM Studio) |
+|  | 4. **Embed** — Use Owlynn's existing embedding model (`text-embedding-nomic-embed-text-v1.5-embedding` via LM Studio) |
 |  | 5. **Store** — Index chunks in Qdrant under a separate collection `workspace_docs` keyed by `(project_id, file_path, chunk_index)` |
 |  | 6. **Query** — Add a `search_workspace_docs` tool that performs hybrid search (semantic + keyword) over indexed documents |
 |  | 7. **UI** — Add a file list with indexing status (indexed/indexing/pending) in the workspace panel |

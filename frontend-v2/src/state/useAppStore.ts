@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { ChatMessage, ConnectionState } from '../types/protocol'
+import type { ConversationItem, ConversationHitlPrompt, ConversationToolActivity } from '../appEventHandlers'
 
 // crypto.randomUUID() polyfill for environments where it's not available
 function uuid() {
@@ -73,6 +74,7 @@ export interface InlineSecurityPrompt {
 interface AppState {
   connectionState: ConnectionState
   messages: ChatMessage[]
+  conversationItems: ConversationItem[]
   safeMode: SafeModeLevel
   executionPolicy: ExecutionPolicy
   windowMode: WindowMode
@@ -112,12 +114,15 @@ interface AppState {
   clearInterruptPrompt: () => void
   setInlineSecurityPrompt: (prompt: InlineSecurityPrompt | null) => void
   clearInlineSecurityPrompt: () => void
+  appendConversationItem: (item: ConversationItem) => void
+  updateConversationItemStatus: (id: string, status: 'pending' | 'approved' | 'rejected' | 'dismissed' | 'running' | 'success' | 'error') => void
   clearSession: () => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
   connectionState: 'disconnected',
   messages: [],
+  conversationItems: [],
   safeMode: 'normal',
   executionPolicy: 'auto_approve',
   windowMode: 'full',
@@ -229,9 +234,24 @@ export const useAppStore = create<AppState>((set) => ({
     set({ interruptQuestion: null, interruptChoices: null }),
   setInlineSecurityPrompt: (inlineSecurityPrompt) => set({ inlineSecurityPrompt }),
   clearInlineSecurityPrompt: () => set({ inlineSecurityPrompt: null }),
+  appendConversationItem: (item) =>
+    set((state) => ({
+      conversationItems: [...state.conversationItems, item],
+    })),
+  updateConversationItemStatus: (id, status) =>
+    set((state) => ({
+      conversationItems: state.conversationItems.map((item) =>
+        item.kind === 'hitl_prompt' && item.id === id
+          ? { ...item, status: status as ConversationHitlPrompt['status'] }
+          : item.kind === 'tool_activity' && item.id === id
+            ? { ...item, status: status as ConversationToolActivity['status'] }
+            : item
+      ),
+    })),
   clearSession: () =>
     set({
       messages: [],
+      conversationItems: [],
       toolExecutionHistory: [],
       latestToolExecution: null,
       actionProposals: [],

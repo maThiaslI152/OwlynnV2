@@ -10,7 +10,7 @@
 | `GET /api/topics` returns 500 or empty | JSON file corrupted or missing | Check topic storage files | Repair or recreate JSON file |
 | `GET /api/mem0/search` returns 500 | Qdrant not running or Mem0 config wrong | `curl http://localhost:6333/collections` | `docker-compose up -d qdrant`, check Mem0 config |
 | Qdrant connection refused | Qdrant container not running | `docker ps \| grep qdrant` | `docker-compose up -d qdrant` |
-| Embedding dimension mismatch (e.g., expected 768, got 384) | Wrong embedding model loaded | Check nomic model in LM Studio | Load `nomic-embed-text-v1.5` (768-dim) in LM Studio |
+| Embedding dimension mismatch (e.g., expected 768, got 384) | Wrong embedding model loaded | Check nomic model in LM Studio | Load `text-embedding-nomic-embed-text-v1.5-embedding` (768-dim) in LM Studio |
 | Mem0 search returns no results | Collection empty or embedding model mismatch | Check Qdrant collection stats | Add memory entries, verify embedding dimensions |
 | Redis unavailable (checkpoint fallback) | Redis container not running | `docker ps \| grep redis` | `docker-compose up -d redis` |
 | Profile/persona not loading | JSON file missing or parse error | Check `src/memory/user_profile.py` file paths | Create default profile if missing |
@@ -74,7 +74,7 @@ for m in emb_models:
 # Test embedding generation
 curl -s http://127.0.0.1:1234/v1/embeddings \
   -H "Content-Type: application/json" \
-  -d '{"model":"nomic-embed-text-v1.5","input":"test"}' | \
+  -d '{"model":"text-embedding-nomic-embed-text-v1.5-embedding","input":"test"}' | \
   python3 -c "
 import sys,json
 data = json.load(sys.stdin)
@@ -137,7 +137,7 @@ ERROR:mem0.memory.main:Failed to connect to Qdrant: Connection refused
 
 # Embedding failure
 ERROR:src.memory.long_term:Embedding generation failed: HTTP 404
-→ Fix: Load nomic-embed-text-v1.5 in LM Studio
+→ Fix: Load text-embedding-nomic-embed-text-v1.5-embedding in LM Studio
 ```
 
 ### JSON File Corruption
@@ -239,18 +239,18 @@ INFO:langgraph.checkpoint.memory:Using in-memory checkpointer (data lost on rest
    "
    ```
 
-2. If not loaded: download and load `nomic-embed-text-v1.5` in LM Studio.
+2. If not loaded: download and load `text-embedding-nomic-embed-text-v1.5-embedding` in LM Studio.
 
 3. Test embedding generation:
    ```bash
    curl -s -w "\nHTTP %{http_code}" http://127.0.0.1:1234/v1/embeddings \
      -H "Content-Type: application/json" \
-     -d '{"model":"nomic-embed-text-v1.5","input":"test"}' | tail -3
+     -d '{"model":"text-embedding-nomic-embed-text-v1.5-embedding","input":"test"}' | tail -3
    ```
    Expected: HTTP 200 with embedding array of 768 dimensions.
 
 4. If dimension mismatch (384 vs 768):
-   - Wrong model loaded. `nomic-embed-text-v1.5` produces 768-dim embeddings.
+   - Wrong model loaded. `text-embedding-nomic-embed-text-v1.5-embedding` produces 768-dim embeddings.
    - Check Qdrant collection vector size config — must match embedding dimension.
 
 ### Procedure 3: Short-Term Memory JSON Corruption
@@ -274,7 +274,7 @@ INFO:langgraph.checkpoint.memory:Using in-memory checkpointer (data lost on rest
 
 ## Known Fixes
 
-- **Mem0 `user_id` parameter bug**: Resolved — all 6 calls to `mem0_memory.search()` now pass `user_id` as a keyword argument instead of inside `filters` dict. See [STATUS.md](../STATUS.md).
+- **Mem0 `user_id` parameter bug**: Resolved — all calls to `mem0_memory.search()` now pass `filters={"user_id": user_id}` (the old `user_id=user_id` keyword argument form was incompatible with Mem0's API). See [STATUS.md](../STATUS.md).
 - **Topics/interests not used in simple path**: Resolved — knowledge context now injected into `simple_node()` prompt. See [STATUS.md](../STATUS.md).
 - **Memory context caching**: 5-minute TTL per thread, invalidated on `memory_write`. See [AGENT_FLOW.md](../AGENT_FLOW.md).
 - See also: [ARCHITECTURE_OVERVIEW.md](../ARCHITECTURE_OVERVIEW.md) sections 6-7 for memory architecture.

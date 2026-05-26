@@ -34,6 +34,7 @@ docs/AI_AGENT_INDEX.md     # Cross-references all ADRs
 | ADR-0012 | 2026-04-24 | Removed (2026-04-29) | macOS-native Live Talk via Tauri events |
 | ADR-0013 | 2026-04-24 | Removed (2026-04-29) | Tauri v2 + Swift helper for two-stage voice pipeline |
 | ADR-0014 | 2026-05-24 | Implemented | Skill matcher HITL resolves routing ambiguity |
+| ADR-0015 | 2026-05-26 | Implemented | Proactive plan-review + scope-clarify HITL gates |
 | — | 2026-05-25 | — | Quality audit: browser interactive test |
 
 ## Architecture
@@ -90,7 +91,7 @@ Single persistent WebSocket connection per thread (`/ws/chat/{thread_id}`) with 
 
 ### ADR-0005: Mem0 + Qdrant for Long-Term Memory
 
-Mem0 with local Qdrant on port 6333, LM Studio embeddings (`nomic-embed-text-v1.5`).
+Mem0 with local Qdrant on port 6333, LM Studio embeddings (`text-embedding-nomic-embed-text-v1.5-embedding`).
 
 **Consequences:**
 
@@ -117,7 +118,7 @@ Redis for session state and LangGraph checkpointing; Qdrant for vector memory (v
 **Consequences:**
 
 - Redis: sub-millisecond session state access
-- Qdrant (port 6333): `nomic-embed-text-v1.5` embeddings for memory vectors
+- Qdrant (port 6333): `text-embedding-nomic-embed-text-v1.5-embedding` embeddings for memory vectors
 - Mem0 wraps Qdrant for higher-level memory operations
 - SearxNG: privacy-preserving local web search
 - All three run in containers (`docker-compose.yml`)
@@ -205,3 +206,36 @@ Cross-references: `docs/BUG-ANALYSIS.md`, `docs/STATUS.md` (Phase 8), `docs/AI_A
 ## Configuration
 
 No specific env vars. Policy enforced via ADR decisions in code.
+
+### ADR-0015: Proactive Plan-Review + Scope-Clarify HITL Gates
+
+**Date:** 2026-05-26  
+**Status:** Implemented
+
+**Context:** The agent's `complex_llm` node often commits to tool execution plans (write files, run notebooks, delete) without human review. Vague build requests ("build a calculator app") route to `complex-default` with no requirement gathering, resulting in wrong-stack implementations. Existing `security_proxy` and router HITL gates catch individual tool calls but don't surface *intent*, *pitfalls*, or *missing requirements*.
+
+**Decision:** Add two proactive HITL gates in the graph:
+
+1. **`scope_clarify`** (after router, before `complex_llm`): Runs a Small LLM classifier on the user message. If the request is a build/create/implement action with underspecified dimensions (language, UI surface, feature scope), interrupts with multi-choice questions. Stores answers in `clarified_scope` state for injection into `complex_llm`'s system prompt.
+
+2. **`plan_review`** (after `complex_llm`, before `security_proxy`): When `complex_llm` produces sensitive pending tool calls, builds a structured interrupt showing stated intent, planned actions, and pitfalls (heuristic + Small LLM). Human approval gates execution; denial short-circuits to `memory_write`.
+
+Both nodes run **locally only** (Small/Medium LLM, no cloud). When the eventual route is `complex-cloud`, a `cloud_brief.py` module builds a compact anonymized prompt from `clarified_scope` and `plan_review` summaries instead of sending raw chat history.
+
+**Consequences:**
+
+- Extra latency from scope_clarify + plan_review LLM calls; mitigated by heuristic fast-paths and profile toggles
+- Double-HITL risk (plan_review then security_proxy) mitigated by security_proxy skipping duplicate interrupts when plan_review was already approved
+- All HITL and tool activity cards now render inline in the chat timeline (not sidebar accordions), removing the "missed request" UX gap
+- `plan_review_response` client event added to WS protocol for structured plan approval/denial
+- Checks scoped to `branch: hitl-improvement`
+
+**Post-implementation fixes (2026-05-26):**
+
+1. **Heuristic was too narrow** — `_BUILD_NOUNS` list missed common terms like "calculator" and "inventory app". Replaced with regex pattern `build/create/make a/an/the <noun>` that catches any build-target noun without an exhaustive list. Added `fastapi` and `api` to explicit signal sets so well-specified API requests don't trigger false positives.
+
+2. **Router was preempting scope_clarify** — Router fired its own skill-ambiguity HITL for low-confidence build requests before scope_clarify could run, setting `router_clarification_used=true` and causing scope_clarify to skip. Fixed by adding `needs_clarification()` check *before* router HITL; if the heuristic detects a build request, router delegates instead of asking "which skill?".
+
+3. **Small LLM could override the heuristic** — The Small LLM classifier's `needs_clarification` field could return `false`, silently skipping the interrupt even when the heuristic correctly identified 2+ missing dimensions. Fixed by removing the LLM's gating authority: the heuristic is the authoritative gate; the Small LLM only generates questions. Fallback generic questions are used if the LLM is unavailable or returns empty.
+
+4. **Medium LLM preloaded at startup** — `get_medium_llm("default")` is loaded in a background task during the server lifespan. Eliminates cold-start model swap latency on the first complex request. The embedding model (`text-embedding-nomic-embed-text-v1.5-embedding`) must be manually pre-pulled in LM Studio before use; auto-preload was removed to avoid unnecessary LM Studio state manipulation.

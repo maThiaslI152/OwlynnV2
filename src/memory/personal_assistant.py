@@ -22,6 +22,8 @@ from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
+from src.config.audit_log import audit_info, audit_debug
+
 _DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 MEMORIES_PATH = _DATA_DIR / "memories.json"
 TOPICS_PATH = _DATA_DIR / "topics.json"
@@ -227,6 +229,8 @@ def track_topic(category: str, topic: str, strength: float = 1.0) -> None:
         existing["occurrences"] += 1
         existing["last_mentioned"] = now
         existing["strength"] = min(existing["strength"] + 0.1, 5.0)
+        audit_debug("memory.topics", "topic_updated", topic=topic, category=category,
+                     occurrence=existing["occurrences"], strength=round(existing["strength"], 2))
     else:
         topics[category].append({
             "name": topic,
@@ -235,6 +239,8 @@ def track_topic(category: str, topic: str, strength: float = 1.0) -> None:
             "last_mentioned": now,
             "strength": strength,
         })
+        audit_info("memory.topics", "topic_extracted", topic=topic, category=category,
+                    occurrence=1, decay_score=1.0)
     save_topics(topics)
 
 
@@ -259,10 +265,14 @@ def update_interests(extracted_interests: Dict[str, bool]) -> None:
                 "last_observed": now,
                 "strength": 1.0,
             }
+            audit_debug("memory.topics", "interest_extracted", interest=interest, count=1)
         else:
             interests[interest]["count"] += 1
             interests[interest]["last_observed"] = now
             interests[interest]["strength"] = min(interests[interest]["strength"] + 0.2, 5.0)
+            audit_debug("memory.topics", "interest_updated", interest=interest,
+                         count=interests[interest]["count"],
+                         decay_score=round(interests[interest]["strength"], 2))
     save_interests(interests)
 
 
@@ -294,6 +304,10 @@ def record_conversation(messages: List[Dict], session_id: str = None) -> Dict:
         for item in items:
             track_topic(category, item)
     update_interests(summary.get("interests", {}))
+
+    audit_info("memory.topics", "conversation_recorded",
+                session_id=summary["session_id"],
+                message_count=summary.get("message_count", 0))
     return summary
 
 

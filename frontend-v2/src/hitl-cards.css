@@ -1,0 +1,370 @@
+/* ── HITL Prompt Card ─────────────────────────────────────────────── */
+
+.hitl-prompt-card {
+  margin: 12px 0;
+  border-radius: 10px;
+  background: var(--bg-secondary, #1e1e2e);
+  border: 1px solid var(--border, #313244);
+  padding: 16px;
+  max-width: 700px;
+  animation: hitl-fade-in 0.25s ease;
+}
+
+.hitl-prompt-card.hitl-pending {
+  border-color: var(--amber, #f9e2af);
+  box-shadow: 0 0 0 2px rgba(249, 226, 175, 0.18);
+  animation: hitl-pulse 2s ease-in-out infinite;
+}
+
+@keyframes hitl-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes hitl-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(249, 226, 175, 0.18); }
+  50%      { box-shadow: 0 0 0 4px rgba(249, 226, 175, 0.32); }
+}
+
+.hitl-prompt-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.hitl-prompt-badge {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--surface, #313244);
+  color: var(--text-secondary, #a6adc8);
+}
+
+.hitl-badge-warn {
+  background: rgba(249, 226, 175, 0.15);
+  color: var(--amber, #f9e2af);
+}
+
+.hitl-badge-danger {
+  background: rgba(255, 60, 60, 0.12);
+  color: var(--red, #f38ba8);
+}
+
+.hitl-prompt-intent {
+  font-size: 0.95rem;
+  color: var(--text-primary, #cdd6f4);
+  margin: 8px 0;
+  line-height: 1.5;
+}
+
+.hitl-prompt-pitfalls {
+  margin: 12px 0;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: rgba(249, 226, 175, 0.06);
+  font-size: 0.875rem;
+  color: var(--text-secondary, #a6adc8);
+}
+
+.hitl-prompt-pitfalls strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--amber, #f9e2af);
+}
+
+.hitl-prompt-pitfalls ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.hitl-prompt-questions {
+  margin: 12px 0;
+}
+
+.hitl-scope-question {
+  margin-bottom: 12px;
+}
+
+.hitl-scope-question label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-primary, #cdd6f4);
+  margin-bottom: 6px;
+}
+
+.hitl-scope-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.hitl-prompt-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0;
+}
+
+.hitl-choice-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--border, #45475a);
+  border-radius: 8px;
+  background: var(--surface, #313244);
+  color: var(--text-primary, #cdd6f4);
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 0.15s;
+}
+
+.hitl-choice-btn:hover {
+  background: var(--hover, #45475a);
+  border-color: var(--accent, #89b4fa);
+}
+
+.hitl-choice-btn.selected {
+  background: var(--accent, #89b4fa);
+  border-color: var(--accent, #89b4fa);
+  color: var(--bg-primary, #1e1e2e);
+}
+
+.hitl-free-input {
+  width: 100%;
+  max-width: 400px;
+  margin-top: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--border, #45475a);
+  border-radius: 8px;
+  background: var(--bg-primary, #1e1e2e);
+  color: var(--text-primary, #cdd6f4);
+  font-size: 0.875rem;
+}
+
+.hitl-prompt-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.hitl-btn-approve {
+  padding: 8px 20px;
+  border: none;
+  border-radius: 8px;
+  background: var(--green, #a6e3a1);
+  color: var(--bg-primary, #1e1e2e);
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: opacity 0.15s;
+}
+
+.hitl-btn-approve:hover { opacity: 0.85; }
+.hitl-btn-approve:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.hitl-btn-decline {
+  padding: 8px 20px;
+  border: 1px solid var(--red, #f38ba8);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--red, #f38ba8);
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 0.15s;
+}
+
+.hitl-btn-decline:hover {
+  background: rgba(255, 60, 60, 0.08);
+}
+
+.hitl-btn-skip {
+  padding: 8px 16px;
+  border: 1px solid var(--border, #45475a);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary, #a6adc8);
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.15s;
+}
+
+.hitl-btn-skip:hover { background: var(--hover, #45475a); }
+
+.hitl-prompt-tool code {
+  font-size: 0.875rem;
+  background: var(--surface, #313244);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.hitl-prompt-risk {
+  font-size: 0.875rem;
+  color: var(--red, #f38ba8);
+  margin: 6px 0;
+}
+
+.hitl-prompt-remediation {
+  font-size: 0.85rem;
+  color: var(--text-secondary, #a6adc8);
+  font-style: italic;
+}
+
+.hitl-prompt-actions-list ul {
+  margin: 4px 0;
+  padding-left: 18px;
+  font-size: 0.875rem;
+  color: var(--text-secondary, #a6adc8);
+}
+
+/* ── Resolved HITL chip ───────────────────────────────────────────── */
+
+.hitl-resolved-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  margin: 4px 0;
+}
+
+.hitl-resolved-approved {
+  background: rgba(166, 227, 161, 0.1);
+  color: var(--green, #a6e3a1);
+}
+
+.hitl-resolved-rejected {
+  background: rgba(255, 60, 60, 0.1);
+  color: var(--red, #f38ba8);
+}
+
+.hitl-resolved-dismissed {
+  background: var(--surface, #313244);
+  color: var(--text-muted, #6c7086);
+}
+
+.hitl-resolved-icon {
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+/* ── Tool Activity Card ───────────────────────────────────────────── */
+
+.tool-activity-card {
+  margin: 4px 0;
+  border-radius: 8px;
+  background: var(--bg-secondary, #1e1e2e);
+  border: 1px solid var(--border, #313244);
+  padding: 0;
+  max-width: 600px;
+  font-size: 0.85rem;
+  overflow: hidden;
+}
+
+.tool-activity-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.12s;
+}
+
+.tool-activity-row:hover {
+  background: var(--hover, #45475a);
+}
+
+.tool-activity-icon {
+  font-size: 0.9rem;
+  width: 18px;
+  text-align: center;
+}
+
+.tool-activity-running .tool-activity-icon { color: var(--blue, #89b4fa); animation: spin 1s linear infinite; }
+.tool-activity-success .tool-activity-icon { color: var(--green, #a6e3a1); }
+.tool-activity-error   .tool-activity-icon { color: var(--red, #f38ba8); }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.tool-activity-name code {
+  font-size: 0.85rem;
+  color: var(--text-primary, #cdd6f4);
+}
+
+.tool-activity-chip {
+  font-size: 0.7rem;
+  padding: 1px 8px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.tool-activity-running .tool-activity-chip { background: rgba(137, 180, 250, 0.15); color: var(--blue, #89b4fa); }
+.tool-activity-success .tool-activity-chip { background: rgba(166, 227, 161, 0.15); color: var(--green, #a6e3a1); }
+.tool-activity-error   .tool-activity-chip { background: rgba(255, 60, 60, 0.12); color: var(--red, #f38ba8); }
+
+.tool-activity-risk {
+  font-size: 0.7rem;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(249, 226, 175, 0.12);
+  color: var(--amber, #f9e2af);
+}
+
+.tool-activity-duration {
+  font-size: 0.75rem;
+  color: var(--text-muted, #6c7086);
+  margin-left: auto;
+}
+
+.tool-activity-chevron {
+  font-size: 0.7rem;
+  color: var(--text-muted, #6c7086);
+  margin-left: 4px;
+}
+
+.tool-activity-details {
+  padding: 8px 12px 12px;
+  border-top: 1px solid var(--border, #313244);
+  font-size: 0.8rem;
+  color: var(--text-secondary, #a6adc8);
+}
+
+.tool-activity-input pre {
+  font-size: 0.75rem;
+  margin: 4px 0;
+  padding: 6px 8px;
+  background: var(--surface, #313244);
+  border-radius: 6px;
+  overflow-x: auto;
+  max-height: 120px;
+}
+
+.tool-activity-risk-detail {
+  color: var(--red, #f38ba8);
+  margin: 4px 0;
+}
+
+.tool-activity-remediation {
+  font-style: italic;
+  margin: 4px 0;
+}
+
+.tool-activity-audit-btn {
+  margin-top: 8px;
+  padding: 4px 12px;
+  border: 1px solid var(--border, #45475a);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary, #a6adc8);
+  cursor: pointer;
+  font-size: 0.75rem;
+}
+
+.tool-activity-audit-btn:hover {
+  background: var(--hover, #45475a);
+}

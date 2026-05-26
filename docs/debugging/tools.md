@@ -188,17 +188,59 @@ ERROR:src.tools.mcp_client:MCP tool execution failed: Connection refused
 
 2. Verify frontend receives interrupt:
    - `App.tsx` `handleInterrupt()` should dispatch to store
-   - `AppShell.tsx` should render the inline security prompt card
+   - `HitlPromptCard` should render inline in the message timeline
+   - Interrupts now appear as conversation-inline cards (not sidebar-only)
 
 3. If interrupt not showing:
-   - Check if `SENSITIVE_TOOLS` in `security_proxy.py` includes the tool
+   - Check if `SENSITIVE_TOOLS` in `src/agent/hitl/policy.py` includes the tool
    - Safe tools (web_search, fetch_webpage, read_workspace_file, etc.) are auto-approved
    - Only file write/edit/delete and notebook_run trigger HITL
+   - Plan review (`plan_review` node) runs before security_proxy for sensitive plans
 
 4. If approval not being sent back:
    - Check DevTools WS tab for the approval message:
-     `{"type":"security_approval","approved":true}`
+     - `{"type":"security_approval","approved":true}`
+     - `{"type":"plan_review_response","approved":true}` (for plan review)
+     - `{"type":"ask_user_response","answer":{...}}` (for scope clarification)
    - Verify the button click handler sends this payload
+
+### Dev Preview (NEW)
+
+Use the dev API to test HITL UI without interacting with a real agent:
+
+```bash
+# Backend must have OWLYNN_DEV=1
+./scripts/preview_hitl.sh router            # Router skill ambiguity
+./scripts/preview_hitl.sh security           # Security delete_file
+./scripts/preview_hitl.sh plan_review        # Plan review approval
+./scripts/preview_hitl.sh scope_clarify      # Scope clarification
+./scripts/preview_hitl.sh ask_user           # Mid-task ask_user
+```
+
+Or via the dev-only dropdown in the Safe Mode panel (visible when `import.meta.env.DEV`).
+
+### Procedure 2b: Scope Clarification Debugging
+
+The `scope_clarify` node runs between `router` and `complex_llm` for vague build/create requests. If it's not triggering:
+
+1. **Check heuristic**: `src/agent/hitl/scope_heuristics.py::needs_clarification()`
+   - Uses regex `\b(build|create|make|implement|develop|write)\s+(a|an|the|some|me\s+a)\b`
+   - Requires 2+ missing dimensions from `language`, `ui_surface` signal sets
+   - Explicit signals include common languages (Python, JS, Rust etc.), UI types (web, desktop, CLI etc.), and frameworks
+   - Fix signals ("fix", "bug", "error", "issue", "line") skip the check
+
+2. **Check router delegation**: Router delegates build requests to scope_clarify
+   - In `router.py`: before firing router HITL, checks `needs_clarification(user_text)` — if true, skips router HITL and lets scope_clarify handle it
+   - If the router fires its own HITL first, `router_clarification_used` is set to true, causing scope_clarify to skip (avoid back-to-back HITL)
+
+3. **Check Small LLM**: The heuristic is authoritative — the Small LLM only generates questions, it cannot override the need for clarification
+   - If Small LLM is unavailable or returns empty, fallback questions are generated from the missing dimensions
+   - Prompt: `scope_clarify.py::_CLASSIFIER_PROMPT`
+   - Fallback: `scope_clarify.py::_build_fallback_questions()`
+
+4. **Check profile**: `scope_clarification_enabled` must be true (default)
+
+5. **Check clarified_scope injection**: After user answers, `clarified_scope` is injected into `complex_llm`'s system prompt as `CONFIRMED REQUIREMENTS (user-approved, do not contradict)`
 
 ### Procedure 3: Wrong Toolbox Selected
 

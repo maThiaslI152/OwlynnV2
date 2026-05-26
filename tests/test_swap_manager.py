@@ -14,7 +14,7 @@ from src.agent.swap_manager import ModelSwapError, SwapManager
 # ── helpers ──────────────────────────────────────────────────────────────
 
 MEDIUM_MODELS = {
-    "default": "qwen/qwen3.5-9b",
+    "default": "medium-default-model",
     "vision": "zai-org/glm-4.6v-flash",
     "longctx": "LFM2 8B A1B GGUF Q8_0",
 }
@@ -46,13 +46,13 @@ async def test_get_loaded_instance_ids_returns_ids():
     resp = MagicMock()
     resp.status_code = 200
     resp.raise_for_status = MagicMock()
-    resp.json.return_value = _models_response(loaded_key="qwen/qwen3.5-9b")
+    resp.json.return_value = _models_response(loaded_key="medium-default-model")
 
     sm._client = AsyncMock()
     sm._client.get = AsyncMock(return_value=resp)
 
-    ids = await sm.get_loaded_instance_ids("qwen/qwen3.5-9b")
-    assert ids == ["inst-qwen/qwe"]
+    ids = await sm.get_loaded_instance_ids("medium-default-model")
+    assert ids == ["inst-medium-d"]
 
 
 @pytest.mark.anyio
@@ -66,7 +66,7 @@ async def test_get_loaded_instance_ids_empty_when_not_loaded():
     sm._client = AsyncMock()
     sm._client.get = AsyncMock(return_value=resp)
 
-    ids = await sm.get_loaded_instance_ids("qwen/qwen3.5-9b")
+    ids = await sm.get_loaded_instance_ids("medium-default-model")
     assert ids == []
 
 

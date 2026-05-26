@@ -4,9 +4,10 @@ interface ComposerProps {
   onSend: (content: string) => void
   disabled?: boolean
   compact?: boolean
+  hitlBlocked?: boolean
 }
 
-export function Composer({ onSend, disabled, compact }: ComposerProps) {
+export function Composer({ onSend, disabled, compact, hitlBlocked }: ComposerProps) {
   const [value, setValue] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -50,8 +51,15 @@ export function Composer({ onSend, disabled, compact }: ComposerProps) {
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={compact ? "Ask..." : "Ask Owlynn..."}
+            placeholder={
+              hitlBlocked
+                ? 'Approve or decline the action above to continue'
+                : compact
+                  ? 'Ask...'
+                  : 'Ask Owlynn...'
+            }
             rows={1}
+            disabled={disabled || hitlBlocked}
           />
         </div>
         <button

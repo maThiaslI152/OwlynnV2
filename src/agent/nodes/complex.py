@@ -17,9 +17,13 @@ from src.agent.tool_sets import (
 )
 from src.agent.lm_studio_compat import is_local_server, with_system_for_local_server
 from src.agent.anonymization import anonymize, deanonymize
+from src.agent.hitl.cloud_brief import build_cloud_brief, estimate_brief_tokens
 from src.memory.user_profile import get_profile
 
 logger = logging.getLogger(__name__)
+
+from src.config.audit_log import audit_debug, audit_info, audit_warn
+from src.config.log_middleware import log_model_attempt, log_node
 
 # Context window for the local model (Gemma 4 E4B Q4_K_M in LM Studio)
 _LARGE_CONTEXT_WINDOW = 16384
@@ -445,6 +449,7 @@ def _trim_tool_history(messages: list, max_tool_cycles: int = 6) -> list:
     return trimmed
 
 
+@log_node("complex_llm")
 async def complex_llm_node(state: AgentState) -> AgentState:
     """
     LLM reasoning node for the cyclic secure tool flow.
@@ -489,6 +494,21 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     if denied_tools:
         system_text += f"\n\nBLOCKED TOOLS (do NOT call these): {', '.join(denied_tools)}"
 
+    # ── Inject user-approved clarified_scope if present ────────────────────
+    clarified_scope = state.get("clarified_scope")
+    if clarified_scope and isinstance(clarified_scope, dict) and not clarified_scope.get("skipped"):
+        scope_lines = ["\n\nCONFIRMED REQUIREMENTS (user-approved, do not contradict):"]
+        for key, value in clarified_scope.items():
+            if key in ("skipped", "_raw"):
+                continue
+            if isinstance(value, dict):
+                label = value.get("label", str(value))
+                user_input = value.get("user_input", "")
+                scope_lines.append(f"- {key}: {label}" + (f" ({user_input})" if user_input else ""))
+            else:
+                scope_lines.append(f"- {key}: {value}")
+        system_text += "\n".join(scope_lines)
+
     system = SystemMessage(content=system_text)
 
     # Trim conversation history to fit context window.
@@ -526,6 +546,76 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             anon_messages.append(type(msg)(content=content))
         trimmed_messages = anon_messages
 
+    # ── 9.3: Cloud brief (compact, anonymized prompt for DeepSeek) ────────
+    cloud_brief_tokens_est = 0
+    anonymization_placeholders_count = 0
+    if route == "complex-cloud" and profile.get("cloud_brief_enabled", True):
+        # Build plan_review summary from state
+        plan_review_summary: dict[str, Any] | None = None
+        if state.get("plan_review_approved") is not None:
+            plan_review_summary = {
+                "approved": bool(state.get("plan_review_approved")),
+                "stated_intent": state.get("plan_review_feedback") or "Plan reviewed",
+                "pitfalls": [],
+            }
+
+        # Extract last user message and last assistant summary
+        last_user_message = ""
+        last_assistant_summary = ""
+        for msg in reversed(thread_messages):
+            if isinstance(msg, HumanMessage) and not last_user_message:
+                last_user_message = str(msg.content)
+            if isinstance(msg, AIMessage) and not last_assistant_summary:
+                content = str(msg.content)
+                # Truncate long assistant responses to just a summary line
+                last_assistant_summary = content[:300] if len(content) > 300 else content
+            if last_user_message and last_assistant_summary:
+                break
+
+        # Build memory context from state
+        memory_context = ""
+        if state.get("memory_context"):
+            mc = state.get("memory_context")
+            memory_context = str(mc) if isinstance(mc, str) else json.dumps(mc)
+
+        # Build the brief
+        brief = build_cloud_brief(
+            clarified_scope=state.get("clarified_scope"),
+            plan_review_summary=plan_review_summary,
+            memory_context=memory_context,
+            last_user_message=last_user_message,
+            last_assistant_summary=last_assistant_summary,
+            selected_toolboxes=state.get("selected_toolboxes"),
+            max_chars=profile.get("cloud_brief_max_chars", 8000),
+        )
+
+        if brief:
+            # Anonymize the brief text as well
+            if profile.get("cloud_anonymization_enabled", True):
+                anon_ctx = {
+                    "name": profile.get("name", ""),
+                    "custom_sensitive_terms": profile.get("custom_sensitive_terms", []),
+                }
+                brief, brief_mapping = anonymize(brief, anon_ctx)
+                if anon_mapping is not None:
+                    anon_mapping.update(brief_mapping)
+                else:
+                    anon_mapping = brief_mapping
+                anonymization_placeholders_count = len(brief_mapping) if brief_mapping else 0
+            else:
+                anonymization_placeholders_count = len(anon_mapping) if anon_mapping else 0
+
+            cloud_brief_tokens_est = estimate_brief_tokens(brief)
+            logger.info(
+                "[complex] Cloud brief built — tokens_est=%d placeholders=%d",
+                cloud_brief_tokens_est,
+                anonymization_placeholders_count,
+            )
+            # Replace full trimmed messages with the compact brief
+            trimmed_messages = [HumanMessage(content=brief)]
+        else:
+            logger.info("[complex] Cloud brief empty, falling back to full trimmed messages")
+
     # ── 9.1 continued: Determine base_url for message format decision ────
     if route == "complex-cloud":
         base_url = profile.get("cloud_llm_base_url", "https://api.deepseek.com/v1")
@@ -555,12 +645,13 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             else:
                 llm = await get_medium_llm("default")
                 model_label = "medium-default"
+            log_model_attempt(model_label, "success", reason="tools_off_direct")
         except (ModelSwapError, CloudUnavailableError) as e:
             logger.warning("[complex] Model %s unavailable (%s), falling back to medium-default", route, e)
-            fallback_chain.append({"model": model_label or route, "status": "failed", "reason": str(e)[:120], "duration_ms": 0})
+            log_model_attempt(model_label or route, "failed", reason=str(e)[:120])
             llm = await get_medium_llm("default")
             model_label = "medium-default-fallback"
-            fallback_chain.append({"model": "medium-default-fallback", "status": "success", "reason": "fallback_from_unavailable", "duration_ms": 0})
+            log_model_attempt(model_label, "success", reason="fallback_from_unavailable")
 
         budget = _cap_budget_to_context(prompt_messages, state.get("token_budget") or 4096)
         response = await llm.bind(max_tokens=budget).ainvoke(prompt_messages)
@@ -572,6 +663,8 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             "security_reason": None,
             "api_tokens_used": None,
             "fallback_chain": fallback_chain,
+            "cloud_brief_tokens_est": cloud_brief_tokens_est,
+            "anonymization_placeholders_count": anonymization_placeholders_count,
         }
 
     # ── 9.3: Dynamic tool binding ────────────────────────────────────────
@@ -601,42 +694,22 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             loop_start_time = asyncio.get_running_loop().time()
             llm = await get_cloud_llm()
             model_label = "large-cloud"
-            fallback_chain.append({
-                "model": "large-cloud",
-                "status": "success",
-                "reason": "initial_route",
-                "duration_ms": 0,
-            })
+            log_model_attempt("large-cloud", "success", reason="initial_route")
         elif route == "complex-vision":
             loop_start_time = asyncio.get_running_loop().time()
             llm = await get_medium_llm("vision")
             model_label = "medium-vision"
-            fallback_chain.append({
-                "model": "medium-vision",
-                "status": "success",
-                "reason": "initial_route",
-                "duration_ms": 0,
-            })
+            log_model_attempt("medium-vision", "success", reason="initial_route")
         elif route == "complex-longctx":
             loop_start_time = asyncio.get_running_loop().time()
             llm = await get_medium_llm("longctx")
             model_label = "medium-longctx"
-            fallback_chain.append({
-                "model": "medium-longctx",
-                "status": "success",
-                "reason": "initial_route",
-                "duration_ms": 0,
-            })
+            log_model_attempt("medium-longctx", "success", reason="initial_route")
         else:
             loop_start_time = asyncio.get_running_loop().time()
             llm = await get_medium_llm("default")
             model_label = "medium-default"
-            fallback_chain.append({
-                "model": "medium-default",
-                "status": "success",
-                "reason": "initial_route",
-                "duration_ms": 0,
-            })
+            log_model_attempt("medium-default", "success", reason="initial_route")
     except (ModelSwapError, CloudUnavailableError) as e:
         logger.warning("[complex] Model %s unavailable (%s), falling back to medium-default", route, e)
         fallback_chain.append({
@@ -645,8 +718,10 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             "reason": str(e)[:120],
             "duration_ms": 0,
         })
+        log_model_attempt(model_label if model_label != "medium-default" else route, "failed", reason=str(e)[:120])
         llm = await get_medium_llm("default")
         model_label = "medium-default-fallback"
+        log_model_attempt("medium-default-fallback", "success", reason="fallback_from_unavailable")
         fallback_chain.append({
             "model": "medium-default-fallback",
             "status": "success",
@@ -656,6 +731,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
 
     budget = _cap_budget_to_context(prompt_messages, state.get("token_budget") or 4096)
     bound_llm = llm.bind_tools(tools).bind(max_tokens=budget)
+    audit_debug("agent.token", "budget_computed", token_budget=budget, route=route)
 
     # ── 9.4: Tiered fallback — LLM invocation with error handling ────────
     try:
@@ -884,9 +960,12 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         "security_reason": None,
         "api_tokens_used": api_tokens,
         "fallback_chain": fallback_chain,
+        "cloud_brief_tokens_est": cloud_brief_tokens_est,
+        "anonymization_placeholders_count": anonymization_placeholders_count,
     }
 
 
+@log_node("tool_action")
 async def complex_tool_action_node(state: AgentState) -> AgentState:
     """
     Executes already-approved tool calls and appends tool outputs to the thread.

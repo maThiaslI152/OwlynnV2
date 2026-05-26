@@ -14,7 +14,7 @@ Usage:
     python tests/standalone/test_lm_studio_model_load_unload.py
 
 Models tested:
-    liquid/lfm2-24b-a2b, zai-org/glm-4.6v-flash, qwen/qwen3.5-9b
+    liquid/lfm2-24b-a2b, zai-org/glm-4.6v-flash
 """
 
 import sys
@@ -28,7 +28,6 @@ LM_STUDIO_BASE = os.getenv("LM_STUDIO_BASE_URL", "http://127.0.0.1:1234")
 MODELS_TO_TEST = [
     "liquid/lfm2-24b-a2b",
     "zai-org/glm-4.6v-flash",
-    "qwen/qwen3.5-9b",
 ]
 
 LOAD_TIMEOUT = 300   # seconds — large models can be slow
@@ -46,7 +45,7 @@ def get_all_models(client: httpx.Client) -> list[dict]:
 
 
 def get_model_entry(client: httpx.Client, model_key: str) -> dict | None:
-    """Find a single model entry by its key (e.g. 'qwen/qwen3.5-9b')."""
+    """Find a single model entry by its key."""
     for m in get_all_models(client):
         if m.get("key") == model_key:
             return m

@@ -16,6 +16,9 @@ from src.agent.response_styles import style_instruction_for_prompt
 from src.agent.lm_studio_compat import with_system_for_local_server
 from src.agent.state import AgentState
 
+from src.config.audit_log import audit_info
+from src.config.log_middleware import log_node
+
 logger = logging.getLogger(__name__)
 
 SIMPLE_PROMPT = (
@@ -64,6 +67,7 @@ def _clean_response(text: str) -> str:
     return result or text
 
 
+@log_node("simple")
 async def simple_node(state: AgentState) -> AgentState:
     """Fast-path node: short answers without tools."""
     style_hint = style_instruction_for_prompt(state.get("response_style"))

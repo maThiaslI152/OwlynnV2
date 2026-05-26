@@ -79,7 +79,7 @@ Track which model was used and send it to the client:
 ```python
 # Add to your server initialization
 app.state.current_model = "unknown"
-app.state.small_model = "Qwen2-VL-7B"
+app.state.small_model = "ibm-grok4-ultrafast-coder-1b"
 app.state.large_model = "your-large-model"
 
 # When sending responses
@@ -195,7 +195,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
     "type": "chunk",
     "content": "token-by-token text",
     "metadata": {
-        "model": "Qwen2-VL-7B",
+        "model": "ibm-grok4-ultrafast-coder-1b",
         "token_count": 150,
         "chunk_index": 1,
         "timestamp": "2026-03-20T10:30:00Z"
@@ -216,7 +216,7 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
 # For model info
 {
     "type": "model_info",
-    "model": "Qwen2-VL-7B",
+    "model": "ibm-grok4-ultrafast-coder-1b",
     "model_type": "small|large",
     "reasoning_depth": 0.8,
     "thinking_enabled": true

@@ -29,6 +29,9 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+from src.config.audit_log import audit_debug, audit_info, audit_event
+from src.config.log_middleware import log_node
+
 # Import enhanced personal assistant memory system
 from src.memory.personal_assistant import (
     TopicExtractor, ConversationSummary, MemoryEnricher,
@@ -85,9 +88,13 @@ class MemoryContextCache:
                 cached_at, context = cls._cache[thread_id]
                 age = datetime.now() - cached_at
                 if age < timedelta(seconds=cls._ttl_seconds):
+                    audit_debug("memory.cache", "cache_hit", age_seconds=int(age.total_seconds()))
                     return context
                 else:
+                    audit_debug("memory.cache", "cache_miss", reason="expired", age_seconds=int(age.total_seconds()))
                     del cls._cache[thread_id]
+            else:
+                audit_debug("memory.cache", "cache_miss", reason="not_found")
             return None
     
     @classmethod
@@ -108,6 +115,7 @@ class MemoryContextCache:
         """Called by memory_write_node after saving new memories.
         Invalidates cache and signals that a WebSocket notification should be sent."""
         cls.invalidate(thread_id)
+        audit_debug("memory.cache", "cache_invalidated", reason="memory_updated")
         return True
 
     @classmethod
@@ -121,6 +129,7 @@ class MemoryContextCache:
                 del cls._cache[k]
 
 # --- READ: fires before the brain node ---
+@log_node("memory_inject")
 async def memory_inject_node(state: AgentState) -> AgentState:
     """Pre-reasoning node: build memory context for the LLM system prompt.
 
@@ -141,6 +150,7 @@ async def memory_inject_node(state: AgentState) -> AgentState:
     cached_context = MemoryContextCache.get(thread_id)
     if cached_context:
         persona = get_persona()
+        audit_debug("memory.inject", "context_from_cache", context_chars=len(cached_context))
         return {
             "memory_context": cached_context,
             "persona": persona.get("role", "None")
@@ -216,6 +226,7 @@ async def memory_inject_node(state: AgentState) -> AgentState:
     
     # Cache for subsequent requests (M4 optimization)
     MemoryContextCache.set(thread_id, memory_context)
+    audit_info("memory.inject", "context_assembled", context_chars=len(memory_context), result_count=len(results))
     
     return {
         "memory_context": memory_context,
@@ -320,6 +331,7 @@ async def _is_semantically_similar(memory, new_text: str, user_id: str) -> bool:
     return False
 
 
+@log_node("memory_write")
 async def memory_write_node(state: AgentState) -> AgentState:
     """Post-reasoning node: extract and persist memories from the conversation turn.
 
@@ -353,6 +365,8 @@ async def memory_write_node(state: AgentState) -> AgentState:
     # --- Selective memory gate ---
     if not await _should_save_memory(last_human, last_ai):
         logger.debug("[Memory] Skipping memory save (gate rejected trivial/greeting exchange)")
+        audit_debug("memory.write", "gate_skipped", reason="greeting_or_trivial",
+                     human_len=len(str(last_human)), ai_len=len(str(last_ai)))
         return {}
     
     # Record this turn in conversation
@@ -393,15 +407,15 @@ async def memory_write_node(state: AgentState) -> AgentState:
             is_dup = await _is_semantically_similar(memory, fact_text, mem0_uid)
             if is_dup:
                 logger.debug("[Memory] Skipping memory save (semantically similar exists)")
+                audit_debug("memory.write", "dedup_skip", reason="semantically_similar", user_id=mem0_uid)
             else:
-                # Save to Mem0 with STABLE user id (shared across all threads)
-                # infer=False: skip Mem0's internal OpenAI LLM call (we use a dummy key)
                 await asyncio.to_thread(
                     memory.add, 
                     fact_text, 
                     user_id=mem0_uid, 
                     infer=False,
                 )
+                audit_info("memory.write", "mem0_saved", user_id=mem0_uid, fact_chars=len(fact_text), topic_count=len(topics))
             
             # Invalidate memory context cache since memory was updated (M4 optimization)
             # Uses invalidate_on_write to signal WebSocket forwarder

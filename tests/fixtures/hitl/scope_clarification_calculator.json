@@ -1,0 +1,43 @@
+{
+  "type": "scope_clarification_required",
+  "task_summary": "Build a calculator application",
+  "questions": [
+    {
+      "id": "language",
+      "question": "Which language or runtime should I use?",
+      "choices": [
+        {"label": "Python"},
+        {"label": "JavaScript / TypeScript"},
+        {"label": "Rust"},
+        {"label": "No preference — recommend one", "allows_user_input": false}
+      ],
+      "allows_user_input": true
+    },
+    {
+      "id": "ui_surface",
+      "question": "What kind of interface should the calculator have?",
+      "choices": [
+        {"label": "Web GUI"},
+        {"label": "Desktop GUI"},
+        {"label": "CLI (command line)"},
+        {"label": "TUI (terminal interface)"}
+      ],
+      "allows_user_input": true
+    },
+    {
+      "id": "feature_scope",
+      "question": "What feature scope do you need?",
+      "choices": [
+        {"label": "Basic (+ - × ÷)"},
+        {"label": "Scientific (sin, cos, log, etc.)"},
+        {"label": "With history/memory"},
+        {"label": "No preference — keep it simple"}
+      ],
+      "allows_user_input": false
+    }
+  ],
+  "pitfalls": [
+    "Choosing a GUI framework without knowing desktop vs web wastes a full implementation pass."
+  ],
+  "conversation_snippet": "User: Can you build a calculator app?\nOwlynn: I'll help you build a calculator application."
+}

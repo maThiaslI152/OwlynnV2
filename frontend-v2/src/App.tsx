@@ -10,7 +10,9 @@ import {
   parseInterruptChoices,
   resolveProjectSwitch,
   toToolExecutionSnapshot,
+  type ConversationToolActivity,
 } from './appEventHandlers'
+import { parseHitlPrompt } from './components/HitlPromptCard'
 import type { ChatMessage, ServerEvent } from './types/protocol'
 
 interface ProjectChat {
@@ -55,13 +57,6 @@ function App() {
   const setTtsSpeaking = useAppStore((s) => s.setTtsSpeaking)
   const appendStreamChunk = useAppStore((s) => s.appendStreamChunk)
   const clearSession = useAppStore((s) => s.clearSession)
-  const setInterruptPrompt = useAppStore((s) => s.setInterruptPrompt)
-  const clearInterruptPrompt = useAppStore((s) => s.clearInterruptPrompt)
-  const inlineSecurityPrompt = useAppStore((s) => s.inlineSecurityPrompt)
-  const setInlineSecurityPrompt = useAppStore((s) => s.setInlineSecurityPrompt)
-  const clearInlineSecurityPrompt = useAppStore((s) => s.clearInlineSecurityPrompt)
-  const interruptQuestion = useAppStore((s) => s.interruptQuestion)
-  const interruptChoices = useAppStore((s) => s.interruptChoices)
   const makeThreadId = () => `thread-${crypto.randomUUID()}`
   const initialThreadId = makeThreadId()
   const [projects, setProjects] = useState<ProjectSummary[]>([])
@@ -127,11 +122,35 @@ function App() {
     // ask_user interrupts always need UI interaction, regardless of execution policy
     const askUser = parseInterruptChoices(interrupts)
     if (askUser) {
-      setInterruptPrompt(askUser.question, askUser.choices)
       setOperatorNote('Clarification needed: choose an option to continue.')
+      useAppStore.getState().appendConversationItem({
+        kind: 'hitl_prompt',
+        id: `hitl-${Date.now()}`,
+        variant: 'ask_user',
+        title: askUser.question,
+        viewModel: { variant: 'ask_user', question: askUser.question, choices: askUser.choices },
+        status: 'pending',
+        ts: Date.now(),
+      })
       return
     }
 
+    // Try unified parse; covers scope_clarification, plan_review, security
+    const hitlModel = parseHitlPrompt(interrupts)
+    if (hitlModel) {
+      useAppStore.getState().appendConversationItem({
+        kind: 'hitl_prompt',
+        id: `hitl-${Date.now()}`,
+        variant: hitlModel.variant,
+        title: hitlModel.title,
+        viewModel: hitlModel as unknown as Record<string, unknown>,
+        status: 'pending',
+        ts: Date.now(),
+      })
+      return
+    }
+
+    // Fallback: auto-approve if policy allows
     if (executionPolicy === 'auto_approve') {
       const autoApprove = buildAutoApproveInterruptResponse()
       wsClientRef.current?.send(autoApprove.clientEvent)
@@ -139,20 +158,26 @@ function App() {
       return
     }
 
+    // Fallback: unknown interrupt format — build generic inline prompt
     const proposal = buildInterruptProposal(interrupts, latestToolExecution, Date.now())
-    // Also keep in sidebar as historical log
-    upsertActionProposal(proposal)
-    // Show inline prompt in chat area
-    setInlineSecurityPrompt({
-      id: proposal.id,
-      summary: proposal.summary,
-      toolName: proposal.toolContext?.toolName,
-      riskHint: proposal.riskHint,
-      riskRationale: proposal.riskRationale,
-      backendInterrupt: proposal.backendInterrupt,
+    useAppStore.getState().appendConversationItem({
+      kind: 'hitl_prompt',
+      id: `hitl-${Date.now()}`,
+      variant: 'security_approval',
+      title: proposal.summary,
+      viewModel: {
+        variant: 'security_approval',
+        title: proposal.summary,
+        toolName: proposal.toolContext?.toolName || 'unknown',
+        riskLabel: proposal.riskHint || 'sensitive',
+        riskRationale: proposal.riskRationale || '',
+        remediationHint: proposal.remediationHint || '',
+      },
+      status: 'pending',
+      ts: Date.now(),
     })
-    setOperatorNote('Security approval required — see prompt below.')
-  }, [executionPolicy, latestToolExecution, wsClientRef, setInterruptPrompt, setInlineSecurityPrompt, setOperatorNote, upsertActionProposal])
+    setOperatorNote('Security approval required — see prompt in chat.')
+  }, [executionPolicy, latestToolExecution, wsClientRef, setOperatorNote])
 
   // Refs to keep latest callback references without triggering WS reconnects.
   const handleInterruptRef = useRef(handleInterrupt)
@@ -279,6 +304,38 @@ function App() {
           const snapshot = toToolExecutionSnapshot(event, Date.now())
           setLatestToolExecution(snapshot)
           pushToolExecution(snapshot)
+          // Append inline tool activity card to conversation timeline
+          const store = useAppStore.getState()
+          const existingIdx = store.conversationItems.findIndex(
+            (item) =>
+              item.kind === 'tool_activity' &&
+              (item.toolCallId === snapshot.toolCallId ||
+                (item.toolName === snapshot.toolName && item.status === 'running' && snapshot.status !== 'running'))
+          )
+          if (existingIdx >= 0) {
+            const updated = [...store.conversationItems]
+            updated[existingIdx] = {
+              ...updated[existingIdx],
+              status: snapshot.status,
+              duration: snapshot.duration,
+            } as ConversationToolActivity
+            useAppStore.setState({ conversationItems: updated })
+          } else {
+            store.appendConversationItem({
+              kind: 'tool_activity',
+              id: snapshot.toolCallId || `tool-${Date.now()}`,
+              toolName: snapshot.toolName,
+              toolCallId: snapshot.toolCallId,
+              status: snapshot.status,
+              input: snapshot.input,
+              riskLabel: snapshot.riskLabel,
+              riskConfidence: snapshot.riskConfidence,
+              riskRationale: snapshot.riskRationale,
+              remediationHint: snapshot.remediationHint,
+              ts: Date.now(),
+              duration: snapshot.duration,
+            })
+          }
         } else if (event.type === 'interrupt') {
           handleInterruptRef.current(event.interrupts)
         } else if (event.type === 'router_info') {
@@ -331,6 +388,38 @@ function App() {
         const snapshot = toToolExecutionSnapshot(payload, Date.now())
         setLatestToolExecution(snapshot)
         pushToolExecution(snapshot)
+        // Append inline tool activity card
+        const store = useAppStore.getState()
+        const existingIdx = store.conversationItems.findIndex(
+          (item) =>
+            item.kind === 'tool_activity' &&
+            (item.toolCallId === snapshot.toolCallId ||
+              (item.toolName === snapshot.toolName && item.status === 'running' && snapshot.status !== 'running'))
+        )
+        if (existingIdx >= 0) {
+          const updated = [...store.conversationItems]
+          updated[existingIdx] = {
+            ...updated[existingIdx],
+            status: snapshot.status,
+            duration: snapshot.duration,
+          } as ConversationToolActivity
+          useAppStore.setState({ conversationItems: updated })
+        } else {
+          store.appendConversationItem({
+            kind: 'tool_activity',
+            id: snapshot.toolCallId || `tool-${Date.now()}`,
+            toolName: snapshot.toolName,
+            toolCallId: snapshot.toolCallId,
+            status: snapshot.status,
+            input: snapshot.input,
+            riskLabel: snapshot.riskLabel,
+            riskConfidence: snapshot.riskConfidence,
+            riskRationale: snapshot.riskRationale,
+            remediationHint: snapshot.remediationHint,
+            ts: Date.now(),
+            duration: snapshot.duration,
+          })
+        }
       } else if (payload.type === 'interrupt') {
         handleInterrupt(payload.interrupts)
       }
@@ -362,47 +451,34 @@ function App() {
     })
   }, [addMessage, activeProjectId])
 
-  const handleApproveProposal = async (id: string) => {
-    wsClientRef.current?.send({
-      type: 'security_approval',
-      approved: true,
-    })
-    updateActionProposalStatus(id, 'approved')
-    clearInlineSecurityPrompt()
-    setOperatorNote(`Proposal ${id} approved and sent to backend`)
-  }
-
-  const handleRejectProposal = async (id: string) => {
-    wsClientRef.current?.send({
-      type: 'security_approval',
-      approved: false,
-    })
-    updateActionProposalStatus(id, 'rejected')
-    clearInlineSecurityPrompt()
-    setOperatorNote(`Proposal ${id} rejected and sent to backend`)
-  }
-
-  const handleAutoApprove = async (proposalId: string) => {
-    wsClientRef.current?.send({
-      type: 'security_approval',
-      approved: true,
-    })
-    try {
-      await fetch(apiUrl('/api/unified-settings'), {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ execution_policy: 'auto_approve' }),
+  // ── Inline HITL card callbacks ────────────────────────────────────
+  const handleHitlApprove = useCallback((hitlId: string, variant: string, answers?: Record<string, unknown>) => {
+    const store = useAppStore.getState()
+    if (variant === 'security_approval') {
+      wsClientRef.current?.send({ type: 'security_approval', approved: true })
+      store.updateConversationItemStatus(hitlId, 'approved')
+    } else if (variant === 'plan_review') {
+      wsClientRef.current?.send({ type: 'plan_review_response', approved: true })
+      store.updateConversationItemStatus(hitlId, 'approved')
+    } else if (variant === 'scope_clarification') {
+      wsClientRef.current?.send({
+        type: 'ask_user_response',
+        answer: answers || { skipped: false },
       })
-    } catch {
-      // Non-critical — policy update failed but approval was sent
+      store.updateConversationItemStatus(hitlId, 'approved')
+    } else if (variant === 'ask_user') {
+      store.updateConversationItemStatus(hitlId, 'approved')
     }
-    updateActionProposalStatus(proposalId, 'approved')
-    setExecutionPolicy('auto_approve')
-    clearInlineSecurityPrompt()
-    setOperatorNote('Auto-approve enabled. Future sensitive tools will run without prompts.')
-  }
+    setOperatorNote('Action approved.')
+  }, [])
 
-  const handleSelectChoice = useCallback((choice: import('./state/useAppStore').InterruptChoice, userInput?: string) => {
+  const handleHitlDecline = useCallback((hitlId: string) => {
+    wsClientRef.current?.send({ type: 'security_approval', approved: false })
+    useAppStore.getState().updateConversationItemStatus(hitlId, 'rejected')
+    setOperatorNote('Action declined.')
+  }, [])
+
+  const handleHitlSelectChoice = useCallback((choice: import('./state/useAppStore').InterruptChoice, userInput?: string) => {
     const answer: Record<string, unknown> = { ...choice }
     if (userInput !== undefined) {
       answer.user_input = userInput
@@ -411,9 +487,24 @@ function App() {
       type: 'ask_user_response',
       answer: answer,
     })
-    clearInterruptPrompt()
+    const store = useAppStore.getState()
+    const pendingHitl = store.conversationItems.find(
+      (item) => item.kind === 'hitl_prompt' && item.status === 'pending'
+    )
+    if (pendingHitl) {
+      store.updateConversationItemStatus(pendingHitl.id, 'approved')
+    }
     setOperatorNote('Choice sent — resuming conversation.')
-  }, [clearInterruptPrompt, setOperatorNote])
+  }, [])
+
+  const handleHitlSkip = useCallback((hitlId: string) => {
+    useAppStore.getState().updateConversationItemStatus(hitlId, 'dismissed')
+    wsClientRef.current?.send({
+      type: 'ask_user_response',
+      answer: { skipped: true },
+    })
+    setOperatorNote('Skipped clarification.')
+  }, [])
 
   const handleSwitchProject = useCallback((projectId: string) => {
     const next = resolveProjectSwitch({
@@ -560,17 +651,14 @@ function App() {
       onCreateProject={handleCreateProject}
       onEditProject={handleEditProject}
       onDeleteProject={handleDeleteProject}
-      onApproveProposal={handleApproveProposal}
-      onRejectProposal={handleRejectProposal}
-      onAutoApprove={handleAutoApprove}
-      onSelectChoice={handleSelectChoice}
       onNewChat={handleNewChat}
       onSelectChat={handleSelectChat}
       onDeleteChat={handleDeleteChat}
       onRenameChat={handleRenameChat}
-      inlineSecurityPrompt={inlineSecurityPrompt}
-      interruptQuestion={interruptQuestion}
-      interruptChoices={interruptChoices}
+      onHitlApprove={handleHitlApprove}
+      onHitlDecline={handleHitlDecline}
+      onHitlSelectChoice={handleHitlSelectChoice}
+      onHitlSkip={handleHitlSkip}
     />
   )
 }

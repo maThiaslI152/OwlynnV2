@@ -44,6 +44,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+from src.config.audit_log import audit_info, audit_debug
+
 connected_websockets = set()
 
 def notify_file_processed(filename, status="processed"):
@@ -73,6 +75,20 @@ async def lifespan(app: FastAPI):
     # Initialize the LangGraph Agent Engine Singleton asynchronously
     app.state.agent = await init_agent()
     app.state.sessions = {} # thread_id -> GraphSession
+
+    # Preload medium LLM (gemma4) in background.
+    # Avoids cold-start swap latency on the first complex request.
+    async def _preload_medium():
+        try:
+            from src.agent.llm import LLMPool
+            await LLMPool.get_medium_llm("default")
+            logger.info("[startup] Medium LLM preloaded successfully")
+        except Exception as e:
+            logger.warning("[startup] Medium LLM preload skipped: %s", e)
+    asyncio.create_task(_preload_medium())
+
+    # Embedding models are pre-pulled manually via `ollama pull` or LM Studio UI.
+    # The app relies on them being already available; no auto-load at startup.
     
     # Start background file watcher with WebSocket callback
     try:
@@ -103,6 +119,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Audit logging middleware (HTTP request logging)
+from src.config.log_middleware import AuditLogMiddleware
+app.add_middleware(AuditLogMiddleware)
 
 # Serve frontend static files from frontend-v2 dist only.
 _ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
@@ -344,6 +364,56 @@ async def api_health():
     }
 
 
+# ─── Dev API: HITL preview triggers ──────────────────────────────────────
+
+@app.post("/api/dev/hitl/trigger")
+async def api_dev_hitl_trigger(body: dict):
+    """
+    Dev-only endpoint to push a synthetic HITL interrupt over the active WS
+    session for preview/demo purposes. Gated by OWLYNN_DEV=1 or debug flag.
+    """
+    import os
+    dev_mode = os.environ.get("OWLYNN_DEV") == "1"
+    if not dev_mode:
+        profile = get_profile()
+        dev_mode = profile.get("debug_mode", False)
+    if not dev_mode:
+        raise HTTPException(status_code=403, detail="Dev API requires OWLYNN_DEV=1 or debug_mode enabled in profile")
+
+    variant = (body.get("variant") or "router").strip()
+    thread_id = body.get("thread_id")
+
+    # Map variant to fixture name
+    variant_map = {
+        "router": "router_skill_ambiguity",
+        "security": "security_delete_file",
+        "plan_review": "plan_review_write_file",
+        "scope_clarify": "scope_clarification_calculator",
+        "ask_user": "ask_user_mid_task",
+    }
+    fixture_name = variant_map.get(variant, "router_skill_ambiguity")
+
+    try:
+        from src.hitl.fixtures import load_fixture
+        fixture = load_fixture(fixture_name)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Try to push to active WS
+    if thread_id and thread_id in app.state.sessions:
+        session = app.state.sessions[thread_id]
+        ws = getattr(session, "_ws", None)
+        if ws:
+            try:
+                await ws.send_json({"type": "interrupt", "interrupts": [fixture]})
+                return {"status": "pushed", "variant": variant, "fixture": fixture_name}
+            except Exception:
+                pass
+
+    # Return fixture JSON for inspection
+    return {"status": "fixture_only", "variant": variant, "fixture_name": fixture_name, "payload": fixture}
+
+
 @app.post("/api/advanced-settings")
 async def api_update_advanced_settings(body: dict):
     """Update inference and behavior settings."""
@@ -392,7 +462,7 @@ async def api_mem0_search(query: str = "", limit: int = 50, project_id: str = ""
         user_id = f"project:{project_id}" if project_id else "owner"
         # Use a broad query to retrieve memories; if empty, use a space to get recent ones
         search_query = query if query else " "
-        results_dict = mem0_memory.search(search_query, user_id=user_id, filters=None, limit=limit)
+        results_dict = mem0_memory.search(search_query, filters={"user_id": user_id}, limit=limit)
         results = results_dict.get("results", []) if isinstance(results_dict, dict) else results_dict
         # Normalize: Mem0 results may have 'memory' or 'id' keys
         memories = []
@@ -421,7 +491,7 @@ async def api_mem0_count(project_id: str = ""):
     try:
         user_id = f"project:{project_id}" if project_id else "owner"
         # Search with a large limit to get all memories and count them
-        results_dict = mem0_memory.search(" ", user_id=user_id, filters=None, limit=1000)
+        results_dict = mem0_memory.search(" ", filters={"user_id": user_id}, limit=1000)
         results = results_dict.get("results", []) if isinstance(results_dict, dict) else results_dict
         count = len(results) if isinstance(results, list) else 0
         return {"status": "ok", "count": count, "user_id": user_id}
@@ -607,22 +677,10 @@ async def api_add_project_chat(project_id: str, body: dict):
 
 @app.delete("/api/projects/{project_id}/chats/{chat_id}")
 async def api_delete_project_chat(project_id: str, chat_id: str):
-    #region agent log
-    with open("/Users/tim/Works/OwlynnV2/.cursor/debug-03f428.log", "a") as f:
-        f.write('{"sessionId":"03f428","runId":"run1","hypothesisId":"A","location":"server.py:592","message":"delete_chat called","data":{"project_id":' + json.dumps(project_id) + ',"chat_id":' + json.dumps(chat_id) + '},"timestamp":' + str(int(__import__('time').time()*1000)) + '}\n')
-    #endregion
     try:
         project_manager.delete_chat_from_project(project_id, chat_id)
-        #region agent log
-        with open("/Users/tim/Works/OwlynnV2/.cursor/debug-03f428.log", "a") as f:
-            f.write('{"sessionId":"03f428","runId":"run1","hypothesisId":"A","location":"server.py:597","message":"delete_chat success","data":{"project_id":' + json.dumps(project_id) + ',"chat_id":' + json.dumps(chat_id) + '},"timestamp":' + str(int(__import__('time').time()*1000)) + '}\n')
-        #endregion
         return {"status": "ok"}
     except Exception as e:
-        #region agent log
-        with open("/Users/tim/Works/OwlynnV2/.cursor/debug-03f428.log", "a") as f:
-            f.write('{"sessionId":"03f428","runId":"run1","hypothesisId":"A","location":"server.py:600","message":"delete_chat ERROR","data":{"error":' + json.dumps(str(e)) + '},"timestamp":' + str(int(__import__('time').time()*1000)) + '}\n')
-        #endregion
         return {"status": "error", "message": str(e)}
 
 @app.put("/api/projects/{project_id}/chats/{chat_id}")
@@ -916,8 +974,12 @@ async def api_upload_file(file: UploadFile = File(...), sub_path: str = "", proj
             import asyncio
             asyncio.create_task(_auto_index_project_file(project_id, file.filename, filepath, file_bytes))
 
+        audit_info("api.file", "file_uploaded", name=file.filename,
+                    size_bytes=len(file_bytes), project_id=project_id)
         return {"status": "ok", "message": f"Uploaded {file.filename}"}
     except Exception as e:
+        audit_info("api.file", "file_upload_failed", name=file.filename if file else "unknown",
+                    error=str(e)[:120])
         return {"status": "error", "message": str(e)}
 
 
@@ -989,27 +1051,13 @@ async def api_create_folder(body: dict):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-@app.delete("/api/projects/{project_id}")
-async def api_delete_project(project_id: str):
-    #region agent log
-    with open("/Users/tim/Works/OwlynnV2/.cursor/debug-03f428.log", "a") as f:
-        f.write('{"sessionId":"03f428","runId":"run1","hypothesisId":"A","location":"server.py:962","message":"delete_project called","data":{"project_id":' + json.dumps(project_id) + '},"timestamp":' + str(int(__import__('time').time()*1000)) + '}\n')
-    #endregion
     try:
         success = project_manager.delete_project(project_id)
-        #region agent log
-        with open("/Users/tim/Works/OwlynnV2/.cursor/debug-03f428.log", "a") as f:
-            f.write('{"sessionId":"03f428","runId":"run1","hypothesisId":"A","location":"server.py:967","message":"delete_project result","data":{"success":' + json.dumps(success) + ',"project_id":' + json.dumps(project_id) + '},"timestamp":' + str(int(__import__('time').time()*1000)) + '}\n')
-        #endregion
         if success:
             return {"status": "ok"}
         else:
             return {"status": "error", "message": "Failed to delete project or cannot delete default project"}
     except Exception as e:
-        #region agent log
-        with open("/Users/tim/Works/OwlynnV2/.cursor/debug-03f428.log", "a") as f:
-            f.write('{"sessionId":"03f428","runId":"run1","hypothesisId":"A","location":"server.py:973","message":"delete_project ERROR","data":{"error":' + json.dumps(str(e)) + '},"timestamp":' + str(int(__import__('time').time()*1000)) + '}\n')
-        #endregion
         return {"status": "error", "message": str(e)}
 
 
@@ -1127,12 +1175,13 @@ def serialize_interrupt_item(item):
     if isinstance(value, (str, int, float, bool)) or value is None:
         return value
     if isinstance(value, dict):
-        if value.get("type") == "security_approval_required":
+        interrupt_type = value.get("type", "")
+
+        if interrupt_type == "security_approval_required":
             sensitive_calls = value.get("sensitive_tool_calls") or []
             primary_call = sensitive_calls[0] if isinstance(sensitive_calls, list) and sensitive_calls else {}
             tool_name = str(primary_call.get("name", "unknown"))
             tool_args = _stringify_tool_input(primary_call.get("args"))
-            # Policy-authoritative risk summary from security proxy classification.
             enriched = dict(value)
             enriched["risk_label"] = str(primary_call.get("risk_label") or "sensitive_tool_execution")
             enriched["risk_confidence"] = float(primary_call.get("risk_confidence", 0.95))
@@ -1144,6 +1193,20 @@ def serialize_interrupt_item(item):
             enriched["tool_args"] = tool_args
             enriched["sensitive_count"] = len(sensitive_calls) if isinstance(sensitive_calls, list) else 0
             return enriched
+
+        if interrupt_type == "plan_review_required":
+            # Pass through with enriched context fields for frontend rendering
+            enriched = dict(value)
+            return enriched
+
+        if interrupt_type == "scope_clarification_required":
+            enriched = dict(value)
+            return enriched
+
+        if interrupt_type == "ask_user":
+            # Pass through; may already have enriched fields from router
+            return dict(value)
+
         return value
     if isinstance(value, list):
         return value
@@ -1249,6 +1312,10 @@ class GraphSession:
         self.task = asyncio.create_task(self._execute(input_data, config))
 
     async def _execute(self, input_data, config):
+        # Propagate thread_id into audit context for this graph run
+        from src.config.audit_log import set_thread_id
+        set_thread_id(self.thread_id)
+
         token = set_active_project_for_run(self.last_project_id)
         try:
             # Initial status
@@ -1298,6 +1365,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
         return
 
     logger.info("WebSocket accepted for thread=%s", thread_id)
+    audit_info("api.ws", "ws_connected", thread_id=thread_id)
 
     # Get or create session
     sessions = websocket.app.state.sessions
@@ -1459,6 +1527,11 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                     }
                                     if _node_fallback_chain and isinstance(_node_fallback_chain, list):
                                         model_info_payload["fallback_chain"] = _node_fallback_chain
+                                    # Include cloud brief telemetry if present
+                                    if output.get("cloud_brief_tokens_est"):
+                                        model_info_payload["cloud_brief_tokens_est"] = output["cloud_brief_tokens_est"]
+                                    if output.get("anonymization_placeholders_count") is not None:
+                                        model_info_payload["anonymization_placeholders_count"] = output["anonymization_placeholders_count"]
                                     await websocket.send_json(model_info_payload)
                                 elif _node_fallback_chain and isinstance(_node_fallback_chain, list):
                                     # No model_used but fallback chain exists (e.g. tools_off fallback)
@@ -1597,6 +1670,15 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                 )
                 continue
 
+            if payload.get("type") == "plan_review_response":
+                approved = bool(payload.get("approved"))
+                feedback = payload.get("feedback", "")
+                await session.start_run(
+                    Command(resume={"approved": approved, "feedback": feedback}),
+                    config=config
+                )
+                continue
+
             user_input = payload.get("message", "")
             files = payload.get("files", [])
             payload_mode = payload.get("mode", "tools_on")
@@ -1665,13 +1747,15 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                     "mode": payload_mode,
                     "web_search_enabled": bool(web_search_enabled),
                     "response_style": response_style,
-                    "project_id": project_id
+                    "project_id": project_id,
+                    "thread_id": thread_id,
                 },
                 config=config
             )
 
     except WebSocketDisconnect:
         logger.info("Client disconnected from thread: %s", thread_id)
+        audit_info("api.ws", "ws_disconnected", thread_id=thread_id)
     finally:
         # We don't cancel the session task here! It continues in background.
         connected_websockets.discard(websocket) # Remove from active list
@@ -1683,7 +1767,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
 async def build_message_content(text: str, files: list):
     """
     Builds the message content block for LangChain, supporting:
-    - Images: forwarded as image_url for multimodal Qwen2-VL
+    - Images: forwarded as image_url for multimodal vision models
     - Text PDFs: text extracted via PyMuPDF and injected
     - Scanned PDFs: each page rendered as image and forwarded to the vision model
     - Code/text files: decoded and injected as a fenced code block
@@ -1784,7 +1868,7 @@ def render_pdf_as_composite(raw_bytes: bytes, max_pages: int = 10) -> str | None
     """
     Render ALL PDF pages and stitch them into a single tall composite JPEG.
     
-    Since mlx_vlm Qwen2-VL has a bug processing multiple separate image_url entries,
+    Since mlx_vlm vision models may struggle with multiple separate image_url entries,
     we sidestep the issue by combining all pages into ONE image. The model can still
     see and read all pages in a single pass.
     

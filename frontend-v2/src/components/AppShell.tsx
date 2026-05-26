@@ -7,12 +7,13 @@ import type { Options } from 'rehype-sanitize'
 import { Composer } from './Composer'
 import { SafeModePanel } from './SafeModePanel'
 import { ScreenAssistPanel } from './ScreenAssistPanel'
-import { ActionProposalQueue } from './ActionProposalQueue'
-import type { InlineSecurityPrompt, InterruptChoice } from '../state/useAppStore'
-import { ToolExecutionPanel } from './ToolExecutionPanel'
 import { ProjectKnowledgePanel } from './ProjectKnowledgePanel'
 import { OrchestrationPanel } from './OrchestrationPanel'
 import { MemoryPanel } from './MemoryPanel'
+import { HitlPromptCard, type HitlPromptViewModel } from './HitlPromptCard'
+import { ToolActivityCard } from './ToolActivityCard'
+import type { InterruptChoice } from '../state/useAppStore'
+import type { ConversationItem, ConversationToolActivity, ConversationHitlPrompt } from '../appEventHandlers'
 import { useAppStore } from '../state/useAppStore'
 import { tauriBridge } from '../lib/tauriBridge'
 import type { ChatMessage } from '../types/protocol'
@@ -40,18 +41,15 @@ interface AppShellProps {
   onCreateProject: (name: string) => void
   onEditProject: (projectId: string, name: string) => void
   onDeleteProject: (projectId: string) => void
-  onApproveProposal?: (id: string) => Promise<void>
-  onRejectProposal?: (id: string) => Promise<void>
-  onAutoApprove?: (id: string) => Promise<void>
-  onSelectChoice?: (choice: InterruptChoice, userInput?: string) => void
   onNewChat: () => void
   onSelectChat: (chatId: string) => void
   onDeleteChat: (chatId: string) => void
   onRenameChat: (chatId: string, newName: string) => void
-  inlineSecurityPrompt?: InlineSecurityPrompt | null
-  interruptQuestion?: string | null
-  interruptChoices?: InterruptChoice[] | null
-  onClearInterrupt?: () => void
+  /** Inline HITL card callbacks */
+  onHitlApprove?: (hitlId: string, variant: string, answers?: Record<string, unknown>) => void
+  onHitlDecline?: (hitlId: string) => void
+  onHitlSelectChoice?: (choice: InterruptChoice, userInput?: string) => void
+  onHitlSkip?: (hitlId: string) => void
 }
 
 function MessageAvatar({ role }: { role: ChatMessage['role'] }) {
@@ -255,86 +253,6 @@ function RenameInput({
   )
 }
 
-function InterruptChoicesInline({
-  question,
-  choices,
-  onSelect,
-  onClose,
-}: {
-  question: string
-  choices: import('../state/useAppStore').InterruptChoice[]
-  onSelect?: (choice: import('../state/useAppStore').InterruptChoice, userInput?: string) => void
-  onClose?: () => void
-}) {
-  const [othersInput, setOthersInput] = useState('')
-  const hasOthers = choices.some((c) => c.allows_user_input)
-
-  const handleChoiceClick = (choice: import('../state/useAppStore').InterruptChoice) => {
-    if (choice.allows_user_input) return
-    onSelect?.(choice)
-  }
-
-  const handleOthersSubmit = () => {
-    const othersChoice = choices.find((c) => c.allows_user_input)
-    if (othersChoice && othersInput.trim()) {
-      onSelect?.(othersChoice, othersInput.trim())
-      setOthersInput('')
-    }
-  }
-
-  return (
-    <div className="interrupt-inline-prompt">
-      <div className="interrupt-inline-card">
-        <div className="interrupt-inline-header">
-          <span className="interrupt-inline-icon">?</span>
-          <span className="interrupt-inline-title">{question}</span>
-          {onClose && (
-            <button type="button" className="interrupt-inline-close" onClick={onClose} title="Dismiss">
-              ×
-            </button>
-          )}
-        </div>
-        <div className="interrupt-inline-choices">
-          {choices.map((choice, idx) => {
-            if (choice.allows_user_input) return null
-            return (
-              <button
-                key={idx}
-                type="button"
-                className="btn-choice"
-                onClick={() => handleChoiceClick(choice)}
-              >
-                {choice.label}
-              </button>
-            )
-          })}
-        </div>
-        {hasOthers && (
-          <div className="interrupt-inline-others">
-            <input
-              type="text"
-              placeholder="Describe what you need..."
-              value={othersInput}
-              onChange={(e) => setOthersInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleOthersSubmit()
-              }}
-            />
-            <button
-              type="button"
-              className="btn-others-submit"
-              disabled={!othersInput.trim()}
-              onClick={handleOthersSubmit}
-            >
-              Submit
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
 export function AppShell({
   onSend,
   projects,
@@ -346,21 +264,18 @@ export function AppShell({
   onCreateProject,
   onEditProject,
   onDeleteProject,
-  onApproveProposal,
-  onRejectProposal,
-  onAutoApprove,
-  onSelectChoice,
+  onHitlApprove,
+  onHitlDecline,
+  onHitlSelectChoice,
+  onHitlSkip,
   onNewChat,
   onSelectChat,
   onDeleteChat,
   onRenameChat,
-  inlineSecurityPrompt,
-  interruptQuestion,
-  interruptChoices,
-  onClearInterrupt,
 }: AppShellProps) {
   const connectionState = useAppStore((s) => s.connectionState)
   const messages = useAppStore((s) => s.messages)
+  const conversationItems = useAppStore((s) => s.conversationItems)
   const operatorNote = useAppStore((s) => s.operatorNote)
   const windowMode = useAppStore((s) => s.windowMode)
   const setWindowMode = useAppStore((s) => s.setWindowMode)
@@ -397,12 +312,17 @@ export function AppShell({
     }
   }, [messages])
 
-  // Auto-scroll
+  // Auto-scroll (messages + conversation items)
   useEffect(() => {
     if (messagesContainerRef.current) {
       messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
     }
-  }, [messages, streamActive])
+  }, [messages, conversationItems, streamActive])
+
+  // Check if any HITL prompt is pending (for composer blocking)
+  const hasPendingHitl = conversationItems.some(
+    (item) => item.kind === 'hitl_prompt' && item.status === 'pending'
+  )
 
   // ESC key closes inspector overlay in compact mode
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -636,104 +556,131 @@ export function AppShell({
         {operatorNote ? <p className="operator-note">ⓘ {operatorNote}</p> : null}
         <div className="messages-container" ref={messagesContainerRef}>
           <div className="messages">
-            {messages.filter((m) => {
-              const content = (m.content || '').trim()
-              if (!content) return false
-              if (content.startsWith('[Internal reminder')) return false
-              return true
-            }).length === 0 ? (
-              <div className="messages-empty">
-                <div className="messages-empty-icon">💬</div>
-                <p className="messages-empty-text">
-                  {isCompact ? 'Quick ask, quick answer' : 'Start a conversation with Owlynn'}
-                </p>
-                {!isCompact && (
-                  <div className="messages-suggestions">
-                    {SUGGESTIONS.map((suggestion) => (
-                      <button
-                        key={suggestion}
-                        type="button"
-                        className="messages-suggestion-btn"
-                        onClick={() => onSend(suggestion)}
-                        disabled={connectionState !== 'connected'}
-                      >
-                        {suggestion}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ) : (
-              messages.filter((m) => {
+            {/* Build unified timeline: messages + conversation items interleaved by time */}
+            {(() => {
+              const displayMessages = messages.filter((m) => {
                 const content = (m.content || '').trim()
                 if (!content) return false
                 if (content.startsWith('[Internal reminder')) return false
                 return true
-              }).map((message, idx) => {
-                const isStreaming =
-                  isStreamingRef.current && idx === messages.length - 1 && message.id?.startsWith('stream-')
-                return <MessageBubble key={message.id || idx} message={message} isStreaming={isStreaming} />
               })
-            )}
+
+              // Convert display messages to timeline entries
+              type TimelineEntry =
+                | { kind: 'message'; message: ChatMessage; ts: number; idx: number }
+                | { kind: 'conversation_item'; item: ConversationItem; ts: number }
+
+              const entries: TimelineEntry[] = [
+                ...displayMessages.map((msg, idx) => ({
+                  kind: 'message' as const,
+                  message: msg,
+                  ts: msg.ts || 0,
+                  idx,
+                })),
+                ...conversationItems.map((item) => ({
+                  kind: 'conversation_item' as const,
+                  item,
+                  ts: item.ts || 0,
+                })),
+              ].sort((a, b) => a.ts - b.ts)
+
+              if (entries.length === 0) {
+                return (
+                  <div className="messages-empty">
+                    <div className="messages-empty-icon">💬</div>
+                    <p className="messages-empty-text">
+                      {isCompact ? 'Quick ask, quick answer' : 'Start a conversation with Owlynn'}
+                    </p>
+                    {!isCompact && (
+                      <div className="messages-suggestions">
+                        {SUGGESTIONS.map((suggestion) => (
+                          <button
+                            key={suggestion}
+                            type="button"
+                            className="messages-suggestion-btn"
+                            onClick={() => onSend(suggestion)}
+                            disabled={connectionState !== 'connected'}
+                          >
+                            {suggestion}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              }
+
+              return entries.map((entry) => {
+                if (entry.kind === 'message') {
+                  const { message, idx } = entry
+                  const isStreaming =
+                    isStreamingRef.current &&
+                    idx === displayMessages.length - 1 &&
+                    message.id?.startsWith('stream-')
+                  return <MessageBubble key={`msg-${message.id || idx}`} message={message} isStreaming={isStreaming} />
+                }
+
+                // conversation_item
+                const item = entry.item
+                if (item.kind === 'tool_activity') {
+                  const ta = item as ConversationToolActivity
+                  return (
+                    <ToolActivityCard
+                      key={`tool-${ta.id}`}
+                      activity={{
+                        id: ta.id,
+                        toolName: ta.toolName,
+                        toolCallId: ta.toolCallId,
+                        status: ta.status,
+                        input: ta.input,
+                        duration: ta.duration,
+                        riskLabel: ta.riskLabel,
+                        riskConfidence: ta.riskConfidence,
+                        riskRationale: ta.riskRationale,
+                        remediationHint: ta.remediationHint,
+                      }}
+                    />
+                  )
+                }
+
+                if (item.kind === 'hitl_prompt') {
+                  const hp = item as ConversationHitlPrompt
+                  return (
+                    <HitlPromptCard
+                      key={`hitl-${hp.id}`}
+                      model={hp.viewModel as unknown as HitlPromptViewModel}
+                      status={hp.status}
+                      onApprove={(answers) => onHitlApprove?.(hp.id, hp.variant as string, answers)}
+                      onDecline={() => onHitlDecline?.(hp.id)}
+                      onSelectChoice={(choice, userInput) => onHitlSelectChoice?.(choice, userInput)}
+                      onSkip={() => onHitlSkip?.(hp.id)}
+                    />
+                  )
+                }
+
+                // Fallback for message-kind conversation items
+                if (item.kind === 'message') {
+                  const msgItem = item as { role: string; content: string; id: string; ts: number }
+                  return (
+                    <MessageBubble
+                      key={`ci-msg-${msgItem.id}`}
+                      message={{
+                        id: msgItem.id,
+                        role: msgItem.role as ChatMessage['role'],
+                        content: msgItem.content,
+                        ts: msgItem.ts,
+                      }}
+                      isStreaming={false}
+                    />
+                  )
+                }
+
+                return null
+              })
+            })()}
             <div ref={messagesEndRef} />
           </div>
         </div>
-        {interruptQuestion && interruptChoices && interruptChoices.length > 0 && (
-          <InterruptChoicesInline
-            question={interruptQuestion}
-            choices={interruptChoices}
-            onSelect={onSelectChoice}
-            onClose={onClearInterrupt}
-          />
-        )}
-        {inlineSecurityPrompt && (
-          <div className="security-inline-prompt">
-            <div className="security-inline-card">
-              <div className="security-inline-header">
-                <span className="security-inline-icon">&#x26A0;</span>
-                <span className="security-inline-title">Security Approval Required</span>
-              </div>
-              <div className="security-inline-body">
-                <p className="security-inline-tool">
-                  <strong>Tool:</strong> {inlineSecurityPrompt.toolName || 'Unknown'}
-                </p>
-                {inlineSecurityPrompt.riskHint && (
-                  <p className="security-inline-risk">
-                    <strong>Risk:</strong> {inlineSecurityPrompt.riskHint}
-                  </p>
-                )}
-                {inlineSecurityPrompt.riskRationale && (
-                  <p className="security-inline-rationale">
-                    {inlineSecurityPrompt.riskRationale}
-                  </p>
-                )}
-              </div>
-              <div className="security-inline-actions">
-                <button
-                  type="button"
-                  className="security-btn security-btn-deny"
-                  onClick={() => onRejectProposal?.(inlineSecurityPrompt.id)}
-                >
-                  Decline
-                </button>
-                <button
-                  type="button"
-                  className="security-btn security-btn-allow"
-                  onClick={() => onApproveProposal?.(inlineSecurityPrompt.id)}
-                >
-                  Allow
-                </button>
-                <button
-                  type="button"
-                  className="security-btn security-btn-auto"
-                  onClick={() => onAutoApprove?.(inlineSecurityPrompt.id)}
-                >
-                  Auto-Allow
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
         {streamActive && (
           <div className="streaming-indicator">
             <span className="streaming-badge">
@@ -746,7 +693,7 @@ export function AppShell({
             </span>
           </div>
         )}
-        <Composer onSend={onSend} disabled={connectionState !== 'connected'} compact={isCompact} />
+        <Composer onSend={onSend} disabled={connectionState !== 'connected'} hitlBlocked={hasPendingHitl} compact={isCompact} />
       </main>
 
       {/* ── Right Panel ── */}
@@ -788,12 +735,6 @@ export function AppShell({
           </CollapsibleSection>
           <CollapsibleSection title="Screen Assist" icon="🖥">
             <ScreenAssistPanel />
-          </CollapsibleSection>
-          <CollapsibleSection title="Tool Execution" icon="🔧" defaultOpen={true}>
-            <ToolExecutionPanel />
-          </CollapsibleSection>
-          <CollapsibleSection title="Action Proposals" icon="📋">
-            <ActionProposalQueue onApprove={onApproveProposal} onReject={onRejectProposal} onSelectChoice={onSelectChoice} />
           </CollapsibleSection>
         </aside>
       )}

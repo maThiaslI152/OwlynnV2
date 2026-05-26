@@ -92,6 +92,14 @@ Resumes HITL-gated sensitive tool calls.
 
 `answer` is forwarded without string coercion — structured router choices (e.g. `{ "route": "...", "toolbox": "..." }`) remain intact.
 
+#### Plan Review Response (NEW)
+
+```json
+{ "type": "plan_review_response", "approved": true | false, "feedback": "optional string" }
+```
+
+Resumes the `plan_review` HITL gate after human review. `feedback` is optional text from the reviewer.
+
 ### File Attachment Handling
 
 #### Workspace References
@@ -360,6 +368,44 @@ Sent at `on_chain_end` for the `auto_summarize` node. When no summarization need
 ```
 
 Sent by `notify_file_processed()` to trigger UI refresh of the workspace file panel.
+
+#### `interrupt` (HITL)
+
+```json
+{
+  "type": "interrupt",
+  "interrupts": [
+    {
+      "type": "scope_clarification_required | plan_review_required | security_approval_required | ask_user",
+      "title": "string",
+      "stated_intent": "string (optional)",
+      "conversation_snippet": "string (optional)",
+      "pitfalls": ["string"],
+      "questions": [
+        {
+          "id": "string",
+          "question": "string",
+          "choices": [{ "label": "string" }],
+          "allows_user_input": true | false
+        }
+      ],
+      "planned_actions": [{ "tool": "string", "summary": "string" }],
+      "sensitive_tool_calls": [...]
+    }
+  ]
+}
+```
+
+New interrupt types added in HITL improvement branch:
+
+| Type | When emitted | Response event |
+|------|-------------|----------------|
+| `scope_clarification_required` | Vague build/create request detected | `ask_user_response` with structured `answers` |
+| `plan_review_required` | Sensitive tool plan needs review | `plan_review_response` with `approved` bool |
+| `security_approval_required` | Policy blocks sensitive tool | `security_approval` with `approved` bool |
+| `ask_user` | Router or mid-task clarification | `ask_user_response` with `answer` |
+
+Enriched fields now include `conversation_snippet`, `stated_intent`, `affected_resources`, and `clarification_reason` where available.
 
 ### TTS Runtime Event (Desktop Channel)
 

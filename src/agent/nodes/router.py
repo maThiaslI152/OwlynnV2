@@ -15,6 +15,9 @@ from src.config.settings import MEDIUM_DEFAULT_CONTEXT, MEDIUM_LONGCTX_CONTEXT, 
 from src.memory.user_profile import get_profile
 from src.tools.skills import SkillMatcher, MatchResult, _default_loader as _skill_loader
 
+from src.config.audit_log import audit_info, audit_debug, audit_warn
+from src.config.log_middleware import log_node
+
 import json
 import re
 import logging
@@ -271,6 +274,7 @@ def _check_cloud_available() -> bool:
     return bool(api_key)
 
 
+@log_node("router")
 async def router_node(state: AgentState) -> AgentState:
     """Route to simple or complex path with 5-way variant selection and toolbox."""
     messages = state.get("messages", [])
@@ -308,6 +312,8 @@ async def router_node(state: AgentState) -> AgentState:
                 has_images=has_images, task_category="tool_followup", estimated_tokens=budget, web_on=web_on,
                 swap_from=state.get("current_medium_model"), swap_to=None,
             )
+            audit_info("agent.lifecycle", "router_decision", route=route, confidence=0.95,
+                        source="tool_history", task_category="tool_followup")
             return {"route": route, "token_budget": budget,
                     "selected_toolboxes": toolbox, "router_clarification_used": False,
                     "skill_matched": None,
@@ -322,6 +328,8 @@ async def router_node(state: AgentState) -> AgentState:
             classification_source="deterministic", cloud_available=cloud_available,
             has_images=has_images, task_category="web_search", estimated_tokens=budget, web_on=web_on,
         )
+        audit_info("agent.lifecycle", "router_decision", route=route, confidence=0.9,
+                    source="web_intent", task_category="web_search")
         return {"route": route, "token_budget": budget,
                 "selected_toolboxes": toolbox, "router_clarification_used": False,
                 "skill_matched": None,
@@ -341,6 +349,8 @@ async def router_node(state: AgentState) -> AgentState:
             classification_source="deterministic", cloud_available=cloud_available,
             has_images=has_images, task_category="file_operations", estimated_tokens=budget, web_on=web_on,
         )
+        audit_info("agent.lifecycle", "router_decision", route=route, confidence=0.9,
+                    source="file_attachment", task_category="file_operations")
         return {"route": route, "token_budget": budget,
                 "selected_toolboxes": toolbox, "router_clarification_used": False,
                 "skill_matched": None,
@@ -360,6 +370,8 @@ async def router_node(state: AgentState) -> AgentState:
                 classification_source="keyword_bypass", cloud_available=cloud_available,
                 has_images=has_images, task_category="greeting", estimated_tokens=budget, web_on=web_on,
             )
+            audit_info("agent.lifecycle", "router_decision", route="simple", confidence=0.98,
+                        source="keyword_bypass", task_category="greeting")
             return {"route": "simple", "token_budget": budget,
                     "selected_toolboxes": ["all"], "router_clarification_used": False,
                     "skill_matched": None,
@@ -382,6 +394,7 @@ async def router_node(state: AgentState) -> AgentState:
         classification_source = "llm_classifier"
     except Exception as e:
         logger.error(f"[router] Error during routing: {e}")
+        audit_warn("agent.lifecycle", "router_llm_error", error=str(e)[:120])
         decision, confidence, toolbox = "complex", 0.5, ["all"]
         classification_source = "llm_classifier"
 
@@ -426,6 +439,28 @@ async def router_node(state: AgentState) -> AgentState:
                 "[router] Skipping HITL — confident skill match: %s (%.0f%%)",
                 match_result.top_match.name, match_result.best_score * 100,
             )
+            audit_info("agent.hitl", "router_hitl_skipped",
+                        reason="confident_skill_match",
+                        skill=match_result.top_match.name,
+                        score=round(match_result.best_score, 3))
+
+        # When the request is a build/create action, delegate to the
+        # scope_clarify node instead of asking skill-routing questions.
+        # scope_clarify asks the *right* questions (language, UI, scope),
+        # not "which skill/toolbox?", which the user can't answer well.
+        if hitl_needed:
+            try:
+                from src.agent.hitl.scope_heuristics import needs_clarification
+                if needs_clarification(user_text)[0]:
+                    hitl_needed = False
+                    logger.info(
+                        "[router] Delegating to scope_clarify — build/create request detected: %r",
+                        user_text[:80],
+                    )
+                    audit_info("agent.hitl", "router_delegated_to_scope_clarify",
+                                reason="build_create_request")
+            except ImportError:
+                pass  # heuristic module unavailable; fall through to router HITL
 
         # HITL requires a checkpointer — without one, interrupt() silently
         # stops the node without returning a route, breaking graph state.
@@ -468,6 +503,8 @@ async def router_node(state: AgentState) -> AgentState:
                         ),
                         "choices": choices,
                     })
+                    audit_info("agent.hitl", "router_hitl_interrupt",
+                                reason="skill_ambiguity", candidate_count=len(choices) - 1)
                 except (RuntimeError, ValueError):
                     logger.debug("[router] HITL unavailable (no checkpointer or outside graph context)")
                     clarification = None
@@ -484,6 +521,8 @@ async def router_node(state: AgentState) -> AgentState:
                             {"label": "Just answer directly", "route": "complex-default", "toolbox": ["all"]},
                         ],
                     })
+                    audit_info("agent.hitl", "router_hitl_interrupt",
+                                reason="low_confidence", confidence=round(confidence, 3))
                 except (RuntimeError, ValueError):
                     logger.debug("[router] HITL unavailable (no checkpointer or outside graph context)")
                     clarification = None
@@ -509,6 +548,8 @@ async def router_node(state: AgentState) -> AgentState:
                             "[router] HITL 'Others' re-match → skill=%s score=%.0f%%",
                             top[0].name, top[1] * 100,
                         )
+                        audit_info("agent.hitl", "router_hitl_others_rematch",
+                                    skill=top[0].name, score=round(top[1], 3))
                         budget = estimate_token_budget(user_text, "complex-default")
                         metadata = _build_router_metadata(
                             "complex-default", confidence=0.8, reasoning="hitl_others_rematch",
@@ -529,10 +570,13 @@ async def router_node(state: AgentState) -> AgentState:
                 toolbox = clarification.get("toolbox", ["all"]) if isinstance(clarification, dict) else ["all"]
                 route_override = clarification.get("route", "complex-default") if isinstance(clarification, dict) else "complex-default"
                 logger.info("[router] HITL clarification → route=%s, toolbox=%s", route_override, toolbox)
+                audit_info("agent.hitl", "router_hitl_resolved", route=route_override, toolbox=toolbox)
                 budget = estimate_token_budget(user_text, route_override)
                 if route_override == "complex-cloud" and not cloud_available:
                     route_override = "complex-default"
                     logger.warning("[router] Cloud unavailable, falling back to complex-default")
+                    audit_warn("agent.hitl", "router_hitl_cloud_unavailable",
+                                requested="complex-cloud", fallback="complex-default")
                 metadata = _build_router_metadata(
                     route_override, confidence=0.8, reasoning="hitl_clarification",
                     classification_source="hitl", cloud_available=cloud_available,
@@ -548,6 +592,8 @@ async def router_node(state: AgentState) -> AgentState:
 
         elif hitl_needed:
             logger.debug("[router] HITL needed but checkpointer unavailable — falling through to LLM route")
+            audit_debug("agent.hitl", "router_hitl_checkpointer_unavailable",
+                         confidence=round(confidence, 3))
 
         # ── No HITL: proactive skill matching ────────────────────
         if match_result.top_match and match_result.best_score >= skill_clarification_threshold:
@@ -562,6 +608,8 @@ async def router_node(state: AgentState) -> AgentState:
                     "[router] Skill-driven toolbox: LLM=%s → skill=%s",
                     toolbox, skill_toolbox,
                 )
+                audit_info("agent.lifecycle", "router_skill_toolbox_override",
+                            llm_toolbox=toolbox, skill_toolbox=skill_toolbox)
                 toolbox = skill_toolbox
 
     # ── Finalize route ───────────────────────────────────────────────────
@@ -573,6 +621,9 @@ async def router_node(state: AgentState) -> AgentState:
             classification_source=classification_source, cloud_available=cloud_available,
             has_images=has_images, task_category="simple_conversation", estimated_tokens=budget, web_on=web_on,
         )
+        audit_info("agent.lifecycle", "router_decision", route="simple",
+                    confidence=round(confidence, 3), source=classification_source,
+                    task_category="simple_conversation")
         return {"route": "simple", "token_budget": budget,
                 "selected_toolboxes": toolbox, "router_clarification_used": router_clarification_used,
                 "skill_matched": skill_matched,
@@ -590,6 +641,8 @@ async def router_node(state: AgentState) -> AgentState:
         else:
             route = "complex-default"
         logger.warning(f"[router] Cloud unavailable, downgraded from complex-cloud to {route}")
+        audit_warn("agent.model", "router_cloud_downgrade",
+                    from_route="complex-cloud", to_route=route, reason="cloud_unavailable")
         swap_decision = "swapped"
         swap_to = route
 
@@ -603,6 +656,9 @@ async def router_node(state: AgentState) -> AgentState:
     )
 
     logger.info(f"[router] → {route} (confidence={confidence:.2f}, toolbox={toolbox})")
+    audit_info("agent.lifecycle", "router_decision", route=route,
+                confidence=round(confidence, 3), source=classification_source,
+                task_category=task_type, toolbox=toolbox)
     return {"route": route, "token_budget": budget,
             "selected_toolboxes": toolbox, "router_clarification_used": router_clarification_used,
             "skill_matched": skill_matched,

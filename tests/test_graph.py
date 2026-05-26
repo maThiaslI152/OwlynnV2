@@ -27,28 +27,28 @@ class TestRouteDecision:
 
     def test_complex_default_route(self):
         state = {"route": "complex-default"}
-        assert route_decision(state) == "complex"
+        assert route_decision(state) == "scope_clarify"
 
     def test_complex_vision_route(self):
         state = {"route": "complex-vision"}
-        assert route_decision(state) == "complex"
+        assert route_decision(state) == "scope_clarify"
 
     def test_complex_longctx_route(self):
         state = {"route": "complex-longctx"}
-        assert route_decision(state) == "complex"
+        assert route_decision(state) == "scope_clarify"
 
     def test_complex_cloud_route(self):
         state = {"route": "complex-cloud"}
-        assert route_decision(state) == "complex"
+        assert route_decision(state) == "scope_clarify"
 
     def test_unrecognized_route_defaults_to_complex(self):
         state = {"route": "unknown-route"}
-        assert route_decision(state) == "complex"
+        assert route_decision(state) == "scope_clarify"
 
     def test_missing_route_defaults_to_complex(self):
         state = {}
-        assert route_decision(state) == "complex"
+        assert route_decision(state) == "scope_clarify"
 
     def test_none_route_defaults_to_complex(self):
         state = {"route": None}
-        assert route_decision(state) == "complex"
+        assert route_decision(state) == "scope_clarify"

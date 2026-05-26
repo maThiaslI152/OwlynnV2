@@ -223,6 +223,92 @@ class _InterruptAgent:
         }
 
 
+class _PlanReviewHITLAgent:
+    """Stubbed agent that emits a plan_review_required interrupt from the plan_review node."""
+
+    async def astream_events(self, _input_data, config=None, version="v2"):
+        yield {
+            "event": "on_chain_stream",
+            "metadata": {"langgraph_node": "plan_review"},
+            "data": {
+                "chunk": {
+                    "__interrupt__": [
+                        {
+                            "type": "plan_review_required",
+                            "title": "Write new authentication module",
+                            "stated_intent": "Owlynn wants to write a new auth module in auth.py",
+                            "conversation_snippet": "User: add authentication to the app",
+                            "planned_actions": [
+                                {"tool": "write_workspace_file", "summary": "Create auth.py with login logic"},
+                                {"tool": "edit_workspace_file", "summary": "Update app.py to import auth"},
+                            ],
+                            "pitfalls": [
+                                "Writing auth code without security review may introduce vulnerabilities",
+                                "Hardcoding credentials is a common pitfall for LLM-generated auth",
+                            ],
+                            "sensitive_tool_calls": [
+                                {
+                                    "name": "write_workspace_file",
+                                    "args": {"filename": "auth.py", "content": "..."},
+                                    "risk_label": "sensitive_write",
+                                    "risk_confidence": 0.75,
+                                    "risk_rationale": "Writing new auth module — potential for credential leaks.",
+                                    "remediation_hint": "Review the auth logic for hardcoded secrets.",
+                                }
+                            ],
+                        }
+                    ]
+                }
+            },
+        }
+
+
+class _ScopeClarifyHITLAgent:
+    """Stubbed agent that emits a scope_clarification_required interrupt."""
+
+    async def astream_events(self, _input_data, config=None, version="v2"):
+        yield {
+            "event": "on_chain_stream",
+            "metadata": {"langgraph_node": "scope_clarify"},
+            "data": {
+                "chunk": {
+                    "__interrupt__": [
+                        {
+                            "type": "scope_clarification_required",
+                            "task_summary": "Build a calculator application",
+                            "conversation_snippet": "User: can you build a calculator app?",
+                            "questions": [
+                                {
+                                    "id": "language",
+                                    "question": "Which language or runtime should I use?",
+                                    "choices": [
+                                        {"label": "Python"},
+                                        {"label": "JavaScript / TypeScript"},
+                                        {"label": "Rust"},
+                                    ],
+                                    "allows_user_input": True,
+                                },
+                                {
+                                    "id": "ui_surface",
+                                    "question": "What kind of interface?",
+                                    "choices": [
+                                        {"label": "Web GUI"},
+                                        {"label": "Desktop GUI"},
+                                        {"label": "CLI / TUI"},
+                                    ],
+                                    "allows_user_input": False,
+                                },
+                            ],
+                            "pitfalls": [
+                                "Choosing a GUI framework without knowing desktop vs web wastes a full implementation pass."
+                            ],
+                        }
+                    ]
+                }
+            },
+        }
+
+
 @contextmanager
 def _client_with_agent(tmp_path, fake_agent):
     from src.api.server import app
@@ -669,3 +755,46 @@ def test_ws_error_event_shape(tmp_path):
     for err in error_events:
         assert isinstance(err.get("content"), str)
         assert err["content"].strip()
+
+
+def test_ws_interrupt_plan_review_shape(tmp_path):
+    """plan_review_required interrupt must contain stated_intent, planned_actions, pitfalls, and sensitive_tool_calls."""
+    with _client_with_agent(tmp_path, _PlanReviewHITLAgent()) as client:
+        with client.websocket_connect("/ws/chat/ws-plan-review") as ws:
+            ws.send_text(json.dumps({"message": "add authentication"}))
+            events = _collect_ws_events(ws)
+
+    interrupt_events = [e for e in events if e.get("type") == "interrupt"]
+    assert interrupt_events
+    payload = interrupt_events[-1].get("interrupts", [])[0]
+    assert payload.get("type") == "plan_review_required"
+    assert payload.get("title") == "Write new authentication module"
+    assert isinstance(payload.get("stated_intent"), str)
+    assert isinstance(payload.get("conversation_snippet"), str)
+    assert isinstance(payload.get("planned_actions"), list)
+    assert len(payload["planned_actions"]) >= 1
+    assert payload["planned_actions"][0].get("tool")
+    assert isinstance(payload.get("pitfalls"), list)
+    assert len(payload["pitfalls"]) >= 1
+    assert isinstance(payload.get("sensitive_tool_calls"), list)
+
+
+def test_ws_interrupt_scope_clarify_shape(tmp_path):
+    """scope_clarification_required interrupt must contain task_summary, questions, and pitfalls."""
+    with _client_with_agent(tmp_path, _ScopeClarifyHITLAgent()) as client:
+        with client.websocket_connect("/ws/chat/ws-scope-clarify") as ws:
+            ws.send_text(json.dumps({"message": "build a calculator"}))
+            events = _collect_ws_events(ws)
+
+    interrupt_events = [e for e in events if e.get("type") == "interrupt"]
+    assert interrupt_events
+    payload = interrupt_events[-1].get("interrupts", [])[0]
+    assert payload.get("type") == "scope_clarification_required"
+    assert isinstance(payload.get("task_summary"), str)
+    assert isinstance(payload.get("conversation_snippet"), str)
+    assert isinstance(payload.get("questions"), list)
+    assert len(payload["questions"]) >= 1
+    assert payload["questions"][0].get("id")
+    assert payload["questions"][0].get("question")
+    assert isinstance(payload["questions"][0].get("choices"), list)
+    assert isinstance(payload.get("pitfalls"), list)

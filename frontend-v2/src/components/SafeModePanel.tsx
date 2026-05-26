@@ -102,6 +102,52 @@ export function SafeModePanel() {
               ? 'Requires confirmation for exec'
               : 'Isolated sandbox execution'}
       </p>
+      {import.meta.env.DEV && (
+        <div className="safe-mode-dev-preview">
+          <p className="safe-mode-info" style={{ marginTop: 12 }}>
+            <strong>Dev: HITL Preview</strong>
+          </p>
+          <select
+            onChange={(e) => {
+              const variant = e.target.value
+              if (!variant) return
+              e.target.value = ''
+              import('../dev/hitlPreview').then(({ getDevHitlPreview }) => {
+                const preview = getDevHitlPreview(variant as any)
+                if (preview) {
+                  // Push through the same handleInterrupt path
+                  const store = useAppStore.getState()
+                  const interrupts = preview.event.interrupts
+                  if (import.meta.env.DEV) {
+                    // Use the parseHitlPrompt function directly
+                    import('./HitlPromptCard').then(({ parseHitlPrompt }) => {
+                      const model = parseHitlPrompt(interrupts)
+                      if (model) {
+                        store.appendConversationItem({
+                          kind: 'hitl_prompt',
+                          id: `hitl-dev-${Date.now()}`,
+                          variant: model.variant,
+                          title: model.title,
+                          viewModel: model as unknown as Record<string, unknown>,
+                          status: 'pending',
+                          ts: Date.now(),
+                        })
+                      }
+                    })
+                  }
+                }
+              })
+            }}
+          >
+            <option value="">Preview HITL...</option>
+            <option value="router">Router — Skill Ambiguity</option>
+            <option value="security">Security — Delete File</option>
+            <option value="plan_review">Plan Review — Write File</option>
+            <option value="scope_clarify">Scope Clarification — Calculator</option>
+            <option value="ask_user">Ask User — Mid-task</option>
+          </select>
+        </div>
+      )}
     </div>
   )
 }

@@ -40,7 +40,7 @@ MCP_CONFIG_PATH = PROJECT_ROOT / "mcp_config.json"
 
 # Web RAG (fetch_webpage excerpt ranking; optional web_search snippet rerank)
 WEB_RAG_ENABLED = os.getenv("WEB_RAG_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
-WEB_RAG_EMBED_MODEL = os.getenv("WEB_RAG_EMBED_MODEL", "text-embedding-nomic-embed-text-v1.5@f16")
+WEB_RAG_EMBED_MODEL = os.getenv("WEB_RAG_EMBED_MODEL", "text-embedding-nomic-embed-text-v1.5-embedding")
 WEB_RAG_TOP_K = int(os.getenv("WEB_RAG_TOP_K", "5"))
 WEB_RAG_CHUNK_CHARS = int(os.getenv("WEB_RAG_CHUNK_CHARS", "720"))
 WEB_RAG_CHUNK_OVERLAP = int(os.getenv("WEB_RAG_CHUNK_OVERLAP", "120"))
@@ -86,7 +86,7 @@ M4_MAC_OPTIMIZATION = {
         "timeout": 10,           # seconds - small model should be fast
     },
     "medium_model": {
-        "max_tokens": 4096,       # Qwen3.5 9B MLX 4bit — shorter, faster responses
+        "max_tokens": 4096,       # medium model — shorter, faster responses
         "context_length": 16384,  # Default context window
         "temperature": 0.5,
         "timeout": 60,           # seconds

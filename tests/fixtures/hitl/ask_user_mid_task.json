@@ -1,0 +1,10 @@
+{
+  "type": "ask_user",
+  "question": "Which format should I use for the output report?",
+  "choices": [
+    {"label": "PDF"},
+    {"label": "Word"},
+    {"label": "Markdown"}
+  ],
+  "conversation_snippet": "User: Generate a summary report of the sales data.\nOwlynn: I'll analyze the sales data and create a comprehensive report."
+}

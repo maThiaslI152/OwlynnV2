@@ -27,6 +27,50 @@ export function toToolExecutionSnapshot(
   }
 }
 
+// ── Conversation timeline model ──────────────────────────────────────
+
+export type ConversationItemKind = 'message' | 'tool_activity' | 'hitl_prompt'
+
+export interface ConversationMessage {
+  kind: 'message'
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  ts: number
+}
+
+export interface ConversationToolActivity {
+  kind: 'tool_activity'
+  id: string
+  toolName: string
+  toolCallId?: string | null
+  status: 'running' | 'success' | 'error'
+  input?: string | null
+  riskLabel?: string
+  riskConfidence?: number
+  riskRationale?: string
+  remediationHint?: string
+  ts: number
+  duration?: number
+}
+
+export type HitlPromptStatus = 'pending' | 'approved' | 'rejected' | 'dismissed'
+
+export interface ConversationHitlPrompt {
+  kind: 'hitl_prompt'
+  id: string
+  variant: 'scope_clarification' | 'plan_review' | 'security_approval' | 'ask_user'
+  title: string
+  viewModel: Record<string, unknown>
+  status: HitlPromptStatus
+  ts: number
+}
+
+export type ConversationItem =
+  | ConversationMessage
+  | ConversationToolActivity
+  | ConversationHitlPrompt
+
 type InterruptMetadata = {
   backendToolName: string
   backendToolArgs: string | null

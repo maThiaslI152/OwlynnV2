@@ -16,11 +16,11 @@ _DEFAULTS = {
     "domains_of_interest": [],
     "response_style": "detailed",
     "llm_base_url": "http://127.0.0.1:1234/v1",
-    "llm_model_name": "qwen/qwen3.5-9b",
+    "llm_model_name": "medium-default-model",
     "small_llm_base_url": "http://127.0.0.1:1234/v1",
     "small_llm_model_name": "liquid/lfm2.5-1.2b",
     "large_llm_base_url": "http://127.0.0.1:1234/v1",
-    "large_llm_model_name": "qwen/qwen3.5-9b",
+    "large_llm_model_name": "medium-default-model",
     # New system settings
     "system_prompt": "",
     "custom_instructions": "",
@@ -35,14 +35,14 @@ _DEFAULTS = {
     "streaming_enabled": True,
     "show_thinking": False,
     "show_tool_execution": True,
-    # LM Studio / Qwen Jinja: merge system into first user message to avoid
-    # "No user query found in messages" when using the local OpenAI server.
+    # LM Studio Jinja: merge system into first user message to avoid
+    # "No user query found in messages" when the model's chat template requires a user role.
     "lm_studio_fold_system": True,
     # Cloud / Medium / Router / Redis settings
     "cloud_llm_base_url": "https://api.deepseek.com/v1",
     "cloud_llm_model_name": "deepseek-chat",
     "deepseek_api_key": "",
-    "medium_models": {"default": "qwen3.5-9b-mlx", "vision": "zai-org/glm-4.6v-flash", "longctx": "lfm2-8b-a1b"},
+    "medium_models": {"default": "gemma-4-e4b-uncensored-hauhaucs-aggressive", "vision": "zai-org/glm-4.6v-flash", "longctx": "lfm2-8b-a1b"},
     "cloud_escalation_enabled": True,
     "cloud_anonymization_enabled": True,
     "custom_sensitive_terms": [],
@@ -52,6 +52,15 @@ _DEFAULTS = {
     "router_clarification_threshold": 0.6,
     "redis_url": "redis://localhost:6379",
     "execution_policy": "auto_approve",
+    # ── HITL improvement settings ──────────────────────────────────────
+    "scope_clarification_enabled": True,
+    "plan_review_enabled": True,
+    "cloud_brief_enabled": True,
+    "cloud_brief_max_chars": 8000,
+    # Audit logging
+    "audit_log_enabled": True,
+    "audit_log_levels": {},
+    "audit_log_dir": "",
 }
 
 VALID_FIELDS = {
@@ -95,6 +104,15 @@ VALID_FIELDS = {
     "router_clarification_threshold": (int, float),
     "redis_url": str,
     "execution_policy": str,
+    # ── HITL improvement settings ──────────────────────────────────────
+    "scope_clarification_enabled": bool,
+    "plan_review_enabled": bool,
+    "cloud_brief_enabled": bool,
+    "cloud_brief_max_chars": int,
+    # ── Audit logging ────────────────────────────────────────────────────
+    "audit_log_enabled": bool,
+    "audit_log_levels": dict,
+    "audit_log_dir": str,
 }
 
 

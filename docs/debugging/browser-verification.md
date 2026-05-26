@@ -1,5 +1,7 @@
 # Browser Verification — May 25, 2026 Audit
 
+> **Note**: This document describes an historical audit session. The current default medium model is `gemma-4-e4b-uncensored-hauhaucs-aggressive` (Q4_K_M). The Qwen 3.5 9B fp16 variant described in Session 1 is no longer used.
+
 Two test sessions. Session 1 used Qwen 3.5 9B fp16 (crashed). Session 2 switched to Gemma 4 E4B Q4_K_M (stable).
 
 ---

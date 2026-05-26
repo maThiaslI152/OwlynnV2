@@ -16,8 +16,14 @@ src/agent/graph.py               # Graph builder, init_agent(), route_decision()
 src/agent/nodes/router.py         # router_node()
 src/agent/nodes/simple.py          # simple_node()
 src/agent/nodes/complex.py         # complex_llm_node(), complex_tool_action_node()
+src/agent/nodes/scope_clarify.py   # scope_clarify_node() (NEW)
+src/agent/nodes/plan_review.py     # plan_review_node() (NEW)
 src/agent/nodes/memory.py          # memory_inject_node(), memory_write_node()
 src/agent/nodes/security_proxy.py  # security proxy gate
+src/agent/hitl/policy.py          # Shared policy + is_sensitive_call() (NEW)
+src/agent/hitl/context.py         # build_hitl_context(), enrich_interrupt() (NEW)
+src/agent/hitl/cloud_brief.py     # Cloud brief builder (NEW)
+src/agent/hitl/scope_heuristics.py # Scope clarification heuristics (NEW)
 src/agent/tool_sets.py             # COMPLEX_TOOLS_WITH_WEB, COMPLEX_TOOLS_NO_WEB
 src/agent/state.py                 # AgentState TypedDict
 ```
@@ -27,15 +33,25 @@ src/agent/state.py                 # AgentState TypedDict
 ### Graph Topology
 
 ```
-START → memory_inject → router → simple → memory_write → END
-                               → complex_llm ←──────────────┐
-                                    ↓                        │
-                               security_proxy                │
-                                    ↓                        │
-                               tool_action ──────────────────┘
-                                    ↓
-                               memory_write → END
+START → memory_inject → auto_summarize? → router → simple → memory_write → END
+                                              → scope_clarify ─────────────────┐
+                                                   ↓                          │
+                                              complex_llm ←───────────────────┐│
+                                                   ↓                         ││
+                                              plan_review ─────┐             ││
+                                                   ↓            │(denied)     ││
+                                              security_proxy    │             ││
+                                                   ↓            │             ││
+                                              tool_action ──────┘             ││
+                                                   ↓                          ││
+                                              memory_write ←──────────────────┘│
+                                                                     ←─────────┘
 ```
+
+HITL interrupt nodes (highlighted):
+- **scope_clarify**: Runs after router for vague build/create requests. Uses Small LLM to ask clarifying questions.
+- **plan_review**: Runs after complex_llm when sensitive tools are planned. Reviews intent + pitfalls before approval.
+- **security_proxy**: Existing security gate (deduplicated — skips if plan_review already approved).
 
 ## Flow
 
@@ -57,8 +73,25 @@ START → memory_inject → router → simple → memory_write → END
 | Keyword bypass | Greetings → `simple`. Web intent → `complex` |
 | Tool history | Conversation with tool calls in history → stays `complex` |
 | LLM classification | Falls back to Small_LLM JSON classification |
+| Build delegation | Detects build/create requests via `scope_heuristics.needs_clarification()` and skips router HITL — delegates to `scope_clarify` instead of asking generic skill questions |
 | Default fallback | `complex` if classification fails |
 | Output | Route value + toolbox categories + `router_metadata` |
+
+### scope_clarify
+
+| Concern | Detail |
+|---------|--------|
+| Input | AgentState with user message, route must start with `complex` |
+| Gate 1 — Heuristic | `scope_heuristics.needs_clarification()` — regex-based detection of build/create verb + article + noun patterns. Requires 2+ missing dimensions (language, ui_surface) to trigger. Adds `fastapi` and `api` to explicit signal sets. |
+| Gate 2 — Profile | `scope_clarification_enabled` (default true) |
+| Gate 3 — Dedup | Skips if `router_clarification_used` is true (router already handled) |
+| LLM | Small LLM generates 1-3 clarifying questions with choices; heuristic is authoritative — LLM cannot override the need for clarification |
+| Fallback | Generic questions built from missing dimensions when Small LLM is unavailable or returns empty |
+| Interrupt | `scope_clarification_required` type with `task_summary`, `questions[]`, `pitfalls[]` |
+| Resume | `ask_user_response` with `answers` dict keyed by question `id` |
+| Output | `clarified_scope` dict injected into `complex_llm` system prompt as CONFIRMED REQUIREMENTS |
+| Max questions | 3 per interrupt, 1 round per message |
+| Model tier | Small LLM only — never uses cloud |
 
 ### simple
 

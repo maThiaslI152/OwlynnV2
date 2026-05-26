@@ -92,8 +92,8 @@ Normal swap sequence:
 ```
 INFO:src.agent.swap_manager:Swap requested: default -> vision
 INFO:src.agent.swap_manager:Querying loaded models at http://127.0.0.1:1234/api/v1/models
-INFO:src.agent.swap_manager:Unloading instance <instance_id> (qwen3.5-9b-mlx)
-INFO:src.agent.swap_manager:Loading target model: qwen3.5-9b-mlx
+INFO:src.agent.swap_manager:Unloading instance <instance_id> (gemma-4-e4b-uncensored-hauhaucs-aggressive)
+INFO:src.agent.swap_manager:Loading target model: gemma-4-e4b-uncensored-hauhaucs-aggressive
 INFO:src.agent.swap_manager:Waiting for model to appear in loaded_instances...
 INFO:src.agent.swap_manager:Model loaded successfully after 8s
 INFO:src.agent.swap_manager:Swap complete: default -> vision (10.2s total)

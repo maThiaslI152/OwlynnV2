@@ -1,5 +1,7 @@
 # Memory Analysis — May 25, 2026
 
+> **Note**: This document describes historical behavior from the Qwen 3.5 9B fp16 era. The current default medium model is `gemma-4-e4b-uncensored-hauhaucs-aggressive` (Q4_K_M, ~2.5 GB), which uses significantly less memory than the fp16 Qwen variant analyzed here. See [browser-verification.md](browser-verification.md) for the Gemma 4 switch details.
+
 Full memory budget for OwlynnV2 on Mac M4 Air (24 GB unified memory) with local Qwen 3.5 9B via LM Studio + MLX.
 
 ---

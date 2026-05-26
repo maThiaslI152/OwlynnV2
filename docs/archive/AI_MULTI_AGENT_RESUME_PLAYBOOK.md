@@ -59,7 +59,7 @@ If conflicts exist, prefer:
   - `gemma-4-e2b-heretic-uncensored-mlx` (fast path)
   - `lfm2-8b-a1b-absolute-heresy-mpoa-mlx` (big-brain escalation)
 - Embedding baseline:
-  - `text-embedding-nomic-embed-text-v1.5` pending benchmark lock
+  - `text-embedding-nomic-embed-text-v1.5-embedding` pending benchmark lock
 - Security stance:
   - no behavior/content filtering layer
   - strict tool permission and destructive-action controls

@@ -43,6 +43,9 @@ class AgentState(TypedDict):
     # Project ID to associate this conversation with a specific project
     project_id: str | None
 
+    # Thread identifier (set from config at graph entry, used by audit log + memory)
+    thread_id: str | None
+
     # Track if any tool execution was vetted/approved by security node
     execution_approved: bool | None
 
@@ -84,6 +87,16 @@ class AgentState(TypedDict):
 
     # Names of tools explicitly denied by human reviewer (appended across turns)
     denied_tools: list[str] | None
+
+    # ── Scope clarification (scope_clarify node) ─────────────────────────
+    # User-approved requirements from scope_clarify HITL
+    clarified_scope: dict | None
+
+    # ── Plan review (plan_review node) ───────────────────────────────────
+    # Whether plan_review was approved (True), denied (False), or skipped (None)
+    plan_review_approved: bool | None
+    # Optional feedback from the human reviewer
+    plan_review_feedback: str | None
 
     # Fallback chain for telemetry — ordered list of model attempts in complex_llm_node
     fallback_chain: list[dict] | None

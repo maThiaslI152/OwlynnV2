@@ -33,6 +33,9 @@ from src.agent.state import AgentState
 
 logger = logging.getLogger(__name__)
 
+from src.config.audit_log import audit_info, audit_debug, audit_warn
+from src.config.log_middleware import log_node
+
 # Default context window for Medium_Default (used when state doesn't specify)
 _DEFAULT_CONTEXT_WINDOW = 100_000
 
@@ -150,6 +153,7 @@ def _split_messages(
     return older, recent
 
 
+@log_node("auto_summarize")
 async def auto_summarize_node(state: AgentState) -> dict:
     """LangGraph node: compress older messages when context is near capacity.
 
@@ -172,6 +176,10 @@ async def auto_summarize_node(state: AgentState) -> dict:
     if active_tokens <= threshold:
         return {}  # no-op — nothing to update
 
+    audit_info("memory.summarize", "triggered",
+               active_tokens=active_tokens, context_window=context_window,
+               ratio=round(active_tokens / context_window, 3))
+
     # ── Split into older vs. recent ──────────────────────────────────────
     older, recent = _split_messages(messages)
     if not older:
@@ -188,6 +196,10 @@ async def auto_summarize_node(state: AgentState) -> dict:
 
     if not to_summarize:
         return {}  # everything is protected, nothing to compress
+
+    audit_debug("memory.summarize", "split_result",
+                older_candidates=len(older), protected=len(protected),
+                recent_kept=len(recent))
 
     # ── Extract prior summary context for multi-level awareness ──────────
     prior_context = ""
@@ -230,6 +242,7 @@ async def auto_summarize_node(state: AgentState) -> dict:
         summary_text = (response.content or "").strip()
     except Exception as e:
         logger.warning("[auto_summarize] Small_LLM failed (%s), skipping summarization", e)
+        audit_warn("memory.summarize", "llm_failed", error=str(e)[:120])
         return {}  # graceful degradation — keep full context
 
     if not summary_text:
@@ -273,6 +286,9 @@ async def auto_summarize_node(state: AgentState) -> dict:
         len(to_summarize),
         tokens_freed,
     )
+    audit_info("memory.summarize", "compression_complete",
+               messages_compressed=len(to_summarize), tokens_freed=tokens_freed,
+               new_active_tokens=new_active_tokens, llm="small-local")
 
     return {
         "messages": new_messages,

@@ -31,17 +31,17 @@ class TestSMLRouting:
         assert route_decision({"route": "simple"}) == "simple"
 
     def test_medium_default_path(self):
-        """complex-default → complex node (Medium_Default)."""
-        assert route_decision({"route": "complex-default"}) == "complex"
+        """complex-default → scope_clarify → complex_llm (Medium_Default)."""
+        assert route_decision({"route": "complex-default"}) == "scope_clarify"
 
     def test_medium_vision_path(self):
-        """complex-vision → complex node (Medium_Vision)."""
-        assert route_decision({"route": "complex-vision"}) == "complex"
+        """complex-vision → scope_clarify → complex_llm (Medium_Vision)."""
+        assert route_decision({"route": "complex-vision"}) == "scope_clarify"
 
     def test_medium_longctx_path(self):
-        """complex-longctx → complex node (Medium_LongCtx)."""
-        assert route_decision({"route": "complex-longctx"}) == "complex"
+        """complex-longctx → scope_clarify → complex_llm (Medium_LongCtx)."""
+        assert route_decision({"route": "complex-longctx"}) == "scope_clarify"
 
     def test_cloud_path(self):
-        """complex-cloud → complex node (Cloud_LLM)."""
-        assert route_decision({"route": "complex-cloud"}) == "complex"
+        """complex-cloud → scope_clarify → complex_llm (Cloud_LLM)."""
+        assert route_decision({"route": "complex-cloud"}) == "scope_clarify"

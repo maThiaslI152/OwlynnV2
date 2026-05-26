@@ -1,0 +1,25 @@
+{
+  "type": "plan_review_required",
+  "title": "Plan review — sensitive file operations ahead",
+  "stated_intent": "Owlynn wants to write a new Python script to the workspace and execute it.",
+  "conversation_snippet": "User: Write a script that processes all CSV files and outputs a summary.\nOwlynn: I'll create a Python script that reads all CSV files and generates a summary report.",
+  "planned_actions": [
+    {"tool": "write_workspace_file", "summary": "Create process_csvs.py with data processing logic"},
+    {"tool": "shell_run", "summary": "Execute process_csvs.py to generate report"}
+  ],
+  "pitfalls": [
+    "The script will read all CSV files including potentially large ones — memory usage may spike.",
+    "Writing and executing files in the workspace could overwrite existing scripts with the same name."
+  ],
+  "sensitive_tool_calls": [
+    {
+      "name": "write_workspace_file",
+      "args": {"path": "/workspace/process_csvs.py", "content": "..."},
+      "risk_category": "sensitive_tool_execution",
+      "risk_label": "sensitive_tool_execution",
+      "risk_confidence": 0.8,
+      "risk_rationale": "Tool is in sensitive allowlist and requires explicit approval before execution.",
+      "remediation_hint": "Review tool args carefully and run only if intent is explicit."
+    }
+  ]
+}

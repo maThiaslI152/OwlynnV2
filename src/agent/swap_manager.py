@@ -17,6 +17,8 @@ import httpx
 from src.config.settings import M4_MAC_OPTIMIZATION
 from src.memory.user_profile import get_profile
 
+from src.config.audit_log import audit_info, audit_debug, audit_warn
+
 logger = logging.getLogger(__name__)
 
 
@@ -69,6 +71,9 @@ class SwapManager:
             If the target model does not appear in ``loaded_instances``
             within the configured timeout.
         """
+        import time as _time
+        swap_start = _time.monotonic()
+
         profile = get_profile()
         medium_models: dict = profile.get("medium_models", {})
         model_key = medium_models.get(target_variant)
@@ -81,6 +86,11 @@ class SwapManager:
         swap_cfg = M4_MAC_OPTIMIZATION.get("medium_models", {})
         timeout: int = swap_cfg.get("swap_timeout", 120)
         poll_interval: int = swap_cfg.get("poll_interval", 2)
+
+        prev_variant = self._current_variant
+        if prev_variant:
+            audit_info("agent.model", "swap_begin",
+                        from_variant=prev_variant, to_variant=target_variant)
 
         # ── 1. Unload currently loaded M-tier instances ──────────────────
         await self._unload_current(medium_models)
@@ -98,6 +108,9 @@ class SwapManager:
                     model_key, resp.status_code, resp.text[:300],
                 )
         except Exception as exc:
+            audit_warn("agent.model", "swap_load_failed",
+                        variant=target_variant, model=model_key,
+                        error=str(exc)[:120])
             raise ModelSwapError(
                 f"Load request failed for '{model_key}': {exc}"
             ) from exc
@@ -105,21 +118,31 @@ class SwapManager:
         # ── 3. Poll until target appears in loaded_instances ─────────────
         loaded = await self._poll_until_loaded(model_key, timeout, poll_interval)
         if not loaded:
+            audit_warn("agent.model", "swap_poll_timeout",
+                        variant=target_variant, model=model_key,
+                        timeout_seconds=timeout)
             raise ModelSwapError(
                 f"Model '{model_key}' did not appear in loaded_instances "
                 f"within {timeout}s"
             )
 
         self._current_variant = target_variant
+        elapsed = round((_time.monotonic() - swap_start) * 1000, 2)
         logger.info("Swap complete → variant=%s  model=%s", target_variant, model_key)
+        audit_info("agent.model", "swap_complete",
+                    from_variant=prev_variant or "none",
+                    to_variant=target_variant, model=model_key,
+                    duration_ms=elapsed)
 
     # ── private helpers ──────────────────────────────────────────────────
 
     async def _unload_current(self, medium_models: dict) -> None:
         """Best-effort unload of every loaded M-tier model instance."""
+        import time as _time
         for variant_key in medium_models.values():
             instance_ids = await self.get_loaded_instance_ids(variant_key)
             for inst_id in instance_ids:
+                unload_start = _time.monotonic()
                 try:
                     resp = await self._client.post(
                         f"{self._base_url}/api/v1/models/unload",
@@ -131,6 +154,12 @@ class SwapManager:
                             "Unload instance %s returned %s: %s",
                             inst_id, resp.status_code, resp.text[:200],
                         )
+                        audit_warn("agent.model", "swap_unload_failed",
+                                    instance_id=inst_id, status=resp.status_code)
+                    else:
+                        elapsed = round((_time.monotonic() - unload_start) * 1000, 2)
+                        audit_debug("agent.model", "swap_unloaded",
+                                     instance_id=inst_id, duration_ms=elapsed)
                 except Exception as exc:
                     logger.warning("Unload failed for instance %s: %s", inst_id, exc)
 

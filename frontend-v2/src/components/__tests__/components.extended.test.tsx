@@ -319,4 +319,10 @@ describe('AppShell', () => {
     expect(onCreateProject).toHaveBeenCalledWith('Inline Created Project')
     expect(screen.queryByDisplayValue('Inline Created Project')).toBeNull()
   })
+
+  it('sidebar does not render Tool Execution or Action Proposals panels', () => {
+    render(<AppShell {...defaultProps} />)
+    expect(screen.queryByText((content) => content.includes('Tool Execution'))).toBeNull()
+    expect(screen.queryByText((content) => content.includes('Action Proposals'))).toBeNull()
+  })
 })

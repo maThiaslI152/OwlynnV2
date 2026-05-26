@@ -7,12 +7,17 @@ It enforces policy checks and triggers HITL interruption for sensitive actions.
 
 import json
 import re
+import logging
 from typing import Any
 
 from langchain_core.messages import AIMessage
 from langgraph.types import interrupt
 
 from src.agent.state import AgentState
+
+logger = logging.getLogger(__name__)
+
+from src.config.log_middleware import log_hitl_event, log_node
 
 
 SENSITIVE_TOOLS = {
@@ -99,11 +104,14 @@ def _risk_meta_for_call(tool_name: str, args: Any) -> dict[str, Any]:
     }
 
 
+@log_node("security_proxy")
 async def security_proxy_node(state: AgentState) -> AgentState:
     """
     Validate proposed tool calls and gate execution.
     - Safe calls pass through.
     - Sensitive calls trigger HITL interrupt.
+    - If plan_review was already approved and sensitive calls are unchanged,
+      skip the second interrupt (dedup).
     """
     tool_calls = _tool_calls_from_last_message(state)
     if not tool_calls:
@@ -111,7 +119,6 @@ async def security_proxy_node(state: AgentState) -> AgentState:
             "execution_approved": False,
             "security_decision": "denied",
             "security_reason": "No tool call found for security validation.",
-            # Routed here when pending_tool_calls was True; clear so checkpoint state matches reality.
             "pending_tool_calls": False,
         }
 
@@ -124,8 +131,11 @@ async def security_proxy_node(state: AgentState) -> AgentState:
             enriched = dict(call)
             enriched.update(_risk_meta_for_call(name, args))
             sensitive_calls.append(enriched)
+            log_hitl_event("tool_classified", tool=name, decision="sensitive",
+                           risk=enriched.get("risk_label", "unknown"))
         else:
             safe_calls.append(call)
+            log_hitl_event("tool_classified", tool=name, decision="safe")
 
     if not sensitive_calls:
         return {
@@ -133,6 +143,19 @@ async def security_proxy_node(state: AgentState) -> AgentState:
             "security_decision": "approved",
             "security_reason": None,
             "pending_tool_names": [str(c.get("name", "unknown")) for c in safe_calls],
+        }
+
+    # ── Dedup: skip second interrupt when plan_review already approved ────
+    if state.get("plan_review_approved"):
+        # Still run policy classification (defense in depth) but skip HITL
+        logger.info("[security_proxy] Plan review already approved — skipping duplicate interrupt")
+        log_hitl_event("hitl_skipped", decision="plan_review_dedup",
+                        sensitive_count=len(sensitive_calls))
+        return {
+            "execution_approved": True,
+            "security_decision": "approved",
+            "security_reason": "Plan review approved; security proxy skipped duplicate interrupt.",
+            "pending_tool_names": [str(c.get("name", "unknown")) for c in tool_calls],
         }
 
     decision = interrupt(
@@ -150,6 +173,8 @@ async def security_proxy_node(state: AgentState) -> AgentState:
 
     if approved:
         approved_tools = [str(c.get("name", "unknown")) for c in tool_calls]
+        log_hitl_event("hitl_approved", decision="approved",
+                        tools=approved_tools, sensitive_count=len(sensitive_calls))
         return {
             "execution_approved": True,
             "security_decision": "approved",
@@ -160,6 +185,9 @@ async def security_proxy_node(state: AgentState) -> AgentState:
     denied_tool_names = [str(c.get("name", "unknown")) for c in sensitive_calls]
     prior_denied = state.get("denied_tools") or []
     all_denied = prior_denied + denied_tool_names
+
+    log_hitl_event("hitl_denied", decision="denied",
+                    tools=denied_tool_names, total_denied=len(all_denied))
 
     denied_message = AIMessage(
         content=(

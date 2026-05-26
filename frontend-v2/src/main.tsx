@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
+import './hitl-cards.css'
 import App from './App.tsx'
 
 // Apply Tauri-specific glass mode for native frosted effects.
