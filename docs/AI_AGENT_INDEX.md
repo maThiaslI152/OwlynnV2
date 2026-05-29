@@ -1,5 +1,5 @@
 ---
-last_verified: 2026-05-26
+last_verified: 2026-05-30
 auto_generated: false
 ---
 
@@ -103,6 +103,9 @@ Current status: **Phase 7 complete**. All phases through 7 are done.
 | BUG-6 | LOW | Tool Execution panel shows permanent mock data |
 | BUG-7 | LOW | Workspace delete shows wrong operator note |
 | BUG-8 | LOW | Audit & Verify sub-panel doesn't expand |
+| BUG-9 | HIGH | Default project file auto-indexing into Qdrant is skipped (cache path mismatch) |
+| BUG-10 | MEDIUM | DOCX table content not extracted (python-docx limitation) |
+| BUG-11 | LOW | XLSX merged cells produce "Unnamed" column headers in markdown output |
 
 ### Canonical Documentation Map
 
@@ -117,4 +120,5 @@ Current status: **Phase 7 complete**. All phases through 7 are done.
 | `docs/ADR.md` | Architecture decisions |
 | `docs/PERFORMANCE_SLOS.md` | Performance & memory SLOs |
 | `docs/BUG-ANALYSIS.md` | Bug analysis and audit reports |
+| `docs/audit-file-intake-2026-05-30.md` | RAG file intake audit — PDF/DOCX/XLSX pipeline, Qdrant indexing, LLM retrieval |
 | `docs/ENGINEERING_IMPROVEMENTS.md` | Engineering improvement backlog |
