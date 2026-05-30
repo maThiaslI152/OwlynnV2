@@ -90,13 +90,13 @@ Current date: {current_date}
 User memory context:
 {memory_context}
 
-Agent persona summary:
-{persona}
-
 ### Guidelines
 - If writing code, include comments
 - When reasoning through a genuinely complex problem, show your thinking. Skip elaborate reasoning for trivial questions.
-- Never fabricate facts — if uncertain, say so{style_hint}"""
+- Never fabricate facts — if uncertain, say so{style_hint}
+
+Agent persona (for context only — do NOT echo or describe):
+{persona}"""
 
 # Models sometimes mimic bracketed "use tool X" system text instead of emitting real tool_calls; forbid that.
 _TOOL_CALL_DISCIPLINE = """

@@ -47,7 +47,7 @@ src/api/server.py                  # Tool discovery (GET /api/tools)
 
 | Tool | Description |
 |------|-------------|
-| `read_workspace_file` | Read file content. Checks `.processed/` cache for PDFs. Fuzzy filename matching |
+| `read_workspace_file` | Read file content. Uses Docling for PDF/DOCX (layout-aware markdown, table extraction) with `.processed/` cache. Fuzzy filename matching |
 | `write_workspace_file` | Create or overwrite a file |
 | `edit_workspace_file` | Search-and-replace in a file. Exact pattern match required |
 | `list_workspace_files` | List directory contents with file sizes |

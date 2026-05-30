@@ -9,6 +9,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 WORKSPACE_DIR = PROJECT_ROOT / "workspace"
+MODELS_DIR = PROJECT_ROOT / ".models"
 
 
 def normalize_project_id(project_id: str | None) -> str:

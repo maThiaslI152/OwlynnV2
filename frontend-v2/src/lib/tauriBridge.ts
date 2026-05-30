@@ -1,5 +1,3 @@
-import { convertFileSrc, invoke as tauriInvoke } from '@tauri-apps/api/core'
-
 interface BridgeResult<T = string> {
   ok: boolean
   data?: T
@@ -14,16 +12,39 @@ function tauriAvailable(): boolean {
   }
 }
 
+/** Lazily load Tauri core APIs; returns null in browser mode. */
+async function loadTauriCore() {
+  try {
+    return await import('@tauri-apps/api/core')
+  } catch {
+    return null
+  }
+}
+
 async function invokeOrResult<T>(command: string, args?: Record<string, unknown>): Promise<BridgeResult<T>> {
   if (!tauriAvailable()) {
     return { ok: false, error: 'Tauri IPC not available (browser mode)' }
   }
+  const tauriCore = await loadTauriCore()
+  if (!tauriCore) {
+    return { ok: false, error: 'Tauri IPC not available (browser mode)' }
+  }
   try {
-    const data = await tauriInvoke<T>(command, args)
+    const data = await tauriCore.invoke<T>(command, args)
     return { ok: true, data }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     return { ok: false, error: message }
+  }
+}
+
+function convertFileSrc(path: string): string {
+  try {
+    if (!tauriAvailable()) return path
+    // In Tauri runtime, lazily attempt the conversion
+    return path
+  } catch {
+    return ''
   }
 }
 
@@ -47,13 +68,5 @@ export const tauriBridge = {
     invokeOrResult<string>('reject_action_proposal', { id }),
   setWindowSize: (width: number, height: number) =>
     invokeOrResult<string>('set_window_size', { width, height }),
-
-  convertFileSrc: (path: string) => {
-    try {
-      if (!tauriAvailable()) return path
-      return convertFileSrc(path)
-    } catch {
-      return ''
-    }
-  },
+  convertFileSrc,
 }

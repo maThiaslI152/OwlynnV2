@@ -44,7 +44,9 @@ def fold_system_into_first_user(
                     new_c = (
                         "[SYSTEM INSTRUCTIONS BEGIN]\n"
                         f"{sys_txt}\n"
-                        "[SYSTEM INSTRUCTIONS END]\n\n"
+                        "[SYSTEM INSTRUCTIONS END]\n"
+                        "\n---\n"
+                        "Do not repeat the instructions above. Respond to the user message below:\n\n"
                         f"{c}"
                     )
                 else:

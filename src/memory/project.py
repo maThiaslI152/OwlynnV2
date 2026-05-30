@@ -242,6 +242,14 @@ class ProjectManager:
                 return
             project["files"] = [f for f in project.get("files", []) if f.get("name") != name]
             self._save()
+        
+        # Also remove vectors from Qdrant/Mem0 to avoid orphaned embeddings
+        try:
+            from src.memory.long_term import memory
+            if memory is not None:
+                memory.delete(user_id=f"project:{project_id}", metadata={"filename": name})
+        except Exception as exc:
+            logger.warning("Failed to remove knowledge vectors for %s: %s", name, exc)
 
     # ── helpers ──────────────────────────────────────────────────────────
 

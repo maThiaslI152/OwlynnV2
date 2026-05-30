@@ -11,20 +11,45 @@ export function OrchestrationPanel() {
   const confidencePct = confidence !== undefined ? Math.max(0, Math.min(100, Math.round(confidence * 100))) : null
   const classificationSource = routerMetadata?.classification_source as string | undefined
 
-  const hasData = modelInfo || route || contextCompression || memoryUpdatedAt
+  const hasRoutingData = !!(modelInfo || route || contextCompression)
+  const hasMemoryOnly = !hasRoutingData && !!memoryUpdatedAt
 
-  if (!hasData) {
+  if (!hasRoutingData && !hasMemoryOnly) {
     return <p className="orchestration-empty">No routing information yet.</p>
   }
 
+  if (hasMemoryOnly) {
+    return (
+      <div>
+        <div className="orchestration-row">
+          <span className="orchestration-label">Memory</span>
+          <span className="orchestration-value orchestration-memory-ok">Saved</span>
+        </div>
+        {memoryUpdatedAt && (
+          <div className="orchestration-row">
+            <span className="orchestration-label">Last Saved</span>
+            <span className="orchestration-value orchestration-memory-ok">
+              {new Date(memoryUpdatedAt).toLocaleTimeString()}
+            </span>
+          </div>
+        )}
+        <p className="orchestration-empty" style={{marginTop: 8}}>No routing data yet — send a message to populate.</p>
+      </div>
+    )
+  }
+
+  // Show model badge only when explicit modelInfo is received (from server or WS event).
+  // The route badge below already communicates the routing path independently.
+  const displayModel = modelInfo || null
+
   return (
     <div>
-      {modelInfo && (
+      {displayModel && (
         <div className="orchestration-row">
           <span className="orchestration-label">Model</span>
           <span className="orchestration-value">
-            <span className={`model-badge ${modelInfo.includes('cloud') ? 'model-cloud' : 'model-local'}`}>
-              {modelInfo}
+            <span className={`model-badge ${displayModel.includes('cloud') ? 'model-cloud' : 'model-local'}`}>
+              {displayModel}
             </span>
           </span>
         </div>

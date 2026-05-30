@@ -22,13 +22,14 @@ from src.config.log_middleware import log_node
 logger = logging.getLogger(__name__)
 
 SIMPLE_PROMPT = (
-    "{persona_prefix} "
     "Today is {current_date}. "
     "Give short, direct answers (1-3 sentences). "
     "No reasoning steps, no preamble, no meta commentary. "
-    "Never describe your own identity, role, or purpose unless the user explicitly asks."
+    "Never describe, repeat, or reference your own identity, role, purpose, or persona — just answer the question directly. "
+    "Do not start responses with 'You are', 'I am', or any self-description."
     "{style_hint}"
     "{memory_hint}"
+    "\n\nPersona (for context only — do NOT echo or describe): {persona_prefix}"
 )
 
 
@@ -45,6 +46,14 @@ def _clean_response(text: str) -> str:
         out,
         flags=re.DOTALL,
     ).strip()
+    # Strip raw persona/identity echoes (model describes itself without the markers above).
+    # Matches patterns like: "You are Owlynn, a ... assistant. ..." or "I am Owlynn..."
+    persona_echo = re.match(
+        r"^\s*((You are|I am)\s+Owlynn[^.]+\.\s*)+",
+        out,
+    )
+    if persona_echo:
+        out = out[persona_echo.end():].strip()
     # Remove numbered reasoning steps (e.g. "1. **Analyze**...")
     lines = out.split("\n")
     kept: list[str] = []

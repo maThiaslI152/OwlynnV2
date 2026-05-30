@@ -77,46 +77,54 @@ def notify_file_processed(filepath_or_name, status="processed"):
             parts = rel_path.split(os.sep)
             if len(parts) >= 3 and parts[0] == "projects":
                 project_id = parts[1]
-                if project_id != "default":
-                    # Read the processed text format in .processed/
-                    project_workspace = get_project_workspace(project_id)
-                    processed_dir = os.path.join(project_workspace, ".processed")
-                    cache_path = os.path.join(processed_dir, filename + ".txt")
-                    if not os.path.exists(cache_path):
-                        cache_path = os.path.join(processed_dir, filename + ".md")
+                # Auto-index all projects, including default
+                # Read the processed text format in .processed/
+                # Check both project-local and root workspace cache paths
+                project_workspace = get_project_workspace(project_id)
+                root_processed = os.path.join(WORKSPACE_DIR, ".processed")
+                cache_path = None
+                
+                for search_dir in [os.path.join(project_workspace, ".processed"), root_processed]:
+                    for ext in [".txt", ".md"]:
+                        candidate = os.path.join(search_dir, filename + ext)
+                        if os.path.exists(candidate):
+                            cache_path = candidate
+                            break
+                    if cache_path:
+                        break
                         
-                    if os.path.exists(cache_path):
-                        with open(cache_path, "r", encoding="utf-8") as f:
-                            text = f.read()
-                        
-                        if text and len(text.strip()) > 50:
-                            async def index_task():
-                                try:
-                                    # Chunk the text: 1500 chars with 200 chars overlap
-                                    chunks = []
-                                    chunk_size = 1500
-                                    overlap = 200
-                                    start = 0
-                                    content_len = len(text)
-                                    while start < content_len:
-                                        end = start + chunk_size
-                                        chunk = text[start:end].strip()
-                                        if chunk:
-                                            chunks.append(chunk)
-                                        start += chunk_size - overlap
-                                    
-                                    # Index each chunk (up to 20 chunks to prevent performance issues)
-                                    for i, chunk_text in enumerate(chunks[:20]):
-                                        await project_manager.add_knowledge(
-                                            project_id,
-                                            f"{filename}#chunk{i}",
-                                            chunk_text
-                                        )
-                                    logger.info("Auto-indexed %d chunks of %s into project %s knowledge base", len(chunks[:20]), filename, project_id)
-                                except Exception as e:
-                                    logger.error("Failed to auto-index file %s: %s", filepath, e)
-                                    
-                            asyncio.run_coroutine_threadsafe(index_task(), loop)
+                if cache_path:
+                    with open(cache_path, "r", encoding="utf-8") as f:
+                        text = f.read()
+                    
+                    if text and len(text.strip()) > 50:
+                        async def index_task():
+                            try:
+                                # Chunk the text: 1500 chars with 200 chars overlap
+                                chunks = []
+                                chunk_size = 1500
+                                overlap = 200
+                                start = 0
+                                content_len = len(text)
+                                while start < content_len:
+                                    end = start + chunk_size
+                                    chunk = text[start:end].strip()
+                                    if chunk:
+                                        chunks.append(chunk)
+                                    start += chunk_size - overlap
+                                
+                                # Index each chunk (up to 20 chunks to prevent performance issues)
+                                for i, chunk_text in enumerate(chunks[:20]):
+                                    await project_manager.add_knowledge(
+                                        project_id,
+                                        f"{filename}#chunk{i}",
+                                        chunk_text
+                                    )
+                                logger.info("Auto-indexed %d chunks of %s into project %s knowledge base", len(chunks[:20]), filename, project_id)
+                            except Exception as e:
+                                logger.error("Failed to auto-index file %s: %s", filepath, e)
+                                
+                        asyncio.run_coroutine_threadsafe(index_task(), loop)
         except Exception as e:
             logger.error("Error in watcher auto-indexing: %s", e)
 
@@ -1041,10 +1049,9 @@ async def api_upload_file(file: UploadFile = File(...), sub_path: str = "", proj
         with open(filepath, "wb") as f:
             f.write(file_bytes)
 
-        # Auto-index into project knowledge base for non-default projects
-        if project_id != "default":
-            import asyncio
-            asyncio.create_task(_auto_index_project_file(project_id, file.filename, filepath, file_bytes))
+        # Auto-index into project knowledge base for all projects
+        import asyncio
+        asyncio.create_task(_auto_index_project_file(project_id, file.filename, filepath, file_bytes))
 
         audit_info("api.file", "file_uploaded", name=file.filename,
                     size_bytes=len(file_bytes), project_id=project_id)
@@ -1567,9 +1574,19 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                     except (TypeError, ValueError):
                                         logger.warning("[ws] Skipping non-serializable router_metadata field: %s", k)
                                 if safe_metadata:
+                                    # Derive a model name from the route for the frontend
+                                    route = safe_metadata.get("route", "")
+                                    if route == "simple":
+                                        model = "small-local"
+                                    elif route.startswith("complex-"):
+                                        variant = route.replace("complex-", "")
+                                        model = f"medium-{variant}"
+                                    else:
+                                        model = "unknown"
                                     await websocket.send_json({
                                         "type": "router_info",
                                         "metadata": safe_metadata,
+                                        "model": model,
                                     })
 
                         if node in ["simple", "complex_llm"]:

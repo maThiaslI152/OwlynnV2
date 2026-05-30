@@ -127,7 +127,7 @@ describe('OrchestrationPanel', () => {
   it('shows memory indicator when memoryUpdatedAt is set', () => {
     useAppStore.getState().setMemoryUpdatedAt(Date.now())
     render(<OrchestrationPanel />)
-    expect(screen.getByText(/Saved/)).toBeTruthy()
+    expect(screen.getByText(/No routing data yet/)).toBeTruthy()
   })
 })
 

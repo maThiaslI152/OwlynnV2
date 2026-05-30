@@ -255,7 +255,10 @@ function App() {
         setConnection('connected')
         void loadHistory()
       },
-      onClose: () => setConnection('disconnected'),
+      onClose: () => {
+        setConnection('disconnected')
+        setLatestToolExecution(null)
+      },
       onError: () => setConnection('error'),
       onEvent: (event: ServerEvent) => {
         if (event.type === 'assistant.message') {
@@ -340,6 +343,9 @@ function App() {
           handleInterruptRef.current(event.interrupts)
         } else if (event.type === 'router_info') {
           setRouterMetadata(event.metadata as Record<string, unknown>)
+          if ((event as any).model) {
+            setModelInfo((event as any).model as string)
+          }
         } else if (event.type === 'model_info') {
           setModelInfo(event.model as string)
         } else if (event.type === 'chunk') {
@@ -624,14 +630,14 @@ function App() {
       const updatedThreads = { ...projectThreadsRef.current }
       delete updatedThreads[projectId]
       projectThreadsRef.current = updatedThreads
-      if (projectId === activeProjectId) {
+      if (projectId === activeProjectIdRef.current) {
         const fallbackThreadId = projectThreadsRef.current.default ?? makeThreadId()
         projectThreadsRef.current = { ...projectThreadsRef.current, default: fallbackThreadId }
         clearSession()
         setActiveProjectId('default')
         setCurrentThreadId(fallbackThreadId)
         setActiveChatId(fallbackThreadId)
-        setOperatorNote('Workspace deleted. Switched to default workspace.')
+        setOperatorNote('Workspace deleted. Viewing default workspace.')
       } else {
         setOperatorNote('Workspace deleted.')
       }

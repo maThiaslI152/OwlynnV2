@@ -18,6 +18,7 @@ export function SafeModePanel() {
   const setOperatorNote = useAppStore((s) => s.setOperatorNote)
 
   const onModeChange = async (mode: SafeModeLevel) => {
+    // Try Tauri IPC first
     const result = await tauriBridge.setSafeMode(mode)
     if (result.ok) {
       setSafeMode(mode)
@@ -25,6 +26,8 @@ export function SafeModePanel() {
       return
     }
     // Tauri IPC unavailable (browser mode) — fall back to REST API
+    console.warn('[SafeModePanel] Tauri IPC unavailable, falling back to REST API')
+    setSafeMode(mode) // optimistic update — prevents visual bounce
     try {
       const response = await fetch('/api/advanced-settings', {
         method: 'POST',
@@ -35,7 +38,6 @@ export function SafeModePanel() {
         setOperatorNote(`Safe Mode error: request failed (${response.status})`)
         return
       }
-      setSafeMode(mode)
       setOperatorNote(`Safe Mode set to ${mode}`)
     } catch (error) {
       setOperatorNote(`Safe Mode error: ${(error as Error).message}`)

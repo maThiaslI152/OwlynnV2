@@ -280,7 +280,8 @@ async def router_node(state: AgentState) -> AgentState:
     messages = state.get("messages", [])
     if not messages:
         return {"route": "complex-default", "selected_toolboxes": ["all"],
-                "router_clarification_used": False, "skill_matched": None}
+                "router_clarification_used": False, "skill_matched": None,
+                "router_metadata": _build_router_metadata("complex-default", classification_source="empty_state_fallback")}
 
     user_text = _last_user_text(state)
     user_lower = user_text.lower()
@@ -831,13 +832,14 @@ async def generate_chat_title_router_llm(
         if title:
             return title[:60]
     except Exception:
-        logger.debug("[chat_title] LLM unavailable, using text fallback")
+        logger.warning("[chat_title] LLM unavailable, using text fallback")
 
     # Fallback: use the first meaningful line/segment of the user message
     fallback = user_text.split("\n")[0].strip()
     # Strip common prefixes that don't make good titles
-    fallback = re.sub(r"^(hi|hey|hello|ok|okay|yes|no|thanks|please)[,.\s]+", "", fallback, flags=re.IGNORECASE).strip()
+    fallback = re.sub(r"^(hi|hey|hello|ok|okay|yes|no|thanks|please)[,.\s]*", "", fallback, flags=re.IGNORECASE).strip()
     if not fallback:
-        return ""
+        from datetime import datetime
+        return f"Chat \u2014 {datetime.now().strftime('%b %d, %I:%M %p')}"
     fallback = re.sub(r"\s+", " ", fallback).strip()
     return fallback[:60]

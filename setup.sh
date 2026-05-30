@@ -1,81 +1,88 @@
 #!/bin/bash
+# Owlynn Setup — one-time bootstrap for a fresh checkout
+# Prerequisites: Podman/Docker, Python 3.12+, Node 18+
 set -e
 
-# Setup Script for Local Cowork Agent
-echo "Starting local environment setup..."
+echo ""
+echo "══════════════════════════════"
+echo "  Owlynn Setup"
+echo "══════════════════════════════"
+echo ""
 
-# 1. Start support services manually via podman run
-echo "Starting Podman services..."
+# ═══════════════════════════════════════════════════════════════════
+# [1/4] Start containers — Qdrant + Redis
+# ═══════════════════════════════════════════════════════════════════
+echo "[1/4] Starting containers..."
+podman machine start 2>/dev/null || true
+podman compose up -d 2>/dev/null || podman-compose up -d 2>/dev/null || docker compose up -d 2>/dev/null || {
+    echo "      ERROR: Could not start containers. Is Podman/Docker installed?"
+    exit 1
+}
+sleep 3
+echo "      Ready."
 
-# --- Qdrant (vector database for long-term memory) ---
-echo "Starting Qdrant..."
-podman stop cowork_qdrant 2>/dev/null || true
-podman rm cowork_qdrant 2>/dev/null || true
-podman run -d --name cowork_qdrant \
-  -p 6333:6333 -p 6334:6334 \
-  -v cowork_qdrant_data:/qdrant/storage \
-  qdrant/qdrant:latest
-
-# --- Redis (session checkpointing) ---
-echo "Starting Redis..."
-podman stop cowork_redis 2>/dev/null || true
-podman rm cowork_redis 2>/dev/null || true
-podman run -d --name cowork_redis \
-  -p 6379:6379 \
-  -v cowork_redis_data:/data \
-  redis:7-alpine redis-server --appendonly yes
-
-# Verify Redis connectivity
-echo "Verifying Redis..."
-for i in $(seq 1 10); do
-    if podman exec cowork_redis redis-cli ping 2>/dev/null | grep -q PONG; then
-        echo "  Redis is ready."
-        break
-    fi
-    sleep 1
-done
-
-# --- Optional: SearXNG (self-hosted metasearch, no API keys needed) ---
-if [ "${SKIP_SEARXNG:-0}" != "1" ]; then
-    echo "Starting SearXNG..."
-    podman stop cowork_searxng 2>/dev/null || true
-    podman rm cowork_searxng 2>/dev/null || true
-    podman run -d --name cowork_searxng \
-      -p 8888:8080 \
-      -v cowork_searxng_data:/etc/searxng \
-      searxng/searxng:latest
-fi
-
-# Podman machine memory configuration (minimum 4GB for containers)
-echo "Configuring Podman machine memory..."
-echo "  Note: If creating a new machine, use: podman machine init --memory 4096"
-echo "  For existing machines: podman machine set --memory 4096"
-
-# 2. Recreate virtual environment
-echo "Recreating Python virtual environment..."
+# ═══════════════════════════════════════════════════════════════════
+# [2/4] Create virtual environment + install dependencies
+# ═══════════════════════════════════════════════════════════════════
+echo "[2/4] Python environment..."
 rm -rf .venv
 
 if command -v python3.12 &>/dev/null; then
-  echo "Using python3.12"
-  python3.12 -m venv .venv
+    PYTHON=python3.12
+elif command -v python3.13 &>/dev/null; then
+    PYTHON=python3.13
 elif command -v python3.11 &>/dev/null; then
-  echo "Using python3.11"
-  python3.11 -m venv .venv
+    PYTHON=python3.11
 else
-  echo "Using default python3"
-  python3 -m venv .venv
+    PYTHON=python3
 fi
 
-# 3. Activate and install dependencies
-echo "Installing Python dependencies..."
+echo "      Using $PYTHON"
+$PYTHON -m venv .venv
 source .venv/bin/activate
-pip install --upgrade pip
+pip install --upgrade pip -q
 pip install -r requirements.txt
-pip install -r requirements-dev.txt
+echo "      Dependencies installed."
+
+# ═══════════════════════════════════════════════════════════════════
+# [3/4] Download Docling document models (~2 GB, one-time)
+# ═══════════════════════════════════════════════════════════════════
+echo "[3/4] Docling models..."
+MODEL_DIR="$(pwd)/.models/docling"
+mkdir -p "$MODEL_DIR"
+
+if [ -f "$MODEL_DIR/ds4sd--docling-models/config.json" ]; then
+    echo "      Already downloaded (skip with: rm -rf .models/docling)."
+else
+    echo "      Downloading document processing models (~2 GB)..."
+    echo "      This is a one-time download. Models are stored in .models/docling/"
+    echo ""
+    source .venv/bin/activate
+    python3 -c "
+from docling.utils.model_downloader import download_models
+from pathlib import Path
+download_models(output_dir=Path('$MODEL_DIR'))
+" 2>&1 | tail -3
+    echo ""
+    echo "      Models downloaded to .models/docling/"
+fi
+
+# ═══════════════════════════════════════════════════════════════════
+# [4/4] Copy .env.example → .env if missing
+# ═══════════════════════════════════════════════════════════════════
+echo "[4/4] Configuration..."
+if [ ! -f .env ]; then
+    cp .env.example .env
+    echo "      Created .env from .env.example — edit as needed."
+else
+    echo "      .env already exists."
+fi
 
 echo ""
-echo "Setup complete! Next steps:"
-echo "  1. Copy .env.example to .env and configure as needed"
-echo "  2. Start LM Studio and load your models"
-echo "  3. Run ./start.sh to launch the agent"
+echo "═══ Setup complete ═══"
+echo ""
+echo "   Next steps:"
+echo "   1. Edit .env and set MEDIUM_LLM_MODEL_NAME to your LM Studio model"
+echo "   2. Start LM Studio with your models loaded"
+echo "   3. Run ./start.sh to launch Owlynn"
 echo ""

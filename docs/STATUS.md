@@ -26,7 +26,7 @@ frontend-v2/src/App.tsx        # Frontend runtime
 |-------|--------|------|
 | Phase 6 (MVP Hardening) | Complete | — |
 | Phase 7 (Post-MVP Polish) | Complete | 2026-05-11 |
-| Phase 8 (Browser Audit Bug Fixes) | Pending | — |
+| Phase 8 (Browser Audit Bug Fixes) | In Progress | 2026-05-30 |
 
 ### Phase 7 Results
 
@@ -55,6 +55,8 @@ frontend-v2/src/App.tsx        # Frontend runtime
 | Tauri frontend shell | Active |
 | Live Talk (wake-word, STT) | Removed (2026-04-29) |
 | TTS (`speak_text` via macOS `say`) | Active |
+| RAG File Intake (PDF/DOCX/XLSX → Qdrant) | ✅ Fixed (Docling) |
+| Workspace Tools (read/save/search/list) | Active |
 
 ## Testing
 
@@ -101,6 +103,9 @@ frontend-v2/src/App.tsx        # Frontend runtime
 | BUG-6 | **LOW** | Tool Execution panel shows permanent mock data | `ToolExecutionPanel.tsx` |
 | BUG-7 | **LOW** | Workspace delete shows wrong operator note | `App.tsx` `handleDeleteProject()` |
 | BUG-8 | **LOW** | Audit & Verify sub-panel doesn't expand | `ToolExecutionPanel.tsx` |
+| BUG-9 | **CRITICAL** | Default project file auto-indexing into Qdrant skipped (cache path mismatch) | `src/api/server.py` lines 80, 82-86, 1045 |
+| BUG-10 | **MEDIUM** | DOCX table content not extracted (python-docx limitation) | `src/api/file_processor.py` `_process_word()` |
+| BUG-11 | **LOW** | XLSX merged cells produce "Unnamed" column headers in markdown output | `src/api/file_processor.py` `_process_table()` |
 
 ### Architectural Concerns
 
@@ -120,7 +125,9 @@ frontend-v2/src/App.tsx        # Frontend runtime
 
 ## Next Plan
 
-Phase 8 (post-audit bug fixes) — address 8 bugs found in browser audit:
+Phase 8 (post-audit bug fixes) — address 8 browser audit bugs + 5 RAG audit bugs:
+
+### Browser Bugs (BUG-1 through BUG-8)
 
 | Priority | Item | Status |
 |----------|------|--------|
@@ -135,10 +142,26 @@ Phase 8 (post-audit bug fixes) — address 8 bugs found in browser audit:
 | — | Add loading timeouts to Memory/Orchestration panels | Pending |
 | — | Add error logging to silent try/catch blocks | Pending |
 
+### RAG File Intake Bugs (BUG-9 through BUG-11) — **FIXED 2026-05-30**
+
+| Priority | Item | Status |
+|----------|------|--------|
+| 9 | BUG-9 — Fix default project auto-indexing + cache path mismatch | ✅ Fixed |
+| 10 | BUG-10 — Add DOCX table extraction (Docling integration) | ✅ Fixed |
+| 11 | BUG-11 — Clean XLSX merged cell artifacts | ✅ Fixed |
+| — | Docling replaced PyMuPDF/python-docx as PDF/DOCX extraction engine | ✅ Done |
+| — | Permanent model cache at `.models/docling/` with pre-download | ✅ Done |
+| — | Startup scripts rewritten for browser-first (no Tauri) | ✅ Done |
+| — | Orphaned Mem0 vectors cleaned on `remove_knowledge()` | ✅ Fixed |
+| — | Dead `processing_lock` removed | ✅ Fixed |
+
 ### Lingering Risks
 
 | Risk | Context |
 |------|---------|
+| Tauri on hold | Browser is primary launch mode. SafeMode, ScreenAssist, window sizing require Tauri IPC — no browser fallbacks. |
+| File processing extraction quality | ⚠️ Improved — Docling replaces PyMuPDF/python-docx with layout-aware extraction + table detection. Model downloads on first use (~2 GB). |
+| Web search | SearXNG recommended for self-hosted metasearch. DuckDuckGo is backup. |
 | Workspace switching UI state | Stale UI in edge transitions |
 | Frontend/backend WS payload drift | Integration path mismatches |
 | Cloud fallback + anonymization | Regression protection needed |

@@ -36,6 +36,9 @@ workspace/
 .pytest_cache/
 .hypothesis/
 
+# Model artifacts (Docling, etc.)
+.models/
+
 # Kiro
 .kiro/
 

@@ -6,7 +6,8 @@ Monitors the workspace directory for new or modified files and automatically
 extracts their text content into ``.processed/`` for LLM consumption.
 
 Supported formats:
-- Documents: PDF, DOCX, PPTX, EPUB, RTF
+- Documents: PDF, DOCX (via Docling — layout-aware, table extraction)
+- Presentations: PPTX, EPUB, RTF
 - Data: CSV, XLSX, JSON, XML, YAML, TOML, INI
 - Web: HTML, Markdown
 - Database: SQLite
@@ -36,6 +37,10 @@ class FileWatcherHandler(FileSystemEventHandler):
     then dispatches to a format-specific processor. Output goes to
     ``{workspace}/.processed/{filename}.txt`` (or ``.md`` for tables).
 
+    PDF and DOCX extraction uses Docling when available (layout-aware
+    with table structure detection), falling back to PyMuPDF and
+    python-docx respectively.
+
     Args:
         workspace_dir: Absolute path to the watched workspace directory.
         on_processed_callback: Optional ``(filename, status)`` callback
@@ -45,7 +50,7 @@ class FileWatcherHandler(FileSystemEventHandler):
         self.workspace_dir = os.path.abspath(workspace_dir)
         self.processed_dir = os.path.join(self.workspace_dir, ".processed")
         os.makedirs(self.processed_dir, exist_ok=True)
-        self.processing_lock = threading.Lock()
+        self._docling_converter = None
         self.on_processed_callback = on_processed_callback # callback(filename)
     
 
@@ -154,24 +159,95 @@ class FileWatcherHandler(FileSystemEventHandler):
             if self.on_processed_callback:
                 self.on_processed_callback(filepath, "error")
 
-    def _process_pdf(self, filepath, output_path):
-        import fitz # PyMuPDF
-        doc = fitz.open(filepath)
-        text = ""
-        for i, page in enumerate(doc):
-            text += f"--- Page {i+1} ---\n"
-            text += page.get_text() + "\n\n"
-        doc.close()
+    def _get_docling_converter(self):
+        """Lazy-initialise the Docling converter with local model cache.
         
-        with open(output_path, "w", encoding="utf-8") as f:
-            f.write(text)
+        Uses DOCLING_ARTIFACTS_PATH env var or falls back to project .models/docling/.
+        Enables table structure detection for PDFs. Returns None if Docling is unavailable.
+        """
+        try:
+            from docling.document_converter import DocumentConverter, PdfFormatOption, WordFormatOption
+            from docling.datamodel.base_models import InputFormat
+            from docling.datamodel.pipeline_options import PdfPipelineOptions
+        except ImportError:
+            logger.warning("[Watcher] Docling not installed — falling back to PyMuPDF/python-docx")
+            return None
+        
+        if self._docling_converter is None:
+            artifacts_path = os.environ.get("DOCLING_ARTIFACTS_PATH", "")
+            if not artifacts_path:
+                from src.config.settings import MODELS_DIR
+                artifacts_path = str(MODELS_DIR / "docling")
+            
+            pipeline_options = PdfPipelineOptions(artifacts_path=artifacts_path)
+            pipeline_options.do_table_structure = True
+            
+            self._docling_converter = DocumentConverter(
+                format_options={
+                    InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options),
+                    InputFormat.DOCX: WordFormatOption(),
+                }
+            )
+            logger.info("[Watcher] Docling converter initialised (models: %s)", artifacts_path)
+        return self._docling_converter
+
+    def _process_pdf(self, filepath, output_path):
+        """Extract PDF text via Docling (fallback to PyMuPDF)."""
+        converter = self._get_docling_converter()
+        if converter is not None:
+            try:
+                result = converter.convert(filepath)
+                markdown_text = result.document.export_to_markdown()
+                if markdown_text and len(markdown_text.strip()) > 50:
+                    with open(output_path, "w", encoding="utf-8") as f:
+                        f.write(markdown_text)
+                    return
+            except Exception as e:
+                logger.warning("[Watcher] Docling PDF extraction failed for %s: %s — falling back to PyMuPDF", filepath, e)
+        
+        # Fallback: PyMuPDF
+        import fitz
+        doc = fitz.open(filepath)
+        try:
+            text = ""
+            for i, page in enumerate(doc):
+                text += f"--- Page {i+1} ---\n"
+                text += page.get_text() + "\n\n"
+            
+            with open(output_path, "w", encoding="utf-8") as f:
+                f.write(text)
+        finally:
+            doc.close()
 
     def _process_table(self, filepath, output_path, ext):
         import pandas as pd
+        import numpy as np
         if ext == ".csv":
             df = pd.read_csv(filepath)
         else: # .xlsx
             df = pd.read_excel(filepath)
+        
+        # Clean merged-cell artifacts: strip entirely-NaN rows and columns
+        df = df.dropna(axis=0, how="all").dropna(axis=1, how="all").reset_index(drop=True)
+        
+        # If column names are "Unnamed: N", infer from first data row
+        if any(str(c).startswith("Unnamed:") for c in df.columns):
+            # Use first row as header if it looks like a header row
+            first_row_non_empty = df.iloc[0].notna().any()
+            if first_row_non_empty and df.shape[0] > 1:
+                # Check if old header names give better labels
+                new_cols = []
+                for i, col in enumerate(df.columns):
+                    cell_val = str(df.iloc[0, i]).strip() if i < df.shape[1] else ""
+                    if cell_val and cell_val.lower() != "nan":
+                        new_cols.append(cell_val)
+                    else:
+                        new_cols.append(df.columns[i])
+                df.columns = new_cols
+                df = df.iloc[1:].reset_index(drop=True)
+            else:
+                # Just rename to generic column labels
+                df.columns = [f"Column_{i+1}" for i in range(len(df.columns))]
             
         # Convert to Markdown for LLM readability
         markdown_text = df.to_markdown(index=False)
@@ -181,6 +257,20 @@ class FileWatcherHandler(FileSystemEventHandler):
             f.write(markdown_text)
 
     def _process_word(self, filepath, output_path):
+        """Extract DOCX text via Docling (includes tables; fallback to python-docx)."""
+        converter = self._get_docling_converter()
+        if converter is not None:
+            try:
+                result = converter.convert(filepath)
+                markdown_text = result.document.export_to_markdown()
+                if markdown_text and len(markdown_text.strip()) > 50:
+                    with open(output_path, "w", encoding="utf-8") as f:
+                        f.write(markdown_text)
+                    return
+            except Exception as e:
+                logger.warning("[Watcher] Docling DOCX extraction failed for %s: %s — falling back to python-docx", filepath, e)
+        
+        # Fallback: python-docx (paragraphs only, no tables)
         from docx import Document
         doc = Document(filepath)
         text = ""

@@ -222,8 +222,19 @@ console.log('Verification OK')`
       <div style={{marginTop:4}}>
         <button
           type="button"
-          onClick={(e) => { e.stopPropagation(); setShowAdvanced(!showAdvanced) }}
-          style={{border:'none', background:'transparent', color:'var(--text-muted)', fontSize:'0.7rem', cursor:'pointer', padding:0}}
+          onClick={() => setShowAdvanced(!showAdvanced)}
+          style={{
+            border: 'none',
+            background: 'transparent',
+            color: 'var(--text-muted)',
+            fontSize: '0.7rem',
+            cursor: 'pointer',
+            padding: '2px 4px',
+            minHeight: '24px',
+            display: 'inline-block',
+          }}
+          title={showAdvanced ? 'Hide audit tools' : 'Show audit tools'}
+          aria-expanded={showAdvanced}
         >
           {showAdvanced ? '−' : '+'} Audit & Verify
         </button>

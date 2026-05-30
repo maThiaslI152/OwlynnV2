@@ -25,7 +25,7 @@ The system operates on a stateful, cyclic **LangGraph** architecture with a thre
   - **Small (Router):** `ibm-grok4-ultrafast-coder-1b` for quick classification.
   - **Medium (Reasoning):** `gemma-4-e4b-uncensored-hauhaucs-aggressive` for tool calling and reasoning.
   - **Cloud (Fallback):** DeepSeek API for escalated requests.
-- **Memory System:** Three-tier architecture using Mem0 + Qdrant (long-term semantic), JSON files (short-term facts), and topic/interest tracking. Includes a zero-config workspace file watcher that auto-indexes documents into Qdrant for hybrid semantic search.
+- **Memory System:** Three-tier architecture using Mem0 + Qdrant (long-term semantic), JSON files (short-term facts), and topic/interest tracking. Includes a zero-config workspace file watcher that auto-indexes documents into Qdrant for hybrid semantic search. PDF/DOCX extraction via Docling (layout-aware markdown with table structure detection).
 - **Security:** A Security Proxy node that intercepts high-risk tool calls and requests user approval before execution.
 - **Persona System:** Built-in profiles (Owlynn, Coder, Writer, Researcher) with custom JSON support, dynamically adjusting system prompts, tool permissions, and response tone via `persona_manager.py`.
 - **OpenAI API Compatibility:** `POST /v1/chat/completions` endpoint with SSE streaming support, plus a Click CLI (`src/cli.py`) for terminal-based querying.
@@ -35,7 +35,7 @@ The system operates on a stateful, cyclic **LangGraph** architecture with a thre
 The project has successfully completed Phases 1 through 7, establishing a hardened MVP with a passing test suite (over 700 backend tests and 50+ frontend tests).
 
 **Recent Milestones:**
-- **SOTA Features Integration (May 2026):** Bridged competitive gaps with 3 new features — Dynamic Persona Selector (4 built-in profiles + custom JSON), OpenAI-Compatible local API server with SSE streaming CLI, and zero-config workspace RAG indexer with Qdrant vector search. Full-stack browser testing confirmed all features operational.
+- **SOTA Features Integration (May 2026):** Bridged competitive gaps with 3 new features — Dynamic Persona Selector (4 built-in profiles + custom JSON), OpenAI-Compatible local API server with SSE streaming CLI, and zero-config workspace RAG indexer with Qdrant vector search. Docling replaced PyMuPDF/python-docx for PDF/DOCX extraction (layout-aware, table detection). Full-stack browser testing confirmed all features operational.
 - **MVP Hardening & Test Fixes:** Resolved environment config, dependency pinning, and skipped tests.
 - **Skill Matching Improvements:** Fixed false-positive ambiguity triggers in the HITL gate and ensured confident skill matches bypass manual routing.
 - **Frontend Markdown:** Replaced a limited custom parser with robust `react-markdown` + `remark-gfm` for full table and HTML rendering support.

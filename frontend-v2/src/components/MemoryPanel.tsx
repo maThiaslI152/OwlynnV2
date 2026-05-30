@@ -21,6 +21,7 @@ export function MemoryPanel() {
   const [contextText, setContextText] = useState<string>('')
   const [contextLoading, setContextLoading] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState('')
 
   // Mem0 state
   const [mem0Memories, setMem0Memories] = useState<Mem0Item[]>([])
@@ -31,11 +32,13 @@ export function MemoryPanel() {
   // Fetch topics and interests
   useEffect(() => {
     let disposed = false
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
     const fetchData = async () => {
       setLoading(true)
+      setFetchError('')
       try {
         const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 10_000)
+        timeoutId = setTimeout(() => controller.abort(), 5_000)
         const [topicsRes, interestsRes] = await Promise.all([
           fetch('/api/topics', { signal: controller.signal }),
           fetch('/api/interests', { signal: controller.signal }),
@@ -44,26 +47,40 @@ export function MemoryPanel() {
         if (!disposed) {
           if (topicsRes.ok) {
             const data = await topicsRes.json()
-            const rawTopics: unknown[] = data.topics ?? []
-            setTopics(
-              rawTopics
-                .filter((t): t is [string, string] => Array.isArray(t) && t.length >= 2)
-                .map(([category, topic]) => ({ category, topic }))
-            )
+            if (data.status === 'ok') {
+              const rawTopics: unknown[] = data.topics ?? []
+              setTopics(
+                rawTopics
+                  .filter((t): t is [string, string] => Array.isArray(t) && t.length >= 2)
+                  .map(([category, topic]) => ({ category, topic }))
+              )
+            } else {
+              console.warn('[MemoryPanel] /api/topics returned error:', data.message ?? 'unknown')
+            }
           }
           if (interestsRes.ok) {
             const data = await interestsRes.json()
-            setInterestsStr(data.interests ?? '')
+            if (data.status === 'ok') {
+              setInterestsStr(data.interests ?? '')
+            } else {
+              console.warn('[MemoryPanel] /api/interests returned error:', data.message ?? 'unknown')
+            }
           }
         }
-      } catch {
-        // Non-critical
+      } catch (err) {
+        if (!disposed) {
+          console.warn('[MemoryPanel] fetch error:', err)
+          setFetchError('Failed to load memory data. Is the backend running?')
+        }
       } finally {
         if (!disposed) setLoading(false)
       }
     }
     void fetchData()
-    return () => { disposed = true }
+    return () => {
+      disposed = true
+      if (timeoutId !== undefined) clearTimeout(timeoutId)
+    }
   }, [memoryUpdatedAt])
 
   // Fetch Mem0 memories
@@ -146,7 +163,55 @@ export function MemoryPanel() {
       )}
 
       {/* Topics and Interests section */}
-      {loading ? (
+      {fetchError ? (
+        <div className="memory-section">
+          <p className="orchestration-empty" style={{ color: 'var(--red)', marginBottom: 6 }}>
+            {fetchError}
+          </p>
+          <button
+            type="button"
+            className="memory-context-toggle"
+            onClick={() => {
+              setFetchError('')
+              void (async () => {
+                setLoading(true)
+                try {
+                  const controller = new AbortController()
+                  const timeoutId = setTimeout(() => controller.abort(), 5_000)
+                  const [topicsRes, interestsRes] = await Promise.all([
+                    fetch('/api/topics', { signal: controller.signal }),
+                    fetch('/api/interests', { signal: controller.signal }),
+                  ])
+                  clearTimeout(timeoutId)
+                  if (topicsRes.ok) {
+                    const data = await topicsRes.json()
+                    if (data.status === 'ok') {
+                      const rawTopics: unknown[] = data.topics ?? []
+                      setTopics(
+                        rawTopics
+                          .filter((t): t is [string, string] => Array.isArray(t) && t.length >= 2)
+                          .map(([category, topic]) => ({ category, topic }))
+                      )
+                    }
+                  }
+                  if (interestsRes.ok) {
+                    const data = await interestsRes.json()
+                    if (data.status === 'ok') {
+                      setInterestsStr(data.interests ?? '')
+                    }
+                  }
+                } catch {
+                  setFetchError('Retry failed. Is the backend running?')
+                } finally {
+                  setLoading(false)
+                }
+              })()
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      ) : loading ? (
         <p className="orchestration-empty">Loading...</p>
       ) : hasTopicsOrInterests ? (
         <>
@@ -177,7 +242,9 @@ export function MemoryPanel() {
             </div>
           )}
         </>
-      ) : null}
+      ) : (
+        <p className="orchestration-empty">No topics or interests tracked yet. Chat with the assistant to build memory.</p>
+      )}
 
       {/* Mem0 Long-Term Memories section */}
       <div className="memory-section">

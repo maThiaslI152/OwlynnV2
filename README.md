@@ -62,15 +62,16 @@ The router uses the small LLM to classify requests into `simple` (greetings, qui
 | Layer | Technology |
 |-------|-----------|
 | Backend | `FastAPI` + `LangGraph` + Python 3.12+ |
-| Frontend | React 19 + TypeScript (Vite 8) + Zustand 5, served via Tauri desktop shell |
+| Frontend | React 19 + TypeScript (Vite 8) + Zustand 5, browser-first (Tauri on hold) |
 | Small LLM | `ibm-grok4-ultrafast-coder-1b` (Q8_0, routing) |
 | Medium LLM | `gemma-4-e4b-uncensored-hauhaucs-aggressive` (Q4_K_M, reasoning + tool calling, swappable) |
 | Cloud LLM | `deepseek-chat` (DeepSeek API, optional escalation) |
+| File Processing | Docling v2.96 (PDF/DOCX — layout-aware markdown, table structure detection) |
 | Memory | Mem0 + Qdrant + JSON files |
 | Checkpointing | Redis (falls back to in-memory `MemorySaver`) |
 | Search | Multi-tier: wttr.in / SearXNG (self-hosted) → curl_cffi / DDGS → Playwright |
 | Testing | `pytest` + `hypothesis` (backend), `vitest` + `@testing-library/react` (frontend) |
-| Desktop | Tauri v2.10 (Rust, macOS vibrancy) |
+| Desktop | Tauri v2.10 (Rust, macOS vibrancy) — on hold, browser is primary |
 
 ## Project Progress
 
@@ -237,52 +238,56 @@ npx vitest run
 
 ## Quick Start
 
+### One-time setup
+
 ```bash
 git clone <repo-url> && cd owlynn
-pip install -r requirements.txt
-cp .env.example .env   # edit with your settings
+./setup.sh              # containers, venv, pip install, Docling models, .env
 ```
 
-Then choose your launch mode:
+Edit `.env` and set your LM Studio model name:
+```
+MEDIUM_LLM_MODEL_NAME=gemma-4-e4b-uncensored-hauhaucs-aggressive
+```
 
-### 1. Full Stack (Tauri Desktop)
+### Launch
 
 ```bash
 ./start.sh
 ```
 
-Launches: Podman containers (Qdrant, Redis) → LM Studio check → Backend (port 8000) → Frontend dev server (port 5173) → Tauri desktop app. All services share one terminal; Ctrl+C stops everything.
+Launches 3 stages:
+1. **Podman containers** — Qdrant (port 6333) + Redis (port 6379)
+2. **LM Studio** — prompts you to start the server on port 1234
+3. **Backend + Frontend** — uvicorn (port 8000) + Vite dev server (port 5173), opens browser
 
-### 2. Browser-Only (Backend + Frontend Dev Server)
+Press `Ctrl+C` to stop all services.
 
-Best for development and browser-based testing. Start the backend first, then the frontend Vite dev server:
+### Browser-Only (Backend + Frontend HMR)
 
 ```bash
 # Terminal 1 — backend
-export PYTHONPATH="$(pwd):$PYTHONPATH"
-source .venv/bin/activate
-uvicorn src.api.server:app --host 127.0.0.1 --port 8000
+source .venv/bin/activate && uvicorn src.api.server:app --host 127.0.0.1 --port 8000
 
-# Terminal 2 — frontend dev server (hot reload)
-cd frontend-v2 && npm run dev -- --host 127.0.0.1
+# Terminal 2 — frontend (hot reload)
+cd frontend-v2 && npx vite --host 127.0.0.1
 ```
 
-Open `http://127.0.0.1:5173` in your browser. This bypasses the Tauri shell entirely — Safe Mode and Screen Assist won't work without Tauri IPC, but chat, tools, and panels all function.
+Open `http://127.0.0.1:5173`. Safe Mode and Screen Assist require Tauri IPC — unavailable in browser mode.
 
-### 3. CLI / Headless (Backend Only)
+### CLI / Headless (Backend Only)
 
 ```bash
-export PYTHONPATH="$(pwd):$PYTHONPATH"
 source .venv/bin/activate
 uvicorn src.api.server:app --host 127.0.0.1 --port 8000
 ```
 
-Backend available at `http://127.0.0.1:8000`. Use `curl`, the REST API, or the WebSocket endpoint (`ws://127.0.0.1:8000/ws/chat/{thread_id}`) to interact programmatically. Full API reference in [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md).
+Backend at `http://127.0.0.1:8000`. Use REST API or WebSocket (`ws://127.0.0.1:8000/ws/chat/{thread_id}`). Full API reference in [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md).
 
-| Mode | Backend | Frontend HMR | Tauri IPC | Best For |
-|------|---------|-------------|-----------|----------|
-| `./start.sh` | Yes | No (prod build) | Yes | Daily use, full features |
-| Browser | Yes | Yes | No | Dev, browser testing |
+| Mode | Backend | Frontend | Tauri | Best For |
+|------|---------|----------|-------|----------|
+| `./start.sh` | Yes | Vite HMR | No | Daily browser use |
+| Browser (manual) | Yes | Vite HMR | No | Dev, hot reload |
 | CLI | Yes | No | No | Scripting, API testing |
 
 ## API
