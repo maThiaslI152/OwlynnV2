@@ -270,6 +270,60 @@ No `<input type="file">`, `onDrop`/`onDragOver` handlers, paste handler, or `For
 
 ---
 
+## RAG System Location Map
+
+Where each component of the RAG file intake pipeline lives in the codebase:
+
+| Stage | Component | File | Key Lines / Function |
+|-------|-----------|------|----------------------|
+| 1. **Detection** | File watcher (watchdog) | `src/api/file_processor.py` | `FileWatcherHandler` (L32), `start_watcher()` (L594) |
+| 2. **Extraction** | PDF → text | `src/api/file_processor.py` | `_process_pdf()` (L157), uses `fitz` (PyMuPDF) |
+| | DOCX → text | `src/api/file_processor.py` | `_process_word()` (L183), uses `python-docx` |
+| | XLSX → markdown | `src/api/file_processor.py` | `_process_table()` (L169), uses `pandas` + `tabulate` |
+| 3. **Cache** | Write `.processed/` | `src/api/file_processor.py` | `process_file()` (L87), outputs to `workspace/.processed/` |
+| 4. **Indexing** | Auto-index into Qdrant | `src/api/server.py` | `notify_file_processed()` (L51), auto-index hook (L73-121) |
+| | Manual index API | `src/api/server.py` | `POST /api/projects/{id}/knowledge` (L1136) |
+| | Project knowledge mgr | `src/memory/project.py` | `project_manager.add_knowledge()` |
+| 5. **Retrieval** | File cache lookup | `src/tools/core_tools.py` | `read_workspace_file()` (L47), cache-first at L69-81 |
+| | Semantic search | `src/tools/rag_tools.py` | `search_workspace_docs()` (L15), via Mem0/Qdrant |
+| | Search API | `src/api/server.py` | `GET /api/mem0/search` (L522) |
+| 6. **Ingestion** | Upload API | `src/api/server.py` | `POST /api/upload` (L1021) |
+| | Auto-index on upload | `src/api/server.py` | `_auto_index_project_file()` (L1058) |
+| 7. **LLM Access** | Message content builder | `src/api/server.py` | `build_message_content()` (L1841), PDF inline (L1879) |
+| | Vision routing | `src/agent/router/feature_extractor.py` | `_has_image_content` (L68), vision keywords (L53) |
+| 8. **Storage** | Vector store | Docker: `qdrant/qdrant` | Collection: `cowork_memory_nomic`, 768-dim nomic embeddings |
+| | Memory manager | `src/memory/long_term.py` | `mem0_memory` singleton |
+
+### Data Flow
+
+```
+File placed in workspace/projects/{id}/
+        │
+        ▼
+[FileWatcherHandler] watchdog detects new file
+        │
+        ▼
+[file_processor.process_file()] routes by extension
+        │
+        ▼
+[_process_pdf / _process_word / _process_table] extracts text
+        │
+        ▼
+workspace/.processed/{filename}.txt (or .md)
+        │
+        ├──▶ [read_workspace_file tool] agent cache-lookup
+        │
+        └──▶ [notify_file_processed] WS broadcast + auto-index
+                 │
+                 ▼
+            [project_manager.add_knowledge()] chunks → Qdrant
+                 │
+                 ▼
+            [search_workspace_docs tool] semantic RAG retrieval
+```
+
+---
+
 ## Recommendations Summary
 
 1. **Immediate**: Fix auto-indexing cache path mismatch so non-default projects auto-index into Qdrant
