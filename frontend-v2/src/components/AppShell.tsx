@@ -93,6 +93,9 @@ function formatTimeRelative(ts: number): string {
 }
 
 function MessageContent({ content }: { content: string }) {
+  // Collapse 3+ consecutive newlines into a single blank line (2 newlines)
+  // to prevent large visual gaps caused by excessive blank lines in markdown.
+  const cleaned = content.replace(/\n{3,}/g, '\n\n')
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
@@ -156,7 +159,7 @@ function MessageContent({ content }: { content: string }) {
         ),
       }}
     >
-      {content}
+      {cleaned}
     </ReactMarkdown>
   )
 }
