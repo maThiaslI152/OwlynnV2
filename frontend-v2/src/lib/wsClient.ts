@@ -25,8 +25,8 @@ export class WsClient {
       try {
         const payload = JSON.parse(event.data) as ServerEvent
         handlers.onEvent?.(payload)
-      } catch {
-        // Ignore malformed payloads from incompatible protocol emitters.
+      } catch (e) {
+        console.warn('[wsClient] failed to parse event', e)
       }
     })
 

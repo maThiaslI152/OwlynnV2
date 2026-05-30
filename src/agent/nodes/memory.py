@@ -171,8 +171,8 @@ async def memory_inject_node(state: AgentState) -> AgentState:
         try:
             results_dict = await asyncio.to_thread(lambda: memory.search(user_message, user_id=mem0_uid, filters=None, limit=5))
             results = results_dict.get("results", []) if isinstance(results_dict, dict) else results_dict
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("[mem0] search failed: %s", e)
 
         # 2. If in a non-default project, also pull global user memories
         #    so the assistant retains general knowledge about the user.
@@ -189,8 +189,8 @@ async def memory_inject_node(state: AgentState) -> AgentState:
                 global_dict = await asyncio.to_thread(lambda: memory.search(user_message, user_id=global_uid, filters=None, limit=3))
                 global_results = global_dict.get("results", []) if isinstance(global_dict, dict) else global_dict
                 results.extend(global_results)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("[mem0] global search failed: %s", e)
 
     # Pull structured user profile
     profile = get_profile()
@@ -221,8 +221,8 @@ async def memory_inject_node(state: AgentState) -> AgentState:
                 if file_count:
                     parts.append(f"This project has {file_count} knowledge file(s) indexed.")
                 project_instructions = "\n".join(parts)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("[project] instructions fetch failed: %s", e)
 
     # Format into a clean context block
     memory_context = format_memory_context(results, profile, enhanced_context, project_instructions)

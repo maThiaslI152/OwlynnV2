@@ -52,7 +52,7 @@ class TestMemoryInject:
 
         with patch("src.memory.long_term.memory", mock_mem0), \
              patch("src.agent.nodes.memory.get_profile", return_value=profile), \
-             patch("src.agent.nodes.memory.get_persona", return_value={"role": "Helper"}), \
+             patch("src.agent.nodes.memory.get_persona_by_id", return_value={"id": "default", "name": "Owlynn", "role": "General Workspace Assistant", "tone": "friendly", "instructions": "Help the user.", "allowed_toolboxes": ["all"]}), \
              patch("src.agent.nodes.memory.get_memory_context_for_prompt", return_value="Mock context"), \
              patch("src.agent.nodes.memory.MemoryContextCache") as mock_cache:
             mock_cache.get.return_value = None  # force cache miss
@@ -96,7 +96,7 @@ class TestMemoryInject:
         profile = ProfileBuilder().build()
 
         with patch("src.agent.nodes.memory.get_profile", return_value=profile), \
-             patch("src.agent.nodes.memory.get_persona", return_value={"role": "Helper"}), \
+             patch("src.agent.nodes.memory.get_persona_by_id", return_value={"id": "default", "name": "Owlynn", "role": "General Workspace Assistant", "tone": "friendly", "instructions": "Help the user.", "allowed_toolboxes": ["all"]}), \
              patch("src.agent.nodes.memory.MemoryContextCache") as mock_cache:
             mock_cache.get.return_value = "Cached context string"
             mock_cache.set = MagicMock()

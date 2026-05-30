@@ -84,7 +84,7 @@ def notify_file_processed(filepath_or_name, status="processed"):
                 root_processed = os.path.join(WORKSPACE_DIR, ".processed")
                 cache_path = None
                 
-                for search_dir in [os.path.join(project_workspace, ".processed"), root_processed]:
+                for search_dir in [root_processed, os.path.join(project_workspace, ".processed")]:  # root first (fast path)
                     for ext in [".txt", ".md"]:
                         candidate = os.path.join(search_dir, filename + ext)
                         if os.path.exists(candidate):
@@ -306,8 +306,8 @@ async def api_update_persona(body: dict):
     for field, value in body.items():
         try:
             update_persona_field(field, value)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("[persona] update failed for field %s: %s", field, e)
     return get_persona()
 
 @app.get("/api/personas")
@@ -487,8 +487,8 @@ async def api_dev_hitl_trigger(body: dict):
             try:
                 await ws.send_json({"type": "interrupt", "interrupts": [fixture]})
                 return {"status": "pushed", "variant": variant, "fixture": fixture_name}
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("[dev_hitl] WS push failed: %s", e)
 
     # Return fixture JSON for inspection
     return {"status": "fixture_only", "variant": variant, "fixture_name": fixture_name, "payload": fixture}
@@ -746,8 +746,8 @@ async def api_add_project_chat(project_id: str, body: dict):
             title = await generate_chat_title_router_llm(body["first_message"])
             if title:
                 name = title
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("[chat_title] generation failed: %s", e)
     project_manager.add_chat_to_project(project_id, {
         "id": chat_id,
         "name": name or "New Chat",
@@ -1676,6 +1676,14 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                             if _node_model_used:
                                                 fallback_msg["model_used"] = _node_model_used
                                             await websocket.send_json({"type": "assistant.message", "message": fallback_msg})
+                        elif node is None or node not in {"simple", "complex_llm", "tool_action", "tools", "auto_summarize", "memory_write", "router"}:
+                            # Catch-all: root-level or unknown node with AIMessage content
+                            if isinstance(output, dict) and "messages" in output:
+                                msgs_ = output.get("messages") or []
+                                if msgs_ and isinstance(msgs_[0], AIMessage):
+                                    raw = str(msgs_[0].content or "").strip()
+                                    if raw and not raw.startswith("[Internal reminder"):
+                                        await websocket.send_json({"type": "assistant.message", "message": serialize_message(msgs_[0])})
                         elif node in {"tool_action", "tools"} or metadata.get("langgraph_step") == "tools":
                             if isinstance(output, dict) and "messages" in output:
                                 for msg in output["messages"]:
@@ -1946,9 +1954,12 @@ def extract_pdf_text(raw_bytes: bytes) -> str:
     try:
         import fitz  # PyMuPDF
         doc = fitz.open(stream=raw_bytes, filetype="pdf")
-        pages_text = []
-        for page in doc:
-            pages_text.append(page.get_text())
+        try:
+            pages_text = []
+            for page in doc:
+                pages_text.append(page.get_text())
+        finally:
+            doc.close()
         return "\n\n".join(pages_text)
     except Exception as e:
         logger.error("PyMuPDF text extraction failed: %s", e)

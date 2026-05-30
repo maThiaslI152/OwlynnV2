@@ -245,6 +245,20 @@ class FileWatcherHandler(FileSystemEventHandler):
                         new_cols.append(df.columns[i])
                 df.columns = new_cols
                 df = df.iloc[1:].reset_index(drop=True)
+            
+            # Second pass: fix any remaining Unnamed: columns by scanning all rows
+            if any(str(c).startswith("Unnamed:") for c in df.columns):
+                for i, col in enumerate(df.columns):
+                    if str(col).startswith("Unnamed:"):
+                        found = False
+                        for row_idx in range(min(5, len(df))):
+                            cell_val = str(df.iloc[row_idx, i]).strip()
+                            if cell_val and cell_val.lower() != "nan" and not cell_val.startswith("Unnamed:"):
+                                df.rename(columns={col: cell_val}, inplace=True)
+                                found = True
+                                break
+                        if not found:
+                            df.rename(columns={col: f"Column_{i}"}, inplace=True)
             else:
                 # Just rename to generic column labels
                 df.columns = [f"Column_{i+1}" for i in range(len(df.columns))]
@@ -277,6 +291,16 @@ class FileWatcherHandler(FileSystemEventHandler):
         for para in doc.paragraphs:
             if para.text.strip():
                 text += para.text + "\n"
+        
+        # Extract table content
+        for table in doc.tables:
+            text += "\n--- Table ---\n"
+            for row_idx, row in enumerate(table.rows):
+                cells = [cell.text.strip() for cell in row.cells]
+                if row_idx == 0:
+                    text += " | ".join(cells) + "\n" + "---" * len(cells) + "\n"
+                else:
+                    text += " | ".join(cells) + "\n"
         
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(text)

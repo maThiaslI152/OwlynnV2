@@ -102,7 +102,8 @@ export function MemoryPanel() {
       } else {
         setMem0Error('Failed to fetch memories')
       }
-    } catch {
+    } catch (e) {
+      console.warn('[loadMem0Memories]', e)
       setMem0Error('Network error')
     } finally {
       setMem0Loading(false)
@@ -127,8 +128,8 @@ export function MemoryPanel() {
         // Refresh the list
         void loadMem0Memories(mem0SearchQuery)
       }
-    } catch {
-      // non-critical
+    } catch (e) {
+      console.warn('[deleteMemory]', e)
     }
   }
 
@@ -144,8 +145,8 @@ export function MemoryPanel() {
         const data = await res.json()
         setContextText(data.memory_context ?? '')
       }
-    } catch {
-      // Non-critical
+    } catch (e) {
+      console.warn('[loadContext]', e)
     } finally {
       setContextLoading(false)
     }

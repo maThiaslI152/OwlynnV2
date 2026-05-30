@@ -113,7 +113,8 @@ function App() {
           setActiveChatId(tid)
         }
       }
-    } catch {
+    } catch (e) {
+      console.warn('[loadProjects]', e)
       setProjects([{ id: 'default', name: 'General Workspace', chats: [] }])
     }
   }, [])
@@ -204,7 +205,8 @@ function App() {
         if (payload.execution_policy === 'hitl' || payload.execution_policy === 'auto_approve') {
           setExecutionPolicy(payload.execution_policy)
         }
-      } catch {
+      } catch (e) {
+        console.warn('[execPolicy]', e)
         // Keep local default if settings are unavailable.
       }
     }
@@ -242,7 +244,8 @@ function App() {
             })
           }
         }
-      } catch {
+      } catch (e) {
+        console.warn('[loadHistory]', e)
         // History unavailable — non-critical
       }
     }
@@ -268,15 +271,13 @@ function App() {
           const msgs = useAppStore.getState().messages
           const last = msgs[msgs.length - 1]
           if (last && last.role === 'assistant' && last.id?.startsWith('stream-')) {
-            const currentContent = useAppStore.getState().messages[msgs.length - 1]?.content || ''
-            const hasNewerStreamContent = currentContent.length > (last.content?.length || 0)
             useAppStore.setState({
               messages: msgs.map((m, idx) =>
                 idx === msgs.length - 1
                   ? {
                       id: msg.id || crypto.randomUUID(),
                       role: 'assistant',
-                      content: hasNewerStreamContent ? currentContent : finalContent,
+                      content: finalContent,
                       ts: Date.now(),
                     }
                   : m
@@ -567,8 +568,8 @@ function App() {
         body: JSON.stringify({ name: newName }),
       })
       await loadProjects()
-    } catch {
-      // non-critical
+    } catch (e) {
+      console.warn('[renameChat]', e)
     }
   }, [activeProjectId, loadProjects])
 
@@ -615,8 +616,8 @@ function App() {
         body: JSON.stringify({ name }),
       })
       await loadProjects()
-    } catch {
-      // non-critical
+    } catch (e) {
+      console.warn('[editProject]', e)
     }
   }, [loadProjects])
 
@@ -645,7 +646,7 @@ function App() {
     } catch (e: any) {
       setOperatorNote('Failed to delete workspace.')
     }
-  }, [activeProjectId, clearSession, loadProjects])
+  }, [clearSession, loadProjects])  // activeProjectId removed — uses ref for latest value
 
   return (
     <AppShell

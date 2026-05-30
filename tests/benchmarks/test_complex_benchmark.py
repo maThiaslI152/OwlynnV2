@@ -465,7 +465,7 @@ class TestGraphE2ELatency:
              patch("src.agent.nodes.complex.get_medium_llm", new_callable=AsyncMock, return_value=mock_llm), \
              patch("src.agent.nodes.complex.get_cloud_llm", new_callable=AsyncMock, return_value=mock_llm), \
              patch("src.agent.nodes.memory.get_profile", return_value=profile), \
-             patch("src.agent.nodes.memory.get_persona", return_value={"role": "Helper"}), \
+             patch("src.agent.nodes.memory.get_persona_by_id", return_value={"id": "default", "name": "Owlynn", "role": "General Workspace Assistant", "tone": "friendly", "instructions": "Help the user.", "allowed_toolboxes": ["all"]}), \
              patch("src.memory.long_term.memory", MagicMock()), \
              patch("src.agent.nodes.memory.get_memory_context_for_prompt", return_value="Mock"), \
              patch("src.agent.nodes.memory.MemoryContextCache") as mock_cache, \
