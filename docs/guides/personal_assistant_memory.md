@@ -1,4 +1,14 @@
+---
+status: active
+category: guide
+last_updated: 2026-05-31
+owner: human
+---
+
 # Personal Assistant Memory System
+
+> **Purpose:** Guide for personal assistant memory system.
+
 
 ## Overview
 
@@ -488,3 +498,11 @@ The Personal Assistant Memory System transforms Owlynn from a stateless conversa
 - ✅ Can be extended with new topic/interest types
 
 This creates the foundation for increasingly personalized, context-aware assistance as you interact with Owlynn over time.
+
+## Related
+
+- [`docs/README.md`](../README.md) — project documentation map
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

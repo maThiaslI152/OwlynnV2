@@ -1,4 +1,14 @@
+---
+status: active
+category: debugging
+last_updated: 2026-05-31
+owner: human
+---
+
 # System Integration Test — 2026-05-27
+
+> **Purpose:** System integration test results from 2026-05-27.
+
 
 ## Test Prompt Used
 
@@ -172,3 +182,11 @@ No logging plan files exist in the repository.
 3. **Increase token budget** for complex multi-step tasks to at least 4096
 4. **Add STM write** in memory_write node alongside Mem0 LTM write for shorter-lived facts
 5. **Wire @log_node decorator** into graph nodes for richer lifecycle telemetry
+
+## Related
+
+- [`docs/debugging/README.md`](README.md) — debugging index
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

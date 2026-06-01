@@ -1,3 +1,10 @@
+---
+status: archived
+category: archive
+last_updated: 2026-05-31
+owner: human
+---
+
 # Live Talk Phase 1 Implementation (2026-04-25)
 
 This document records the implementation work completed for the Live Talk
@@ -85,3 +92,10 @@ The following manual checks are still recommended in an interactive Tauri run:
 - TTS engine quality upgrade
 - Acoustic echo cancellation strategy
 
+## Related
+
+- [`docs/README.md`](../README.md) — project documentation map
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

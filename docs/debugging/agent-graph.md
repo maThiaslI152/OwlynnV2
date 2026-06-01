@@ -1,4 +1,14 @@
+---
+status: active
+category: debugging
+last_updated: 2026-05-31
+owner: human
+---
+
 # Debugging: Agent Graph (LangGraph)
+
+> **Purpose:** Debugging guide for the LangGraph agent execution flow.
+
 
 **Quick Reference:** Stateful cyclic LangGraph orchestrating conversation flow. Key files: `src/agent/graph.py` (graph builder + checkpoint config), `src/agent/state.py` (AgentState definition), `src/agent/nodes/router.py` (routing logic), `src/agent/nodes/simple.py` (simple answers), `src/agent/nodes/complex.py` (tool-calling responses), `src/agent/nodes/security_proxy.py` (HITL gate), `src/agent/nodes/summarize.py` (context compression).
 
@@ -251,3 +261,11 @@ INFO:src.agent.nodes.summarize:Active tokens 3200/10000 (32%), skipping summariz
 - **Denied tools tracking**: Denied tool names accumulate in `AgentState.denied_tools` to prevent LLM retries. See [AGENT_FLOW.md](../AGENT_FLOW.md) for details.
 - **Auto-summarize**: Wired between `memory_inject` and `router` with 85% threshold. See [AGENT_FLOW.md](../AGENT_FLOW.md).
 - See also: [ARCHITECTURE_OVERVIEW.md](../ARCHITECTURE_OVERVIEW.md) section 1 for full graph flow.
+
+## Related
+
+- [`docs/debugging/README.md`](README.md) — debugging index
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

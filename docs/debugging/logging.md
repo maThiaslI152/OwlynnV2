@@ -1,4 +1,14 @@
+---
+status: active
+category: debugging
+last_updated: 2026-05-31
+owner: human
+---
+
 # Owlynn Structured Debug Logging
+
+> **Purpose:** Debugging guide for the audit logging system.
+
 
 ## Architecture Overview
 
@@ -255,3 +265,11 @@ python scripts/logcat.py --channel memory.stm
 4. Add the field type to `VALID_FIELDS` (already present if pattern matches)
 5. Document in this file's channel reference table
 6. Add a sample log line to the plan reference if applicable
+
+## Related
+
+- [`docs/debugging/README.md`](README.md) — debugging index
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

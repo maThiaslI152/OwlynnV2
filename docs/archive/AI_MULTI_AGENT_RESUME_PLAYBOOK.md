@@ -1,3 +1,10 @@
+---
+status: archived
+category: archive
+last_updated: 2026-05-31
+owner: human
+---
+
 # AI Multi-Agent Resume Playbook
 
 ## Purpose
@@ -135,3 +142,11 @@ Any agent framework can follow it as long as it can:
 - produce deterministic handoff notes.
 
 If an external tool has its own memory/context layer, do not treat it as source-of-truth over repository docs.
+
+## Related
+
+- [`docs/README.md`](../README.md) — project documentation map
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

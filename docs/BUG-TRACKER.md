@@ -1,4 +1,13 @@
+---
+status: active
+category: audit
+last_updated: 2026-05-31
+owner: human
+---
+
 # Bug Tracker: Browser Audit — OwlynnV2
+
+> **Purpose:** Bug tracker for browser audit findings with root cause analysis and fix verification.
 
 **Created:** 2026-05-30
 **Last Updated:** 2026-05-30 (all 8 bugs fixed and verified)
@@ -186,3 +195,12 @@
 - **Frontend vitest**: 96/96 passing (7 test files, 0 failures)
 - **Backend pytest (new)**: 16/16 passing (2 test files for BUG-1 + BUG-4)
 - **Regression checks**: No regressions introduced by any of the fixes
+
+## Related
+
+- [`docs/STATUS.md`](STATUS.md) — project status and risks
+- [`docs/BUG-ANALYSIS.md`](BUG-ANALYSIS.md) — bug analysis
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter, purpose blockquote

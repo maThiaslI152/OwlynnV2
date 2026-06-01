@@ -1,4 +1,13 @@
+---
+status: active
+category: audit
+last_updated: 2026-05-31
+owner: human
+---
+
 # RAG File Intake Audit Report
+
+> **Purpose:** Automated audit of the RAG file intake pipeline — PDF, DOCX, XLSX ingestion, processing, LLM retrieval, and Qdrant indexing.
 
 **Date**: 2026-05-30  
 **Auditor**: Automated audit via Cursor agent  
@@ -332,3 +341,13 @@ workspace/.processed/{filename}.txt (or .md)
 4. **Medium-term**: Adopt Docling for unified PDF/DOCX/PPTX extraction with semantic hierarchy
 5. **Medium-term**: Add drag-and-drop file upload UI to frontend
 6. **Long-term**: Implement agent file disambiguation (metadata hints, explicit file references)
+
+
+## Related
+
+- [`docs/STATUS.md`](STATUS.md) — project status and risks
+- [`docs/BUG-ANALYSIS.md`](BUG-ANALYSIS.md) — bug analysis
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter, purpose blockquote

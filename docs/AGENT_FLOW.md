@@ -1,9 +1,13 @@
 ---
-last_verified: 2026-05-26
-auto_generated: false
+status: active
+category: architecture
+last_updated: 2026-05-31
+owner: human
 ---
 
 # Agent Flow (LangGraph)
+
+> **Purpose:** LangGraph agent execution flow, node descriptions, and state transitions.
 
 ## Overview
 
@@ -204,3 +208,12 @@ pytest tests/test_memory_nodes.py -v
 | `cloud_escalation_enabled` | boolean | `true` | complex_llm |
 | `cloud_anonymization_enabled` | boolean | `true` | complex_llm (cloud path) |
 | `medium_models` | object | Three variant keys | complex_llm (model selection) |
+
+## Related
+
+- [`docs/ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) — system architecture
+- [`docs/README.md`](README.md) — project documentation map
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter, purpose blockquote

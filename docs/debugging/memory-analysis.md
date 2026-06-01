@@ -1,4 +1,14 @@
+---
+status: active
+category: debugging
+last_updated: 2026-05-31
+owner: human
+---
+
 # Memory Analysis — May 25, 2026
+
+> **Purpose:** Memory budget analysis, crash root cause, and optimization findings.
+
 
 > **Note**: This document describes historical behavior from the Qwen 3.5 9B fp16 era. The current default medium model is `gemma-4-e4b-uncensored-hauhaucs-aggressive` (Q4_K_M, ~2.5 GB), which uses significantly less memory than the fp16 Qwen variant analyzed here. See [browser-verification.md](browser-verification.md) for the Gemma 4 switch details.
 
@@ -123,3 +133,7 @@ ps aux | grep -i krunkit | grep -v grep | awk '{printf "Podman VM RSS: %.0f MB\n
 - [browser-verification.md](browser-verification.md) — Live browser test results for the 8 bug fixes
 - [BUG-ANALYSIS.md](../BUG-ANALYSIS.md) — Root cause analysis of all 8 bugs
 - [AGENT_FLOW.md](../AGENT_FLOW.md) — Summarizer gate and context window logic
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

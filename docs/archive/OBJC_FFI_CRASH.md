@@ -1,3 +1,10 @@
+---
+status: archived
+category: archive
+last_updated: 2026-05-31
+owner: human
+---
+
 # ObjC FFI Non-Null-Terminated C String Crash Analysis
 
 ## Date of incident
@@ -167,3 +174,7 @@ an API expecting `NSString *`), not null termination.
   re-granted each time the binary hash changes. Workaround: build a debug `.app` bundle
   via `tauri build --debug` and launch via `open` — permissions persist across launches
   of the same bundle.
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

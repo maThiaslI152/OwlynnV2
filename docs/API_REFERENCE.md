@@ -1,11 +1,13 @@
 ---
-last_verified: 2026-05-26
-auto_generated: false
+status: active
+category: reference
+last_updated: 2026-05-31
+owner: human
 ---
 
 # API Reference
 
-Backend endpoints exposed by `src/api/server.py`. Written for developers modifying backend behavior.
+> **Purpose:** Backend endpoints exposed by `src/api/server.py`. Written for developers modifying backend behavior.
 
 ## Overview
 
@@ -44,6 +46,13 @@ Base URL: `http://<host>:8000`
 
 `WS /ws/chat/{thread_id}` — see `docs/CHAT_PROTOCOL.md` for payload and event contract
 
+### Chat Completions
+
+`POST /v1/chat/completions`
+- OpenAI-compatible chat completions endpoint
+- Body: `{ "model": "...", "messages": [...], "stream": true | false }`
+- Response: Streaming SSE or JSON chat completion response
+
 ### Profile
 
 `GET /api/profile`
@@ -66,6 +75,24 @@ Base URL: `http://<host>:8000`
 ```
 
 ### System Prompt / Persona
+
+`GET /api/persona`
+- Returns the active persona/system prompt configuration
+- Response: `{ "system_prompt": "...", "custom_instructions": "...", "name": "...", "tone": "..." }`
+
+`POST /api/persona`
+- Updates persona/system prompt configuration
+- Body keys: `system_prompt`, `custom_instructions`, `name`, `tone`
+- Response: `{ "status": "ok" | "error", "message": "..." }`
+
+`GET /api/personas`
+- Lists all available personas
+- Response: `{ "status": "ok", "personas": [...] }`
+
+`POST /api/personas`
+- Creates a new persona
+- Body: `{ "name": "...", "system_prompt": "...", ... }`
+- Response: `{ "status": "ok", "persona": {...} }`
 
 `GET /api/system-settings`
 - Response: `{ "system_prompt": "...", "custom_instructions": "...", "name": "...", "tone": "..." }`
@@ -116,6 +143,11 @@ Base URL: `http://<host>:8000`
 `GET /api/unified-settings`
 - Merged profile + advanced settings payload for frontend bootstrap
 - Includes: profile identity, LLM config, all advanced settings, cloud budget defaults, masked `deepseek_api_key`
+
+`PUT /api/unified-settings`
+- Updates unified settings
+- Body: unified settings object with profile + advanced fields
+- Response: `{ "status": "ok" | "error", "message": "..." }`
 
 ### Short-Term Memory (JSON)
 
@@ -196,6 +228,20 @@ Project-scoping handled by `get_project_workspace(project_id)` with path-prefix 
 
 `GET /api/projects/{project_id}`
 
+`PUT /api/projects/{project_id}`
+- Updates project metadata
+- Body: `{ "name": "...", "instructions": "..." }`
+- Response: Updated project object
+
+`POST /api/projects/{project_id}/knowledge`
+- Adds knowledge/document to a project's vector index
+- Body: Multipart upload with file or text content
+- Response: `{ "status": "ok", "knowledge_id": "..." }`
+
+`DELETE /api/projects/{project_id}/knowledge/{filename}`
+- Removes specific knowledge/document from a project's vector index
+- Response: `{ "status": "ok" }`
+
 `POST /api/projects/{project_id}/chats`
 - Body: `{ "id": "...", "name": "..." }`
 
@@ -205,10 +251,36 @@ Project-scoping handled by `get_project_workspace(project_id)` with path-prefix 
 
 `DELETE /api/projects/{project_id}`
 
+### Chat History
+
+`GET /api/history/{thread_id}`
+- Returns chat history for a specific thread
+- Response: `{ "status": "ok", "messages": [...] }`
+
+### Chat Title Generation
+
+`POST /api/chats/generate-title`
+- Generates a title for a chat based on its content
+- Body: `{ "thread_id": "...", "message": "..." }`
+- Response: `{ "status": "ok", "title": "..." }`
+
+### Artifacts
+
+`GET /api/artifacts`
+- Lists all artifacts generated during chat sessions
+- Response: `{ "status": "ok", "artifacts": [...] }`
+
 ### Tool Discovery
 
 `GET /api/tools`
 - Returns list of tool metadata derived from `src/agent/tool_sets.py`
+
+### Dev / HITL
+
+`POST /api/dev/hitl/trigger`
+- Manually triggers a HITL interrupt for testing
+- Body: `{ "type": "security_approval_required | ask_user", ... }`
+- Response: `{ "status": "ok" }`
 
 ## Key Decisions
 
@@ -252,3 +324,12 @@ WebSocket request payload keys parsed in `websocket_endpoint()` and passed into 
 | `router_hitl_enabled` | boolean | `true` | Allow router to ask clarifying questions |
 | `router_clarification_threshold` | float | `0.6` | Confidence threshold for clarification |
 | `redis_url` | string | `"redis://localhost:6379"` | Redis URL for checkpointing |
+
+## Related
+
+- [`docs/CHAT_PROTOCOL.md`](CHAT_PROTOCOL.md) — WebSocket event contract
+- [`docs/ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) — system architecture
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added 13 missing endpoints

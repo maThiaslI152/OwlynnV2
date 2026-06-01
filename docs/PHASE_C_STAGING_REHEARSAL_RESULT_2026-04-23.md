@@ -1,4 +1,13 @@
+---
+status: archived
+category: archive
+last_updated: 2026-05-31
+owner: human
+---
+
 # Phase C Staging Rehearsal Result (2026-04-23)
+
+> **Purpose:** Staging rehearsal result for Phase C frontend cutover rollback procedure.
 
 ## Metadata
 
@@ -42,3 +51,11 @@
 
 - Operator: Codex agent
 - Reviewer: Pending human sign-off
+
+## Related
+
+- [`docs/README.md`](README.md) — project documentation map
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter, purpose blockquote

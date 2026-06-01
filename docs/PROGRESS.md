@@ -1,4 +1,13 @@
+---
+status: active
+category: changelog
+last_updated: 2026-05-31
+owner: human
+---
+
 # Progress Report — 2026-05-26
+
+> **Purpose:** Progress report documenting recent fixes and improvements.
 
 ## Session Summary
 
@@ -89,3 +98,12 @@ if (
 | `frontend-v2/package.json` | Dependencies: react-markdown, remark-gfm, rehype-raw, rehype-sanitize |
 | `skills/visual_comparison.md` | Visual Comparison skill with "compare" trigger |
 | `tests/test_skill_matcher.py` | 17 tests covering keyword, semantic, match, confidence, ambiguity |
+
+## Related
+
+- [`docs/STATUS.md`](STATUS.md) — project status
+- [`docs/README.md`](README.md) — project documentation map
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter, purpose blockquote

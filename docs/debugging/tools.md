@@ -1,4 +1,14 @@
+---
+status: active
+category: debugging
+last_updated: 2026-05-31
+owner: human
+---
+
 # Debugging: Tools & ToolboxRegistry
+
+> **Purpose:** Debugging guide for agent tool execution issues.
+
 
 **Quick Reference:** 20 tools across 5 toolbox categories. Dynamically bound via `src/agent/tool_sets.py` (ToolboxRegistry) based on router classification. HITL gating via `src/agent/nodes/security_proxy.py`. Key files: `src/agent/tool_sets.py`, `src/agent/nodes/security_proxy.py`, `src/tools/*.py`.
 
@@ -268,3 +278,11 @@ The `scope_clarify` node runs between `router` and `complex_llm` for vague build
 - **Audit & verify sub-panel not expanding (BUG-8)**: Known issue in `ToolExecutionPanel.tsx`. See [BUG-ANALYSIS.md](../BUG-ANALYSIS.md).
 - **Mock data in tool execution panel (BUG-6)**: Known issue — mock entries persist regardless of actual tool activity. See [frontend.md](frontend.md).
 - See also: [AGENT_FLOW.md](../AGENT_FLOW.md) sections on Tool Binding and Security Proxy.
+
+## Related
+
+- [`docs/debugging/README.md`](README.md) — debugging index
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

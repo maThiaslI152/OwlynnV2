@@ -1,3 +1,10 @@
+---
+status: active
+category: changelog
+last_updated: 2026-05-31
+owner: ai-agent
+---
+
 # CHANGELOG: plan-to-create-repo-and-push
 
 > **Change:** Initialize git repo and push to GitHub.
@@ -30,3 +37,8 @@
 ### Notes
 - Repo URL: https://github.com/maThiaslI152/Cursor_Spec_Driven
 - Visibility: PRIVATE
+
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

@@ -1,4 +1,14 @@
+---
+status: active
+category: guide
+last_updated: 2026-05-31
+owner: human
+---
+
 # LM Studio Setup
+
+> **Purpose:** Guide for configuring and using LM Studio with Owlynn.
+
 
 ## Models to Download
 
@@ -40,3 +50,11 @@ LM Studio applies the model's **Jinja chat template** to the `/v1/chat/completio
 - Update **LM Studio** to the latest build.
 - Prefer **`lmstudio-community`** GGUF variants when available.
 - In **My Models → model settings → Prompt Template**, try a fixed template or one from community presets.
+
+## Related
+
+- [`docs/README.md`](../README.md) — project documentation map
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

@@ -1130,6 +1130,10 @@ async def api_create_folder(body: dict):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+
+@app.delete("/api/projects/{project_id}")
+async def api_delete_project(project_id: str):
+    """Delete a project by its ID."""
     try:
         success = project_manager.delete_project(project_id)
         if success:

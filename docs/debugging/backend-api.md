@@ -1,4 +1,14 @@
+---
+status: active
+category: debugging
+last_updated: 2026-05-31
+owner: human
+---
+
 # Debugging: Backend API
+
+> **Purpose:** Debugging guide for backend API and server issues.
+
 
 **Quick Reference:** FastAPI server on `127.0.0.1:8000`, Uvicorn with WebSocket support. Key files: `src/api/server.py` (~1830 lines), `src/config/settings.py`, `src/config/logging_config.py`.
 
@@ -218,3 +228,11 @@ INFO:langgraph.checkpoint.memory:Falling back to MemorySaver
 - **`GET /api/unified-settings` regressed to 404**: Resolved — route was restored. If it recurs, check for route registration conflicts in `server.py`.
 - **`OPENAI_API_KEY` global side-effect**: Resolved — removed from global scope. See [STATUS.md](../STATUS.md).
 - **Chat title generation failing silently**: Known bug (BUG-4) — `generate_chat_title_router_llm` wrapped in try/except. See [BUG-ANALYSIS.md](../BUG-ANALYSIS.md).
+
+## Related
+
+- [`docs/debugging/README.md`](README.md) — debugging index
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

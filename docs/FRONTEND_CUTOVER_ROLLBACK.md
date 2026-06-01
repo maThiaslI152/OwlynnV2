@@ -1,4 +1,13 @@
+---
+status: active
+category: guide
+last_updated: 2026-05-31
+owner: human
+---
+
 # Frontend Cutover Rollback Procedure
+
+> **Purpose:** Rollback procedure for frontend-v2 when cutover introduces regressions.
 
 This procedure defines how to rollback a broken `frontend-v2` state to a known-good `frontend-v2` revision for personal local use.
 
@@ -39,3 +48,12 @@ Execute rollback if any of the following occur in daily use:
 - focused regression test added,
 - audit/verify flows pass,
 - local smoke checks pass in your daily-use environment.
+
+## Related
+
+- [`docs/README.md`](README.md) — project documentation map
+- [`docs/AI_AGENT_INDEX.md`](AI_AGENT_INDEX.md) — navigation index
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter, purpose blockquote

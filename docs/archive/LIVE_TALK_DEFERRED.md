@@ -1,3 +1,10 @@
+---
+status: archived
+category: archive
+last_updated: 2026-05-31
+owner: human
+---
+
 # Live Talk — Removed
 
 **Status:** Fully removed from the codebase (2026-04-29 v2)  
@@ -39,3 +46,11 @@ The following docs record the implementation history for future reference:
 - [`docs/archive/LIVE_TALK_WHISPER_FILLER_AND_FORCE_FINALIZE.md`](LIVE_TALK_WHISPER_FILLER_AND_FORCE_FINALIZE.md) — Filler hallucination debug analysis and all changes
 - [`docs/archive/LIVE_TALK_PHASE1_TTS_LOOP_FIX_2026-04-25.md`](LIVE_TALK_PHASE1_TTS_LOOP_FIX_2026-04-25.md) — Phase 1 mute/unmute implementation
 - [`docs/archive/SOUNDANALYSIS_WAKEWORD_ARCHITECTURE.md`](SOUNDANALYSIS_WAKEWORD_ARCHITECTURE.md) — Two-stage pipeline architecture
+
+## Related
+
+- [`docs/README.md`](../README.md) — project documentation map
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

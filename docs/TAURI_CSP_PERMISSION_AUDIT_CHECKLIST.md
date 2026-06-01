@@ -1,4 +1,13 @@
+---
+status: active
+category: standards
+last_updated: 2026-05-31
+owner: human
+---
+
 # Tauri CSP + Permission Audit Checklist
+
+> **Purpose:** Checklist for auditing Tauri CSP and permission configuration before security gates.
 
 Use this checklist before declaring Phase C security gates complete.
 
@@ -35,3 +44,12 @@ Use this checklist before declaring Phase C security gates complete.
 - [ ] CSP effective value capture
 - [ ] command inventory + approval record
 - [ ] smoke test log reference
+
+## Related
+
+- [`docs/standards/documentation.md`](standards/documentation.md) — doc structure rules
+- [`docs/standards/coding-style.md`](standards/coding-style.md) — coding conventions
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter, purpose blockquote

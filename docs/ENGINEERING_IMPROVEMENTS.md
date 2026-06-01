@@ -1,4 +1,13 @@
+---
+status: active
+category: planning
+last_updated: 2026-05-31
+owner: human
+---
+
 # Engineering improvement suggestions
+
+> **Purpose:** Prioritized engineering improvement suggestions for the Owlynn project.
 
 This document captures prioritized improvement ideas for Owlynn. It is **advisory**: nothing here is a commitment until tracked in issues or `docs/STATUS.md`.
 
@@ -144,3 +153,12 @@ This document captures prioritized improvement ideas for Owlynn. It is **advisor
 3. When an item is done or rejected, update **this file** or `docs/STATUS.md` so agents do not re-propose stale work.
 
 _Last updated: 2026-05-11_
+
+## Related
+
+- [`docs/STATUS.md`](STATUS.md) — project status and risks
+- [`docs/ENGINEERING_IMPROVEMENTS.md`](ENGINEERING_IMPROVEMENTS.md) — improvement backlog
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter, purpose blockquote

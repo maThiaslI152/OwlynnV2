@@ -1,3 +1,10 @@
+---
+status: active
+category: debugging
+last_updated: 2026-05-31
+owner: human
+---
+
 # Session Summary — 2026-05-27
 
 ## Overview
@@ -152,3 +159,11 @@ This resolves the model name from the user profile (`medium_models["default"]`).
 
 ## No Logging Plan File Found
 Searched for `*.plan.md`, `*logging*plan*`, and `*e999dbc9*` across the entire repository — zero results.
+
+## Related
+
+- [`docs/debugging/README.md`](README.md) — debugging index
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

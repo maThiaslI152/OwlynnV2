@@ -1,4 +1,14 @@
+---
+status: active
+category: debugging
+last_updated: 2026-05-31
+owner: human
+---
+
 # Debugging Guide — Index
+
+> **Purpose:** Entry point for debugging OwlynnV2 — symptom-to-subsystem mapping and quick health check.
+
 
 Entry point for AI agents and developers troubleshooting OwlynnV2. This index maps symptoms to the appropriate subsystem debug doc. Start with the [Quick Health Check](#quick-health-check) below, then follow the decision tree.
 
@@ -164,3 +174,7 @@ ISSUE REPORTED
 └─ Unknown / multiple systems?
    └─ Run Quick Health Check above, then follow each failing component's guide
 ```
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

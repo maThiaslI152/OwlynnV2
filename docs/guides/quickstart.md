@@ -1,9 +1,14 @@
 ---
-last_verified: 2026-05-26
-auto_generated: false
+status: active
+category: guide
+last_updated: 2026-05-31
+owner: human
 ---
 
 # Owlynn Enhanced Chat — Quick Start Guide
+
+> **Purpose:** Quick start guide for the Owlynn enhanced chat experience.
+
 
 ## Overview
 
@@ -130,3 +135,11 @@ Expected output: `PONG`. Falls back to in-memory `MemorySaver` if Redis unavaila
 | XSS protection | Sanitized user input |
 | Tool execution | Security proxy gates sensitive operations |
 | WebSocket | Secure connections recommended |
+
+## Related
+
+- [`docs/README.md`](../README.md) — project documentation map
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

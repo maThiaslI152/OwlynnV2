@@ -1,10 +1,19 @@
+---
+status: active
+category: reference
+last_updated: 2026-05-31
+owner: ai-agent
+---
+
 # docs/ — Project Documentation Map
+
+> **Purpose:** Project documentation map, reading order, and SDD workflow quick reference.
 
 > **START HERE.** This is the project's documentation index and reading order for all agents and contributors.
 
 ## Reading Order (for new agents)
 
-1. **This file** (`docs/README.md`) → [`docs/INDEX.md`](INDEX.md)
+1. **This file** (`docs/README.md`) → [`docs/INDEX.md`](INDEX.md) → [`docs/PROJECT_TIMELINE.md`](PROJECT_TIMELINE.md)
 2. **[`docs/architecture/overview.md`](architecture/overview.md)** — system context, modules, data flow
 3. **[`specs/memory/constitution.md`](../specs/memory/constitution.md)** — non-negotiable rules
 4. **[`docs/standards/coding-style.md`](standards/coding-style.md)** — formatting, naming, patterns
@@ -20,11 +29,16 @@
 docs/
 ├── README.md                      # This file — project map
 ├── INDEX.md                       # Machine-readable manifest
+├── PROJECT_TIMELINE.md            # Aggregated project timeline
 ├── architecture/
 │   └── overview.md                # System design overview
+├── debugging/                     # Debugging guides by subsystem
+├── guides/                        # How-to guides
 ├── standards/
 │   ├── coding-style.md            # Language-agnostic conventions
 │   └── documentation.md           # Doc structure rules
+├── technical/                     # Technical implementation notes
+├── archive/                       # Archived/superseded documents
 └── changes/                       # Per-feature edit history
     └── <change-slug>/
         └── CHANGELOG.md           # Mandatory entry per implementation task
@@ -66,4 +80,4 @@ See [`AGENTS.md`](../AGENTS.md) for the full workflow. Summary:
 
 ## Last updated
 
-2026-05-31 — `cursor-sdd-enforcement-harness` initial doc scaffold
+2026-05-31 — `docs-standards-timeline` added PROJECT_TIMELINE.md, expanded structure

@@ -1,4 +1,14 @@
+---
+status: active
+category: debugging
+last_updated: 2026-05-31
+owner: human
+---
+
 # Debugging: Memory System
+
+> **Purpose:** Debugging guide for memory system issues.
+
 
 **Quick Reference:** Dual memory architecture: short-term (JSON file-based, 200-entry cap, managed by `src/memory/memory_manager.py`) + long-term (Mem0 + Qdrant vector search, managed by `src/memory/long_term.py`). Redis for LangGraph checkpointing. Key files: `src/memory/memory_manager.py`, `src/memory/long_term.py`, `src/memory/personal_assistant.py`, `src/memory/user_profile.py`, `src/memory/persona.py`, `src/agent/nodes/memory.py` (inject/write nodes).
 
@@ -278,3 +288,11 @@ INFO:langgraph.checkpoint.memory:Using in-memory checkpointer (data lost on rest
 - **Topics/interests not used in simple path**: Resolved — knowledge context now injected into `simple_node()` prompt. See [STATUS.md](../STATUS.md).
 - **Memory context caching**: 5-minute TTL per thread, invalidated on `memory_write`. See [AGENT_FLOW.md](../AGENT_FLOW.md).
 - See also: [ARCHITECTURE_OVERVIEW.md](../ARCHITECTURE_OVERVIEW.md) sections 6-7 for memory architecture.
+
+## Related
+
+- [`docs/debugging/README.md`](README.md) — debugging index
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

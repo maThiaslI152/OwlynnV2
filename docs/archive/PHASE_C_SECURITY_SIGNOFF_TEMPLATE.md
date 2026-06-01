@@ -1,3 +1,10 @@
+---
+status: archived
+category: archive
+last_updated: 2026-05-31
+owner: human
+---
+
 # Phase C Security Sign-Off Template
 
 Use this template after executing `docs/TAURI_CSP_PERMISSION_AUDIT_CHECKLIST.md`.
@@ -32,3 +39,11 @@ Use this template after executing `docs/TAURI_CSP_PERMISSION_AUDIT_CHECKLIST.md`
 
 - Reviewer:
 - Approver:
+
+## Related
+
+- [`docs/README.md`](../README.md) — project documentation map
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

@@ -1,4 +1,13 @@
+---
+status: active
+category: audit
+last_updated: 2026-05-31
+owner: human
+---
+
 # Audit Logging System — Implementation Summary
+
+> **Purpose:** Implementation summary for the channel-based structured audit logging system.
 
 **Completed**: 2026-05-27
 **Plan**: `owlynn-logging-system` (`.cursor/plans/owlynn-logging-system_e999dbc9.plan.md`)
@@ -102,3 +111,13 @@ python scripts/logcat.py --thread-id abc-123 --follow
 # Monitor memory subsystem
 python scripts/logcat.py --channel memory --follow
 ```
+
+
+## Related
+
+- [`docs/STATUS.md`](STATUS.md) — project status and risks
+- [`docs/BUG-ANALYSIS.md`](BUG-ANALYSIS.md) — bug analysis
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter, purpose blockquote

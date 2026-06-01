@@ -1,4 +1,14 @@
+---
+status: active
+category: guide
+last_updated: 2026-05-31
+owner: human
+---
+
 # Personal Assistant Memory System - Integration Complete ✅
+
+> **Purpose:** Guide for integrating personal assistant features.
+
 
 ## What Was Accomplished
 
@@ -229,3 +239,11 @@ The personal assistant memory system is now **fully integrated and ready to use*
 ✅ Documentation: Comprehensive guide with examples and debugging
 
 This creates a foundation for increasingly personalized assistance as Owlynn learns more about you across conversations.
+
+## Related
+
+- [`docs/README.md`](../README.md) — project documentation map
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

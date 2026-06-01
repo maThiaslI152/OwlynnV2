@@ -1,9 +1,13 @@
 ---
-last_verified: 2026-05-26
-auto_generated: false
+status: active
+category: guide
+last_updated: 2026-05-31
+owner: human
 ---
 
 # Owlynn Project Guide (Human)
+
+> **Purpose:** Project guide for human developers working with Owlynn.
 
 ## Overview
 
@@ -69,3 +73,12 @@ Current priorities:
 Delivery conventions:
 - Keep feature changes scoped and test-backed
 - Prefer focused PRs over large mixed commits
+
+## Related
+
+- [`docs/README.md`](README.md) — project documentation map
+- [`docs/AI_AGENT_INDEX.md`](AI_AGENT_INDEX.md) — navigation index
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter, purpose blockquote

@@ -1,4 +1,14 @@
+---
+status: active
+category: debugging
+last_updated: 2026-05-31
+owner: human
+---
+
 # Debugging: Frontend
+
+> **Purpose:** Debugging guide for frontend UI and component issues.
+
 
 **Quick Reference:** React 19 + TypeScript (Vite 8). Zustand 5 state management. WebSocket streaming via `frontend-v2/src/lib/wsClient.ts`. Key files: `frontend-v2/src/state/useAppStore.ts`, `frontend-v2/src/lib/wsClient.ts`, `frontend-v2/src/App.tsx`, `frontend-v2/src/components/*.tsx`.
 
@@ -192,3 +202,11 @@ Expected message sequence for a normal chat:
 - **Browser API polyfills**: `vitest.config.ts` setup file provides `crypto.subtle`, `URL.createObjectURL`, `navigator.clipboard`.
 - **Stale closure patterns**: Known concern from browser audit — `useCallback` with complex dependency chains. See [BUG-ANALYSIS.md](../BUG-ANALYSIS.md) section "Concerns".
 - **Silent error handling**: Known concern — multiple try/catch blocks swallow errors in chat title generation, profile updates. See [BUG-ANALYSIS.md](../BUG-ANALYSIS.md).
+
+## Related
+
+- [`docs/debugging/README.md`](README.md) — debugging index
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

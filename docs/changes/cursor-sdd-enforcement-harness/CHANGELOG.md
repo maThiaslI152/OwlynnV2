@@ -1,3 +1,10 @@
+---
+status: active
+category: changelog
+last_updated: 2026-05-31
+owner: ai-agent
+---
+
 # CHANGELOG: cursor-sdd-enforcement-harness
 
 > **Change:** Initial implementation of the Cursor SDD Enforcement Harness.
@@ -40,3 +47,8 @@
 - All hook scripts are executable and pass bash syntax check
 - Gate logic tested: allowlists specs/.cursorplan/docs/changes, blocks product writes without approvals
 - All 63 integrity checks pass via sdd-harness-test.sh
+
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

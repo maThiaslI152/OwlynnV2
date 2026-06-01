@@ -1,9 +1,13 @@
 ---
-last_verified: 2026-05-26
-auto_generated: false
+status: active
+category: guide
+last_updated: 2026-05-31
+owner: human
 ---
 
 # Owlynn Project Guide (AI Agent)
+
+> **Purpose:** Project guide for AI agents working in the Owlynn codebase.
 
 ## Overview
 
@@ -66,3 +70,12 @@ tests/                        # Behavior, property, and regression tests
 ## Configuration
 
 No specific env vars for agent guidelines. Rules enforced via code review and testing policy.
+
+## Related
+
+- [`docs/README.md`](README.md) — project documentation map
+- [`docs/AI_AGENT_INDEX.md`](AI_AGENT_INDEX.md) — navigation index
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter, purpose blockquote

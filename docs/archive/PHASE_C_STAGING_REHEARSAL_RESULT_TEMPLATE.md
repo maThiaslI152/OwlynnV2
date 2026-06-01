@@ -1,3 +1,10 @@
+---
+status: archived
+category: archive
+last_updated: 2026-05-31
+owner: human
+---
+
 # Phase C Staging Rehearsal Result Template
 
 Use this template to record a rollback rehearsal outcome for personal local use.
@@ -42,3 +49,11 @@ Use this template to record a rollback rehearsal outcome for personal local use.
 
 - Operator:
 - Reviewer:
+
+## Related
+
+- [`docs/README.md`](../README.md) — project documentation map
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

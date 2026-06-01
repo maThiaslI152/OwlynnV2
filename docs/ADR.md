@@ -1,9 +1,13 @@
 ---
-last_verified: 2026-05-26
-auto_generated: false
+status: active
+category: architecture
+last_updated: 2026-05-31
+owner: human
 ---
 
 # Architecture Decision Log (ADR)
+
+> **Purpose:** Architecture Decision Log for the Owlynn project.
 
 ## Overview
 
@@ -239,3 +243,12 @@ Both nodes run **locally only** (Small/Medium LLM, no cloud). When the eventual 
 3. **Small LLM could override the heuristic** — The Small LLM classifier's `needs_clarification` field could return `false`, silently skipping the interrupt even when the heuristic correctly identified 2+ missing dimensions. Fixed by removing the LLM's gating authority: the heuristic is the authoritative gate; the Small LLM only generates questions. Fallback generic questions are used if the LLM is unavailable or returns empty.
 
 4. **Medium LLM preloaded at startup** — `get_medium_llm("default")` is loaded in a background task during the server lifespan. Eliminates cold-start model swap latency on the first complex request. The embedding model (`text-embedding-nomic-embed-text-v1.5-embedding`) must be manually pre-pulled in LM Studio before use; auto-preload was removed to avoid unnecessary LM Studio state manipulation.
+
+## Related
+
+- [`docs/ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) — system architecture
+- [`docs/README.md`](README.md) — project documentation map
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter, purpose blockquote

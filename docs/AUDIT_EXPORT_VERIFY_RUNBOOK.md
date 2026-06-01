@@ -1,4 +1,13 @@
+---
+status: active
+category: guide
+last_updated: 2026-05-31
+owner: human
+---
+
 # Audit Export + Verify Runbook
+
+> **Purpose:** Operator runbook for exporting and verifying tool-execution audit artifacts.
 
 This runbook defines the operator workflow for producing and validating tool-execution audit artifacts from `frontend-v2`.
 
@@ -60,3 +69,12 @@ This runbook defines the operator workflow for producing and validating tool-exe
   - manifest modified after export.
 - `Manifest signature mismatch`:
   - wrong verify secret or modified manifest.
+
+## Related
+
+- [`docs/README.md`](README.md) — project documentation map
+- [`docs/AI_AGENT_INDEX.md`](AI_AGENT_INDEX.md) — navigation index
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter, purpose blockquote

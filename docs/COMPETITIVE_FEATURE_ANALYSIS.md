@@ -1,4 +1,13 @@
+---
+status: active
+category: reference
+last_updated: 2026-05-31
+owner: human
+---
+
 # Competitive Feature Gap Analysis — Owlynn vs. Leading Local AI Assistants
+
+> **Purpose:** Competitive feature gap analysis — Owlynn vs. leading local AI assistants.
 
 **Date:** 2026-05-22
 **Audience:** Owlynn maintainers, AI agents planning feature work
@@ -454,3 +463,12 @@ These constraints should guide all feature implementation:
 3. **Memory budget discipline** — New features must not exceed the M4 Air 24 GB envelope (refer to `docs/PERFORMANCE_SLOS.md` degradation ladder).
 4. **Solo-dev maintainability** — Features should not create ongoing maintenance burdens. Prefer leveraging existing infrastructure (Qdrant, Redis, MCP) over new services.
 5. **Build on strengths** — Leverage the LangGraph graph, router, and tool infrastructure rather than circumventing them.
+
+## Related
+
+- [`docs/README.md`](README.md) — project documentation map
+- [`docs/INDEX.md`](INDEX.md) — documentation index
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter, purpose blockquote

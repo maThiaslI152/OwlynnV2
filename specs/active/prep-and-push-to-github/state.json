@@ -1,0 +1,18 @@
+{
+  "change": "prep-and-push-to-github",
+  "phase": "requirements",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true,
+    "implement": true,
+    "verify": false
+  },
+  "pending_review": null,
+  "phase": "implement",
+  "verification": {
+    "tasks": {}
+  },
+  "allowed_paths": [],
+  "updated_at": "2026-06-01T13:16:35Z"
+}

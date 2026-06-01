@@ -1,11 +1,13 @@
 ---
-last_verified: 2026-05-26
-auto_generated: false
+status: active
+category: reference
+last_updated: 2026-05-31
+owner: human
 ---
 
 # Chat & Events Protocol
 
-Developer-facing JSON contract between the frontend WebSocket client (`frontend-v2`), the backend WebSocket handler (`src/api/server.py`), and the LangGraph execution stream forwarded to the browser.
+> **Purpose:** Developer-facing JSON contract between the frontend WebSocket client (`frontend-v2`), the backend WebSocket handler (`src/api/server.py`), and the LangGraph execution stream forwarded to the browser.
 
 ## Overview
 
@@ -157,11 +159,11 @@ For non-`workspace_ref` attachments, the server:
 - `budget_remaining` — tokens remaining in allocated budget
 - `metadata` is optional; frontend code not handling it continues to work
 
-#### `message`
+#### `assistant.message`
 
 ```json
 {
-  "type": "message",
+  "type": "assistant.message",
   "message": {
     "type": "ai | tool | human | ...",
     "content": "string",
@@ -291,7 +293,7 @@ Sent after router node completes, before the first `chunk` event.
 
 Telemetry data source: `src/agent/nodes/router.py` — `router_node()` populates `router_metadata` on every return path via `_build_router_metadata()`.
 
-#### `token_budget_update`
+#### `token_budget_update` (planned / not yet implemented)
 
 ```json
 {
@@ -303,7 +305,7 @@ Telemetry data source: `src/agent/nodes/router.py` — `router_node()` populates
 }
 ```
 
-Sent after streaming completes.
+> **Status:** Planned — not yet implemented. The server does not currently emit this event.
 
 | Field | Description |
 |-------|-------------|
@@ -312,7 +314,7 @@ Sent after streaming completes.
 | `remaining` | `max(0, total - used)` |
 | `percent` | Fraction of budget consumed (can exceed 1.0) |
 
-#### `cloud_budget_warning`
+#### `cloud_budget_warning` (planned / not yet implemented)
 
 ```json
 {
@@ -324,7 +326,7 @@ Sent after streaming completes.
 }
 ```
 
-Sent when cumulative cloud token usage crosses a configured threshold. Default thresholds: 50%, 80%, 95% of daily limit.
+> **Status:** Planned — not yet implemented. The server does not currently emit this event.
 
 | Level | Trigger |
 |-------|---------|
@@ -433,7 +435,7 @@ Returns all user-facing settings merged from `GET /api/profile` and `GET /api/ad
   "medium_models": {},
   "cloud_llm_base_url": "https://api.deepseek.com/v1",
   "cloud_llm_model_name": "deepseek-chat",
-  "deepseek_api_key": "••••••••",
+  "deepseek_api_key": "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022",
   "temperature": 0.7,
   "top_p": 0.9,
   "max_tokens": 2048,
@@ -455,7 +457,7 @@ Returns all user-facing settings merged from `GET /api/profile` and `GET /api/ad
 
 | Note | Detail |
 |------|--------|
-| API key masking | `deepseek_api_key` always masked (`••••••••` when present, `""` when absent) |
+| API key masking | `deepseek_api_key` always masked (`\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022` when present, `""` when absent) |
 | Default limits | `cloud_daily_token_limit` defaults to 500,000; `cloud_budget_warning_thresholds` defaults to `[0.5, 0.8, 0.95]` |
 | Backward compatibility | `GET /api/profile` and `GET /api/advanced-settings` unchanged |
 | Error fallback | If `get_profile()` raises exception, returns error response; frontend falls back to individual endpoints |
@@ -488,3 +490,13 @@ cd frontend-v2 && npx vitest run
 | `cloud_anonymization_enabled` | boolean | `true` |
 | `redis_url` | string | `redis://localhost:6379` |
 | `deepseek_api_key` | string | `""` |
+
+## Related
+
+- [`docs/API_REFERENCE.md`](API_REFERENCE.md) — REST endpoint reference
+- [`docs/ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) — system architecture
+- [`src/api/server.py`](../src/api/server.py) — WebSocket handler implementation
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` fixed event types, annotated ghost events

@@ -1,9 +1,13 @@
 ---
-last_verified: 2026-05-26
-auto_generated: false
+status: active
+category: standards
+last_updated: 2026-05-31
+owner: human
 ---
 
 # Performance & Memory SLOs
+
+> **Purpose:** Performance and memory SLOs for the Owlynn project on target hardware.
 
 Target hardware: **Mac Air M4 (24 GB unified memory)**. These SLOs define the expected resource envelope for a healthy Owlynn session.
 
@@ -142,3 +146,12 @@ No specific env vars for SLOs. Enforced via policy rules:
 2. Latency regressions > 20% require investigation and documentation before proceeding
 3. Thermal throttling during normal use (non-query idle) is a blocker
 4. SLOs checked manually before phase transitions (no automated SLO gate yet)
+
+## Related
+
+- [`docs/standards/documentation.md`](standards/documentation.md) — doc structure rules
+- [`docs/standards/coding-style.md`](standards/coding-style.md) — coding conventions
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter, purpose blockquote

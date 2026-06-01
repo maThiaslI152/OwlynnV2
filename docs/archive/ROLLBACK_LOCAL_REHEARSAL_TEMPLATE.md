@@ -1,3 +1,10 @@
+---
+status: archived
+category: archive
+last_updated: 2026-05-31
+owner: human
+---
+
 # Rollback Local Rehearsal Template
 
 Use this template to record the required local rollback rehearsal for personal daily use.
@@ -37,3 +44,11 @@ Use this template to record the required local rollback rehearsal for personal d
 
 - Operator sign-off:
 - Reviewer sign-off:
+
+## Related
+
+- [`docs/README.md`](../README.md) — project documentation map
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

@@ -1,6 +1,49 @@
+---
+status: active
+category: standards
+last_updated: 2026-05-31
+owner: ai-agent
+---
+
 # Documentation Standards
 
-> **How to write and structure project documentation.** All docs, changelogs, and spec artifacts **MUST** follow these rules.
+> **Purpose:** How to write and structure project documentation. All docs, changelogs, and spec artifacts **MUST** follow these rules.
+
+## Frontmatter Schema
+
+Every document **MUST** start with YAML frontmatter between `---` delimiters:
+
+```yaml
+---
+status: active|archived|draft|obsolete
+category: architecture|reference|guide|changelog|debugging|planning|standards|audit|archive
+last_updated: YYYY-MM-DD
+owner: ai-agent|human
+---
+```
+
+### Fields
+
+| Field | Required | Values |
+|-------|----------|--------|
+| `status` | Yes | `active` — current reference; `archived` — superseded/outdated; `draft` — in progress; `obsolete` — no longer relevant |
+| `category` | Yes | One of the category enum values (see above). Pick the most specific match |
+| `last_updated` | Yes | ISO date of last meaningful edit (YYYY-MM-DD) |
+| `owner` | Yes | `ai-agent` if maintained by agents; `human` if manually maintained |
+
+## Template Structure
+
+Every document **MUST** follow this structure in order:
+
+1. **YAML frontmatter** — see schema above
+2. **`# Title`** — single H1 at the top
+3. **Purpose blockquote** — 2-3 lines immediately after the title:
+   ```
+   > **Purpose:** What this doc covers and when to read it.
+   ```
+4. **Content body** — H2 (`##`) for major sections
+5. **`## Related`** — links to other `docs/` paths or specs
+6. **`## Last updated`** — date (YYYY-MM-DD) + change slug
 
 ## File Structure Rules
 
@@ -28,6 +71,7 @@ Every document **MUST**:
 - Docs without a `## Related` section
 - Docs without a `## Last updated` footer
 - Deeply nested headers (H4, H5, etc.)
+- Missing or invalid YAML frontmatter
 
 ## CHANGELOG Format (docs/changes/<slug>/CHANGELOG.md)
 
@@ -69,4 +113,4 @@ Every implementation task **MUST** append at least one entry using this exact fo
 
 ## Last updated
 
-2026-05-31 — `cursor-sdd-enforcement-harness` initial doc standards
+2026-05-31 — `docs-standards-timeline` frontmatter schema + template rules

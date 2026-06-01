@@ -1,3 +1,10 @@
+---
+status: archived
+category: archive
+last_updated: 2026-05-31
+owner: human
+---
+
 # AI Multi-Agent Frontend Rebuild Plan
 
 ## Purpose
@@ -101,3 +108,11 @@ Any agent resuming this work must do the following before changing scope:
 ## Suggested Next Action for Resuming Agents
 
 Start with **Slice A**, create the new frontend skeleton and typed transport contracts, then freeze interface contracts before implementing voice and screen-assist interactions.
+
+## Related
+
+- [`docs/README.md`](../README.md) — project documentation map
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

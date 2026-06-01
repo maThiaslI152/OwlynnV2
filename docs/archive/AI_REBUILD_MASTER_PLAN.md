@@ -1,3 +1,10 @@
+---
+status: archived
+category: archive
+last_updated: 2026-05-31
+owner: human
+---
+
 # AI Rebuild Master Plan (Canonical)
 
 ## Purpose
@@ -168,3 +175,11 @@ The rebuild is complete when:
 - local-first runtime meets stability and SLO targets on Mac Air M4
 - security controls, auditability, and safe-mode are operational
 - memory continuity and offline reliability gates are consistently passing
+
+## Related
+
+- [`docs/README.md`](../README.md) — project documentation map
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

@@ -1,15 +1,17 @@
 ---
-last_verified: 2026-05-30
-auto_generated: false
+status: active
+category: reference
+last_updated: 2026-05-31
+owner: human
 ---
 
 # AI Agent Navigation Index
 
+> **Purpose:** Fastest entry point for AI agents working in Owlynn. Locate source files, contracts, and tests before making changes.
+
 ## Overview
 
-Fastest entry point for AI agents working in Owlynn. Locate source files, contracts, and tests before making changes.
-
-Current status: **Phase 7 complete**. All phases through 7 are done.
+Current status: **Phase 8 complete**. All phases through 8 are done.
 
 ## Entry Points
 
@@ -93,19 +95,19 @@ Current status: **Phase 7 complete**. All phases through 7 are done.
 
 ### Bug Tracking
 
-| ID | Severity | Description |
-|----|----------|-------------|
-| BUG-1 | CRITICAL | Persona/system prompt leaks into first assistant response |
-| BUG-2 | HIGH | Orchestration panel empty after message processing |
-| BUG-3 | HIGH | Memory panel shows "Loading..." indefinitely |
-| BUG-4 | MEDIUM | Chat auto-title defaults to "New Chat" |
-| BUG-5 | MEDIUM | Safe Mode dropdown depends on Tauri IPC, no browser fallback |
-| BUG-6 | LOW | Tool Execution panel shows permanent mock data |
-| BUG-7 | LOW | Workspace delete shows wrong operator note |
-| BUG-8 | LOW | Audit & Verify sub-panel doesn't expand |
-| BUG-9 | HIGH | Default project file auto-indexing into Qdrant is skipped (cache path mismatch) |
-| BUG-10 | MEDIUM | DOCX table content not extracted (python-docx limitation) |
-| BUG-11 | LOW | XLSX merged cells produce "Unnamed" column headers in markdown output |
+| ID | Severity | Description | Status |
+|----|----------|-------------|--------|
+| BUG-1 | CRITICAL | Persona/system prompt leaks into first assistant response | Fixed |
+| BUG-2 | HIGH | Orchestration panel empty after message processing | Fixed |
+| BUG-3 | HIGH | Memory panel shows "Loading..." indefinitely | Fixed |
+| BUG-4 | MEDIUM | Chat auto-title defaults to "New Chat" | Fixed |
+| BUG-5 | MEDIUM | Safe Mode dropdown depends on Tauri IPC, no browser fallback | Fixed |
+| BUG-6 | LOW | Tool Execution panel shows permanent mock data | Fixed |
+| BUG-7 | LOW | Workspace delete shows wrong operator note | Fixed |
+| BUG-8 | LOW | Audit & Verify sub-panel doesn't expand | Fixed |
+| BUG-9 | HIGH | Default project file auto-indexing into Qdrant is skipped (cache path mismatch) | Fixed |
+| BUG-10 | MEDIUM | DOCX table content not extracted (python-docx limitation) | Fixed |
+| BUG-11 | LOW | XLSX merged cells produce "Unnamed" column headers in markdown output | Fixed |
 
 ### Canonical Documentation Map
 
@@ -122,3 +124,13 @@ Current status: **Phase 7 complete**. All phases through 7 are done.
 | `docs/BUG-ANALYSIS.md` | Bug analysis and audit reports |
 | `docs/audit-file-intake-2026-05-30.md` | RAG file intake audit — PDF/DOCX/XLSX pipeline, Qdrant indexing, LLM retrieval |
 | `docs/ENGINEERING_IMPROVEMENTS.md` | Engineering improvement backlog |
+
+## Related
+
+- [`docs/STATUS.md`](STATUS.md) — active status and risks
+- [`docs/API_REFERENCE.md`](API_REFERENCE.md) — API contract
+- [`docs/TOOLS.md`](TOOLS.md) — tool reference
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added Phase 8, status column, updated last_verified

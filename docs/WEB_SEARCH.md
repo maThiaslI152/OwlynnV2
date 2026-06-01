@@ -1,9 +1,13 @@
 ---
-last_verified: 2026-05-26
-auto_generated: false
+status: active
+category: architecture
+last_updated: 2026-05-31
+owner: human
 ---
 
 # Web Search Architecture
+
+> **Purpose:** Web search architecture — multi-tier fallback pipeline for internet search.
 
 ## Overview
 
@@ -172,3 +176,12 @@ API-key-based providers removed from pipeline:
 - Tavily API (`TAVILY_API_KEY`)
 
 `WEB_SEARCH_PROVIDER` env var also removed. Removals affect `src/tools/web_tools.py` and its tests only.
+
+## Related
+
+- [`docs/ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) — system architecture
+- [`docs/README.md`](README.md) — project documentation map
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter, purpose blockquote

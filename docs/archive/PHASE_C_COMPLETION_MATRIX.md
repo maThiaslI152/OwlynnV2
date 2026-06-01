@@ -1,3 +1,10 @@
+---
+status: archived
+category: archive
+last_updated: 2026-05-31
+owner: human
+---
+
 # Phase C Completion Matrix
 
 Status reference for Phase C (Hardening + Cutover) checklist execution.
@@ -39,3 +46,11 @@ Status reference for Phase C (Hardening + Cutover) checklist execution.
   - Evidence: `docs/FRONTEND_CUTOVER_ROLLBACK.md`.
 - [x] Rollback exercised and recorded with execution artifact.
   - Evidence: `docs/ROLLBACK_DRY_RUN_LOG.md`, `docs/PHASE_C_STAGING_REHEARSAL_RESULT_2026-04-23.md` (local personal-use rehearsal using known-good `frontend-v2` restore flow).
+
+## Related
+
+- [`docs/README.md`](../README.md) — project documentation map
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

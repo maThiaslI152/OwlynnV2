@@ -1,4 +1,14 @@
+---
+status: active
+category: guide
+last_updated: 2026-05-31
+owner: human
+---
+
 # Backend Integration Guide for Enhanced Chat Features
+
+> **Purpose:** Guide for integrating with the Owlynn backend.
+
 
 ## Overview
 This guide explains how to modify your backend to fully support the new chat experience improvements.
@@ -393,3 +403,11 @@ socket.addEventListener('message', (e) => {
 4. Test all message types
 5. Monitor performance
 6. Iterate based on user feedback
+
+## Related
+
+- [`docs/README.md`](../README.md) — project documentation map
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

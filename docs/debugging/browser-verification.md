@@ -1,4 +1,14 @@
+---
+status: active
+category: debugging
+last_updated: 2026-05-31
+owner: human
+---
+
 # Browser Verification — May 25, 2026 Audit
+
+> **Purpose:** Browser verification test results confirming bug fixes.
+
 
 > **Note**: This document describes an historical audit session. The current default medium model is `gemma-4-e4b-uncensored-hauhaucs-aggressive` (Q4_K_M). The Qwen 3.5 9B fp16 variant described in Session 1 is no longer used.
 
@@ -82,3 +92,11 @@ Model switched to [HauhauCS/Gemma-4-E4B-Uncensored-HauhauCS-Aggressive](https://
 2. **Re-test BUG-1** — once rendering fixed, send "What is your name?" and verify no system prompt markers in response
 3. **Fix Redis connection** — `AsyncRedisSaver` constructor param
 4. **Re-test BUG-7** — with Redis, create → delete a chat, verify operator note
+
+## Related
+
+- [`docs/debugging/README.md`](README.md) — debugging index
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

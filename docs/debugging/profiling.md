@@ -1,4 +1,14 @@
+---
+status: active
+category: debugging
+last_updated: 2026-05-31
+owner: human
+---
+
 # Debugging: Profiling & Performance
+
+> **Purpose:** Performance profiling data and analysis.
+
 
 **Quick Reference:** Resource monitoring and performance profiling for the full Owlynn stack. Targets defined in `docs/PERFORMANCE_SLOS.md` for Mac Air M4 (16 GB). Key metrics: memory (~8.6 GB sustained), latency (simple <2s, complex <8s), throughput (30+ tok/s medium, 80+ tok/s small).
 
@@ -295,3 +305,11 @@ Total: 18s → Suggests model swap or OOM pressure
 - **Latency targets**: Simple <2s, complex <8s, first token <3s, tool execution <5s. See [PERFORMANCE_SLOS.md](../PERFORMANCE_SLOS.md).
 - **Fanless M4 Air**: No thermal throttling expected. If CPU > 95% sustained, investigate infinite loops or CPU-bound operations.
 - **SLO check commands**: Pre-commit quick check and pre-release full check documented in [PERFORMANCE_SLOS.md](../PERFORMANCE_SLOS.md).
+
+## Related
+
+- [`docs/debugging/README.md`](README.md) — debugging index
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

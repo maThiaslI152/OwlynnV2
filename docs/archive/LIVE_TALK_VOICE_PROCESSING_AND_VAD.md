@@ -1,3 +1,10 @@
+---
+status: archived
+category: archive
+last_updated: 2026-05-31
+owner: human
+---
+
 # Live Talk: Voice processing, VAD, and roadmap
 
 **Last updated:** 2026-04-25 v2 (post filler-forced-finalization debug session)  
@@ -116,3 +123,7 @@ Options for turn-boundary detection without echo:
 - [`docs/LIVE_TALK_WHISPER_FILLER_AND_FORCE_FINALIZE.md`](LIVE_TALK_WHISPER_FILLER_AND_FORCE_FINALIZE.md) — debug analysis, root cause, all changes in this session.
 - [`docs/SOUNDANALYSIS_WAKEWORD_ARCHITECTURE.md`](SOUNDANALYSIS_WAKEWORD_ARCHITECTURE.md) — two-stage pipeline diagram.
 - [`docs/LIVE_TALK_PHASE1_TTS_LOOP_FIX_2026-04-25.md`](LIVE_TALK_PHASE1_TTS_LOOP_FIX_2026-04-25.md) — Phase 1 TTS mute / IPC notes.
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

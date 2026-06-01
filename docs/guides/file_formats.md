@@ -1,4 +1,14 @@
+---
+status: active
+category: guide
+last_updated: 2026-05-31
+owner: human
+---
+
 # File Format Support Guide
+
+> **Purpose:** Guide for supported file formats and their processing.
+
 
 Owlynn can automatically understand and process a wide variety of file formats. When you upload files to the chat, they are automatically converted to readable formats and cached for fast retrieval.
 
@@ -651,3 +661,11 @@ def _process_custom_format(self, filepath, output_path):
 ---
 
 For questions or issues with file format support, check the main [README.md](../../README.md) or explore the `src/api/file_processor.py` implementation.
+
+## Related
+
+- [`docs/README.md`](../README.md) — project documentation map
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

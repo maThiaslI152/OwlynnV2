@@ -1,4 +1,14 @@
+---
+status: active
+category: debugging
+last_updated: 2026-05-31
+owner: human
+---
+
 # Debugging: LLM Pool & SwapManager
+
+> **Purpose:** Debugging guide for LLMPool model loading and swap issues.
+
 
 **Quick Reference:** Three-tier LLM architecture managed by `src/agent/llm.py` (LLMPool) and `src/agent/swap_manager.py` (SwapManager). Models served via LM Studio on port 1234. Cloud via DeepSeek API. Key files: `src/agent/llm.py`, `src/agent/swap_manager.py`, `src/agent/router/budget.py`.
 
@@ -276,3 +286,11 @@ INFO:src.agent.llm:Cloud budget: 420000/500000 (84%) — WARNING
 - **`model_not_found` errors for legacy model IDs**: Resolved — profile update semantic now persists active model keys. `LLMPool.clear()` triggered on profile changes.
 - **Cloud fallback chain**: All cloud failures auto-retry with Medium_Default. 401/403 suggests checking key. 429 retries after 2s. See [ARCHITECTURE_OVERVIEW.md](../ARCHITECTURE_OVERVIEW.md) section 12.
 - See also: [PERFORMANCE_SLOS.md](../PERFORMANCE_SLOS.md) for memory budget and degradation ladder.
+
+## Related
+
+- [`docs/debugging/README.md`](README.md) — debugging index
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

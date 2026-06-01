@@ -1,5 +1,10 @@
 # Virtual Environment
 .venv/
+
+# Binary audit/export files
+*.xlsx
+*.docx
+*.pdf
 .venv-local/
 venv/
 ENV/

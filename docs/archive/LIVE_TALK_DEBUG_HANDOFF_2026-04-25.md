@@ -1,3 +1,10 @@
+---
+status: archived
+category: archive
+last_updated: 2026-05-31
+owner: human
+---
+
 # Live Talk Debug Handoff (2026-04-25)
 
 ## Scope
@@ -84,3 +91,10 @@ Multiple transcript ingestion paths and race timing around TTS end can still adm
 - [ ] Verify transcript preview matches spoken user audio only.
 - [ ] Verify no `<|...|>` artifacts appear in UI messages.
 
+## Related
+
+- [`docs/README.md`](../README.md) — project documentation map
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

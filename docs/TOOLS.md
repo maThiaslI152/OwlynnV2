@@ -1,9 +1,13 @@
 ---
-last_verified: 2026-05-26
-auto_generated: false
+status: active
+category: reference
+last_updated: 2026-05-31
+owner: human
 ---
 
 # Tools Reference
+
+> **Purpose:** Reference for all agent tools organized by toolbox category. Tools are dynamically bound per turn based on router classification.
 
 ## Overview
 
@@ -81,6 +85,7 @@ src/api/server.py                  # Tool discovery (GET /api/tools)
 | `recall_memories` | Search short-term (JSON) memory — keyword overlap on recent 50 entries |
 | `recall_all_memories` | Deep semantic search of Mem0/Qdrant vector store (long-term memory). Optional `project_id` for scoping |
 | `forget_memory` | Delete specific memories by their ID (hash). Use `recall_all_memories` first to find IDs |
+| `search_workspace_docs` | Semantic search over workspace documentation indexed in Qdrant. Queries project-specific knowledge base and returns relevant document excerpts |
 
 ## Key Decisions
 
@@ -113,3 +118,12 @@ All other tools auto-approve. Dangerous shell patterns (`rm -rf`, `sudo`, etc.) 
 4. Tool automatically included when that toolbox is selected by the Router
 5. Update guidance text in `src/agent/nodes/complex.py`
 6. If sensitive, add to `SENSITIVE_TOOLS` in `src/agent/nodes/security_proxy.py`
+
+## Related
+
+- [`docs/API_REFERENCE.md`](API_REFERENCE.md) — REST endpoint reference
+- [`docs/ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) — system architecture
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added search_workspace_docs to memory toolbox

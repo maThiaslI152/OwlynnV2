@@ -1,4 +1,13 @@
+---
+status: active
+category: debugging
+last_updated: 2026-05-31
+owner: human
+---
+
 # Phase 1 Browser Multi-Switch E2E Log
+
+> **Purpose:** E2E test log for deterministic multi-project switching in the browser runtime.
 
 Date: 2026-04-23
 Environment: local runtime (`frontend-v2` via backend at `http://127.0.0.1:8001`)
@@ -40,3 +49,12 @@ PASS (manual browser-driven deterministic sweep)
 
 - This run confirms runtime feasibility and behavioral correctness for deterministic multi-switch interactions in browser.
 - Next iteration should automate this sequence in a repeatable browser harness to remove manual execution dependency.
+
+## Related
+
+- [`docs/README.md`](README.md) — project documentation map
+- [`docs/debugging/README.md`](debugging/README.md) — debugging index
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter, purpose blockquote

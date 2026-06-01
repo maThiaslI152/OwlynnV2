@@ -1,4 +1,13 @@
+---
+status: active
+category: reference
+last_updated: 2026-05-31
+owner: human
+---
+
 # OwlynnV2 Project Overview
+
+> **Purpose:** High-level project overview covering goals, architecture, progress, and areas for improvement.
 
 **Date:** 2026-05-27
 
@@ -66,3 +75,12 @@ As the architecture has matured, certain features and implementations have been 
 ---
 
 *For detailed architectural decisions, see `ADR.md`. For live bug tracking, refer to `STATUS.md` and `BUG-ANALYSIS.md`.*
+
+## Related
+
+- [`docs/README.md`](README.md) — project documentation map
+- [`docs/INDEX.md`](INDEX.md) — documentation index
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter, purpose blockquote

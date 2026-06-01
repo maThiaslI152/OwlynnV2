@@ -1,0 +1,21 @@
+{
+  "change": "fix-reconnect-progress-loss",
+  "phase": "complete",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true,
+    "implement": true,
+    "verify": true
+  },
+  "pending_review": null,
+  "verification": {
+    "tasks": {
+      "1": { "status": "pass", "ran_at": "2026-05-31T05:10:00Z" },
+      "2": { "status": "pass", "ran_at": "2026-05-31T05:10:00Z" },
+      "3": { "status": "pass", "ran_at": "2026-05-31T05:10:00Z" }
+    }
+  },
+  "allowed_paths": [],
+  "updated_at": "2026-05-31T05:12:00Z"
+}

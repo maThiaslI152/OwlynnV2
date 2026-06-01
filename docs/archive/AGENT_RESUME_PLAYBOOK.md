@@ -1,3 +1,10 @@
+---
+status: archived
+category: archive
+last_updated: 2026-05-31
+owner: human
+---
+
 # Agent Resume Playbook
 
 ## Purpose
@@ -86,3 +93,11 @@ Any major architecture or security decision must also be added to `docs/DECISION
 - rationale,
 - alternatives considered,
 - rollback plan.
+
+## Related
+
+- [`docs/README.md`](../README.md) — project documentation map
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

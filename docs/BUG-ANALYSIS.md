@@ -1,4 +1,13 @@
+---
+status: active
+category: audit
+last_updated: 2026-05-31
+owner: human
+---
+
 # Bug Analysis: Browser Audit — OwlynnV2 Full Feature Test
+
+> **Purpose:** Browser audit bug analysis and feature test matrix for OwlynnV2.
 
 **Date:** 2026-05-25  
 **Session:** Browser-based interactive audit of all frontend features  
@@ -175,3 +184,12 @@ These appear to be mock/demo entries from the empty state preview.
 6. **Fix BUG-6 (Mock Data)** — Remove demo entries for clean production UI
 7. **Fix BUG-7 (Operator Note)** — Correct the delete message text
 8. **Fix BUG-8 (Audit Expand)** — Enable the audit verification features
+
+## Related
+
+- [`docs/STATUS.md`](STATUS.md) — project status and risks
+- [`docs/BUG-ANALYSIS.md`](BUG-ANALYSIS.md) — bug analysis
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter, purpose blockquote

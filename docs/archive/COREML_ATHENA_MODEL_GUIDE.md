@@ -1,3 +1,10 @@
+---
+status: archived
+category: archive
+last_updated: 2026-05-31
+owner: human
+---
+
 # Athena CoreML Wake-Word Model — End-to-End Training Guide
 
 This guide explains how to build, validate, compile, and bundle a custom CoreML sound classification model that detects the wake word "Athena" for use with the SoundAnalysis framework in the Owlynn desktop helper.
@@ -375,3 +382,11 @@ func triggerWakeWordIfNeeded(_ text: String, ipc: IPC) {
 ```
 
 This is fed plain text lines from stdin. For MVP validation, the Rust side can send textual representations of audio (or just type "Athena" into stdin during testing). The app integration (UI, Tauri events, transcription routing) can be fully validated without a trained model.
+
+## Related
+
+- [`docs/README.md`](../README.md) — project documentation map
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

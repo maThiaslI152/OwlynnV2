@@ -1,4 +1,14 @@
+---
+status: active
+category: debugging
+last_updated: 2026-05-31
+owner: human
+---
+
 # Debugging: Tauri Desktop Shell
+
+> **Purpose:** Debugging guide for Tauri desktop shell issues.
+
 
 **Quick Reference:** Tauri v2.10 desktop shell for macOS. Handles window vibrancy, screen capture, TTS (`say`), and CSP enforcement. Key files: `src-tauri/src/main.rs`, `src-tauri/src/voice/mod.rs`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`.
 
@@ -296,3 +306,11 @@ When developing in browser-only mode (Vite dev server on port 5173), `window.__T
 - **Obsolete Live Talk artifacts**: All wake-word, STT, and Swift helper infrastructure removed on 2026-04-29. Only `speak_text` (TTS via macOS `say`) remains. See [`../LIVE_TALK_DEFERRED.md`](../LIVE_TALK_DEFERRED.md).
 - **Safe Mode browser fallback (BUG-5)**: Known issue. See [BUG-ANALYSIS.md](../BUG-ANALYSIS.md) and [frontend.md](frontend.md).
 - See also: [`../TAURI_CSP_PERMISSION_AUDIT_CHECKLIST.md`](../TAURI_CSP_PERMISSION_AUDIT_CHECKLIST.md).
+
+## Related
+
+- [`docs/debugging/README.md`](README.md) — debugging index
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

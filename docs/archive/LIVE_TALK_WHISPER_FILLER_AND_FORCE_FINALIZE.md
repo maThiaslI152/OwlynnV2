@@ -1,3 +1,10 @@
+---
+status: archived
+category: archive
+last_updated: 2026-05-31
+owner: human
+---
+
 # Live Talk Whisper Filler Hallucination & Forced Finalization (2026-04-25)
 
 ## Problem: Valid user transcript never reaches LLM
@@ -130,3 +137,11 @@ provide sufficient echo suppression without hardware AEC side effects.
 1. **Voice processing mutes mic**: `setVoiceProcessingEnabled(true)` appears to suppress microphone input too aggressively on this setup. Recommended: revert it, or make it configurable.
 2. **Finalization race**: Even with Rust anti-filler, if meaningful text never gets to `last_meaningful_text` before filler arrives (e.g. first window is already filler), the forced-finalization can't help. Current Swift hallucination filter should catch those cases.
 3. **Continuous transcription**: After wake-word → transcript, the pipeline stays in transcribe mode indefinitely. No auto-stop/re-arm-wake-word logic is active (removed in earlier session due to echo loops). User must manually stop.
+
+## Related
+
+- [`docs/README.md`](../README.md) — project documentation map
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

@@ -1,9 +1,13 @@
 ---
-last_verified: 2026-05-26
-auto_generated: false
+status: active
+category: guide
+last_updated: 2026-05-31
+owner: human
 ---
 
 # Extending the Agent (Developer Guide)
+
+> **Purpose:** Developer guide for extending Owlynn's agent behavior, tools, and event stream.
 
 Reference for developers modifying Owlynn's agent behavior. Covers the LangGraph execution flow, tool contract, and frontend WebSocket event stream.
 
@@ -142,3 +146,12 @@ When changing core behavior, update:
 | Tool binding or tool guidance | `docs/TOOLS.md` |
 | Routing/node topology | `docs/AGENT_FLOW.md` |
 | Memory context format | `docs/guides/personal_assistant_memory.md` |
+
+## Related
+
+- [`docs/README.md`](README.md) — project documentation map
+- [`docs/AI_AGENT_INDEX.md`](AI_AGENT_INDEX.md) — navigation index
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter, purpose blockquote

@@ -1,9 +1,13 @@
 ---
-last_verified: 2026-05-26
-auto_generated: false
+status: active
+category: architecture
+last_updated: 2026-05-31
+owner: human
 ---
 
 # Architecture Overview
+
+> **Purpose:** System architecture, component relationships, and key data flows for Owlynn — a local-first AI productivity agent.
 
 Owlynn is a local-first AI productivity agent built with LangGraph for orchestration and FastAPI for the backend. Optimized for Apple Silicon (M4 Air 24GB) with a three-tier S/M(swap)/L hybrid LLM architecture.
 
@@ -39,13 +43,25 @@ Small_LLM and one M-tier model are served via LM Studio on port 1234 (OpenAI-com
 
 ### Graph Flow
 
-```
-memory_inject → router ──→ simple ──────────────────→ memory_write → END
-                  │
-                  ├──→ complex-default ──→ complex_llm ↔ security_proxy ↔ tool_action → memory_write → END
-                  ├──→ complex-vision  ──→ complex_llm ↔ security_proxy ↔ tool_action → memory_write → END
-                  ├──→ complex-longctx ──→ complex_llm ↔ security_proxy ↔ tool_action → memory_write → END
-                  └──→ complex-cloud   ──→ complex_llm ↔ security_proxy ↔ tool_action → memory_write → END
+```mermaid
+flowchart TD
+    memory_inject --> router
+    router -->|simple| simple
+    router -->|complex-default| complex_llm
+    router -->|complex-vision| complex_llm
+    router -->|complex-longctx| complex_llm
+    router -->|complex-cloud| complex_llm
+    router -->|scope_clarify| interrupt_scope
+    router -->|plan_review| interrupt_plan
+    simple --> auto_summarize
+    complex_llm <--> security_proxy
+    security_proxy --> tool_action
+    tool_action --> complex_llm
+    complex_llm --> auto_summarize
+    interrupt_scope --> memory_write
+    interrupt_plan --> memory_write
+    auto_summarize --> memory_write
+    memory_write --> END
 ```
 
 ### Router: Two-Stage Decision
@@ -63,11 +79,14 @@ memory_inject → router ──→ simple ────────────�
 | Node | Behavior |
 |------|----------|
 | `memory_inject` | Loads user profile, persona, topics, interests, and long-term memory context |
-| `router` | Small_LLM classifies message and selects route + toolbox categories. Keyword heuristics bypass LLM for obvious cases. Conversations with tool history stay on `complex` |
+| `router` | Small_LLM classifies message and selects route + toolbox categories. Keyword heuristics bypass LLM for obvious cases. Conversations with tool history stay on `complex`. May route to `scope_clarify` or `plan_review` interrupts for HITL interaction |
+| `scope_clarify` | HITL interrupt — asks clarifying questions when router detects vague build/create intent |
+| `plan_review` | HITL interrupt — presents sensitive tool plan for human review before execution |
 | `simple` | Small_LLM gives short direct answers. No tools. Falls back to Medium_Default on failure |
 | `complex_llm` | Selected M-tier or Cloud model with dynamically-bound tools. Emits tool calls or direct answers |
 | `security_proxy` | Gates sensitive tools (`write_workspace_file`, `edit_workspace_file`, `delete_workspace_file`, `notebook_run`). Auto-approves safe tools |
 | `tool_action` | Executes approved tool calls via `ToolNode`, loops back to `complex_llm` |
+| `auto_summarize` | Compresses older conversation history when `active_tokens > 85%` of `context_window`. Emits `context_summarized` WS event |
 | `memory_write` | Extracts topics/interests, saves to Mem0/Qdrant, invalidates cache |
 
 ## File Processing & RAG Pipeline
@@ -271,3 +290,13 @@ Profile fields (`data/user_profile.json`):
 | `cloud_anonymization_enabled` | boolean | `true` |
 | `custom_sensitive_terms` | list | `[]` |
 | `medium_models` | object | Three variant keys |
+
+## Related
+
+- [`docs/CHAT_PROTOCOL.md`](CHAT_PROTOCOL.md) — WebSocket event contract
+- [`docs/API_REFERENCE.md`](API_REFERENCE.md) — REST endpoints
+- [`docs/TOOLS.md`](TOOLS.md) — tool reference
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` updated mermaid graph with auto_summarize, scope_clarify, plan_review

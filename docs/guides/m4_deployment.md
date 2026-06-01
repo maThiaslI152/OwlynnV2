@@ -1,4 +1,14 @@
+---
+status: active
+category: guide
+last_updated: 2026-05-31
+owner: human
+---
+
 # M4 LangGraph Optimization - Deployment Guide
+
+> **Purpose:** Deployment guide for Apple M4 hardware.
+
 
 ## Memory Budget (M4 Air 24 GB)
 
@@ -376,3 +386,11 @@ To verify it's working:
 4. Monitor response times
 
 All optimizations are backward compatible - existing code works without changes.
+
+## Related
+
+- [`docs/README.md`](../README.md) — project documentation map
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

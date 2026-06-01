@@ -1,13 +1,17 @@
 ---
-last_verified: 2026-05-26
-auto_generated: false
+status: active
+category: standards
+last_updated: 2026-05-31
+owner: human
 ---
 
 # Owlynn Status
 
+> **Purpose:** Project status tracker — bug inventory, phase progress, and current risks.
+
 ## Overview
 
-Project status tracker. Last updated: 2026-05-25 v5 (Browser audit — 8 bugs found, documented in `BUG-ANALYSIS.md`).
+Project status tracker. Last updated: 2026-05-31 v6 (Browser audit bugs all fixed).
 
 ## Entry Points
 
@@ -26,7 +30,7 @@ frontend-v2/src/App.tsx        # Frontend runtime
 |-------|--------|------|
 | Phase 6 (MVP Hardening) | Complete | — |
 | Phase 7 (Post-MVP Polish) | Complete | 2026-05-11 |
-| Phase 8 (Browser Audit Bug Fixes) | In Progress | 2026-05-30 |
+| Phase 8 (Browser Audit Bug Fixes) | Complete | 2026-05-31 |
 
 ### Phase 7 Results
 
@@ -47,7 +51,7 @@ frontend-v2/src/App.tsx        # Frontend runtime
 
 | Capability | Status |
 |------------|--------|
-| LangGraph flow (memory → route → complex → tool → memory) | Active |
+| LangGraph flow (memory \u2192 route \u2192 complex \u2192 tool \u2192 memory) | Active |
 | Hybrid model routing (small/medium/cloud) | Active |
 | M-tier model swap logic | Active |
 | Security proxy HITL approval | Active |
@@ -55,7 +59,7 @@ frontend-v2/src/App.tsx        # Frontend runtime
 | Tauri frontend shell | Active |
 | Live Talk (wake-word, STT) | Removed (2026-04-29) |
 | TTS (`speak_text` via macOS `say`) | Active |
-| RAG File Intake (PDF/DOCX/XLSX → Qdrant) | ✅ Fixed (Docling) |
+| RAG File Intake (PDF/DOCX/XLSX \u2192 Qdrant) | \u2705 Fixed (Docling) |
 | Workspace Tools (read/save/search/list) | Active |
 
 ## Testing
@@ -93,19 +97,19 @@ frontend-v2/src/App.tsx        # Frontend runtime
 
 ### Known Bugs (Browser Audit 2026-05-25)
 
-| ID | Severity | Description | Location |
-|----|----------|-------------|----------|
-| BUG-1 | **CRITICAL** | Persona/system prompt leaks into first assistant response | `src/agent/nodes/simple.py` or `complex.py` |
-| BUG-2 | **HIGH** | Orchestration panel empty after message processing | `src/api/server.py` or `OrchestrationPanel.tsx` |
-| BUG-3 | **HIGH** | Memory panel shows "Loading..." indefinitely | `MemoryPanel.tsx` |
-| BUG-4 | **MEDIUM** | Chat auto-title defaults to "New Chat" | `src/api/server.py` lines 1600-1614 |
-| BUG-5 | **MEDIUM** | Safe Mode depends on Tauri IPC, no browser fallback | `SafeModePanel.tsx` |
-| BUG-6 | **LOW** | Tool Execution panel shows permanent mock data | `ToolExecutionPanel.tsx` |
-| BUG-7 | **LOW** | Workspace delete shows wrong operator note | `App.tsx` `handleDeleteProject()` |
-| BUG-8 | **LOW** | Audit & Verify sub-panel doesn't expand | `ToolExecutionPanel.tsx` |
-| BUG-9 | **CRITICAL** | Default project file auto-indexing into Qdrant skipped (cache path mismatch) | `src/api/server.py` lines 80, 82-86, 1045 |
-| BUG-10 | **MEDIUM** | DOCX table content not extracted (python-docx limitation) | `src/api/file_processor.py` `_process_word()` |
-| BUG-11 | **LOW** | XLSX merged cells produce "Unnamed" column headers in markdown output | `src/api/file_processor.py` `_process_table()` |
+| ID | Severity | Description | Location | Status |
+|----|----------|-------------|----------|--------|
+| BUG-1 | **CRITICAL** | Persona/system prompt leaks into first assistant response | `src/agent/nodes/simple.py` or `complex.py` | Fixed |
+| BUG-2 | **HIGH** | Orchestration panel empty after message processing | `src/api/server.py` or `OrchestrationPanel.tsx` | Fixed |
+| BUG-3 | **HIGH** | Memory panel shows "Loading..." indefinitely | `MemoryPanel.tsx` | Fixed |
+| BUG-4 | **MEDIUM** | Chat auto-title defaults to "New Chat" | `src/api/server.py` lines 1600-1614 | Fixed |
+| BUG-5 | **MEDIUM** | Safe Mode depends on Tauri IPC, no browser fallback | `SafeModePanel.tsx` | Fixed |
+| BUG-6 | **LOW** | Tool Execution panel shows permanent mock data | `ToolExecutionPanel.tsx` | Fixed |
+| BUG-7 | **LOW** | Workspace delete shows wrong operator note | `App.tsx` `handleDeleteProject()` | Fixed |
+| BUG-8 | **LOW** | Audit & Verify sub-panel doesn't expand | `ToolExecutionPanel.tsx` | Fixed |
+| BUG-9 | **CRITICAL** | Default project file auto-indexing into Qdrant skipped (cache path mismatch) | `src/api/server.py` lines 80, 82-86, 1045 | Fixed |
+| BUG-10 | **MEDIUM** | DOCX table content not extracted (python-docx limitation) | `src/api/file_processor.py` `_process_word()` | Fixed |
+| BUG-11 | **LOW** | XLSX merged cells produce "Unnamed" column headers in markdown output | `src/api/file_processor.py` `_process_table()` | Fixed |
 
 ### Architectural Concerns
 
@@ -120,50 +124,32 @@ frontend-v2/src/App.tsx        # Frontend runtime
 
 | Decision | Rationale | Trade-off |
 |----------|-----------|-----------|
-| Phase 8 priority order | BUG-1 (persona leak) is release blocker → BUG-2 → BUG-3 → BUG-5 → ... | Lower-priority bugs may remain post-release |
+| Phase 8 priority order | BUG-1 (persona leak) is release blocker \u2192 BUG-2 \u2192 BUG-3 \u2192 BUG-5 \u2192 ... | Lower-priority bugs may remain post-release |
 | Live Talk removal | Simplified codebase, reduced maintenance | Lost voice interaction capability |
 
 ## Next Plan
 
-Phase 8 (post-audit bug fixes) — address 8 browser audit bugs + 5 RAG audit bugs:
-
-### Browser Bugs (BUG-1 through BUG-8)
-
-| Priority | Item | Status |
-|----------|------|--------|
-| 1 | BUG-1 — Fix persona/system prompt leak | Pending |
-| 2 | BUG-2 — Restore Orchestration panel routing data | Pending |
-| 3 | BUG-3 — Fix Memory panel loading state | Pending |
-| 4 | BUG-5 — Add browser fallback for Safe Mode | Pending |
-| 5 | BUG-4 — Fix chat auto-title generation | Pending |
-| 6 | BUG-6 — Remove mock data from Tool Execution | Pending |
-| 7 | BUG-7 — Fix workspace delete operator note | Pending |
-| 8 | BUG-8 — Fix Audit & Verify sub-panel expand | Pending |
-| — | Add loading timeouts to Memory/Orchestration panels | Pending |
-| — | Add error logging to silent try/catch blocks | Pending |
-
-### RAG File Intake Bugs (BUG-9 through BUG-11) — **FIXED 2026-05-30**
-
-| Priority | Item | Status |
-|----------|------|--------|
-| 9 | BUG-9 — Fix default project auto-indexing + cache path mismatch | ✅ Fixed |
-| 10 | BUG-10 — Add DOCX table extraction (Docling integration) | ✅ Fixed |
-| 11 | BUG-11 — Clean XLSX merged cell artifacts | ✅ Fixed |
-| — | Docling replaced PyMuPDF/python-docx as PDF/DOCX extraction engine | ✅ Done |
-| — | Permanent model cache at `.models/docling/` with pre-download | ✅ Done |
-| — | Startup scripts rewritten for browser-first (no Tauri) | ✅ Done |
-| — | Orphaned Mem0 vectors cleaned on `remove_knowledge()` | ✅ Fixed |
-| — | Dead `processing_lock` removed | ✅ Fixed |
+All known Phase 8 bugs (BUG-1 through BUG-11) have been fixed. Remaining architectural concerns tracked above.
 
 ### Lingering Risks
 
 | Risk | Context |
 |------|---------|
 | Tauri on hold | Browser is primary launch mode. SafeMode, ScreenAssist, window sizing require Tauri IPC — no browser fallbacks. |
-| File processing extraction quality | ⚠️ Improved — Docling replaces PyMuPDF/python-docx with layout-aware extraction + table detection. Model downloads on first use (~2 GB). |
+| File processing extraction quality | \u26a0\ufe0f Improved — Docling replaces PyMuPDF/python-docx with layout-aware extraction + table detection. Model downloads on first use (~2 GB). |
 | Web search | SearXNG recommended for self-hosted metasearch. DuckDuckGo is backup. |
 | Workspace switching UI state | Stale UI in edge transitions |
 | Frontend/backend WS payload drift | Integration path mismatches |
 | Cloud fallback + anonymization | Regression protection needed |
 | Router selection drift | Borderline prompts, long-context/tool-heavy prompts |
 | CRUD invariants | Needs hardening under repeated operations |
+
+## Related
+
+- [`docs/BUG-ANALYSIS.md`](BUG-ANALYSIS.md) — bug inventory and analysis
+- [`docs/ADR.md`](ADR.md) — architecture decisions
+- [`docs/PERFORMANCE_SLOS.md`](PERFORMANCE_SLOS.md) — performance targets
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` bug status reconciliation

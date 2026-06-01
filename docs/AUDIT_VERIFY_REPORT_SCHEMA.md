@@ -1,4 +1,13 @@
+---
+status: active
+category: reference
+last_updated: 2026-05-31
+owner: human
+---
+
 # Audit Verify Report Schema
+
+> **Purpose:** Machine-readable verification report schema for the in-app audit verifier.
 
 This document defines the machine-readable verification report emitted by the in-app audit verifier.
 
@@ -36,3 +45,12 @@ This document defines the machine-readable verification report emitted by the in
 
 - Consumers should ignore unknown fields for forward compatibility.
 - Producers should preserve existing field meanings for v1.
+
+## Related
+
+- [`docs/README.md`](README.md) — project documentation map
+- [`docs/INDEX.md`](INDEX.md) — documentation index
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter, purpose blockquote

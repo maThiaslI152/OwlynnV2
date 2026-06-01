@@ -1,4 +1,13 @@
+---
+status: active
+category: guide
+last_updated: 2026-05-31
+owner: human
+---
+
 # Owlynn SOTA Features Guide: Bridging Competitive Gaps
+
+> **Purpose:** Implementation guide for state-of-the-art features bridging competitive gaps.
 
 **Date:** 2026-05-27  
 **Status:** Implementation Complete & Verified (Full-Stack Browser Test: 2026-05-27 03:00 UTC+7)  
@@ -158,3 +167,12 @@ The file watcher monitors the `workspace/` directory relative to the project roo
 - **LM Studio models:** `nomic-embed-text-v1.5`, `gemma-4-e4b`, `ibm-grok4-ultrafast-coder-1b`, plus 5 others
 - **Backend:** Python 3.14.3, uvicorn on port 8000
 - **Frontend:** Vite 8.0.10 on port 5173, React 19.2.5
+
+## Related
+
+- [`docs/README.md`](README.md) — project documentation map
+- [`docs/AI_AGENT_INDEX.md`](AI_AGENT_INDEX.md) — navigation index
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter, purpose blockquote

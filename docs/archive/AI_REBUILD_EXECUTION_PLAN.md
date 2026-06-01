@@ -1,3 +1,10 @@
+---
+status: archived
+category: archive
+last_updated: 2026-05-31
+owner: human
+---
+
 # Owlynn Rebuild Execution Plan (Multi-Agent)
 
 ## Purpose
@@ -383,3 +390,7 @@ Cursor instability has been observed under high CPU load. All agents must follow
   - Core test suite: 203 passed, 0 failed.
   - Frontend: 50 passed, build passes.
 - Phase status tracker updated: all phases (A-C, 1-5) → Completed.
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

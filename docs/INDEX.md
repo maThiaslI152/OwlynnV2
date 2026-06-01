@@ -1,66 +1,347 @@
+---
+status: active
+category: reference
+last_updated: 2026-05-31
+owner: ai-agent
+---
+
 # docs/INDEX.md — Machine Manifest
 
-> **Machine-readable index of all documentation paths in this project.** Updated whenever a doc is added, renamed, or removed.
+> **Purpose:** Machine-readable index of ALL documentation paths in this project. Updated whenever a doc is added, renamed, or removed. Every entry includes status, category, and last_updated sourced from each document's YAML frontmatter.
 
 ```yaml
 manifest:
-  version: 1
-  generated: "2026-05-31T00:00:00Z"
+  version: 2
+  generated: "2026-05-31T20:00:00Z"
   files:
-    - path: docs/README.md
-      summary: "Project documentation map, reading order, and SDD workflow quick reference."
-      last_updated: "2026-05-31"
-
+    - path: docs/ADR.md
+      status: active
+      category: architecture
+      last_updated: 2026-05-31
+    - path: docs/AGENT_FLOW.md
+      status: active
+      category: architecture
+      last_updated: 2026-05-31
+    - path: docs/AI_AGENT_INDEX.md
+      status: active
+      category: reference
+      last_updated: 2026-05-31
+    - path: docs/AI_AGENT_PROJECT_GUIDE.md
+      status: active
+      category: guide
+      last_updated: 2026-05-31
+    - path: docs/API_REFERENCE.md
+      status: active
+      category: reference
+      last_updated: 2026-05-31
+    - path: docs/ARCHITECTURE_OVERVIEW.md
+      status: active
+      category: architecture
+      last_updated: 2026-05-31
+    - path: docs/AUDIT_EXPORT_VERIFY_RUNBOOK.md
+      status: active
+      category: guide
+      last_updated: 2026-05-31
+    - path: docs/AUDIT_VERIFY_REPORT_SCHEMA.md
+      status: active
+      category: reference
+      last_updated: 2026-05-31
+    - path: docs/BUG-ANALYSIS.md
+      status: active
+      category: audit
+      last_updated: 2026-05-31
+    - path: docs/BUG-TRACKER.md
+      status: active
+      category: audit
+      last_updated: 2026-05-31
+    - path: docs/CHAT_PROTOCOL.md
+      status: active
+      category: reference
+      last_updated: 2026-05-31
+    - path: docs/COMPETITIVE_FEATURE_ANALYSIS.md
+      status: active
+      category: reference
+      last_updated: 2026-05-31
+    - path: docs/ENGINEERING_IMPROVEMENTS.md
+      status: active
+      category: planning
+      last_updated: 2026-05-31
+    - path: docs/EXTENDING_AGENT.md
+      status: active
+      category: guide
+      last_updated: 2026-05-31
+    - path: docs/FRONTEND_CUTOVER_ROLLBACK.md
+      status: active
+      category: guide
+      last_updated: 2026-05-31
+    - path: docs/HUMAN_PROJECT_GUIDE.md
+      status: active
+      category: guide
+      last_updated: 2026-05-31
     - path: docs/INDEX.md
-      summary: "This manifest — machine-readable index of all doc paths."
-      last_updated: "2026-05-31"
-
+      status: active
+      category: reference
+      last_updated: 2026-05-31
+    - path: docs/PERFORMANCE_SLOS.md
+      status: active
+      category: standards
+      last_updated: 2026-05-31
+    - path: docs/PHASE1_BROWSER_MULTI_SWITCH_E2E_LOG.md
+      status: active
+      category: debugging
+      last_updated: 2026-05-31
+    - path: docs/PHASE_C_STAGING_REHEARSAL_RESULT_2026-04-23.md
+      status: archived
+      category: archive
+      last_updated: 2026-05-31
+    - path: docs/PROGRESS.md
+      status: active
+      category: changelog
+      last_updated: 2026-05-31
+    - path: docs/PROJECT_OVERVIEW.md
+      status: active
+      category: reference
+      last_updated: 2026-05-31
+    - path: docs/PROJECT_TIMELINE.md
+      status: active
+      category: changelog
+      last_updated: 2026-05-31
+    - path: docs/README.md
+      status: active
+      category: reference
+      last_updated: 2026-05-31
+    - path: docs/ROLLBACK_DRY_RUN_LOG.md
+      status: active
+      category: debugging
+      last_updated: 2026-05-31
+    - path: docs/SOTA_FEATURES_GUIDE.md
+      status: active
+      category: guide
+      last_updated: 2026-05-31
+    - path: docs/STATUS.md
+      status: active
+      category: standards
+      last_updated: 2026-05-31
+    - path: docs/TAURI_CSP_PERMISSION_AUDIT_CHECKLIST.md
+      status: active
+      category: standards
+      last_updated: 2026-05-31
+    - path: docs/TOOLS.md
+      status: active
+      category: reference
+      last_updated: 2026-05-31
+    - path: docs/WEB_SEARCH.md
+      status: active
+      category: architecture
+      last_updated: 2026-05-31
     - path: docs/architecture/overview.md
-      summary: "System context, bounded modules, data flow, and key entrypoints."
-      last_updated: "2026-05-31"
-
+      status: unknown
+      category: unknown
+      last_updated: unknown
+    - path: docs/archive/AGENT_RESUME_PLAYBOOK.md
+      status: archived
+      category: archive
+      last_updated: 2026-05-31
+    - path: docs/archive/AI_MULTI_AGENT_FRONTEND_REBUILD_PLAN.md
+      status: archived
+      category: archive
+      last_updated: 2026-05-31
+    - path: docs/archive/AI_MULTI_AGENT_RESUME_PLAYBOOK.md
+      status: archived
+      category: archive
+      last_updated: 2026-05-31
+    - path: docs/archive/AI_REBUILD_EXECUTION_PLAN.md
+      status: archived
+      category: archive
+      last_updated: 2026-05-31
+    - path: docs/archive/AI_REBUILD_MASTER_PLAN.md
+      status: archived
+      category: archive
+      last_updated: 2026-05-31
+    - path: docs/archive/COREML_ATHENA_MODEL_GUIDE.md
+      status: archived
+      category: archive
+      last_updated: 2026-05-31
+    - path: docs/archive/LIVE_TALK_DEBUG_HANDOFF_2026-04-25.md
+      status: archived
+      category: archive
+      last_updated: 2026-05-31
+    - path: docs/archive/LIVE_TALK_DEFERRED.md
+      status: archived
+      category: archive
+      last_updated: 2026-05-31
+    - path: docs/archive/LIVE_TALK_PHASE1_TTS_LOOP_FIX_2026-04-25.md
+      status: archived
+      category: archive
+      last_updated: 2026-05-31
+    - path: docs/archive/LIVE_TALK_VOICE_PROCESSING_AND_VAD.md
+      status: archived
+      category: archive
+      last_updated: 2026-05-31
+    - path: docs/archive/LIVE_TALK_WHISPER_FILLER_AND_FORCE_FINALIZE.md
+      status: archived
+      category: archive
+      last_updated: 2026-05-31
+    - path: docs/archive/OBJC_FFI_CRASH.md
+      status: archived
+      category: archive
+      last_updated: 2026-05-31
+    - path: docs/archive/PHASE_C_COMPLETION_MATRIX.md
+      status: archived
+      category: archive
+      last_updated: 2026-05-31
+    - path: docs/archive/PHASE_C_SECURITY_SIGNOFF_TEMPLATE.md
+      status: archived
+      category: archive
+      last_updated: 2026-05-31
+    - path: docs/archive/PHASE_C_STAGING_REHEARSAL_RESULT_TEMPLATE.md
+      status: archived
+      category: archive
+      last_updated: 2026-05-31
+    - path: docs/archive/ROLLBACK_LOCAL_REHEARSAL_TEMPLATE.md
+      status: archived
+      category: archive
+      last_updated: 2026-05-31
+    - path: docs/archive/SOUNDANALYSIS_WAKEWORD_ARCHITECTURE.md
+      status: archived
+      category: archive
+      last_updated: 2026-05-31
+    - path: docs/audit-file-intake-2026-05-30.md
+      status: active
+      category: audit
+      last_updated: 2026-05-31
+    - path: docs/audit_logging_completion.md
+      status: active
+      category: audit
+      last_updated: 2026-05-31
+    - path: docs/changes/cursor-sdd-enforcement-harness/CHANGELOG.md
+      status: active
+      category: changelog
+      last_updated: 2026-05-31
+    - path: docs/changes/cursor-sdd-enforcement-harness/dogfood-test-plan.md
+      status: unknown
+      category: unknown
+      last_updated: unknown
+    - path: docs/changes/docs-standards-timeline/CHANGELOG.md
+      status: unknown
+      category: unknown
+      last_updated: unknown
+    - path: docs/changes/plan-to-create-repo-and-push/CHANGELOG.md
+      status: active
+      category: changelog
+      last_updated: 2026-05-31
+    - path: docs/debugging/2026-05-27_session_summary.md
+      status: active
+      category: debugging
+      last_updated: 2026-05-31
+    - path: docs/debugging/README.md
+      status: active
+      category: debugging
+      last_updated: 2026-05-31
+    - path: docs/debugging/agent-graph.md
+      status: active
+      category: debugging
+      last_updated: 2026-05-31
+    - path: docs/debugging/backend-api.md
+      status: active
+      category: debugging
+      last_updated: 2026-05-31
+    - path: docs/debugging/browser-verification.md
+      status: active
+      category: debugging
+      last_updated: 2026-05-31
+    - path: docs/debugging/frontend.md
+      status: active
+      category: debugging
+      last_updated: 2026-05-31
+    - path: docs/debugging/llm-pool.md
+      status: active
+      category: debugging
+      last_updated: 2026-05-31
+    - path: docs/debugging/logging.md
+      status: active
+      category: debugging
+      last_updated: 2026-05-31
+    - path: docs/debugging/memory-analysis.md
+      status: active
+      category: debugging
+      last_updated: 2026-05-31
+    - path: docs/debugging/memory.md
+      status: active
+      category: debugging
+      last_updated: 2026-05-31
+    - path: docs/debugging/profiling.md
+      status: active
+      category: debugging
+      last_updated: 2026-05-31
+    - path: docs/debugging/system_integration_test_2026-05-27.md
+      status: active
+      category: debugging
+      last_updated: 2026-05-31
+    - path: docs/debugging/tauri-desktop.md
+      status: active
+      category: debugging
+      last_updated: 2026-05-31
+    - path: docs/debugging/tools.md
+      status: active
+      category: debugging
+      last_updated: 2026-05-31
+    - path: docs/guides/backend_integration.md
+      status: active
+      category: guide
+      last_updated: 2026-05-31
+    - path: docs/guides/file_formats.md
+      status: active
+      category: guide
+      last_updated: 2026-05-31
+    - path: docs/guides/frontend_update.md
+      status: active
+      category: guide
+      last_updated: 2026-05-31
+    - path: docs/guides/llm_chat_prompt_test.md
+      status: active
+      category: guide
+      last_updated: 2026-05-31
+    - path: docs/guides/lm_studio.md
+      status: active
+      category: guide
+      last_updated: 2026-05-31
+    - path: docs/guides/m4_deployment.md
+      status: active
+      category: guide
+      last_updated: 2026-05-31
+    - path: docs/guides/personal_assistant_integration.md
+      status: active
+      category: guide
+      last_updated: 2026-05-31
+    - path: docs/guides/personal_assistant_memory.md
+      status: active
+      category: guide
+      last_updated: 2026-05-31
+    - path: docs/guides/quickstart.md
+      status: active
+      category: guide
+      last_updated: 2026-05-31
     - path: docs/standards/coding-style.md
-      summary: "Language-agnostic coding conventions, naming, file layout, imports, error handling, and lint commands."
-      last_updated: "2026-05-31"
-
+      status: unknown
+      category: unknown
+      last_updated: unknown
     - path: docs/standards/documentation.md
-      summary: "Rules for writing project docs and CHANGELOG entries."
-      last_updated: "2026-05-31"
-
-    - path: docs/changes/
-      summary: "Per-feature edit history with mandatory CHANGELOG.md per change."
-      last_updated: "2026-05-31"
-
-    - path: specs/memory/constitution.md
-      summary: "Non-negotiable project constraints — SDD, HITL gates, artifact integrity, coding style, test discipline."
-      last_updated: "2026-05-31"
-
-    - path: specs/memory/verification.md
-      summary: "Project-level test contract — default commands, pass criteria, agent verification protocol."
-      last_updated: "2026-05-31"
-
-    - path: specs/templates/requirements.md
-      summary: "Template for requirements.md — user stories, EARS acceptance criteria, out-of-scope."
-      last_updated: "2026-05-31"
-
-    - path: specs/templates/design.md
-      summary: "Template for design.md — architecture, mermaid diagrams, APIs, data model."
-      last_updated: "2026-05-31"
-
-    - path: specs/templates/tasks.md
-      summary: "Template for tasks.md — checkbox tasks with depends_on, files, maps_to ACs, verify_steps."
-      last_updated: "2026-05-31"
-
-    - path: specs/templates/verification-report.md
-      summary: "Template for verification-report.md — AC ↔ evidence ↔ status table."
-      last_updated: "2026-05-31"
+      status: active
+      category: standards
+      last_updated: 2026-05-31
+    - path: docs/technical/file_format_implementation.md
+      status: active
+      category: reference
+      last_updated: 2026-05-31
 ```
 
 ## Related
 
-- [`docs/README.md`](README.md)
-- [`AGENTS.md`](../AGENTS.md)
+- [`docs/README.md`](README.md) — project documentation map
+- [`docs/PROJECT_TIMELINE.md`](PROJECT_TIMELINE.md) — aggregated project timeline
+- [`AGENTS.md`](../AGENTS.md) — agent workflow
 
 ## Last updated
 
-2026-05-31 — `cursor-sdd-enforcement-harness` initial manifest
+2026-05-31 — `docs-standards-timeline` full recursive manifest

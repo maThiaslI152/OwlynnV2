@@ -1,4 +1,14 @@
+---
+status: active
+category: guide
+last_updated: 2026-05-31
+owner: human
+---
+
 # LLM Chat Prompt Test
+
+> **Purpose:** Guide for testing LLM chat prompt behavior.
+
 
 Use this test pack to verify that chat behavior matches the intended architecture:
 - small vs large model routing
@@ -128,3 +138,11 @@ Overall result:
 - 5/5 = architecture verified
 - 4/5 = mostly healthy, review failed case
 - <=3/5 = investigate routing, memory, or tool policy
+
+## Related
+
+- [`docs/README.md`](../README.md) — project documentation map
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

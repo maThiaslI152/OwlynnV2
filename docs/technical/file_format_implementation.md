@@ -1,4 +1,14 @@
+---
+status: active
+category: reference
+last_updated: 2026-05-31
+owner: human
+---
+
 # File Format Support Implementation Summary
+
+> **Purpose:** Implementation summary for 20+ file format processing support.
+
 
 ## What Was Added
 
@@ -396,3 +406,10 @@ To add a new format, edit `src/api/file_processor.py`:
 For detailed format information, see [FILE_FORMATS_GUIDE.md](../guides/file_formats.md).
 
 For code implementation details, see [src/api/file_processor.py](src/api/file_processor.py).
+
+## Related
+
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter

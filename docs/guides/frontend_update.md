@@ -1,4 +1,14 @@
+---
+status: active
+category: guide
+last_updated: 2026-05-31
+owner: human
+---
+
 # Frontend Updates: Cowork-like Interface & Settings
+
+> **Purpose:** Guide for updating the frontend UI components.
+
 
 ## Overview
 
@@ -435,3 +445,11 @@ Response: {"status": "ok", "message": "..."}
 **Version**: 1.0  
 **Last Updated**: 2026-03-20  
 **Compatibility**: Works with existing profiles and settings
+
+## Related
+
+- [`docs/README.md`](../README.md) — project documentation map
+
+## Last updated
+
+2026-05-31 — `docs-standards-timeline` added frontmatter
