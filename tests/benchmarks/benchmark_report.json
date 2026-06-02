@@ -1,52 +1,5 @@
 {
-  "generated_at": "2026-06-02T14:31:54",
-  "total_entries": 3,
-  "entries": [
-    {
-      "name": "pool_medium_warm_same_variant",
-      "category": "pool",
-      "warmup_iters": 0,
-      "measured_iters": 50,
-      "concurrency": 1,
-      "p50_ms": 0.0,
-      "p95_ms": 0.0,
-      "p99_ms": 0.0,
-      "mean_ms": 0.0,
-      "throughput_ops_per_sec": 5915118.16,
-      "metadata": {}
-    },
-    {
-      "name": "pool_small_cold_vs_warm",
-      "category": "pool",
-      "warmup_iters": 0,
-      "measured_iters": 50,
-      "concurrency": 1,
-      "p50_ms": 0.0,
-      "p95_ms": 0.0,
-      "p99_ms": 0.0,
-      "mean_ms": 0.0,
-      "throughput_ops_per_sec": 2376126.41,
-      "metadata": {
-        "cold_ms": 0.0,
-        "warm_p50_ms": 0.0
-      }
-    },
-    {
-      "name": "swap_manager_mock_roundtrip",
-      "category": "pool",
-      "warmup_iters": 0,
-      "measured_iters": 50,
-      "concurrency": 1,
-      "p50_ms": 603.1,
-      "p95_ms": 603.62,
-      "p99_ms": 610.73,
-      "mean_ms": 603.15,
-      "throughput_ops_per_sec": 1.66,
-      "metadata": {
-        "simulated_unload_ms": 50,
-        "simulated_load_ms": 50,
-        "simulated_poll_ms": 500
-      }
-    }
-  ]
+  "generated_at": "2026-06-02T16:49:44",
+  "total_entries": 0,
+  "entries": []
 }
