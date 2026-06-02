@@ -13,6 +13,7 @@ owner: ai-agent
 
 ## Reading Order (for new agents)
 
+0. **Start the app:** [`docs/guides/dev-startup.md`](guides/dev-startup.md) — every prerequisite and step to get the full Owlynn app running
 1. **This file** (`docs/README.md`) → [`docs/INDEX.md`](INDEX.md) → [`docs/PROJECT_TIMELINE.md`](PROJECT_TIMELINE.md)
 2. **[`docs/architecture/overview.md`](architecture/overview.md)** — system context, modules, data flow
 3. **[`specs/memory/constitution.md`](../specs/memory/constitution.md)** — non-negotiable rules

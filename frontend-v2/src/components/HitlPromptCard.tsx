@@ -46,6 +46,10 @@ export interface HitlPromptViewModel {
   task_summary?: string
   /** Security-specific: tool name being blocked */
   toolName?: string
+  /** Tool call arguments (record of key-value pairs) */
+  toolArgs?: Record<string, unknown>
+  /** Affected file paths / resources */
+  affectedResources?: string[]
   /** Security-specific: risk details */
   riskLabel?: string
   riskRationale?: string
@@ -62,6 +66,60 @@ interface HitlPromptCardProps {
   onDecline?: () => void
   onSelectChoice?: (choice: ChoiceOption, userInput?: string) => void
   onSkip?: () => void
+}
+
+/** Collapsible conversation context section shown in all HITL variants. */
+function ConversationContext({ snippet }: { snippet?: string }) {
+  if (!snippet) return null
+  return (
+    <details className="hitl-prompt-context">
+      <summary>Conversation context</summary>
+      <pre className="hitl-prompt-snippet">{snippet}</pre>
+    </details>
+  )
+}
+
+/** Table showing tool call arguments. */
+function ToolArgsTable({ toolArgs }: { toolArgs?: Record<string, unknown> }) {
+  if (!toolArgs || Object.keys(toolArgs).length === 0) return null
+  const entries = Object.entries(toolArgs).filter(
+    ([, v]) => v !== null && v !== undefined && String(v).length > 0
+  )
+  if (entries.length === 0) return null
+  return (
+    <div className="hitl-prompt-args">
+      <strong>Arguments:</strong>
+      <table className="hitl-args-table">
+        <tbody>
+          {entries.slice(0, 8).map(([key, value]) => (
+            <tr key={key}>
+              <td className="hitl-args-key">{key}</td>
+              <td className="hitl-args-value">
+                {typeof value === 'string' && value.length > 120
+                  ? value.slice(0, 117) + '...'
+                  : String(value)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+/** List of affected files/resources. */
+function AffectedResources({ resources }: { resources?: string[] }) {
+  if (!resources || resources.length === 0) return null
+  return (
+    <div className="hitl-prompt-affected">
+      <strong>Affected files:</strong>
+      <ul>
+        {resources.map((r, i) => (
+          <li key={i}><code>{r}</code></li>
+        ))}
+      </ul>
+    </div>
+  )
 }
 
 export function HitlPromptCard({
@@ -94,6 +152,7 @@ export function HitlPromptCard({
           <strong>Clarify Scope</strong>
           <span className="hitl-prompt-badge">Before building</span>
         </div>
+        <ConversationContext snippet={model.conversationSnippet} />
         {model.task_summary && <p className="hitl-prompt-intent">{model.task_summary}</p>}
         {model.pitfalls && model.pitfalls.length > 0 && (
           <div className="hitl-prompt-pitfalls">
@@ -133,6 +192,7 @@ export function HitlPromptCard({
             </div>
           ))}
         </div>
+        <AffectedResources resources={model.affectedResources} />
         <div className="hitl-prompt-actions">
           <button
             className="hitl-btn-approve"
@@ -165,6 +225,7 @@ export function HitlPromptCard({
           <strong>Plan Review</strong>
           <span className="hitl-prompt-badge hitl-badge-warn">Approval required</span>
         </div>
+        <ConversationContext snippet={model.conversationSnippet} />
         {model.statedIntent && <p className="hitl-prompt-intent">{model.statedIntent}</p>}
         {model.plannedActions && model.plannedActions.length > 0 && (
           <div className="hitl-prompt-actions-list">
@@ -176,6 +237,8 @@ export function HitlPromptCard({
             </ul>
           </div>
         )}
+        <ToolArgsTable toolArgs={model.toolArgs} />
+        <AffectedResources resources={model.affectedResources} />
         {model.pitfalls && model.pitfalls.length > 0 && (
           <div className="hitl-prompt-pitfalls">
             <strong>Risks to consider:</strong>
@@ -206,8 +269,11 @@ export function HitlPromptCard({
           <strong>Security Check</strong>
           <span className="hitl-prompt-badge hitl-badge-danger">{model.riskLabel || 'sensitive'}</span>
         </div>
+        <ConversationContext snippet={model.conversationSnippet} />
         {model.statedIntent && <p className="hitl-prompt-intent">{model.statedIntent}</p>}
         <p className="hitl-prompt-tool"><code>{model.toolName || 'unknown tool'}</code></p>
+        <ToolArgsTable toolArgs={model.toolArgs} />
+        <AffectedResources resources={model.affectedResources} />
         {model.riskRationale && <p className="hitl-prompt-risk">{model.riskRationale}</p>}
         {model.remediationHint && <p className="hitl-prompt-remediation">Tip: {model.remediationHint}</p>}
         <div className="hitl-prompt-actions">
@@ -231,6 +297,7 @@ export function HitlPromptCard({
         <div className="hitl-prompt-header">
           <strong>Question</strong>
         </div>
+        <ConversationContext snippet={model.conversationSnippet} />
         <p className="hitl-prompt-intent">{model.question || 'Clarification needed'}</p>
         <div className="hitl-prompt-choices">
           {choices.map((c, i) => (
@@ -280,6 +347,29 @@ export function parseHitlPrompt(interrupts: unknown[] | undefined): HitlPromptVi
   const p = primary as Record<string, unknown>
   const type = String(p.type || '')
 
+  // Shared helpers to extract enrichment fields from any payload
+  const extractToolArgs = (): Record<string, unknown> => {
+    const args = p.tool_args
+    if (args && typeof args === 'object' && !Array.isArray(args)) {
+      return args as Record<string, unknown>
+    }
+    // Fallback: extract args from sensitive_tool_calls if present
+    const stc = p.sensitive_tool_calls
+    if (Array.isArray(stc) && stc.length > 0) {
+      const firstCall = stc[0] as Record<string, unknown> | undefined
+      if (firstCall?.args && typeof firstCall.args === 'object') {
+        return firstCall.args as Record<string, unknown>
+      }
+    }
+    return {}
+  }
+
+  const extractAffected = (): string[] => {
+    const ar = p.affected_resources
+    if (Array.isArray(ar)) return ar.map(String)
+    return []
+  }
+
   if (type === 'scope_clarification_required') {
     return {
       variant: 'scope_clarification',
@@ -288,6 +378,7 @@ export function parseHitlPrompt(interrupts: unknown[] | undefined): HitlPromptVi
       conversationSnippet: String(p.conversation_snippet || ''),
       questions: Array.isArray(p.questions) ? p.questions as ScopeQuestion[] : [],
       pitfalls: Array.isArray(p.pitfalls) ? p.pitfalls as string[] : [],
+      affectedResources: extractAffected(),
     }
   }
 
@@ -299,6 +390,8 @@ export function parseHitlPrompt(interrupts: unknown[] | undefined): HitlPromptVi
       conversationSnippet: String(p.conversation_snippet || ''),
       plannedActions: Array.isArray(p.planned_actions) ? p.planned_actions as Array<{ tool: string; summary: string }> : [],
       pitfalls: Array.isArray(p.pitfalls) ? p.pitfalls as string[] : [],
+      toolArgs: extractToolArgs(),
+      affectedResources: extractAffected(),
     }
   }
 
@@ -306,8 +399,11 @@ export function parseHitlPrompt(interrupts: unknown[] | undefined): HitlPromptVi
     return {
       variant: 'security_approval',
       title: String(p.title || 'Security check'),
-      statedIntent: String(p.stated_intent || p.conversation_snippet || ''),
+      statedIntent: String(p.stated_intent || ''),
+      conversationSnippet: String(p.conversation_snippet || ''),
       toolName: String(p.tool_name || ''),
+      toolArgs: extractToolArgs(),
+      affectedResources: extractAffected(),
       riskLabel: String(p.risk_label || 'sensitive'),
       riskRationale: String(p.risk_rationale || ''),
       remediationHint: String(p.remediation_hint || ''),

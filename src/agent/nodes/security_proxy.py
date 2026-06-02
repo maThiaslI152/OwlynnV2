@@ -19,6 +19,8 @@ logger = logging.getLogger(__name__)
 
 from src.config.log_middleware import log_hitl_event, log_node
 
+from src.agent.hitl.policy import is_information_retrieval, SAFE_TOOLS
+from src.agent.hitl.context import enrich_interrupt
 
 SENSITIVE_TOOLS = {
     "write_workspace_file",
@@ -68,6 +70,8 @@ def _tool_calls_from_last_message(state: AgentState) -> list[dict[str, Any]]:
 
 
 def _is_sensitive_call(tool_name: str, args: Any) -> bool:
+    if is_information_retrieval(tool_name):
+        return False
     if tool_name in SENSITIVE_TOOLS:
         return True
     args_text = json.dumps(args, ensure_ascii=True) if not isinstance(args, str) else args
@@ -104,6 +108,53 @@ def _risk_meta_for_call(tool_name: str, args: Any) -> dict[str, Any]:
     }
 
 
+_TOOL_ACTION_LABELS = {
+    "write_workspace_file": "write to file",
+    "edit_workspace_file": "edit file",
+    "delete_workspace_file": "delete file",
+    "notebook_run": "run code in Python REPL",
+}
+
+
+def _build_title(sensitive_calls: list[dict]) -> str:
+    """Generate a context-aware title from the sensitive tool calls."""
+    if not sensitive_calls:
+        return "Tool approval required"
+    call = sensitive_calls[0]
+    name = str(call.get("name", "unknown"))
+    args = call.get("args", {})
+    primary_arg = ""
+    if isinstance(args, dict):
+        for key in ("path", "file_path", "filename", "name", "file_name", "target"):
+            val = args.get(key)
+            if val:
+                primary_arg = str(val)
+                break
+    label = _TOOL_ACTION_LABELS.get(name, name)
+    if primary_arg:
+        return f"Approve {label}: {primary_arg}?"
+    return f"Approve {label}?"
+
+
+def _build_reason(sensitive_calls: list[dict]) -> str:
+    """Generate a plain-language explanation of why the tool is being called."""
+    if not sensitive_calls:
+        return "One or more tool calls require approval."
+    call = sensitive_calls[0]
+    name = str(call.get("name", "unknown"))
+    args = call.get("args", {})
+    label = _TOOL_ACTION_LABELS.get(name, name)
+    if isinstance(args, dict):
+        detail_parts = []
+        for k, v in args.items():
+            if isinstance(v, str) and len(v) > 100:
+                v = v[:80] + "..."
+            detail_parts.append(f"{k}={v}")
+        if detail_parts:
+            return f"Owlynn wants to {label} with: {', '.join(detail_parts[:3])}"
+    return f"Owlynn wants to {label}."
+
+
 @log_node("security_proxy")
 async def security_proxy_node(state: AgentState) -> AgentState:
     """
@@ -120,6 +171,19 @@ async def security_proxy_node(state: AgentState) -> AgentState:
             "security_decision": "denied",
             "security_reason": "No tool call found for security validation.",
             "pending_tool_calls": False,
+        }
+
+    # ── Fast-path: all calls are information retrieval (no HITL needed) ──
+    if tool_calls and all(is_information_retrieval(str(c.get("name", ""))) for c in tool_calls):
+        tool_names = [str(c.get("name", "unknown")) for c in tool_calls]
+        logger.info("[security_proxy] All safe tools (%s) — auto-approving, no HITL", tool_names)
+        for name in tool_names:
+            log_hitl_event("tool_classified", tool=name, decision="safe_auto")
+        return {
+            "execution_approved": True,
+            "security_decision": "approved",
+            "security_reason": "All tools are information-retrieval (safe).",
+            "pending_tool_names": tool_names,
         }
 
     sensitive_calls: list[dict[str, Any]] = []
@@ -153,7 +217,6 @@ async def security_proxy_node(state: AgentState) -> AgentState:
     else:
         # ── Dedup: skip second interrupt when plan_review already approved ────
         if state.get("plan_review_approved"):
-            # Still run policy classification (defense in depth) but skip HITL
             logger.info("[security_proxy] Plan review already approved — skipping duplicate interrupt")
             log_hitl_event("hitl_skipped", decision="plan_review_dedup",
                             sensitive_count=len(sensitive_calls))
@@ -164,17 +227,20 @@ async def security_proxy_node(state: AgentState) -> AgentState:
                 "pending_tool_names": [str(c.get("name", "unknown")) for c in tool_calls],
             }
 
-        decision = interrupt(
+        enriched_payload = enrich_interrupt(
             {
                 "type": "security_approval_required",
-                "title": "Sensitive tool request blocked pending approval",
-                "reason": "One or more tool calls are marked sensitive by policy.",
+                "title": _build_title(sensitive_calls),
+                "reason": _build_reason(sensitive_calls),
                 "sensitive_tool_calls": sensitive_calls,
                 "safe_tool_calls": safe_calls,
                 "risk_categories": sorted({str(c.get("risk_category", "sensitive_tool_execution")) for c in sensitive_calls}),
-                "instruction": "Resume with {\"approved\": true} to allow, or {\"approved\": false} to deny.",
-            }
+                "instruction": "Approve or deny this action.",
+                "tool_args": sensitive_calls[0].get("args", {}) if sensitive_calls else {},
+            },
+            state,
         )
+        decision = interrupt(enriched_payload)
         approved = _normalize_approval(decision)
 
     if approved:

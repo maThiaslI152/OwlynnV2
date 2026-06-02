@@ -3,6 +3,9 @@ Scope clarification node — runs after router for underspecified build/create r
 
 Uses cheap heuristics first (no LLM), then Small LLM classifier to generate
 targeted clarifying questions before ``complex_llm`` commits to code or files.
+
+When web tools are available, underspecified questions that can be answered via
+web search skip the HITL clarification and let the LLM search autonomously.
 """
 
 import json
@@ -19,6 +22,36 @@ logger = logging.getLogger(__name__)
 
 from src.config.log_middleware import log_hitl_event, log_node
 from src.config.audit_log import audit_info
+
+# Requests matching these patterns are better handled via web search than
+# by asking the user for clarification. The LLM can search the internet to
+# find the information instead of blocking.
+_SEARCHABLE_INTENT_PATTERNS = [
+    "what is",
+    "what are",
+    "how to",
+    "how do",
+    "tell me about",
+    "explain",
+    "define",
+    "find",
+    "search for",
+    "latest",
+    "current",
+    "news about",
+    "who is",
+    "who are",
+    "where is",
+    "when did",
+    "why is",
+    "why does",
+    "can you look up",
+    "can you find",
+    "do you know",
+    "have you heard",
+    "what's the",
+    "what's new",
+]
 
 _CLASSIFIER_PROMPT = """You are helping clarify a user's vague build request by generating targeted questions.
 
@@ -47,6 +80,19 @@ Return ONLY valid JSON:
 }}"""
 
 
+def _looks_like_searchable_query(user_text: str) -> bool:
+    """Check if the user's message looks like a question best answered via web search.
+
+    This catches factual/current-events questions that should be auto-searched
+    rather than blocked behind HITL scope clarification.
+    """
+    text = user_text.strip().lower()
+    for pattern in _SEARCHABLE_INTENT_PATTERNS:
+        if text.startswith(pattern):
+            return True
+    return False
+
+
 @log_node("scope_clarify")
 async def scope_clarify_node(state: AgentState) -> AgentState | Command:
     """Run proactive scope clarification when a build request is underspecified.
@@ -56,6 +102,10 @@ async def scope_clarify_node(state: AgentState) -> AgentState | Command:
     - ``scope_clarification_enabled`` is false in profile
     - ``router_clarification_used`` is true (avoid back-to-back HITL)
     - Heuristic + Small LLM agree no clarification needed
+
+    When web tools are available and the query is informational (not a build
+    request), the node returns a ``web_search_suggested`` flag instead of
+    triggering HITL, allowing the LLM to search autonomously.
     """
     route = state.get("route") or ""
     if not route.startswith("complex"):
@@ -82,6 +132,18 @@ async def scope_clarify_node(state: AgentState) -> AgentState | Command:
     if not user_text:
         return {}
 
+    # ── Web search bypass: informational queries skip HITL ─────────
+    web_on = state.get("web_search_enabled")
+    if web_on is None:
+        web_on = True
+    if web_on and _looks_like_searchable_query(user_text):
+        logger.info("[scope_clarify] Informational query detected — routing to web search instead of HITL")
+        audit_info("agent.hitl", "scope_clarify_bypassed", reason="web_searchable_query")
+        return {
+            "web_search_suggested": True,
+            "clarified_scope": {"_source": "auto_web_search"},
+        }
+
     # ── Heuristic gate (fast, no LLM) ─────────────────────────────
     needs, missing = needs_clarification(user_text)
     if not needs:
@@ -91,6 +153,15 @@ async def scope_clarify_node(state: AgentState) -> AgentState | Command:
 
     logger.info("[scope_clarify] Heuristic flagged as underspecified: missing=%s", missing)
     audit_info("agent.hitl", "scope_clarify_triggered", missing_dimensions=missing)
+
+    # ── Web search bypass for underspecified informational requests ──
+    if web_on and missing and all(dim not in ("language", "ui_surface", "feature_scope") for dim in missing):
+        logger.info("[scope_clarify] Underspecified informational request — routing to web search")
+        audit_info("agent.hitl", "scope_clarify_bypassed", reason="underspecified_informational")
+        return {
+            "web_search_suggested": True,
+            "clarified_scope": {"_source": "auto_web_search"},
+        }
 
     # ── Small LLM: generate questions ──────────────────────────────
     # The heuristic already determined clarification is needed.
@@ -128,7 +199,6 @@ async def scope_clarify_node(state: AgentState) -> AgentState | Command:
         logger.info("[scope_clarify] Using fallback questions: %d", len(questions))
 
     if not questions:
-        # Shouldn't happen, but guard against empty questions
         logger.warning("[scope_clarify] No questions generated, skipping interrupt")
         return {}
 

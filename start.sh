@@ -1,5 +1,5 @@
 #!/bin/bash
-# Owlynn Launcher — browser-first, no Tauri
+# Owlynn Launcher — browser-only, no Tauri (paused)
 # Launches: containers → LM Studio (wait for user) → backend + frontend
 set -o pipefail
 cd "$(dirname "$0")"

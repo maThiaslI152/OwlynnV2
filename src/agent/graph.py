@@ -65,7 +65,11 @@ def scope_clarify_next(state: AgentState) -> str:
 
 
 def llm_next_step(state: AgentState) -> str:
-    """After complex_llm: route to plan_review, security_proxy, or memory_write."""
+    """After complex_llm: route to plan_review, security_proxy, memory_write, or back to complex_llm for cutoff continuation."""
+    if state.get("_cutoff_pending"):
+        audit_debug("agent.lifecycle", "edge_traversal", edge="complex_llm→complex_llm",
+                     reason="cutoff_continuation")
+        return "complex_llm"
     if not state.get("pending_tool_calls"):
         audit_debug("agent.lifecycle", "edge_traversal", edge="complex_llm→memory_write",
                      reason="no_pending_tool_calls")

@@ -8,25 +8,28 @@ This repository enforces **Spec-Driven Development (SDD)** — specs before code
 
 ### Quick start
 
+0. **To run the app:** read [`docs/guides/dev-startup.md`](docs/guides/dev-startup.md) — prerequisites, env setup, launch steps
 1. Read [`docs/README.md`](docs/README.md) → [`docs/INDEX.md`](docs/INDEX.md)
 2. Read [`docs/architecture/overview.md`](docs/architecture/overview.md)
 3. Read [`specs/memory/constitution.md`](specs/memory/constitution.md) + [`docs/standards/coding-style.md`](docs/standards/coding-style.md)
 4. Find active change: check [`specs/active/`](specs/active/) or run `/sdd-status`
-5. If active change exists, read:
+5. For new changes: agent runs autonomous discovery (see `sdd-orchestrator` skill) — explores codebase, inventories tools, presents findings BEFORE any popups
+6. If active change exists, read:
    - `specs/active/<slug>/requirements.md`
    - `specs/active/<slug>/design.md`
    - `specs/active/<slug>/tasks.md`
    - `.cursorplan/active/<slug>/plan.md`
    - `docs/changes/<slug>/CHANGELOG.md`
-6. Then touch code
+7. Then touch code
 
 ### SDD Phases (never skip)
 
 | # | Phase | Cursor Mode | Artifact |
 |---|-------|-------------|----------|
-| 1 | Exploration | Plan | `specs/active/<slug>/requirements.md` |
-| 2 | Specification | Plan | `specs/active/<slug>/design.md` |
-| 3 | Architecture | Plan | `specs/active/<slug>/tasks.md` |
+| 0 | Discovery | Plan | Proposal summary (no file — presented in chat) |
+| 1 | Requirements | Plan | `specs/active/<slug>/requirements.md` |
+| 2 | Design | Plan | `specs/active/<slug>/design.md` |
+| 3 | Tasks | Plan | `specs/active/<slug>/tasks.md` |
 | 4 | Implementation | Agent | Product code + `docs/changes/<slug>/CHANGELOG.md` |
 | 5 | Verification | Agent | `specs/active/<slug>/verification-report.md` |
 | done | Archive | Agent | Move to `specs/completed/<slug>/` |
@@ -34,6 +37,8 @@ This repository enforces **Spec-Driven Development (SDD)** — specs before code
 ### Hard gates (enforced by hooks + rules)
 
 - **Plan mode:** NEVER write product code (enforced natively). Create only spec artifacts under `specs/`, `.cursorplan/`, `docs/changes/`, `.cursor/`, `docs/`.
+- **Before requirements:** Agent MUST complete autonomous discovery — explore codebase, inventory tools, present findings (see `sdd-orchestrator` skill).
+- **Before tasks-review:** Agent MUST run pre-task validation — AC coverage check, pattern consistency check, duplication check.
 - **Agent mode:** NEVER implement until ALL of these approvals are `true` in `state.json`:
   - `approvals.requirements`
   - `approvals.design`
@@ -41,9 +46,8 @@ This repository enforces **Spec-Driven Development (SDD)** — specs before code
   - `approvals.implement`
 - **Every phase transition** requires an **AskQuestion popup** with `approve` selected. Chat text like "looks fine" does NOT count.
 - **Every implementation task** requires:
-  1. For Task 1: `task-start-1` AskQuestion (once). Tasks 2+ proceed without popups.
-  2. Implementation
-  3. Append to `docs/changes/<slug>/CHANGELOG.md`
+  1. Implementation
+  2. Append to `docs/changes/<slug>/CHANGELOG.md`
 - **All tasks done:** run ALL `verify_steps` from `tasks.md` → generate `verification-report.md` → `feature-verify-review` AskQuestion → on Approve, move to `specs/completed/`.
 
 ### Commands
@@ -65,6 +69,7 @@ This repository enforces **Spec-Driven Development (SDD)** — specs before code
 ### Skills
 
 - `.cursor/skills/sdd-kiro-hitl/SKILL.md` — Human-in-the-loop AskQuestion popup scripts
+- `.cursor/skills/sdd-orchestrator/SKILL.md` — Autonomous discovery, codebase exploration, pre-task validation
 
 ### Critical: never infer approval
 
@@ -94,4 +99,4 @@ The bootstrap only copies `.cursor/`, `.cursorplan/`, `specs/`, `docs/`, and `AG
 
 ## Last updated
 
-2026-05-31 — added `/sdd-bootstrap` + template repo instructions
+2026-06-02 — autonomous orchestration layer + task-start-1 removal

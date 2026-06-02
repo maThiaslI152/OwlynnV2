@@ -14,12 +14,14 @@ cd "$(git rev-parse --show-toplevel)"
 QUICK=false
 PYTHON_ONLY=false
 FRONTEND_ONLY=false
+BENCHMARKS=false
 
 for arg in "$@"; do
   case "$arg" in
     --quick) QUICK=true ;;
     --python-only) PYTHON_ONLY=true ;;
     --frontend-only) FRONTEND_ONLY=true ;;
+    --benchmarks) BENCHMARKS=true ;;
   esac
 done
 
@@ -44,7 +46,7 @@ if ! $FRONTEND_ONLY; then
   fi
 
   info "Running unit tests (excluding network, benchmarks)…"
-  if python -m pytest -q -m "not network and not benchmark" --tb=short; then
+  if python -m pytest -q -m "not network and not benchmark" --tb=short --cov=src --cov-report=term; then
     pass "Unit tests passed"
   else
     fail "Unit tests failed"; EXIT_CODE=1
@@ -55,12 +57,33 @@ if ! $FRONTEND_ONLY; then
     tests/test_verify_report_fixture.py \
     tests/test_websocket_event_contract.py \
     tests/test_frontend_cutover_serving.py \
-    --tb=short; \
+    --tb=short --cov=src --cov-report=term; \
   then
     pass "Audit/contract tests passed"
   else
     fail "Audit/contract tests failed"; EXIT_CODE=1
   fi
+
+# ── Benchmark checks ───────────────────────────────────
+if $BENCHMARKS; then
+  info "=== Benchmarks ==="
+  info "Running benchmarks (quick mode)…"
+  if python tests/benchmarks/run.py --all --quick; then
+    pass "Benchmarks passed"
+  else
+    fail "Benchmarks failed"; EXIT_CODE=1
+  fi
+  info "Verifying benchmark report is non-empty…"
+  if python3 -c "
+import json
+r = json.load(open('tests/benchmarks/benchmark_report.json'))
+assert r['total_entries'] > 0, 'Benchmark report is empty'
+"; then
+    pass "Benchmark report non-empty"
+  else
+    fail "Benchmark report is empty"; EXIT_CODE=1
+  fi
+fi
 fi
 
 # ── Frontend checks ──────────────────────────────────────

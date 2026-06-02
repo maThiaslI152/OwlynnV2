@@ -1,5 +1,15 @@
 """HITL shared policy definitions used by security_proxy and plan_review."""
 
+import re
+
+# Tools that are always safe — information retrieval only, no side effects.
+# These bypass HITL entirely: the LLM can call them without approval.
+SAFE_TOOLS = {
+    "web_search",
+    "fetch_webpage",
+    "fetch_webpage_dynamic",
+}
+
 # Tools that always require security review
 SENSITIVE_TOOLS = {
     "write_workspace_file",
@@ -7,8 +17,6 @@ SENSITIVE_TOOLS = {
     "delete_workspace_file",
     "notebook_run",
 }
-
-import re
 
 SENSITIVE_PATTERN_RE = re.compile(
     r"(?:\brm\s+-rf\b|(?:^|[;&|])\s*curl\b|(?:^|[;&|])\s*wget\b|\bsudo\b|\bchmod\b|\bchown\b|\bssh\b|\bscp\b)",
@@ -27,8 +35,24 @@ CATEGORY_REMEDIATION = {
 }
 
 
+def is_information_retrieval(tool_name: str) -> bool:
+    """Check if a tool is pure information retrieval (no side effects).
+
+    Information-retrieval tools (web_search, fetch_webpage, etc.) are always
+    safe to auto-execute. They never mutate state on disk or trigger network
+    side effects beyond fetching data for the LLM to read.
+    """
+    return tool_name in SAFE_TOOLS
+
+
 def is_sensitive_call(tool_name: str, args) -> bool:
-    """Check if a tool call is sensitive based on name and args."""
+    """Check if a tool call is sensitive based on name and args.
+
+    Sensitive calls require HITL approval. Information-retrieval tools
+    (SAFE_TOOLS) are never sensitive regardless of args.
+    """
+    if is_information_retrieval(tool_name):
+        return False
     import json
     if tool_name in SENSITIVE_TOOLS:
         return True

@@ -368,3 +368,89 @@
 .tool-activity-audit-btn:hover {
   background: var(--hover, #45475a);
 }
+
+/* ── HITL Context & Args ─────────────────────────────────────────── */
+
+.hitl-prompt-context {
+  margin: 8px 0;
+  padding: 8px 10px;
+  background: var(--surface, #313244);
+  border-radius: 6px;
+  font-size: 0.78rem;
+}
+
+.hitl-prompt-context summary {
+  cursor: pointer;
+  color: var(--text-secondary, #a6adc8);
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.hitl-prompt-snippet {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+  font-size: 0.75rem;
+  color: var(--text-primary, #cdd6f4);
+  line-height: 1.4;
+  margin: 6px 0 0;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.hitl-prompt-args {
+  margin: 8px 0;
+  font-size: 0.78rem;
+}
+
+.hitl-args-table {
+  width: 100%;
+  margin-top: 4px;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+}
+
+.hitl-args-key {
+  padding: 3px 8px;
+  color: var(--text-secondary, #a6adc8);
+  font-weight: 500;
+  white-space: nowrap;
+  vertical-align: top;
+  border-bottom: 1px solid var(--border-subtle, rgba(49, 50, 68, 0.5));
+}
+
+.hitl-args-value {
+  padding: 3px 8px;
+  color: var(--text-primary, #cdd6f4);
+  word-break: break-all;
+  border-bottom: 1px solid var(--border-subtle, rgba(49, 50, 68, 0.5));
+}
+
+.hitl-args-value code {
+  font-size: 0.7rem;
+  background: var(--surface-alt, rgba(49, 50, 68, 0.6));
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.hitl-prompt-affected {
+  margin: 8px 0;
+  font-size: 0.78rem;
+}
+
+.hitl-prompt-affected ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.hitl-prompt-affected li {
+  margin: 2px 0;
+  color: var(--text-secondary, #a6adc8);
+}
+
+.hitl-prompt-affected code {
+  font-size: 0.7rem;
+  background: var(--surface-alt, rgba(49, 50, 68, 0.6));
+  padding: 1px 4px;
+  border-radius: 3px;
+}

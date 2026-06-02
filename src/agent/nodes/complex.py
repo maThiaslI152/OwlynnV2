@@ -32,6 +32,9 @@ _MIN_OUTPUT_TOKENS = 512
 # Safety margin to avoid hitting the exact limit
 _CONTEXT_SAFETY_MARGIN = 256
 
+# Maximum number of automatic continuation rounds when the LLM hits its token budget
+MAX_CUTOFF_RETRIES = 3
+
 
 def _estimate_message_tokens(messages: list) -> int:
     """
@@ -116,9 +119,11 @@ ask_user — ask the user a clarifying question
 
 ### Rules
 - Ground all claims in tool output. Never invent facts or URLs.
+- After web_search, if the search snippets are too brief to answer the user's question, call fetch_webpage on the most relevant result URLs to get the full page content.
 - Use [1] [2] citations from fetch_webpage excerpts.
 - If tools return nothing useful, say so honestly.
-- Prefer workspace files and project knowledge over web search for project-specific work."""
+- Prefer workspace files and project knowledge over web search for project-specific work.
+- If browser MCP tools (browser_snapshot, browser_take_screenshot, etc.) are available, use them when the user asks what's on a web page or in their browser window."""
     + _TOOL_CALL_DISCIPLINE
 )
 
@@ -499,7 +504,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     if clarified_scope and isinstance(clarified_scope, dict) and not clarified_scope.get("skipped"):
         scope_lines = ["\n\nCONFIRMED REQUIREMENTS (user-approved, do not contradict):"]
         for key, value in clarified_scope.items():
-            if key in ("skipped", "_raw"):
+            if key in ("skipped", "_raw", "_source"):
                 continue
             if isinstance(value, dict):
                 label = value.get("label", str(value))
@@ -508,6 +513,24 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             else:
                 scope_lines.append(f"- {key}: {value}")
         system_text += "\n".join(scope_lines)
+
+    # ── Web search suggestion from scope_clarify bypass ────────────────────
+    if state.get("web_search_suggested") and web_on:
+        system_text += (
+            "\n\nThe user's question is informational and may require current web data. "
+            "Use web_search to find relevant information before answering. "
+            "If search snippets are insufficient, call fetch_webpage on result URLs "
+            "to get full page content."
+        )
+
+    # ── Cutoff continuation: LLM was cut off — pick up where it stopped ────
+    _cutoff_round = state.get("_cutoff_round", 0)
+    if state.get("_cutoff_pending") and _cutoff_round > 0:
+        system_text += (
+            "\n\nYour previous response was cut off (token budget exceeded). "
+            "Continue from where you stopped. Do NOT repeat what you already wrote. "
+            "Pick up mid-sentence if needed and complete your thought."
+        )
 
     system = SystemMessage(content=system_text)
 
@@ -952,12 +975,38 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             if cleaned != msg.content:
                 out_messages[i] = AIMessage(content=cleaned)
 
+    # ── Cutoff detection: auto-continue if LLM hit token budget ────────────
+    _cutoff_round = state.get("_cutoff_round", 0)
+    if (
+        not has_tool_calls
+        and _cutoff_round < MAX_CUTOFF_RETRIES
+        and response
+        and response.response_metadata.get("finish_reason") == "length"
+    ):
+        logger.info("[complex] Response cut off (finish_reason=length), auto-continuing round %d/%d",
+                     _cutoff_round + 1, MAX_CUTOFF_RETRIES)
+        return {
+            "messages": out_messages,
+            "model_used": model_label,
+            "pending_tool_calls": False,
+            "security_decision": None,
+            "security_reason": None,
+            "_cutoff_pending": True,
+            "_cutoff_round": _cutoff_round + 1,
+            "api_tokens_used": api_tokens,
+            "fallback_chain": fallback_chain,
+            "cloud_brief_tokens_est": cloud_brief_tokens_est,
+            "anonymization_placeholders_count": anonymization_placeholders_count,
+        }
+
     return {
         "messages": out_messages,
         "model_used": model_label,
         "pending_tool_calls": bool(getattr(response, "tool_calls", None)),
         "security_decision": None,
         "security_reason": None,
+        "_cutoff_pending": False,
+        "_cutoff_round": _cutoff_round,
         "api_tokens_used": api_tokens,
         "fallback_chain": fallback_chain,
         "cloud_brief_tokens_est": cloud_brief_tokens_est,
