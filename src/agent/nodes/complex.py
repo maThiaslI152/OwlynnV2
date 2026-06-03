@@ -35,6 +35,51 @@ _CONTEXT_SAFETY_MARGIN = 256
 # Maximum number of automatic continuation rounds when the LLM hits its token budget
 MAX_CUTOFF_RETRIES = 3
 
+# Max retries for cloud LLM calls with exponential backoff
+_MAX_CLOUD_RETRIES = 3
+
+
+async def _invoke_with_cloud_retry(bound_llm, prompt_messages, *, fallback_chain, model_label, route):
+    """Invoke cloud LLM with circuit breaker check, retry logic, and cost tracking.
+
+    Retries on 429 (rate limit) and 5xx (server errors) with exponential
+    backoff. Does **not** retry on 401 (auth errors).  Respects the
+    circuit breaker — raises immediately if the circuit is open.
+    """
+    from src.agent.cloud_circuit_breaker import get_circuit_breaker
+
+    breaker = get_circuit_breaker()
+    if breaker.is_open():
+        raise Exception("Circuit breaker open")
+
+    last_error = None
+
+    for attempt in range(_MAX_CLOUD_RETRIES + 1):
+        try:
+            response = await bound_llm.ainvoke(prompt_messages)
+            breaker.record_success()
+            return response
+        except Exception as e:
+            last_error = e
+            err_str = str(e)
+
+            if "401" in err_str:
+                breaker.record_failure()
+                raise
+
+            is_retryable = "429" in err_str or any(
+                code in err_str for code in ("500", "502", "503", "504")
+            )
+            if not is_retryable or attempt >= _MAX_CLOUD_RETRIES:
+                breaker.record_failure()
+                raise
+
+            wait = 2 ** attempt
+            await asyncio.sleep(wait)
+
+    breaker.record_failure()
+    raise last_error if last_error else Exception("Cloud retry exhausted")
+
 
 def _estimate_message_tokens(messages: list) -> int:
     """
