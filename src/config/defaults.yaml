@@ -39,7 +39,7 @@ external_services:
 #      https://huggingface.co/Qwen/Qwen3.5-0.8B
 models:
   small:
-    base_url: "${external_services.lm_studio.base_url}"
+    base_url: "http://127.0.0.1:1234/v1"      # SMALL_LLM_BASE_URL env
     model_name: "qwen3.5-0.8b"              # Router — 0.8B, non-thinking by default
     temperature: 0.2                         # Low temp for consistent routing
     max_tokens: 512
@@ -51,7 +51,7 @@ models:
         enable_thinking: false               # CRITICAL: 0.8B prone to thinking loops
 
   medium:
-    base_url: "${external_services.lm_studio.base_url}"
+    base_url: "http://127.0.0.1:1234/v1"      # MEDIUM_LLM_BASE_URL env
     temperature: 0.7                         # Qwen non-thinking rec: 0.7, top_p=0.8, top_k=20
     max_tokens: 8192                         # Qwen rec: 32768 normal, 81920 complex; ~8K practical
     max_output_tokens: 8192
@@ -87,7 +87,7 @@ models:
       output_per_1m_usd: 0.28
 
   embedding:
-    base_url: "${external_services.lm_studio.base_url}"
+    base_url: "http://127.0.0.1:1234/v1"
     model_name: "text-embedding-nomic-embed-text-v1.5-embedding"
     dims: 768
     timeout: 30.0

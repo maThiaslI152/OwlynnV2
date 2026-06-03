@@ -36,44 +36,21 @@ _DEFAULTS = {
     "audit_log_levels": {},
     "audit_log_dir": "",
 
-    # ── Config overrides (sourced from defaults.yaml unless user overrides) ──
-    # The following fields are *empty by default* — values come from
-    # src/config/defaults.yaml. Set them in the profile JSON only to override.
+    # ── Config overrides are NOT in _DEFAULTS — see note below ───────────
+    # The following fields exist ONLY when the user explicitly sets them
+    # in data/user_profile.json. If absent, code reads defaults from
+    # src/config/defaults.yaml via the centralized config loader.
     #
-    # LLM endpoints / model names
-    "llm_base_url": "",
-    "llm_model_name": "",
-    "small_llm_base_url": "",
-    "small_llm_model_name": "",
-    "large_llm_base_url": "",
-    "large_llm_model_name": "",
-    "cloud_llm_base_url": "",
-    "cloud_llm_model_name": "",
-    "deepseek_api_key": "",
-    "medium_models": {},
-    "redis_url": "",
-    "lm_studio_fold_system": None,
-
-    # Inference params (empty = use defaults)
-    "temperature": None,
-    "top_p": None,
-    "max_tokens": None,
-    "top_k": None,
-
-    # Routing
-    "router_hitl_enabled": None,
-    "route_confidence_threshold": None,
-    "skill_clarification_threshold": None,
-    "router_clarification_threshold": None,
-    "scope_clarification_enabled": None,
-    "plan_review_enabled": None,
-
-    # Cloud
-    "cloud_escalation_enabled": None,
-    "cloud_anonymization_enabled": None,
-    "custom_sensitive_terms": [],
-    "cloud_brief_enabled": None,
-    "cloud_brief_max_chars": None,
+    # Overridable fields (set in profile JSON only to override YAML):
+    #   llm_base_url, llm_model_name, small_llm_base_url, small_llm_model_name,
+    #   large_llm_base_url, large_llm_model_name, cloud_llm_base_url,
+    #   cloud_llm_model_name, deepseek_api_key, medium_models, redis_url,
+    #   lm_studio_fold_system, temperature, top_p, max_tokens, top_k,
+    #   router_hitl_enabled, route_confidence_threshold,
+    #   skill_clarification_threshold, router_clarification_threshold,
+    #   scope_clarification_enabled, plan_review_enabled,
+    #   cloud_escalation_enabled, cloud_anonymization_enabled,
+    #   custom_sensitive_terms, cloud_brief_enabled, cloud_brief_max_chars,
 }
 
 VALID_FIELDS = {

@@ -80,6 +80,13 @@ class SwapManager:
 
         profile = get_profile()
         medium_models: dict = profile.get("medium_models", {})
+        # Fall back to centralized config if profile has no model keys
+        if not medium_models:
+            variants_cfg = config.get("models.medium.variants") or {}
+            medium_models = {
+                variant: v.get("model_name", "")
+                for variant, v in variants_cfg.items()
+            }
         model_key = medium_models.get(target_variant)
         if not model_key:
             raise ModelSwapError(

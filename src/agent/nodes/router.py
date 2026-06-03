@@ -405,8 +405,8 @@ async def router_node(state: AgentState) -> AgentState:
     # ── HITL clarification and proactive skill matching ────────────────
     profile = get_profile()
     router_hitl_enabled = profile.get("router_hitl_enabled", True)
-    routing_confidence_threshold = float(profile.get("route_confidence_threshold", 0.6))
-    skill_clarification_threshold = float(profile.get("skill_clarification_threshold", 0.5))
+    routing_confidence_threshold = float(profile.get("route_confidence_threshold") or config.get("routing.confidence_threshold", 0.6))
+    skill_clarification_threshold = float(profile.get("skill_clarification_threshold") or config.get("routing.skill_clarification_threshold", 0.5))
 
     router_clarification_used = False
     skill_matched = None
