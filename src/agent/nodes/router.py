@@ -356,25 +356,26 @@ async def router_node(state: AgentState) -> AgentState:
                 "router_metadata": metadata}
 
     # Quick keyword check to bypass LLM for obvious simple cases.
-    simple_keywords = [
-        "hello", "hi", "hey", "thanks", "thank you",
-        "bye", "goodbye", "what time", "what date",
-    ]
-    for kw in simple_keywords:
-        if kw in user_lower:
-            logger.info("[router] Simple path - keyword match")
-            budget = estimate_token_budget(user_text, "simple")
-            metadata = _build_router_metadata(
-                "simple", confidence=0.98, reasoning="keyword_match",
-                classification_source="keyword_bypass", cloud_available=cloud_available,
-                has_images=has_images, task_category="greeting", estimated_tokens=budget, web_on=web_on,
-            )
-            audit_info("agent.lifecycle", "router_decision", route="simple", confidence=0.98,
-                        source="keyword_bypass", task_category="greeting")
-            return {"route": "simple", "token_budget": budget,
-                    "selected_toolboxes": ["all"], "router_clarification_used": False,
-                    "skill_matched": None,
-                    "router_metadata": metadata}
+    # Use word-boundary matching to avoid substring false positives
+    # (e.g. "hi" matching inside "which", "this", "Chiang").
+    _greeting_pattern = re.compile(
+        r"\b(hello|hi|hey|thanks|thank\s+you|bye|goodbye)\b", re.IGNORECASE
+    )
+    _time_date_pattern = re.compile(r"\b(what\s+time|what\s+date)\b", re.IGNORECASE)
+    if _greeting_pattern.search(user_text) or _time_date_pattern.search(user_text):
+        logger.info("[router] Simple path - keyword match")
+        budget = estimate_token_budget(user_text, "simple")
+        metadata = _build_router_metadata(
+            "simple", confidence=0.98, reasoning="keyword_match",
+            classification_source="keyword_bypass", cloud_available=cloud_available,
+            has_images=has_images, task_category="greeting", estimated_tokens=budget, web_on=web_on,
+        )
+        audit_info("agent.lifecycle", "router_decision", route="simple", confidence=0.98,
+                    source="keyword_bypass", task_category="greeting")
+        return {"route": "simple", "token_budget": budget,
+                "selected_toolboxes": ["all"], "router_clarification_used": False,
+                "skill_matched": None,
+                "router_metadata": metadata}
 
     # ── Stage 1: Ask Small LLM for simple/complex + toolbox ──────────────
     small_llm = await get_small_llm()
@@ -466,8 +467,9 @@ async def router_node(state: AgentState) -> AgentState:
             except ImportError:
                 pass  # heuristic module unavailable; fall through to router HITL
 
-        # HITL requires a checkpointer — without one, interrupt() silently
-        # stops the node without returning a route, breaking graph state.
+        # HITL requires a checkpointer AND an interactive context.
+        # In API mode (stateless) there is no human to respond to interrupts,
+        # so we must auto-resolve or fall through without pausing.
         _can_interrupt = False
         try:
             from langgraph.config import get_config as _get_config
@@ -475,6 +477,10 @@ async def router_node(state: AgentState) -> AgentState:
             _can_interrupt = _cp is not None
         except RuntimeError:
             pass  # outside graph context
+
+        # API/non-interactive mode: do NOT pause the graph — auto-resolve
+        if state.get("mode") in ("api", "noninteractive"):
+            _can_interrupt = False
 
         if hitl_needed and _can_interrupt:
             # ── Build interrupt payload and PAUSE the graph ──────
