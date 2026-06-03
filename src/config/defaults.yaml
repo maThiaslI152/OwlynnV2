@@ -1,0 +1,266 @@
+# =============================================================================
+# OwlynnV2 — Centralized Default Configuration
+# =============================================================================
+# This is the SINGLE SOURCE OF TRUTH for all configurable settings.
+# Override priority (lowest → highest):
+#   1. defaults.yaml (this file)
+#   2. Environment variables (os.getenv)
+#   3. User profile JSON (data/user_profile.json)
+#
+# To change a model name, endpoint, or threshold — edit here.
+# No need to hunt through the codebase.
+# =============================================================================
+
+# ── Server ───────────────────────────────────────────────────────────────────
+server:
+  host: "127.0.0.1"       # HOST env
+  port: 8000               # PORT env
+
+# ── External Services ────────────────────────────────────────────────────────
+external_services:
+  qdrant:
+    host: "localhost"        # QDRANT_HOST env
+    port: 6333               # QDRANT_PORT env
+    collection_name: "cowork_memory_nomic"
+    embedding_dims: 768
+  redis:
+    url: "redis://localhost:6379"  # REDIS_URL env
+  searxng:
+    url: ""                  # SEARXNG_URL env (e.g. "http://localhost:8888")
+  lm_studio:
+    base_url: "http://127.0.0.1:1234/v1"   # SMALL_LLM_BASE_URL / MEDIUM_LLM_BASE_URL env
+    management_url: "http://127.0.0.1:1234"  # For SwapManager API calls
+
+# ── Models — AI/LLM Configuration ────────────────────────────────────────────
+models:
+  small:
+    base_url: "${external_services.lm_studio.base_url}"
+    model_name: "liquid/lfm2.5-1.2b"     # SMALL_LLM_MODEL_NAME env
+    temperature: 0.2
+    max_tokens: 512
+    max_output_tokens: 512
+    context_window: 4096                  # Lfm2.5 1.2B context
+    timeout: 10                           # M4: 10s, standard: 15s
+
+  medium:
+    base_url: "${external_services.lm_studio.base_url}"
+    temperature: 0.4
+    max_tokens: 4096
+    max_output_tokens: 4096
+    timeout: 60                           # M4: 60s, standard: 45s
+    fold_system: true                     # LM Studio Jinja compat
+    variants:
+      default:
+        model_name: "gemma-4-e4b-uncensored-hauhaucs-aggressive"
+        context_window: 16384             # Gemma 4 E4B Q4_K_M real window
+      vision:
+        model_name: "zai-org/glm-4.6v-flash"
+        context_window: 16384
+      longctx:
+        model_name: "lfm2-8b-a1b"
+        context_window: 131072
+
+    swap:
+      timeout: 120                        # Max wait for LM Studio model swap
+      poll_interval: 2                    # Poll interval during swap
+      api_timeout: 30                     # HTTP timeout for LM Studio API calls
+
+  cloud:
+    base_url: "https://api.deepseek.com/v1"  # CLOUD_LLM_BASE_URL env
+    model_name: "deepseek-v4"                # CLOUD_LLM_MODEL_NAME env
+    temperature: 0.4
+    max_tokens: 8192
+    timeout: 180
+    pricing:
+      input_per_1m_usd: 0.14
+      output_per_1m_usd: 0.28
+
+  embedding:
+    base_url: "${external_services.lm_studio.base_url}"
+    model_name: "text-embedding-nomic-embed-text-v1.5-embedding"
+    dims: 768
+    timeout: 30.0
+
+  # Standard (non-M4) overrides — used when OPTIMIZE_FOR_M4 is false
+  standard:
+    small:
+      timeout: 15
+      max_tokens: 1024
+      max_output_tokens: 1024
+    medium:
+      timeout: 45
+      max_tokens: 8192
+      max_output_tokens: 8192
+
+# ── Routing ──────────────────────────────────────────────────────────────────
+routing:
+  confidence_threshold: 0.6               # Router confidence HITL threshold
+  swap_threshold: 0.7                     # Model swap decision threshold
+  skill_clarification_threshold: 0.5
+  router_clarification_threshold: 0.6
+  scope_clarification_enabled: true
+  plan_review_enabled: true
+  keyword_bypass: true                    # Quick routing for common patterns
+  simple_prompt: true                     # Streamlined prompt for speed
+  max_input_chars: 500                    # Router input truncation
+  hitl_enabled: true
+
+  # Token budget tiers: (max_input_chars, token_budget)
+  budget_tiers:
+    - [40, 256]
+    - [150, 512]
+    - [400, 1536]
+    - [800, 3072]
+    - [1600, 4096]
+
+  # Per-route input reserves (tokens reserved for system + memory + input)
+  input_reserves:
+    simple: 1500
+    cloud: 8000
+    longctx: 4000
+    default: 4000
+
+  # Per-route budget maximums
+  budget_max:
+    cloud: 16384
+    other: 8192
+
+  # Skill matching
+  skill:
+    low_confidence_threshold: 0.5
+    tie_margin: 0.15
+    tie_min_top_score: 0.3
+    vague_word_count: 3
+
+# ── Memory ───────────────────────────────────────────────────────────────────
+memory:
+  max_facts: 200
+  search_window: 50                       # Non-M4: 200
+  search_window_m4: 100                   # M4 optimized
+
+  cache:
+    ttl: 300                              # 5 minutes
+    cleanup_interval: 600                 # 10 minutes
+
+  thread_cleanup_interval: 3600           # 1 hour
+
+  # Memory decay constants
+  decay:
+    topic_half_life_days: 14
+    interest_half_life_days: 21
+    focus_window_days: 3
+    relevance_floor: 0.05
+
+# ── Web Search ───────────────────────────────────────────────────────────────
+web_search:
+  timeout_seconds: 22
+  enable_curl_cffi: true
+  enable_browser_fallback: true
+
+  # Per-backend timeouts
+  timeouts:
+    weather: 20.0
+    bing: 22.0
+    ddg: 25.0
+    cloud_connectivity_check: 15.0
+
+  # User-Agent strings
+  user_agents:
+    bing: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    ddg: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    weather: "Owlynn/1.0 (weather lookup; +https://github.com/chubin/wttr.in)"
+
+  fetch_min_meaningful_text: 100
+
+# ── Web RAG (Embedding-based excerpt ranking) ─────────────────────────────────
+web_rag:
+  enabled: true
+  embed_model: "text-embedding-nomic-embed-text-v1.5-embedding"
+  top_k: 5
+  chunk_chars: 720
+  chunk_overlap: 120
+  min_chars_for_rank: 1800
+  rerank_top_n: 8
+
+# ── Summarization ────────────────────────────────────────────────────────────
+summarization:
+  threshold_ratio: 0.85                   # Trigger when active_tokens > 85% of context
+  keep_recent_turns: 10                   # Recent turns to preserve in full
+  chars_per_token: 4                      # Rough estimation heuristic
+
+# ── Complex Node (LLM invocation) ─────────────────────────────────────────────
+complex:
+  context_safety_margin: 256              # Tokens reserved to avoid hitting limit
+  min_output_tokens: 512                  # Minimum output token budget
+  max_cutoff_retries: 3                   # Auto-continuation rounds
+  max_cloud_retries: 3                    # Cloud LLM retries with backoff
+  default_token_budget: 4096              # Fallback token budget
+  synthetic_answer_max_chars: 4500        # Max chars for synthetic answers
+
+# ── Cloud ────────────────────────────────────────────────────────────────────
+cloud:
+  escalation_enabled: true
+  anonymization_enabled: true
+  circuit_breaker:
+    failure_threshold: 3
+    cooldown_seconds: 60
+  budget:
+    daily_token_limit: 500000
+    warning_thresholds: [0.5, 0.8, 0.95]
+    brief_max_chars: 8000
+
+# ── Tool Output Truncation ───────────────────────────────────────────────────
+tool_output:
+  max_tool_output_chars: 20000
+  max_read_chars: 20000
+  max_notebook_chars: 8000
+  max_inline_pdf_chars: 16000
+  raw_decode_max_chars: 8000
+  embedding_input_max_chars: 8000
+
+# ── File Indexing ────────────────────────────────────────────────────────────
+file_indexing:
+  chunk_size: 1500
+  overlap: 200
+  max_chunks: 20
+
+# ── PDF Rendering ────────────────────────────────────────────────────────────
+pdf_rendering:
+  patch_size: 28
+  page_width: 392                          # 14 × 28
+  divider_height: 28
+
+# ── Audit Logging ────────────────────────────────────────────────────────────
+audit:
+  max_bytes: 10485760                      # 10 MB
+  backup_count: 5
+  error_max_bytes: 5242880                 # 5 MB
+  error_backup_count: 3
+  sanitize_max_len: 500
+
+# ── Threading ────────────────────────────────────────────────────────────────
+threading:
+  max_workers: 2
+  queue_size: 10
+
+# ── Secret Store ─────────────────────────────────────────────────────────────
+secret_store:
+  keychain_service: "com.owlynn.deepseek"
+  keychain_account: "deepseek_api_key"
+
+# ── File Decode ──────────────────────────────────────────────────────────────
+file_decode:
+  max_chars: 8000
+  filename_join_max_chars: 400
+  title_max_chars: 60
+  user_text_preview_chars: 1000
+
+# ── Chat Title ───────────────────────────────────────────────────────────────
+chat_title:
+  temperature: 0.2
+  max_tokens: 64
+
+# ── Router LLM Bind Params ──────────────────────────────────────────────────
+router_llm:
+  temperature: 0.05
+  max_tokens: 128

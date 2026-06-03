@@ -23,6 +23,7 @@ from typing import Dict, List, Optional, Tuple
 logger = logging.getLogger(__name__)
 
 from src.config.audit_log import audit_info, audit_debug
+from src.config.config_loader import config
 
 _DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 MEMORIES_PATH = _DATA_DIR / "memories.json"
@@ -30,11 +31,11 @@ TOPICS_PATH = _DATA_DIR / "topics.json"
 INTERESTS_PATH = _DATA_DIR / "interests.json"
 CONVERSATIONS_PATH = _DATA_DIR / "conversations.json"
 
-# Decay constants
-TOPIC_HALF_LIFE_DAYS = 14
-INTEREST_HALF_LIFE_DAYS = 21
-FOCUS_WINDOW_DAYS = 3
-RELEVANCE_FLOOR = 0.05
+# Decay constants (sourced from centralized config)
+TOPIC_HALF_LIFE_DAYS = int(config.get("memory.decay.topic_half_life_days", 14))
+INTEREST_HALF_LIFE_DAYS = int(config.get("memory.decay.interest_half_life_days", 21))
+FOCUS_WINDOW_DAYS = int(config.get("memory.decay.focus_window_days", 3))
+RELEVANCE_FLOOR = float(config.get("memory.decay.relevance_floor", 0.05))
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────

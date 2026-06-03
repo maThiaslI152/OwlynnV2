@@ -12,25 +12,33 @@ import logging
 logger = logging.getLogger(__name__)
 
 from src.config.audit_log import audit_info, audit_warn
+from src.config.config_loader import config
 
 from mem0 import Memory  # noqa: E402
 
-config = {
+_qdrant_host = config.get("external_services.qdrant.host", "localhost")
+_qdrant_port = int(config.get("external_services.qdrant.port", 6333))
+_qdrant_collection = config.get("external_services.qdrant.collection_name", "cowork_memory_nomic")
+_qdrant_dims = int(config.get("external_services.qdrant.embedding_dims", 768))
+_embed_model = config.get("models.embedding.model_name", "text-embedding-nomic-embed-text-v1.5-embedding")
+_embed_url = config.get("models.embedding.base_url", "http://127.0.0.1:1234/v1")
+
+mem0_config = {
     "vector_store": {
         "provider": "qdrant",
         "config": {
-            "host": "localhost",
-            "port": 6333,
-            "collection_name": "cowork_memory_nomic",
-            "embedding_model_dims": 768,
+            "host": _qdrant_host,
+            "port": _qdrant_port,
+            "collection_name": _qdrant_collection,
+            "embedding_model_dims": _qdrant_dims,
         },
     },
     "embedder": {
         "provider": "lmstudio",
         "config": {
-            "model": "text-embedding-nomic-embed-text-v1.5-embedding",
-            "embedding_dims": 768,
-            "lmstudio_base_url": "http://127.0.0.1:1234/v1",
+            "model": _embed_model,
+            "embedding_dims": _qdrant_dims,
+            "lmstudio_base_url": _embed_url,
         },
     },
 }
@@ -41,14 +49,14 @@ try:
     # but we disable its automatic LLM calls below using infer=False.
     # We use setdefault so any user-provided key takes precedence.
     os.environ.setdefault("OPENAI_API_KEY", "sk-dummy-key")
-    memory = Memory.from_config(config)
+    memory = Memory.from_config(mem0_config)
     audit_info("memory.ltm", "mem0_init",
-               provider="qdrant", collection=config["vector_store"]["config"]["collection_name"],
-               embedding_model=config["embedder"]["config"]["model"], dims=768)
+               provider="qdrant", collection=mem0_config["vector_store"]["config"]["collection_name"],
+               embedding_model=mem0_config["embedder"]["config"]["model"], dims=768)
 except Exception as e:
     logger.warning("Failed to initialize Mem0/Qdrant connection: %s", e)
     audit_warn("memory.ltm", "mem0_init_failed", reason=str(e)[:120],
-               host=config["vector_store"]["config"]["host"])
+               host=mem0_config["vector_store"]["config"]["host"])
     memory = None
 finally:
     # Clean up the dummy key so it doesn't leak to other OpenAI SDK usage

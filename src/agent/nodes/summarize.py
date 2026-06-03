@@ -35,18 +35,19 @@ logger = logging.getLogger(__name__)
 
 from src.config.audit_log import audit_info, audit_debug, audit_warn
 from src.config.log_middleware import log_node
+from src.config.config_loader import config
 
-# Default context window for Medium_Default (used when state doesn't specify)
-_DEFAULT_CONTEXT_WINDOW = 100_000
+# Default context window for Medium_Default (sourced from centralized config)
+_DEFAULT_CONTEXT_WINDOW = int(config.get("models.medium.variants.default.context_window", 16384))
 
 # Threshold ratio — trigger summarization when active_tokens exceed this fraction
-_SUMMARIZE_THRESHOLD = 0.85
+_SUMMARIZE_THRESHOLD = float(config.get("summarization.threshold_ratio", 0.85))
 
 # Number of recent turns to always keep in full (not summarized)
-_KEEP_RECENT_TURNS = 10
+_KEEP_RECENT_TURNS = int(config.get("summarization.keep_recent_turns", 10))
 
 # Rough chars-per-token estimate for quick token approximation
-_CHARS_PER_TOKEN = 4
+_CHARS_PER_TOKEN = int(config.get("summarization.chars_per_token", 4))
 
 
 # ── Structured summarization prompt ───────────────────────────────────

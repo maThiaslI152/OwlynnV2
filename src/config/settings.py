@@ -1,11 +1,16 @@
 """
 Global project settings and configuration.
-Includes M4 Mac Air optimization settings.
+
+Delegates to the centralized config_loader (defaults.yaml → env → profile)
+while preserving backward-compatible module-level constants.
 """
 import os
 from pathlib import Path
 
-# Base Paths
+from src.config.config_loader import config, get_m4_optimization
+
+# ── Base Paths ───────────────────────────────────────────────────────────────
+
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 WORKSPACE_DIR = PROJECT_ROOT / "workspace"
@@ -22,101 +27,65 @@ def normalize_project_id(project_id: str | None) -> str:
 
 
 def get_project_workspace(project_id: str | None = None) -> str:
-    """Absolute path for project-scoped files (matches REST/WS uploads under workspace/projects/<id>)."""
     pid = normalize_project_id(project_id)
     path = WORKSPACE_DIR / "projects" / pid
     path.mkdir(parents=True, exist_ok=True)
     return str(path.resolve())
 
-# Server Settings
-HOST = os.getenv("HOST", "127.0.0.1")
-PORT = int(os.getenv("PORT", "8000"))
 
-# External Services
-QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
-QDRANT_PORT = int(os.getenv("QDRANT_PORT", 6333))
+# ── Server Settings ──────────────────────────────────────────────────────────
 
-# MCP Settings
+HOST = config.get("server.host", "127.0.0.1")
+PORT = int(config.get("server.port", 8000))
+
+# ── External Services ────────────────────────────────────────────────────────
+
+QDRANT_HOST = config.get("external_services.qdrant.host", "localhost")
+QDRANT_PORT = int(config.get("external_services.qdrant.port", 6333))
+
+# ── MCP Settings ─────────────────────────────────────────────────────────────
+
 MCP_CONFIG_PATH = PROJECT_ROOT / "mcp_config.json"
 
-# Web RAG (fetch_webpage excerpt ranking; optional web_search snippet rerank)
-WEB_RAG_ENABLED = os.getenv("WEB_RAG_ENABLED", "true").strip().lower() in {"1", "true", "yes", "on"}
-WEB_RAG_EMBED_MODEL = os.getenv("WEB_RAG_EMBED_MODEL", "text-embedding-nomic-embed-text-v1.5-embedding")
-WEB_RAG_TOP_K = int(os.getenv("WEB_RAG_TOP_K", "5"))
-WEB_RAG_CHUNK_CHARS = int(os.getenv("WEB_RAG_CHUNK_CHARS", "720"))
-WEB_RAG_CHUNK_OVERLAP = int(os.getenv("WEB_RAG_CHUNK_OVERLAP", "120"))
-# Run embedding rank when plain text is at least this many characters
-WEB_RAG_MIN_CHARS_FOR_RANK = int(os.getenv("WEB_RAG_MIN_CHARS_FOR_RANK", "1800"))
-WEB_SEARCH_RERANK_TOP_N = int(os.getenv("WEB_SEARCH_RERANK_TOP_N", "8"))
+# ── Web RAG ──────────────────────────────────────────────────────────────────
 
-# Web search reliability controls
-WEB_SEARCH_TIMEOUT_SECONDS = float(os.getenv("WEB_SEARCH_TIMEOUT_SECONDS", "22"))
-WEB_SEARCH_ENABLE_CURL_CFFI = os.getenv("WEB_SEARCH_ENABLE_CURL_CFFI", "true").strip().lower() in {
-    "1",
-    "true",
-    "yes",
-    "on",
-}
-WEB_SEARCH_ENABLE_BROWSER_FALLBACK = os.getenv(
-    "WEB_SEARCH_ENABLE_BROWSER_FALLBACK", "true"
-).strip().lower() in {"1", "true", "yes", "on"}
+WEB_RAG_ENABLED = config.get("web_rag.enabled", True)
+WEB_RAG_EMBED_MODEL = config.get("web_rag.embed_model", "text-embedding-nomic-embed-text-v1.5-embedding")
+WEB_RAG_TOP_K = int(config.get("web_rag.top_k", 5))
+WEB_RAG_CHUNK_CHARS = int(config.get("web_rag.chunk_chars", 720))
+WEB_RAG_CHUNK_OVERLAP = int(config.get("web_rag.chunk_overlap", 120))
+WEB_RAG_MIN_CHARS_FOR_RANK = int(config.get("web_rag.min_chars_for_rank", 1800))
+WEB_SEARCH_RERANK_TOP_N = int(config.get("web_rag.rerank_top_n", 8))
 
-# SearXNG (self-hosted metasearch — recommended for local setups, no API keys / no bot blocking)
-SEARXNG_URL = (os.getenv("SEARXNG_URL", "") or "").strip()  # e.g. "http://localhost:8888"
+# ── Web Search ───────────────────────────────────────────────────────────────
 
-# ─── Redis & DeepSeek ──────────────────────────────────────────────────────
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+WEB_SEARCH_TIMEOUT_SECONDS = float(config.get("web_search.timeout_seconds", 22))
+WEB_SEARCH_ENABLE_CURL_CFFI = config.get("web_search.enable_curl_cffi", True)
+WEB_SEARCH_ENABLE_BROWSER_FALLBACK = config.get("web_search.enable_browser_fallback", True)
+
+# ── SearXNG ──────────────────────────────────────────────────────────────────
+
+SEARXNG_URL = config.get("external_services.searxng.url", "") or ""
+
+# ── Redis & DeepSeek ─────────────────────────────────────────────────────────
+
+REDIS_URL = config.get("external_services.redis.url", "redis://localhost:6379")
 DEEPSEEK_API_KEY = (os.getenv("DEEPSEEK_API_KEY", "") or "").strip()
 VOICE_WAKE_WORD = (os.getenv("VOICE_WAKE_WORD", "Athena") or "Athena").strip()
 VOICE_AUTO_TTS = os.getenv("VOICE_AUTO_TTS", "true").strip().lower() in {"1", "true", "yes", "on"}
 
-# Context windows per model tier
-MEDIUM_DEFAULT_CONTEXT = 32000
-MEDIUM_LONGCTX_CONTEXT = int(os.getenv("MEDIUM_LONGCTX_CONTEXT", "131072"))
-CLOUD_CONTEXT = 131072
+# ── Context Windows ──────────────────────────────────────────────────────────
 
-# ─── M4 MAC AIR OPTIMIZATION ───────────────────────────────────────────────
-# These settings are optimized for Mac M4 Air with small-large model architecture
-# Adjust based on your specific machine configuration
+MEDIUM_DEFAULT_CONTEXT = int(config.get("models.medium.variants.default.context_window", 16384))
+MEDIUM_LONGCTX_CONTEXT = int(config.get("models.medium.variants.longctx.context_window", 131072))
+CLOUD_CONTEXT = int(config.get("models.cloud.context_window", 131072))
 
-M4_MAC_OPTIMIZATION = {
-    "small_model": {
-        "max_tokens": 512,       # Routing doesn't need long responses
-        "context_length": 4096,  # Lfm2.5 1.2B context window
-        "temperature": 0.1,      # Lower for consistent routing
-        "timeout": 10,           # seconds - small model should be fast
-    },
-    "medium_model": {
-        "max_tokens": 4096,       # medium model — shorter, faster responses
-        "context_length": 16384,  # Default context window
-        "temperature": 0.5,
-        "timeout": 60,           # seconds
-        "cloud_timeout": 180,    # seconds — accommodate cloud API latency
-    },
-    "medium_models": {
-        "swap_timeout": 120,     # seconds - max wait for LM Studio model swap
-        "poll_interval": 2,      # seconds - poll interval during swap
-    },
-    "memory": {
-        "max_facts": 200,       # Default memory capacity
-        "search_window": 100,   # Wider search window
-        "cache_ttl": 300,       # Cache memory context for 5 minutes
-        "cache_cleanup": 600,   # Clean old cache entries every 10 min
-    },
-    "checkpoint": {
-        "memory_cleanup_interval": 3600,  # Clean old threads hourly
-    },
-    "routing": {
-        "keyword_bypass": True,  # Quick routing for common patterns
-        "simple_prompt": True,   # Use streamlined prompt for speed
-    },
-    "threading": {
-        "max_workers": 2,        # M4 has 8 cores, use 2 to avoid contention
-        "queue_size": 10,        # Limit concurrent requests
-    }
-}
+# ── M4 Mac Optimization ──────────────────────────────────────────────────────
 
-# Apply M4 optimization if specified
+M4_MAC_OPTIMIZATION = get_m4_optimization()
+
+# ── Model Timeouts & Tokens (M4 vs standard) ─────────────────────────────────
+
 if os.getenv("MACHINE_TYPE") == "M4_MAC" or os.getenv("OPTIMIZE_FOR_M4", "").lower() == "true":
     MODEL_TIMEOUT_SMALL = M4_MAC_OPTIMIZATION["small_model"]["timeout"]
     MODEL_TIMEOUT_MEDIUM = M4_MAC_OPTIMIZATION["medium_model"]["timeout"]
@@ -125,14 +94,14 @@ if os.getenv("MACHINE_TYPE") == "M4_MAC" or os.getenv("OPTIMIZE_FOR_M4", "").low
     MAX_MEMORIES = M4_MAC_OPTIMIZATION["memory"]["max_facts"]
     MEMORY_SEARCH_WINDOW = M4_MAC_OPTIMIZATION["memory"]["search_window"]
 else:
-    # Standard defaults (non-M4)
-    MODEL_TIMEOUT_SMALL = 15
-    MODEL_TIMEOUT_MEDIUM = 45
-    MAX_TOKENS_SMALL = 1024
-    MAX_TOKENS_MEDIUM = 8192
-    MAX_MEMORIES = 200
-    MEMORY_SEARCH_WINDOW = 200
+    MODEL_TIMEOUT_SMALL = int(config.get("models.standard.small.timeout", 15))
+    MODEL_TIMEOUT_MEDIUM = int(config.get("models.standard.medium.timeout", 45))
+    MAX_TOKENS_SMALL = int(config.get("models.standard.small.max_tokens", 1024))
+    MAX_TOKENS_MEDIUM = int(config.get("models.standard.medium.max_tokens", 8192))
+    MAX_MEMORIES = int(config.get("memory.max_facts", 200))
+    MEMORY_SEARCH_WINDOW = int(config.get("memory.search_window", 200))
 
-# Ensure directories exist
+# ── Ensure directories exist ─────────────────────────────────────────────────
+
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)

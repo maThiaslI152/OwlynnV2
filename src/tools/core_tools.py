@@ -91,7 +91,8 @@ def read_workspace_file(filename: str) -> str:
 
         # Smart truncation for large files — keep enough for the model to
         # understand the structure, then tell it to use notebook_run for full data.
-        _MAX_READ_CHARS = 20000
+        from src.config.config_loader import config
+        _MAX_READ_CHARS = int(config.get("tool_output.max_read_chars", 20000))
         if len(content) > _MAX_READ_CHARS:
             ext = os.path.splitext(filepath)[1].lower()
             if ext in {'.csv', '.tsv'}:

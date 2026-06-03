@@ -15,6 +15,7 @@ from typing import Optional
 import httpx
 
 from src.config.settings import M4_MAC_OPTIMIZATION
+from src.config.config_loader import config
 from src.memory.user_profile import get_profile
 
 from src.config.audit_log import audit_info, audit_debug, audit_warn
@@ -29,7 +30,9 @@ class ModelSwapError(Exception):
 class SwapManager:
     """Manages hot-swapping of M-tier models via the LM Studio native API."""
 
-    def __init__(self, base_url: str = "http://127.0.0.1:1234") -> None:
+    def __init__(self, base_url: str | None = None) -> None:
+        if base_url is None:
+            base_url = config.get("external_services.lm_studio.management_url", "http://127.0.0.1:1234")
         self._base_url = base_url.rstrip("/")
         self._client = httpx.AsyncClient()
         self._current_variant: Optional[str] = None
@@ -42,9 +45,10 @@ class SwapManager:
 
     async def get_loaded_instance_ids(self, model_key: str) -> list[str]:
         """Query ``GET /api/v1/models`` and return instance IDs for *model_key*."""
+        api_timeout = int(config.get("models.medium.swap.api_timeout", 30))
         try:
             resp = await self._client.get(
-                f"{self._base_url}/api/v1/models", timeout=30
+                f"{self._base_url}/api/v1/models", timeout=api_timeout
             )
             resp.raise_for_status()
             models = resp.json().get("models", [])
@@ -84,8 +88,8 @@ class SwapManager:
             )
 
         swap_cfg = M4_MAC_OPTIMIZATION.get("medium_models", {})
-        timeout: int = swap_cfg.get("swap_timeout", 120)
-        poll_interval: int = swap_cfg.get("poll_interval", 2)
+        timeout: int = swap_cfg.get("swap_timeout") or int(config.get("models.medium.swap.timeout", 120))
+        poll_interval: int = swap_cfg.get("poll_interval") or int(config.get("models.medium.swap.poll_interval", 2))
 
         prev_variant = self._current_variant
         if prev_variant:
@@ -139,6 +143,7 @@ class SwapManager:
     async def _unload_current(self, medium_models: dict) -> None:
         """Best-effort unload of every loaded M-tier model instance."""
         import time as _time
+        api_timeout = int(config.get("models.medium.swap.api_timeout", 30))
         for variant_key in medium_models.values():
             instance_ids = await self.get_loaded_instance_ids(variant_key)
             for inst_id in instance_ids:
@@ -147,7 +152,7 @@ class SwapManager:
                     resp = await self._client.post(
                         f"{self._base_url}/api/v1/models/unload",
                         json={"instance_id": inst_id},
-                        timeout=30,
+                        timeout=api_timeout,
                     )
                     if resp.status_code not in (200, 204):
                         logger.warning(

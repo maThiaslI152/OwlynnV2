@@ -14,10 +14,11 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 from src.config.audit_log import audit_info, audit_debug, audit_warn
+from src.config.config_loader import config
 
 _MEMORIES_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "memories.json"
-_MAX_MEMORIES = 200
-_SEARCH_WINDOW = 50
+_MAX_MEMORIES = int(config.get("memory.max_facts", 200))
+_SEARCH_WINDOW = int(config.get("memory.search_window", 50))
 
 
 def _read_file() -> list[dict]:

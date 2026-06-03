@@ -111,9 +111,11 @@ def notebook_run(code: str = "") -> str:
             parts.append("(executed successfully, no output)")
 
         result = "\n".join(parts)
-        # Cap output
-        if len(result) > 8000:
-            result = result[:8000] + "\n... [output truncated]"
+        # Cap output (sourced from centralized config)
+        from src.config.config_loader import config
+        max_output = int(config.get("tool_output.max_notebook_chars", 8000))
+        if len(result) > max_output:
+            result = result[:max_output] + "\n... [output truncated]"
         return result
 
     except Exception:

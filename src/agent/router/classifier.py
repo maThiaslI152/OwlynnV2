@@ -12,11 +12,12 @@ import logging
 import re
 
 from src.agent.router.models import RouteClassification, TaskFeatures, VALID_ROUTES
+from src.config.config_loader import config
 
 logger = logging.getLogger(__name__)
 
 # Max characters of user input included in the classification prompt.
-_MAX_INPUT_CHARS = 500
+_MAX_INPUT_CHARS = int(config.get("routing.max_input_chars", 500))
 
 # ── Classification prompt ────────────────────────────────────────────────
 

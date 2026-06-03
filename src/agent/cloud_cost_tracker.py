@@ -23,9 +23,10 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-# DeepSeek V4 pricing per 1M tokens (USD)
-_PRICE_INPUT_PER_1M = 0.14
-_PRICE_OUTPUT_PER_1M = 0.28
+# Cloud model pricing per 1M tokens (USD) — sourced from centralized config
+from src.config.config_loader import config
+_PRICE_INPUT_PER_1M = float(config.get("models.cloud.pricing.input_per_1m_usd", 0.14))
+_PRICE_OUTPUT_PER_1M = float(config.get("models.cloud.pricing.output_per_1m_usd", 0.28))
 
 
 @dataclass

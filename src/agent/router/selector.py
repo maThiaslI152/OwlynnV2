@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 
 from src.agent.router.models import RouteClassification, TaskFeatures
+from src.config.config_loader import config
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +60,7 @@ class RouteSelector:
         classification: RouteClassification,
         features: TaskFeatures,
         current_variant: str | None,
-        swap_threshold: float = 0.7,
+        swap_threshold: float | None = None,
     ) -> tuple[str, list[str]]:
         """Return ``(final_route, toolbox)`` with swap-avoidance logic.
 
@@ -76,6 +77,8 @@ class RouteSelector:
           route maps to current variant (no swap triggered)
         - If confidence >= swap_threshold, route matches classification.route
         """
+        if swap_threshold is None:
+            swap_threshold = float(config.get("routing.swap_threshold", 0.7))
         target_route = classification.route
         toolbox = classification.toolbox
 

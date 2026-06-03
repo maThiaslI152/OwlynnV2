@@ -49,6 +49,8 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any
 
+from src.config.config_loader import config as _app_config
+
 logger = logging.getLogger(__name__)
 
 # ── Context propagation ──────────────────────────────────────────────────────
@@ -198,10 +200,13 @@ def _setup_file_handler() -> RotatingFileHandler | None:
     audit_dir.mkdir(parents=True, exist_ok=True)
     jsonl_path = audit_dir / "audit.jsonl"
 
+    max_bytes = int(_app_config.get("audit.max_bytes", 10 * 1024 * 1024))
+    backup_count = int(_app_config.get("audit.backup_count", 5))
+
     handler = RotatingFileHandler(
         str(jsonl_path),
-        maxBytes=10 * 1024 * 1024,  # 10 MB
-        backupCount=5,
+        maxBytes=max_bytes,
+        backupCount=backup_count,
         encoding="utf-8",
     )
     handler.setLevel(logging.DEBUG)
@@ -210,10 +215,12 @@ def _setup_file_handler() -> RotatingFileHandler | None:
 
     # Also attach errors-only handler
     errors_path = audit_dir / "audit-errors.jsonl"
+    err_max_bytes = int(_app_config.get("audit.error_max_bytes", 5 * 1024 * 1024))
+    err_backup_count = int(_app_config.get("audit.error_backup_count", 3))
     err_handler = RotatingFileHandler(
         str(errors_path),
-        maxBytes=5 * 1024 * 1024,  # 5 MB
-        backupCount=3,
+        maxBytes=err_max_bytes,
+        backupCount=err_backup_count,
         encoding="utf-8",
     )
     err_handler.setLevel(logging.WARNING)
@@ -285,7 +292,7 @@ def _channel_level(channel: str) -> int:
 
 # Chars to strip from log data values to keep JSON clean and compact
 _STRIP_CHARS = set('{}[]<>;"\'')
-_SANITIZE_MAX_LEN = 500  # Max length for string values in audit events
+_SANITIZE_MAX_LEN = int(_app_config.get("audit.sanitize_max_len", 500))
 
 
 def _sanitize_value(value: Any) -> Any:

@@ -17,11 +17,12 @@ import logging
 logger = logging.getLogger(__name__)
 
 from src.config.audit_log import audit_debug, set_route
+from src.config.config_loader import config
 
 # ── Summarize gate: conditional edge from memory_inject ───────────────
 
-_DEFAULT_CONTEXT_WINDOW = 16_384  # M4 Air: MLX segfaults beyond ~13K tokens
-_SUMMARIZE_THRESHOLD = 0.85
+_DEFAULT_CONTEXT_WINDOW = int(config.get("models.medium.variants.default.context_window", 16384))
+_SUMMARIZE_THRESHOLD = float(config.get("summarization.threshold_ratio", 0.85))
 
 def summarize_gate(state: AgentState) -> str:
     """Route to ``auto_summarize`` when active_tokens > 85% of context_window.
@@ -207,11 +208,11 @@ async def _check_cloud_connectivity() -> dict:
         profile = get_profile()
 
         import httpx
-        base_url = profile.get("cloud_llm_base_url", "https://api.deepseek.com/v1")
-        model = profile.get("cloud_llm_model_name", "deepseek-v4")
+        base_url = config.get("models.cloud.base_url", "https://api.deepseek.com/v1")
+        model = config.get("models.cloud.model_name", "deepseek-v4")
         result["model"] = model
 
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=float(config.get("web_search.timeouts.cloud_connectivity_check", 15.0))) as client:
             response = await client.post(
                 f"{base_url}/chat/completions",
                 headers={

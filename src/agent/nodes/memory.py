@@ -22,6 +22,7 @@ from src.agent.state import AgentState
 from src.memory.memory_manager import save_memory, search_memories
 from src.memory.user_profile import get_profile
 from src.memory.persona_manager import get_persona_by_id
+from src.config.config_loader import config
 import asyncio
 import logging
 from datetime import datetime, timedelta
@@ -77,7 +78,7 @@ class MemoryContextCache:
     Uses a threading lock to prevent race conditions from concurrent async tasks.
     """
     _cache = {}
-    _ttl_seconds = 300  # 5 minute cache
+    _ttl_seconds = int(config.get("memory.cache.ttl", 300))  # default 5 minutes
     _lock = __import__("threading").Lock()
     
     @classmethod

@@ -24,19 +24,20 @@ logger = logging.getLogger(__name__)
 
 from src.config.audit_log import audit_debug, audit_info, audit_warn
 from src.config.log_middleware import log_model_attempt, log_node
+from src.config.config_loader import config
 
-# Context window for the local model (Gemma 4 E4B Q4_K_M in LM Studio)
-_LARGE_CONTEXT_WINDOW = 16384
+# Context window for the local model (sourced from centralized config)
+_LARGE_CONTEXT_WINDOW = int(config.get("models.medium.variants.default.context_window", 16384))
 # Minimum output tokens — if less than this is available, we still try
-_MIN_OUTPUT_TOKENS = 512
+_MIN_OUTPUT_TOKENS = int(config.get("complex.min_output_tokens", 512))
 # Safety margin to avoid hitting the exact limit
-_CONTEXT_SAFETY_MARGIN = 256
+_CONTEXT_SAFETY_MARGIN = int(config.get("complex.context_safety_margin", 256))
 
 # Maximum number of automatic continuation rounds when the LLM hits its token budget
-MAX_CUTOFF_RETRIES = 3
+MAX_CUTOFF_RETRIES = int(config.get("complex.max_cutoff_retries", 3))
 
 # Max retries for cloud LLM calls with exponential backoff
-_MAX_CLOUD_RETRIES = 3
+_MAX_CLOUD_RETRIES = int(config.get("complex.max_cloud_retries", 3))
 
 
 async def _invoke_with_cloud_retry(bound_llm, prompt_messages, *, fallback_chain, model_label, route):
@@ -215,7 +216,7 @@ def _synthetic_answer_from_web_search_tool(content: str) -> str:
         "The model returned an empty message after **web_search**, so here is the "
         "search payload directly (you can use the links below):\n\n"
     )
-    cap = 4500
+    cap = int(config.get("complex.synthetic_answer_max_chars", 4500))
     if len(c) > cap:
         return pref + c[:cap] + "\n\n… [truncated]"
     return pref + c
@@ -689,9 +690,9 @@ async def complex_llm_node(state: AgentState) -> AgentState:
 
     # ── 9.1 continued: Determine base_url for message format decision ────
     if route == "complex-cloud":
-        base_url = profile.get("cloud_llm_base_url", "https://api.deepseek.com/v1")
+        base_url = config.get("models.cloud.base_url", "https://api.deepseek.com/v1")
     else:
-        base_url = profile.get("small_llm_base_url", "http://127.0.0.1:1234/v1")
+        base_url = config.get("models.small.base_url", "http://127.0.0.1:1234/v1")
 
     if is_local_server(base_url):
         prompt_messages = with_system_for_local_server(system, trimmed_messages)
@@ -826,7 +827,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                     })
                     llm = await get_medium_llm("default")
                     prompt_messages = with_system_for_local_server(system, original_trimmed_messages)
-                    budget = _cap_budget_to_context(prompt_messages, state.get("token_budget") or 4096)
+                    budget = _cap_budget_to_context(prompt_messages, state.get("token_budget") or int(config.get("complex.default_token_budget", 4096)))
                     fb_start = asyncio.get_running_loop().time()
                     response = await llm.bind_tools(tools).bind(max_tokens=budget).ainvoke(prompt_messages)
                     model_label = "medium-default-fallback"
@@ -1097,7 +1098,7 @@ async def complex_tool_action_node(state: AgentState) -> AgentState:
         delta = output_messages
 
     # Truncate large tool outputs to stay within context window.
-    _MAX_TOOL_OUTPUT_CHARS = 20_000
+    _MAX_TOOL_OUTPUT_CHARS = int(config.get("tool_output.max_tool_output_chars", 20000))
     truncated_delta = []
     for msg in delta:
         if isinstance(msg, ToolMessage):

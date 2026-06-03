@@ -37,14 +37,14 @@ class CloudCircuitBreaker:
     trial call is allowed. Success resets the circuit; failure re-opens it.
     """
 
-    # Defaults
+    # Defaults (sourced from centralized config)
     _failure_threshold = 3
     _cooldown_seconds = 60
 
     def __init__(
         self,
-        failure_threshold: int = 3,
-        cooldown_seconds: int = 60,
+        failure_threshold: int | None = None,
+        cooldown_seconds: int | None = None,
     ):
         """Initialize the circuit breaker.
 
@@ -55,6 +55,12 @@ class CloudCircuitBreaker:
         cooldown_seconds : int
             Seconds to wait before allowing a trial call.
         """
+        if failure_threshold is None:
+            from src.config.config_loader import config
+            failure_threshold = int(config.get("cloud.circuit_breaker.failure_threshold", 3))
+        if cooldown_seconds is None:
+            from src.config.config_loader import config
+            cooldown_seconds = int(config.get("cloud.circuit_breaker.cooldown_seconds", 60))
         self._failure_threshold = failure_threshold
         self._cooldown_seconds = cooldown_seconds
         self._consecutive_failures: int = 0

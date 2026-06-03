@@ -21,11 +21,12 @@ from src.config.settings import (
     WEB_SEARCH_ENABLE_CURL_CFFI,
     WEB_SEARCH_TIMEOUT_SECONDS,
 )
+from src.config.config_loader import config
 
 logger = logging.getLogger(__name__)
 
 # Static HTML shorter than this may be an SPA shell; merge in meta/OG fallback text.
-_FETCH_MIN_MEANINGFUL_TEXT = 100
+_FETCH_MIN_MEANINGFUL_TEXT = int(config.get("web_search.fetch_min_meaningful_text", 100))
 
 _WEATHER_QUERY_RE = re.compile(
     r"\b(weather|forecast|temperature|rain|snow|humidity|celsius|fahrenheit|°f|°c)\b",
@@ -330,9 +331,12 @@ async def _web_search_wttr_in(query: str, backend: str, news: bool) -> str | Non
 
     path = quote_plus(loc)
     url = f"https://wttr.in/{path}?format=j1"
-    headers = {"User-Agent": "Owlynn/1.0 (weather lookup; +https://github.com/chubin/wttr.in)"}
+    headers = {"User-Agent": config.get("web_search.user_agents.weather", "Owlynn/1.0")}
     try:
-        async with httpx.AsyncClient(timeout=20.0, headers=headers, follow_redirects=True) as client:
+        async with httpx.AsyncClient(
+            timeout=float(config.get("web_search.timeouts.weather", 20.0)),
+            headers=headers, follow_redirects=True
+        ) as client:
             resp = await client.get(url)
             resp.raise_for_status()
         data = json.loads(resp.text)
@@ -374,15 +378,17 @@ async def _web_search_bing_httpx(
     if news:
         url = f"https://www.bing.com/news/search?q={quote_plus(query)}"
     headers = {
-        "User-Agent": (
+        "User-Agent": config.get("web_search.user_agents.bing",
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-        ),
+            "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"),
         "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
     }
     try:
-        async with httpx.AsyncClient(timeout=22.0, headers=headers, follow_redirects=True) as client:
+        async with httpx.AsyncClient(
+            timeout=float(config.get("web_search.timeouts.bing", 22.0)),
+            headers=headers, follow_redirects=True
+        ) as client:
             resp = await client.get(url)
             resp.raise_for_status()
         if detect_bot_block(resp.text):
@@ -482,17 +488,19 @@ async def _web_search_httpx_ddg_html(
     """Plain HTTP GET to DDG HTML lite."""
     import httpx
 
+    ddg_timeout = float(config.get("web_search.timeouts.ddg", 25.0))
+    ddg_ua = config.get("web_search.user_agents.ddg",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+
     url = _ddg_html_url(query, news)
     headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        ),
+        "User-Agent": ddg_ua,
         "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
     }
     try:
-        async with httpx.AsyncClient(timeout=25.0, headers=headers, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=ddg_timeout, headers=headers, follow_redirects=True) as client:
             resp = await client.get(url)
             resp.raise_for_status()
         text = resp.text
@@ -510,7 +518,7 @@ async def _web_search_httpx_ddg_html(
     if not results:
         # Rare: anti-bot interstitial — try POST form DDG sometimes expects
         try:
-            async with httpx.AsyncClient(timeout=25.0, headers=headers, follow_redirects=True) as client:
+            async with httpx.AsyncClient(timeout=ddg_timeout, headers=headers, follow_redirects=True) as client:
                 resp = await client.post(
                     "https://html.duckduckgo.com/html/",
                     data={"q": query, "b": ""},

@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Optional
 from langchain_core.tools import tool
 from src.config.settings import PROJECT_ROOT
+from src.config.config_loader import config as _app_config
 
 try:
     from sklearn.feature_extraction.text import TfidfVectorizer
@@ -351,10 +352,10 @@ class SkillMatcher:
         return None
 
     # ── Thresholds for ambiguity detection ──────────────────────────────
-    LOW_CONFIDENCE_THRESHOLD = 0.5
-    TIE_MARGIN = 0.15
-    TIE_MIN_TOP_SCORE = 0.3
-    VAGUE_WORD_COUNT = 3
+    LOW_CONFIDENCE_THRESHOLD = float(_app_config.get("routing.skill.low_confidence_threshold", 0.5))
+    TIE_MARGIN = float(_app_config.get("routing.skill.tie_margin", 0.15))
+    TIE_MIN_TOP_SCORE = float(_app_config.get("routing.skill.tie_min_top_score", 0.3))
+    VAGUE_WORD_COUNT = int(_app_config.get("routing.skill.vague_word_count", 3))
 
     # Weak intent-signalling keywords — if none of these appear, the
     # query is likely too vague to match skills confidently.

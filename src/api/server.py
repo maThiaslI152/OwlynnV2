@@ -45,6 +45,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 from src.config.audit_log import audit_info, audit_debug
+from src.config.config_loader import config
 
 connected_websockets = set()
 
@@ -100,10 +101,12 @@ def notify_file_processed(filepath_or_name, status="processed"):
                     if text and len(text.strip()) > 50:
                         async def index_task():
                             try:
-                                # Chunk the text: 1500 chars with 200 chars overlap
+                                # Chunk the text: configurable chunk_size with overlap
+                                from src.config.config_loader import config as _app_cfg
                                 chunks = []
-                                chunk_size = 1500
-                                overlap = 200
+                                chunk_size = int(_app_cfg.get("file_indexing.chunk_size", 1500))
+                                overlap = int(_app_cfg.get("file_indexing.overlap", 200))
+                                max_chunks = int(_app_cfg.get("file_indexing.max_chunks", 20))
                                 start = 0
                                 content_len = len(text)
                                 while start < content_len:
@@ -113,8 +116,8 @@ def notify_file_processed(filepath_or_name, status="processed"):
                                         chunks.append(chunk)
                                     start += chunk_size - overlap
                                 
-                                # Index each chunk (up to 20 chunks to prevent performance issues)
-                                for i, chunk_text in enumerate(chunks[:20]):
+                                # Index each chunk (up to max_chunks to prevent performance issues)
+                                for i, chunk_text in enumerate(chunks[:max_chunks]):
                                     await project_manager.add_knowledge(
                                         project_id,
                                         f"{filename}#chunk{i}",
@@ -251,8 +254,8 @@ _ADVANCED_SETTINGS_DEFAULTS = {
 }
 
 _UNIFIED_SETTINGS_CLOUD_BUDGET_DEFAULTS = {
-    "cloud_daily_token_limit": 500_000,
-    "cloud_budget_warning_thresholds": [0.5, 0.8, 0.95],
+    "cloud_daily_token_limit": config.get("cloud.budget.daily_token_limit", 500_000),
+    "cloud_budget_warning_thresholds": config.get("cloud.budget.warning_thresholds", [0.5, 0.8, 0.95]),
 }
 
 # Canonical websocket event envelope contract.
@@ -1948,9 +1951,9 @@ async def build_message_content(text: str, files: list):
     from io import BytesIO
 
     # Scale inline PDF excerpt to leave enough room for the response.
-    # Context window: 16384 tokens. Reserve ~4000 for system prompt + memory + response headroom.
+    # Context window is configured in defaults.yaml.
     # Rough heuristic: 3.5 chars per token.
-    MAX_INLINE_PDF_CHARS = 16_000  # ~4500 tokens — plenty of room at 100k context
+    MAX_INLINE_PDF_CHARS = int(config.get("tool_output.max_inline_pdf_chars", 16000))
     
     content_parts = []
     text_injections = []
@@ -2055,9 +2058,9 @@ def render_pdf_as_composite(raw_bytes: bytes, max_pages: int = 10) -> str | None
     
     Returns: base64-encoded JPEG string, or None on failure.
     """
-    PATCH_SIZE = 28
-    PAGE_WIDTH = 392   # 14 × 28 — safe patch count (28 horizontal patches)
-    DIVIDER_H = 28     # Thin white separator between pages (must be multiple of 28)
+    PATCH_SIZE = int(config.get("pdf_rendering.patch_size", 28))
+    PAGE_WIDTH = int(config.get("pdf_rendering.page_width", 392))   # 14 × 28 — safe patch count
+    DIVIDER_H = int(config.get("pdf_rendering.divider_height", 28))
     
     try:
         import fitz
@@ -2123,7 +2126,7 @@ def extract_text_file(name: str, mime: str, raw_bytes: bytes) -> str:
     is_text = any(mime.startswith(m) for m in text_mimes) or any(name.lower().endswith(e) for e in text_exts)
     if is_text:
         try:
-            return raw_bytes.decode("utf-8", errors="replace")[:8000]
+            return raw_bytes.decode("utf-8", errors="replace")[:int(config.get("file_decode.max_chars", 8000))]
         except Exception:
             return ""
     return ""

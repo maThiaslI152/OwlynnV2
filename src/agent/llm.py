@@ -5,7 +5,10 @@ This module provides helpers to initialize the LangChain ChatOpenAI client
 configured to connect to a local LM Studio server, with pooling to avoid
 re-initialization overhead on Mac M4.
 
-Three-slot pool: small (always loaded) + medium (swappable) + cloud (DeepSeek V4).
+Three-slot pool: small (always loaded) + medium (swappable) + cloud (DeepSeek API).
+
+All model parameters (names, base URLs, temperatures, max_tokens, timeouts)
+are sourced from the centralized config (src/config/defaults.yaml).
 """
 
 import asyncio
@@ -14,6 +17,7 @@ from typing import Optional
 
 from langchain_openai import ChatOpenAI
 
+from src.config.config_loader import config, get_model_config
 from src.config.settings import DEEPSEEK_API_KEY, M4_MAC_OPTIMIZATION
 from src.memory.user_profile import get_profile
 
@@ -60,30 +64,28 @@ class LLMPool:
             try:
                 async with cls._lock:
                     if cls._small_llm is None:
-                        profile = get_profile()
-                        base_url = profile.get("small_llm_base_url", "http://127.0.0.1:1234/v1")
-                        model = profile.get("small_llm_model_name", "liquid/lfm2.5-1.2b")
+                        model_cfg = get_model_config("small")
                         cls._small_llm = ChatOpenAI(
-                            model=model,
+                            model=model_cfg.get("model_name", "liquid/lfm2.5-1.2b"),
                             api_key="sk-local-no-key-needed",
-                            base_url=base_url,
-                            temperature=0.2,
-                            max_tokens=512,
-                            extra_body={"max_output_tokens": 512},
+                            base_url=model_cfg.get("base_url", "http://127.0.0.1:1234/v1"),
+                            temperature=model_cfg.get("temperature", 0.2),
+                            max_tokens=model_cfg.get("max_tokens", 512),
+                            extra_body={"max_output_tokens": model_cfg.get("max_output_tokens", 512)},
                         )
-                        audit_info("agent.model", "pool_instance_created", slot="small", model=model)
+                        audit_info("agent.model", "pool_instance_created", slot="small",
+                                   model=model_cfg.get("model_name"))
             except Exception:
-                profile = get_profile()
-                base_url = profile.get("small_llm_base_url", "http://127.0.0.1:1234/v1")
-                model = profile.get("small_llm_model_name", "liquid/lfm2.5-1.2b")
-                audit_info("agent.model", "pool_instance_created", slot="small", model=model, source="fallback")
+                model_cfg = get_model_config("small")
+                audit_info("agent.model", "pool_instance_created", slot="small",
+                           model=model_cfg.get("model_name"), source="fallback")
                 return ChatOpenAI(
-                    model=model,
+                    model=model_cfg.get("model_name", "liquid/lfm2.5-1.2b"),
                     api_key="sk-local-no-key-needed",
-                    base_url=base_url,
-                    temperature=0.2,
-                    max_tokens=512,
-                    extra_body={"max_output_tokens": 512},
+                    base_url=model_cfg.get("base_url", "http://127.0.0.1:1234/v1"),
+                    temperature=model_cfg.get("temperature", 0.2),
+                    max_tokens=model_cfg.get("max_tokens", 512),
+                    extra_body={"max_output_tokens": model_cfg.get("max_output_tokens", 512)},
                 )
         else:
             audit_debug("agent.model", "pool_cache_hit", slot="small")
@@ -126,32 +128,30 @@ class LLMPool:
 
             await cls._swap_manager.swap_model(variant)
 
-            profile = get_profile()
-            medium_models: dict = profile.get("medium_models", {})
-            model_name = medium_models.get(variant, "gemma-4-e4b-uncensored-hauhaucs-aggressive")
-            base_url = profile.get("llm_base_url", "http://127.0.0.1:1234/v1")
+            model_cfg = get_model_config("medium", variant)
 
             cls._medium_llm = ChatOpenAI(
-                model=model_name,
+                model=model_cfg.get("model_name", "gemma-4-e4b-uncensored-hauhaucs-aggressive"),
                 api_key="sk-local-no-key-needed",
-                base_url=base_url,
-                temperature=0.4,
-                max_tokens=4096,  # Gemma 4 E4B Q4_K_M performs well at 4K
-                extra_body={"max_output_tokens": 4096},
+                base_url=model_cfg.get("base_url", "http://127.0.0.1:1234/v1"),
+                temperature=model_cfg.get("temperature", 0.4),
+                max_tokens=model_cfg.get("max_tokens", 4096),
+                extra_body={"max_output_tokens": model_cfg.get("max_output_tokens", 4096)},
             )
             cls._current_medium_variant = variant
-            audit_info("agent.model", "pool_instance_created", slot="medium", variant=variant, model=model_name)
+            audit_info("agent.model", "pool_instance_created", slot="medium",
+                       variant=variant, model=model_cfg.get("model_name"))
 
         return cls._medium_llm
 
-    # ── cloud (DeepSeek V4 API) ──────────────────────────────────────────
+    # ── cloud (DeepSeek API) ──────────────────────────────────────────
 
     @classmethod
     async def get_cloud_llm(cls) -> ChatOpenAI:
-        """Get or create cached Cloud LLM (DeepSeek V4 API) instance.
+        """Get or create cached Cloud LLM (DeepSeek API) instance.
 
         Resolves API key via secret store (Keychain → env var → profile).
-        Configures a 180s request timeout to prevent hangs on slow API responses.
+        Configures a request timeout to prevent hangs on slow API responses.
 
         Raises
         ------
@@ -180,26 +180,25 @@ class LLMPool:
                     "in user profile."
                 )
 
-            profile = get_profile()
-            base_url = profile.get("cloud_llm_base_url", "https://api.deepseek.com/v1")
-            model = profile.get("cloud_llm_model_name", "deepseek-v4")
+            model_cfg = get_model_config("cloud")
 
-            # Resolve timeout: profile override → M4 optimization → default 180s
+            # Resolve timeout: config → M4 optimization → default 180s
             timeout = float(
-                profile.get("cloud_request_timeout")
+                model_cfg.get("timeout")
                 or M4_MAC_OPTIMIZATION.get("medium_model", {}).get("cloud_timeout", 180)
             )
 
             cls._cloud_llm = ChatOpenAI(
-                model=model,
+                model=model_cfg.get("model_name", "deepseek-v4"),
                 api_key=api_key,
-                base_url=base_url,
+                base_url=model_cfg.get("base_url", "https://api.deepseek.com/v1"),
                 streaming=True,
-                max_tokens=8192,
-                temperature=0.4,
+                max_tokens=model_cfg.get("max_tokens", 8192),
+                temperature=model_cfg.get("temperature", 0.4),
                 request_timeout=timeout,
             )
-            audit_info("agent.model", "pool_instance_created", slot="cloud", model=model)
+            audit_info("agent.model", "pool_instance_created", slot="cloud",
+                       model=model_cfg.get("model_name"))
 
         return cls._cloud_llm
 
@@ -214,7 +213,7 @@ class LLMPool:
 
     @classmethod
     def clear(cls):
-        """Clear cached instances (call when profile updates)."""
+        """Clear cached instances (call when profile or config updates)."""
         cls._small_llm = None
         cls._medium_llm = None
         cls._cloud_llm = None

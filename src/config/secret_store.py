@@ -40,6 +40,18 @@ def _get_keyring():
     return _keyring if _keyring is not False else None
 
 
+def get_service_name() -> str:
+    """Return the Keychain service name (configurable via defaults.yaml)."""
+    from src.config.config_loader import config
+    return config.get("secret_store.keychain_service", _SERVICE_NAME) or _SERVICE_NAME
+
+
+def get_account_name() -> str:
+    """Return the Keychain account name (configurable via defaults.yaml)."""
+    from src.config.config_loader import config
+    return config.get("secret_store.keychain_account", _ACCOUNT_NAME) or _ACCOUNT_NAME
+
+
 def resolve_deepseek_api_key() -> str:
     """Resolve the DeepSeek API key in priority order.
 
@@ -91,7 +103,7 @@ def store_deepseek_api_key(api_key: str) -> None:
 
     # Store in Keychain
     try:
-        kr.set_password(_SERVICE_NAME, _ACCOUNT_NAME, key)
+        kr.set_password(get_service_name(), get_account_name(), key)
         logger.info("DeepSeek API key stored in macOS Keychain")
     except kr.errors.KeyringError as e:
         logger.error("Failed to store API key in Keychain: %s", e)
@@ -106,7 +118,7 @@ def delete_deepseek_api_key() -> None:
     kr = _get_keyring()
     if kr is not None:
         try:
-            kr.delete_password(_SERVICE_NAME, _ACCOUNT_NAME)
+            kr.delete_password(get_service_name(), get_account_name())
             logger.info("DeepSeek API key removed from macOS Keychain")
         except kr.errors.PasswordDeleteError:
             pass  # Already deleted
@@ -131,12 +143,14 @@ def verify_deepseek_api_key(api_key: str) -> tuple[bool, str]:
     """
     import httpx
     from src.memory.user_profile import get_profile
+    from src.config.config_loader import config
 
     if not api_key or not api_key.strip():
         return False, "Empty API key"
 
     profile = get_profile()
-    base_url = profile.get("cloud_llm_base_url", "https://api.deepseek.com/v1")
+    base_url = profile.get("cloud_llm_base_url") or config.get("models.cloud.base_url", "https://api.deepseek.com/v1")
+    model = profile.get("cloud_llm_model_name") or config.get("models.cloud.model_name", "deepseek-v4")
 
     try:
         with httpx.Client(timeout=15.0) as client:
@@ -148,7 +162,7 @@ def verify_deepseek_api_key(api_key: str) -> tuple[bool, str]:
                 },
                 json={
                     "messages": [{"role": "user", "content": "hi"}],
-                    "model": profile.get("cloud_llm_model_name", "deepseek-v4"),
+                    "model": model,
                     "max_tokens": 1,
                 },
             )
@@ -195,7 +209,7 @@ def _read_from_keychain() -> Optional[str]:
     if kr is None:
         return None
     try:
-        return kr.get_password(_SERVICE_NAME, _ACCOUNT_NAME)
+        return kr.get_password(get_service_name(), get_account_name())
     except kr.errors.KeyringError as e:
         logger.debug("Keychain read failed: %s", e)
         return None

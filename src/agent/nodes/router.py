@@ -12,6 +12,7 @@ from langgraph.types import interrupt
 from src.agent.state import AgentState
 from src.agent.llm import get_small_llm, LLMPool
 from src.config.secret_store import resolve_deepseek_api_key
+from src.config.config_loader import config
 from src.config.settings import MEDIUM_DEFAULT_CONTEXT, MEDIUM_LONGCTX_CONTEXT, CLOUD_CONTEXT
 from src.memory.user_profile import get_profile
 from src.tools.skills import SkillMatcher, MatchResult, _default_loader as _skill_loader
@@ -26,25 +27,17 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-# ── Context window constants per model tier ──────────────────────────────
-_MEDIUM_DEFAULT_CONTEXT = MEDIUM_DEFAULT_CONTEXT   # 100000
-_MEDIUM_LONGCTX_CONTEXT = MEDIUM_LONGCTX_CONTEXT   # 131072
-_CLOUD_CONTEXT = CLOUD_CONTEXT                     # 131072
-_SMALL_MODEL_CONTEXT = 4096
+# ── Context window constants (backward compat, sourced from centralized config) ──
+_MEDIUM_DEFAULT_CONTEXT = MEDIUM_DEFAULT_CONTEXT
+_MEDIUM_LONGCTX_CONTEXT = MEDIUM_LONGCTX_CONTEXT
+_CLOUD_CONTEXT = CLOUD_CONTEXT
+_SMALL_MODEL_CONTEXT = int(config.get("models.small.context_window", 4096))
 
-# Tier definitions: (max_input_chars, token_budget)
-_BUDGET_TIERS = [
-    # Greetings / tiny questions
-    (40,   256),
-    # Short questions ("what is X?", "how do I Y?")
-    (150,  512),
-    # Medium questions, single-topic explanations
-    (400,  1536),
-    # Longer prompts, multi-part questions
-    (800,  3072),
-    # Complex / code-heavy / multi-step requests
-    (1600, 4096),
-]
+# Budget tiers from centralized config
+_BUDGET_TIERS_RAW = config.get("routing.budget_tiers", [
+    [40, 256], [150, 512], [400, 1536], [800, 3072], [1600, 4096],
+])
+_BUDGET_TIERS = [(int(t[0]), int(t[1])) for t in _BUDGET_TIERS_RAW]
 
 # Keywords that signal the user wants a long/detailed answer
 _LONG_ANSWER_HINTS = {
@@ -70,25 +63,29 @@ def estimate_token_budget(user_text: str, route: str) -> int:
     - complex-longctx → _MEDIUM_LONGCTX_CONTEXT (131072) with 4000 reserve, budget_max 8192
     - complex-default, complex-vision → _MEDIUM_DEFAULT_CONTEXT (100000) with 4000 reserve, budget_max 8192
     """
+    reserves_cfg = config.get("routing.input_reserves", {})
+    budget_max_cfg = config.get("routing.budget_max", {})
+
     if route == "simple":
         budget = 256
         if len(user_text) > 100:
             budget = 512
-        return min(budget, _SMALL_MODEL_CONTEXT - 1500)
+        simple_reserve = int(reserves_cfg.get("simple", 1500))
+        return min(budget, _SMALL_MODEL_CONTEXT - simple_reserve)
 
     # Determine context window and reserves based on route
     if route == "complex-cloud":
         context = _CLOUD_CONTEXT
-        input_reserve = 8000
-        budget_max = 16384
+        input_reserve = int(reserves_cfg.get("cloud", 8000))
+        budget_max = int(budget_max_cfg.get("cloud", 16384))
     elif route == "complex-longctx":
         context = _MEDIUM_LONGCTX_CONTEXT
-        input_reserve = 4000
-        budget_max = 8192
+        input_reserve = int(reserves_cfg.get("longctx", 4000))
+        budget_max = int(budget_max_cfg.get("other", 8192))
     else:  # complex-default, complex-vision
         context = _MEDIUM_DEFAULT_CONTEXT
-        input_reserve = 4000
-        budget_max = 8192
+        input_reserve = int(reserves_cfg.get("default", 4000))
+        budget_max = int(budget_max_cfg.get("other", 8192))
 
     text_len = len(user_text)
     text_lower = user_text.lower()
@@ -386,10 +383,15 @@ async def router_node(state: AgentState) -> AgentState:
     toolbox = ["all"]
 
     try:
-        router_llm = small_llm.bind(temperature=0.05, max_tokens=128)
+        router_llm = small_llm.bind(
+            temperature=float(config.get("router_llm.temperature", 0.05)),
+            max_tokens=int(config.get("router_llm.max_tokens", 128)),
+        )
         response = await router_llm.ainvoke(
             [HumanMessage(
-                content=ROUTER_PROMPT.format(user_input=json.dumps(user_text[:500]))
+                content=ROUTER_PROMPT.format(
+                    user_input=json.dumps(user_text[:int(config.get("routing.max_input_chars", 500))])
+                )
             )]
         )
         decision, confidence, toolbox = parse_routing(response.content)
@@ -816,15 +818,21 @@ async def generate_chat_title_router_llm(
 
     file_names = file_names or []
     joined_files = ", ".join([str(n).strip() for n in file_names if n])
-    joined_files = joined_files[:400]  # avoid massive prompts
+    joined_files = joined_files[:int(config.get("file_decode.filename_join_max_chars", 400))]
 
     # Try LLM-based title generation
     try:
         small_llm = await get_small_llm()
 
-        router_llm = small_llm.bind(temperature=0.2, max_tokens=64)
+        router_llm = small_llm.bind(
+            temperature=float(config.get("chat_title.temperature", 0.2)),
+            max_tokens=int(config.get("chat_title.max_tokens", 64)),
+        )
         response = await router_llm.ainvoke(
-            [HumanMessage(content=CHAT_TITLE_PROMPT.format(user_input=user_text[:1000], file_names=joined_files))]
+            [HumanMessage(content=CHAT_TITLE_PROMPT.format(
+                user_input=user_text[:int(config.get("file_decode.user_text_preview_chars", 1000))],
+                file_names=joined_files
+            ))]
         )
 
         title = _parse_title_json(getattr(response, "content", "") or "")

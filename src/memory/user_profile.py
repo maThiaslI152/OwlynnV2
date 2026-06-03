@@ -10,109 +10,122 @@ from pathlib import Path
 _PROFILE_PATH = Path(__file__).parent.parent.parent / "data" / "user_profile.json"
 
 _DEFAULTS = {
+    # ── User identity & preferences ─────────────────────────────────────
     "name": "User",
     "preferred_language": "en",
     "education_level": "university",
     "domains_of_interest": [],
     "response_style": "detailed",
-    "llm_base_url": "http://127.0.0.1:1234/v1",
-    "llm_model_name": "medium-default-model",
-    "small_llm_base_url": "http://127.0.0.1:1234/v1",
-    "small_llm_model_name": "liquid/lfm2.5-1.2b",
-    "large_llm_base_url": "http://127.0.0.1:1234/v1",
-    "large_llm_model_name": "medium-default-model",
-    # New system settings
     "system_prompt": "",
     "custom_instructions": "",
-    # New memory settings
+
+    # ── Memory ──────────────────────────────────────────────────────────
     "short_term_enabled": True,
     "long_term_enabled": True,
-    # New inference settings
-    "temperature": 0.7,
-    "top_p": 0.9,
-    "max_tokens": 2048,
-    "top_k": 40,
+
+    # ── Display ─────────────────────────────────────────────────────────
     "streaming_enabled": True,
     "show_thinking": False,
     "show_tool_execution": True,
-    # LM Studio Jinja: merge system into first user message to avoid
-    # "No user query found in messages" when the model's chat template requires a user role.
-    "lm_studio_fold_system": True,
-    # Cloud / Medium / Router / Redis settings
-    "cloud_llm_base_url": "https://api.deepseek.com/v1",
-    "cloud_llm_model_name": "deepseek-chat",
-    "deepseek_api_key": "",
-    "medium_models": {"default": "gemma-4-e4b-uncensored-hauhaucs-aggressive", "vision": "zai-org/glm-4.6v-flash", "longctx": "lfm2-8b-a1b"},
-    "cloud_escalation_enabled": True,
-    "cloud_anonymization_enabled": True,
-    "custom_sensitive_terms": [],
-    "router_hitl_enabled": True,
-    "route_confidence_threshold": 0.6,
-    "skill_clarification_threshold": 0.5,
-    "router_clarification_threshold": 0.6,
-    "redis_url": "redis://localhost:6379",
+
+    # ── Execution ───────────────────────────────────────────────────────
     "execution_policy": "auto_approve",
-    # ── HITL improvement settings ──────────────────────────────────────
-    "scope_clarification_enabled": True,
-    "plan_review_enabled": True,
-    "cloud_brief_enabled": True,
-    "cloud_brief_max_chars": 8000,
-    # Audit logging
+
+    # ── Audit logging ───────────────────────────────────────────────────
     "audit_log_enabled": True,
     "audit_log_levels": {},
     "audit_log_dir": "",
+
+    # ── Config overrides (sourced from defaults.yaml unless user overrides) ──
+    # The following fields are *empty by default* — values come from
+    # src/config/defaults.yaml. Set them in the profile JSON only to override.
+    #
+    # LLM endpoints / model names
+    "llm_base_url": "",
+    "llm_model_name": "",
+    "small_llm_base_url": "",
+    "small_llm_model_name": "",
+    "large_llm_base_url": "",
+    "large_llm_model_name": "",
+    "cloud_llm_base_url": "",
+    "cloud_llm_model_name": "",
+    "deepseek_api_key": "",
+    "medium_models": {},
+    "redis_url": "",
+    "lm_studio_fold_system": None,
+
+    # Inference params (empty = use defaults)
+    "temperature": None,
+    "top_p": None,
+    "max_tokens": None,
+    "top_k": None,
+
+    # Routing
+    "router_hitl_enabled": None,
+    "route_confidence_threshold": None,
+    "skill_clarification_threshold": None,
+    "router_clarification_threshold": None,
+    "scope_clarification_enabled": None,
+    "plan_review_enabled": None,
+
+    # Cloud
+    "cloud_escalation_enabled": None,
+    "cloud_anonymization_enabled": None,
+    "custom_sensitive_terms": [],
+    "cloud_brief_enabled": None,
+    "cloud_brief_max_chars": None,
 }
 
 VALID_FIELDS = {
+    # User identity & preferences
     "name": str,
-    "preferred_language": str,   # "en", "th", etc.
-    "education_level": str,      # "high_school", "university", "professional"
+    "preferred_language": str,
+    "education_level": str,
     "domains_of_interest": list,
-    "response_style": str,       # "concise", "detailed", "step_by_step"
+    "response_style": str,
+    "system_prompt": str,
+    "custom_instructions": str,
+    # Memory
+    "short_term_enabled": bool,
+    "long_term_enabled": bool,
+    # Display
+    "streaming_enabled": bool,
+    "show_thinking": bool,
+    "show_tool_execution": bool,
+    # Execution
+    "execution_policy": str,
+    # Audit logging
+    "audit_log_enabled": bool,
+    "audit_log_levels": dict,
+    "audit_log_dir": str,
+    # ── Config overrides (allow None = "use default") ──────────────────
     "llm_base_url": str,
     "llm_model_name": str,
     "small_llm_base_url": str,
     "small_llm_model_name": str,
     "large_llm_base_url": str,
     "large_llm_model_name": str,
-    # New system settings
-    "system_prompt": str,
-    "custom_instructions": str,
-    # New memory settings
-    "short_term_enabled": bool,
-    "long_term_enabled": bool,
-    # New inference settings
-    "temperature": (int, float),
-    "top_p": (int, float),
-    "max_tokens": int,
-    "top_k": int,
-    "streaming_enabled": bool,
-    "show_thinking": bool,
-    "show_tool_execution": bool,
-    "lm_studio_fold_system": bool,
-    # Cloud / Medium / Router / Redis settings
     "cloud_llm_base_url": str,
     "cloud_llm_model_name": str,
     "deepseek_api_key": str,
     "medium_models": dict,
-    "cloud_escalation_enabled": bool,
-    "cloud_anonymization_enabled": bool,
-    "custom_sensitive_terms": list,
-    "router_hitl_enabled": bool,
-    "route_confidence_threshold": (int, float),
-    "skill_clarification_threshold": (int, float),
-    "router_clarification_threshold": (int, float),
     "redis_url": str,
-    "execution_policy": str,
-    # ── HITL improvement settings ──────────────────────────────────────
-    "scope_clarification_enabled": bool,
-    "plan_review_enabled": bool,
-    "cloud_brief_enabled": bool,
-    "cloud_brief_max_chars": int,
-    # ── Audit logging ────────────────────────────────────────────────────
-    "audit_log_enabled": bool,
-    "audit_log_levels": dict,
-    "audit_log_dir": str,
+    "lm_studio_fold_system": (bool, type(None)),
+    "temperature": (int, float, type(None)),
+    "top_p": (int, float, type(None)),
+    "max_tokens": (int, type(None)),
+    "top_k": (int, type(None)),
+    "router_hitl_enabled": (bool, type(None)),
+    "route_confidence_threshold": (int, float, type(None)),
+    "skill_clarification_threshold": (int, float, type(None)),
+    "router_clarification_threshold": (int, float, type(None)),
+    "scope_clarification_enabled": (bool, type(None)),
+    "plan_review_enabled": (bool, type(None)),
+    "cloud_escalation_enabled": (bool, type(None)),
+    "cloud_anonymization_enabled": (bool, type(None)),
+    "custom_sensitive_terms": list,
+    "cloud_brief_enabled": (bool, type(None)),
+    "cloud_brief_max_chars": (int, type(None)),
 }
 
 
