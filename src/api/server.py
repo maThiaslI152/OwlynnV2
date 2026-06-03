@@ -2141,7 +2141,8 @@ async def openai_stream_generator(lc_messages, project_id, persona_id, auto_appr
     chat_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
     created_time = int(time.time())
     
-    config = {"configurable": {"thread_id": f"api-{uuid.uuid4().hex[:8]}"}}
+    thread_id = body.get("thread_id") or f"api-{uuid.uuid4().hex[:8]}"
+    config = {"configurable": {"thread_id": thread_id}}
     inputs = {
         "messages": lc_messages,
         "project_id": project_id,
@@ -2233,7 +2234,8 @@ async def api_openai_chat_completions(body: dict):
         )
         
     # Non-streaming invocation
-    config = {"configurable": {"thread_id": f"api-{uuid.uuid4().hex[:8]}"}}
+    thread_id = body.get("thread_id") or f"api-{uuid.uuid4().hex[:8]}"
+    config = {"configurable": {"thread_id": thread_id}}
     inputs = {
         "messages": lc_messages,
         "project_id": project_id,

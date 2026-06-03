@@ -46,6 +46,7 @@ models:
     max_output_tokens: 1024
     context_window: 32768                    # Qwen3.5 native 262K; practical ~32K on M4
     timeout: 10                              # M4: 10s, standard: 15s
+    request_timeout: 10                      # HTTP request timeout
     extra_body:
       chat_template_kwargs:
         enable_thinking: false               # CRITICAL: 0.8B prone to thinking loops
@@ -57,6 +58,7 @@ models:
     max_tokens: 16384                        # Ample room for reasoning_content + output
     max_output_tokens: 16384
     timeout: 120                             # M4: 120s, standard: 90s — Qwen3.5 thinking needs time
+    request_timeout: 120                     # HTTP request timeout — prevents infinite hangs
     fold_system: true                        # LM Studio Jinja compat
     extra_body:
       chat_template_kwargs:
@@ -116,7 +118,7 @@ routing:
   plan_review_enabled: true
   keyword_bypass: true                    # Quick routing for common patterns
   simple_prompt: true                     # Streamlined prompt for speed
-  max_input_chars: 500                    # Router input truncation
+  max_input_chars: 2000                   # Router input truncation (was 500 — 0.8B needed more)
   hitl_enabled: true
 
   # Token budget tiers: (max_input_chars, token_budget)
@@ -137,7 +139,7 @@ routing:
   # Per-route budget maximums
   budget_max:
     cloud: 16384
-    other: 16384
+    other: 16384                           # Raised from 8192 for long-form writing
 
   # Skill matching
   skill:
@@ -171,12 +173,13 @@ web_search:
   enable_curl_cffi: true
   enable_browser_fallback: true
 
-  # Per-backend timeouts
+  # Per-backend timeouts (reduced to avoid cumulative delays)
   timeouts:
-    weather: 20.0
-    bing: 22.0
-    ddg: 25.0
+    weather: 10.0
+    bing: 15.0
+    ddg: 15.0
     cloud_connectivity_check: 15.0
+    aggregate: 60.0                        # Total web_search pipeline cap
 
   # User-Agent strings
   user_agents:
@@ -206,7 +209,7 @@ summarization:
 complex:
   context_safety_margin: 256              # Tokens reserved to avoid hitting limit
   min_output_tokens: 512                  # Minimum output token budget
-  max_cutoff_retries: 3                   # Auto-continuation rounds
+  max_cutoff_retries: 1                   # Auto-continuation rounds (reduced for faster UX)
   max_cloud_retries: 3                    # Cloud LLM retries with backoff
   default_token_budget: 4096              # Fallback token budget
   synthetic_answer_max_chars: 4500        # Max chars for synthetic answers

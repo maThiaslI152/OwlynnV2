@@ -101,6 +101,16 @@ def estimate_token_budget(user_text: str, route: str) -> int:
     if any(hint in text_lower for hint in _LONG_ANSWER_HINTS):
         budget = max(budget, 3072)
 
+    # Long-form creative/writing tasks need the full budget
+    _LONG_FORM_HINTS = {
+        "write a story", "write a short story", "write an essay",
+        "write in the style", "continue the story", "add a scene",
+        "detailed", "generate a long", "full story", "full code",
+        "comprehensive", "in depth", "in-depth",
+    }
+    if any(hint in text_lower for hint in _LONG_FORM_HINTS):
+        budget = budget_max
+
     # Cap if the user is asking a short-answer question
     if any(hint in text_lower for hint in _SHORT_ANSWER_HINTS):
         budget = min(budget, 1536)
@@ -374,6 +384,74 @@ async def router_node(state: AgentState) -> AgentState:
                     source="keyword_bypass", task_category="greeting")
         return {"route": "simple", "token_budget": budget,
                 "selected_toolboxes": ["all"], "router_clarification_used": False,
+                "skill_matched": None,
+                "router_metadata": metadata}
+
+    # ── Deterministic complex-route bypasses ──────────────────────────
+    # Code review / refactoring requests need the 9B model for depth.
+    _code_review_hints = (
+        "review this code", "code review", "review the code",
+        "check this code", "audit this code", "inspect this code",
+        "code quality", "improve this code", "refactor this",
+        "find bugs", "bug in this code", "fix this code",
+        "review this python", "review this function",
+    )
+    if any(hint in user_lower for hint in _code_review_hints):
+        logger.info("[router] Complex path — code review detected")
+        budget = estimate_token_budget(user_text, "complex-default")
+        metadata = _build_router_metadata(
+            "complex-default", confidence=0.95, reasoning="code_review_bypass",
+            classification_source="deterministic", cloud_available=cloud_available,
+            has_images=has_images, task_category="code_review", estimated_tokens=budget, web_on=web_on,
+        )
+        audit_info("agent.lifecycle", "router_decision", route="complex-default", confidence=0.95,
+                    source="code_review_bypass", task_category="code_review")
+        return {"route": "complex-default", "token_budget": budget,
+                "selected_toolboxes": ["file_ops"], "router_clarification_used": False,
+                "skill_matched": None,
+                "router_metadata": metadata}
+
+    # Explain / compare / trade-off questions need the 9B model for depth.
+    _explain_compare_hints = (
+        "explain how", "explain the", "compare", "trade-off",
+        "trade off", "differences between", "pros and cons",
+        "how does", "how do", "in depth",
+    )
+    if any(hint in user_lower for hint in _explain_compare_hints):
+        logger.info("[router] Complex path — explain/compare detected")
+        budget = estimate_token_budget(user_text, "complex-default")
+        metadata = _build_router_metadata(
+            "complex-default", confidence=0.95, reasoning="explain_compare_bypass",
+            classification_source="deterministic", cloud_available=cloud_available,
+            has_images=has_images, task_category="technical_explanation", estimated_tokens=budget, web_on=web_on,
+        )
+        audit_info("agent.lifecycle", "router_decision", route="complex-default", confidence=0.95,
+                    source="explain_compare_bypass", task_category="technical_explanation")
+        return {"route": "complex-default", "token_budget": budget,
+                "selected_toolboxes": ["all"], "router_clarification_used": False,
+                "skill_matched": None,
+                "router_metadata": metadata}
+
+    # Creative writing / story generation needs the 9B model for quality.
+    _creative_writing_hints = (
+        "write a story", "write a short story", "continue the story",
+        "creative writing", "write in the style of", "write a poem",
+        "write an essay", "sci-fi story", "science fiction story",
+        "story opening", "narrative",
+    )
+    if any(hint in user_lower for hint in _creative_writing_hints):
+        logger.info("[router] Complex path — creative writing detected")
+        route, toolbox = _resolve_complex_route(user_text, state, ["all"])
+        budget = estimate_token_budget(user_text, route)
+        metadata = _build_router_metadata(
+            route, confidence=0.95, reasoning="creative_writing_bypass",
+            classification_source="deterministic", cloud_available=cloud_available,
+            has_images=has_images, task_category="creative_writing", estimated_tokens=budget, web_on=web_on,
+        )
+        audit_info("agent.lifecycle", "router_decision", route=route, confidence=0.95,
+                    source="creative_writing_bypass", task_category="creative_writing")
+        return {"route": route, "token_budget": budget,
+                "selected_toolboxes": toolbox, "router_clarification_used": False,
                 "skill_matched": None,
                 "router_metadata": metadata}
 

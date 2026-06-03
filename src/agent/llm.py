@@ -74,6 +74,7 @@ class LLMPool:
                             temperature=model_cfg.get("temperature", 0.2),
                             max_tokens=model_cfg.get("max_tokens", 512),
                             extra_body=extra_body,
+                            request_timeout=model_cfg.get("request_timeout") or model_cfg.get("timeout", 10),
                         )
                         audit_info("agent.model", "pool_instance_created", slot="small",
                                    model=model_cfg.get("model_name"))
@@ -90,6 +91,7 @@ class LLMPool:
                     temperature=model_cfg.get("temperature", 0.2),
                     max_tokens=model_cfg.get("max_tokens", 512),
                     extra_body=extra_body,
+                    request_timeout=model_cfg.get("request_timeout") or model_cfg.get("timeout", 10),
                 )
         else:
             audit_debug("agent.model", "pool_cache_hit", slot="small")
@@ -144,6 +146,7 @@ class LLMPool:
                 temperature=model_cfg.get("temperature", 0.4),
                 max_tokens=model_cfg.get("max_tokens", 4096),
                 extra_body=extra_body,
+                request_timeout=model_cfg.get("request_timeout") or model_cfg.get("timeout", 120),
             )
             cls._current_medium_variant = variant
             audit_info("agent.model", "pool_instance_created", slot="medium",
