@@ -300,12 +300,18 @@ def get_model_config(tier: str, variant: str = "default") -> dict[str, Any]:
         variant: For medium tier, one of ``"default"``, ``"vision"``, ``"longctx"``
 
     Returns a dict with keys: model_name, base_url, temperature, max_tokens,
-    max_output_tokens, timeout, context_window, etc.
+    max_output_tokens, timeout, context_window, extra_body, etc.
     """
     if tier == "medium":
         base = config.get(f"models.medium") or {}
         variant_cfg = config.get(f"models.medium.variants.{variant}") or {}
-        return {**base, **variant_cfg}
+        result = {**base, **variant_cfg}
+        # Deep-merge extra_body: base values merged with variant-specific overrides
+        base_extra = base.get("extra_body") or {}
+        variant_extra = variant_cfg.get("extra_body") or {}
+        if base_extra or variant_extra:
+            result["extra_body"] = {**base_extra, **variant_extra}
+        return result
     return config.get(f"models.{tier}") or {}
 
 

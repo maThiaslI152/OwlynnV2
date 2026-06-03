@@ -85,3 +85,59 @@ Edit **one line** in `defaults.yaml` (or set the env var, or update the profile)
 | `src/config/secret_store.py` | Cloud base URL/model from config_loader (fallback) |
 | `src/config/audit_log.py` | Rotation sizes, sanitize max len from config_loader |
 | `.env.example` | Reference new config structure |
+
+---
+
+## Model Swap: Qwen3.5 Family (2026-06-04)
+
+Switched default models to the Qwen3.5 family with author-recommended tuning.
+
+### Model Changes
+
+| Slot | Old Model | New Model | Rationale |
+|------|-----------|-----------|-----------|
+| Small (router) | `liquid/lfm2.5-1.2b` | `qwen3.5-0.8b` | Qwen3.5 0.8B — 262K native context, hybrid architecture |
+| Medium default | `gemma-4-e4b-uncensored-hauhaucs-aggressive` | `qwen3.5-9b-uncensored-hauhaucs-aggressive@q6_k` | Qwen3.5 9B Q6_K — 262K context, 0/465 refusals |
+| Medium vision | `zai-org/glm-4.6v-flash` | `qwen3.5-9b-uncensored-hauhaucs-aggressive@q6_k` | Same model, natively multimodal |
+| Medium longctx | `lfm2-8b-a1b` | `qwen3.5-9b-uncensored-hauhaucs-aggressive@q6_k` | Same model, extensible to 1M tokens |
+
+### Tuning Based on Author Recommendations
+
+| Setting | Old | New | Source |
+|---------|-----|-----|--------|
+| Small context_window | 4096 | **32768** | Qwen3.5 native 262K; practical ~32K on M4 24GB |
+| Medium context_window | 16384 | **32768** | Minimum 128K for thinking; ~32K practical with Q6_K |
+| Longctx context_window | 131072 | **131072** | Unchanged; try if VRAM permits |
+| Medium temperature | 0.4 | **0.7** | Qwen non-thinking rec: `0.7, top_p=0.8, top_k=20` |
+| Medium max_tokens | 4096 | **8192** | Qwen recommends 32768 for normal, ~8K practical |
+| Router input_reserves (default/longctx) | 4000 | **8000** | More room with larger context window |
+| Router budget_max (other) | 8192 | **16384** | Model can handle more output |
+
+### New: `extra_body` Support
+
+Added `extra_body` field to model configs in `defaults.yaml` and `config_loader.py`. This is critical for Qwen3.5:
+
+```yaml
+models:
+  small:
+    extra_body:
+      chat_template_kwargs:
+        enable_thinking: false    # 0.8B prone to thinking loops
+  medium:
+    extra_body:
+      chat_template_kwargs:
+        enable_thinking: false    # Non-thinking agent mode
+```
+
+The `get_model_config()` accessor deep-merges `extra_body` from base config + variant overrides, and `llm.py` passes it to `ChatOpenAI(extra_body=...)`.
+
+### Profile Cleanup
+
+Cleared all model-related overrides from `data/user_profile.json` (set to empty/None) so the new YAML defaults take effect. User can still explicitly set overrides for custom models.
+
+### Files Changed in This Update
+
+- `src/config/defaults.yaml` — Model names, context windows, temps, extra_body, reserves/budgets
+- `src/config/config_loader.py` — Deep-merge extra_body in get_model_config()
+- `src/agent/llm.py` — Pass extra_body from config to ChatOpenAI constructors
+- `data/user_profile.json` — Cleared model overrides (YAML now sole source of truth)

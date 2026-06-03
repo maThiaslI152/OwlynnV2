@@ -32,38 +32,49 @@ external_services:
     management_url: "http://127.0.0.1:1234"  # For SwapManager API calls
 
 # ── Models — AI/LLM Configuration ────────────────────────────────────────────
+# Model recommendations tuned for Qwen3.5 family on Mac M4 Air 24 GB.
+# See: https://huggingface.co/HauhauCS/Qwen3.5-9B-Uncensored-HauhauCS-Aggressive
+#      https://huggingface.co/mlx-community/Qwen3.5-0.8B-8bit
+#      https://huggingface.co/Qwen/Qwen3.5-9B
+#      https://huggingface.co/Qwen/Qwen3.5-0.8B
 models:
   small:
     base_url: "${external_services.lm_studio.base_url}"
-    model_name: "liquid/lfm2.5-1.2b"     # SMALL_LLM_MODEL_NAME env
-    temperature: 0.2
+    model_name: "qwen3.5-0.8b"              # Router — 0.8B, non-thinking by default
+    temperature: 0.2                         # Low temp for consistent routing
     max_tokens: 512
     max_output_tokens: 512
-    context_window: 4096                  # Lfm2.5 1.2B context
-    timeout: 10                           # M4: 10s, standard: 15s
+    context_window: 32768                    # Qwen3.5 native 262K; practical ~32K on M4
+    timeout: 10                              # M4: 10s, standard: 15s
+    extra_body:
+      chat_template_kwargs:
+        enable_thinking: false               # CRITICAL: 0.8B prone to thinking loops
 
   medium:
     base_url: "${external_services.lm_studio.base_url}"
-    temperature: 0.4
-    max_tokens: 4096
-    max_output_tokens: 4096
-    timeout: 60                           # M4: 60s, standard: 45s
-    fold_system: true                     # LM Studio Jinja compat
+    temperature: 0.7                         # Qwen non-thinking rec: 0.7, top_p=0.8, top_k=20
+    max_tokens: 8192                         # Qwen rec: 32768 normal, 81920 complex; ~8K practical
+    max_output_tokens: 8192
+    timeout: 60                              # M4: 60s, standard: 45s
+    fold_system: true                        # LM Studio Jinja compat
+    extra_body:
+      chat_template_kwargs:
+        enable_thinking: false               # Non-thinking agent mode
     variants:
       default:
-        model_name: "gemma-4-e4b-uncensored-hauhaucs-aggressive"
-        context_window: 16384             # Gemma 4 E4B Q4_K_M real window
+        model_name: "qwen3.5-9b-uncensored-hauhaucs-aggressive@q6_k"
+        context_window: 32768                # Practical limit on M4 Air 24GB with Q6_K (~7GB)
       vision:
-        model_name: "zai-org/glm-4.6v-flash"
-        context_window: 16384
+        model_name: "qwen3.5-9b-uncensored-hauhaucs-aggressive@q6_k"
+        context_window: 32768
       longctx:
-        model_name: "lfm2-8b-a1b"
-        context_window: 131072
+        model_name: "qwen3.5-9b-uncensored-hauhaucs-aggressive@q6_k"
+        context_window: 131072               # Try full context if VRAM permits
 
     swap:
-      timeout: 120                        # Max wait for LM Studio model swap
-      poll_interval: 2                    # Poll interval during swap
-      api_timeout: 30                     # HTTP timeout for LM Studio API calls
+      timeout: 120                           # Max wait for LM Studio model swap
+      poll_interval: 2                       # Poll interval during swap
+      api_timeout: 30                        # HTTP timeout for LM Studio API calls
 
   cloud:
     base_url: "https://api.deepseek.com/v1"  # CLOUD_LLM_BASE_URL env
@@ -89,8 +100,8 @@ models:
       max_output_tokens: 1024
     medium:
       timeout: 45
-      max_tokens: 8192
-      max_output_tokens: 8192
+      max_tokens: 16384
+      max_output_tokens: 16384
 
 # ── Routing ──────────────────────────────────────────────────────────────────
 routing:
@@ -117,13 +128,13 @@ routing:
   input_reserves:
     simple: 1500
     cloud: 8000
-    longctx: 4000
-    default: 4000
+    longctx: 8000
+    default: 8000
 
   # Per-route budget maximums
   budget_max:
     cloud: 16384
-    other: 8192
+    other: 16384
 
   # Skill matching
   skill:

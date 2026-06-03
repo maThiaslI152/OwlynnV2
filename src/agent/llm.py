@@ -65,18 +65,22 @@ class LLMPool:
                 async with cls._lock:
                     if cls._small_llm is None:
                         model_cfg = get_model_config("small")
+                        extra_body = dict(model_cfg.get("extra_body") or {})
+                        extra_body["max_output_tokens"] = model_cfg.get("max_output_tokens", 512)
                         cls._small_llm = ChatOpenAI(
                             model=model_cfg.get("model_name", "liquid/lfm2.5-1.2b"),
                             api_key="sk-local-no-key-needed",
                             base_url=model_cfg.get("base_url", "http://127.0.0.1:1234/v1"),
                             temperature=model_cfg.get("temperature", 0.2),
                             max_tokens=model_cfg.get("max_tokens", 512),
-                            extra_body={"max_output_tokens": model_cfg.get("max_output_tokens", 512)},
+                            extra_body=extra_body,
                         )
                         audit_info("agent.model", "pool_instance_created", slot="small",
                                    model=model_cfg.get("model_name"))
             except Exception:
                 model_cfg = get_model_config("small")
+                extra_body = dict(model_cfg.get("extra_body") or {})
+                extra_body["max_output_tokens"] = model_cfg.get("max_output_tokens", 512)
                 audit_info("agent.model", "pool_instance_created", slot="small",
                            model=model_cfg.get("model_name"), source="fallback")
                 return ChatOpenAI(
@@ -85,7 +89,7 @@ class LLMPool:
                     base_url=model_cfg.get("base_url", "http://127.0.0.1:1234/v1"),
                     temperature=model_cfg.get("temperature", 0.2),
                     max_tokens=model_cfg.get("max_tokens", 512),
-                    extra_body={"max_output_tokens": model_cfg.get("max_output_tokens", 512)},
+                    extra_body=extra_body,
                 )
         else:
             audit_debug("agent.model", "pool_cache_hit", slot="small")
@@ -130,13 +134,16 @@ class LLMPool:
 
             model_cfg = get_model_config("medium", variant)
 
+            extra_body = dict(model_cfg.get("extra_body") or {})
+            extra_body["max_output_tokens"] = model_cfg.get("max_output_tokens", 4096)
+
             cls._medium_llm = ChatOpenAI(
                 model=model_cfg.get("model_name", "gemma-4-e4b-uncensored-hauhaucs-aggressive"),
                 api_key="sk-local-no-key-needed",
                 base_url=model_cfg.get("base_url", "http://127.0.0.1:1234/v1"),
                 temperature=model_cfg.get("temperature", 0.4),
                 max_tokens=model_cfg.get("max_tokens", 4096),
-                extra_body={"max_output_tokens": model_cfg.get("max_output_tokens", 4096)},
+                extra_body=extra_body,
             )
             cls._current_medium_variant = variant
             audit_info("agent.model", "pool_instance_created", slot="medium",
