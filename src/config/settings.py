@@ -71,7 +71,7 @@ VOICE_WAKE_WORD = (os.getenv("VOICE_WAKE_WORD", "Athena") or "Athena").strip()
 VOICE_AUTO_TTS = os.getenv("VOICE_AUTO_TTS", "true").strip().lower() in {"1", "true", "yes", "on"}
 
 # Context windows per model tier
-MEDIUM_DEFAULT_CONTEXT = 100000
+MEDIUM_DEFAULT_CONTEXT = 32000
 MEDIUM_LONGCTX_CONTEXT = int(os.getenv("MEDIUM_LONGCTX_CONTEXT", "131072"))
 CLOUD_CONTEXT = 131072
 

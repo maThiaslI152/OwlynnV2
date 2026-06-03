@@ -48,7 +48,7 @@ async def searxng_search(
         "safesearch": 0,
     }
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=15.0, headers={"User-Agent": "Owlynn/1.0", "Accept": "application/json"}) as client:
             resp = await client.get(f"{SEARXNG_URL}/search", params=params)
             resp.raise_for_status()
             data = resp.json()
@@ -77,7 +77,7 @@ async def searxng_available() -> bool:
         return False
     import httpx
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with httpx.AsyncClient(timeout=5.0, headers={"User-Agent": "Owlynn/1.0", "Accept": "application/json"}) as client:
             resp = await client.get(f"{SEARXNG_URL}/healthz")
             return resp.status_code == 200
     except Exception:

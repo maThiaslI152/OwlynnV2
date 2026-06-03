@@ -38,6 +38,7 @@ function App() {
   const wsBaseUrl = import.meta.env.VITE_WS_BASE_URL ?? 'ws://127.0.0.1:8000/ws/chat'
   const setConnection = useAppStore((s) => s.setConnectionState)
   const addMessage = useAppStore((s) => s.addMessage)
+  const setPendingCorrelationId = useAppStore((s) => s.setPendingCorrelationId)
   const setSafeMode = useAppStore((s) => s.setSafeMode)
   const setExecutionPolicy = useAppStore((s) => s.setExecutionPolicy)
   const setScreenAssistMode = useAppStore((s) => s.setScreenAssistMode)
@@ -261,9 +262,25 @@ function App() {
       onClose: () => {
         setConnection('disconnected')
         setLatestToolExecution(null)
+        setPendingCorrelationId(null)
       },
       onError: () => setConnection('error'),
       onEvent: (event: ServerEvent) => {
+        const storeState = useAppStore.getState()
+        const pendingId = storeState.pendingCorrelationId
+        const eventId = (event as any).correlation_id
+
+        if (eventId && pendingId && eventId !== pendingId) {
+            console.debug("Ignoring mismatched correlation id", eventId)
+            return
+        }
+
+        if (event.type === 'status' && (event as any).content === 'idle') {
+            if (pendingId && eventId === pendingId) {
+                useAppStore.setState({ pendingCorrelationId: null })
+            }
+        }
+
         if (event.type === 'assistant.message') {
           const msg = 'message' in event ? (event as any).message : event
           const finalContent: string = msg.content || ''
@@ -372,7 +389,7 @@ function App() {
       disconnect()
       wsClientRef.current = null
     }
-  }, [activeProjectId, addMessage, appendStreamChunk, currentThreadId, executionPolicy, pushToolExecution, setConnection, setLatestToolExecution, setMemoryUpdatedAt, setModelInfo, setContextCompression, setOperatorNote, setRouterMetadata, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setTtsSpeaking, upsertActionProposal, updateActionProposalStatus, isTauriRuntime, wsBaseUrl])
+  }, [activeProjectId, addMessage, appendStreamChunk, currentThreadId, executionPolicy, pushToolExecution, setConnection, setLatestToolExecution, setPendingCorrelationId, setMemoryUpdatedAt, setModelInfo, setContextCompression, setOperatorNote, setRouterMetadata, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setTtsSpeaking, upsertActionProposal, updateActionProposalStatus, isTauriRuntime, wsBaseUrl])
 
   // Listen for Tauri runtime events (TTS state, screen assist, etc.)
   useEffect(() => {
@@ -450,7 +467,9 @@ function App() {
       ts: Date.now(),
     }
     addMessage(message)
+    setPendingCorrelationId(message.id)
     wsClientRef.current?.send({
+      correlation_id: message.id,
       type: 'user.message',
       id: message.id,
       content: message.content,
@@ -464,15 +483,22 @@ function App() {
   const handleHitlApprove = useCallback((hitlId: string, variant: string, answers?: Record<string, unknown>) => {
     const store = useAppStore.getState()
     if (variant === 'security_approval') {
-      wsClientRef.current?.send({ type: 'security_approval', approved: true })
+      const corrId = crypto.randomUUID()
+      setPendingCorrelationId(corrId)
+      wsClientRef.current?.send({ type: 'security_approval', approved: true, correlation_id: corrId })
       store.updateConversationItemStatus(hitlId, 'approved')
     } else if (variant === 'plan_review') {
-      wsClientRef.current?.send({ type: 'plan_review_response', approved: true })
+      const corrId = crypto.randomUUID()
+      setPendingCorrelationId(corrId)
+      wsClientRef.current?.send({ type: 'plan_review_response', approved: true, correlation_id: corrId })
       store.updateConversationItemStatus(hitlId, 'approved')
     } else if (variant === 'scope_clarification') {
+      const corrId = crypto.randomUUID()
+      setPendingCorrelationId(corrId)
       wsClientRef.current?.send({
         type: 'ask_user_response',
         answer: answers || { skipped: false },
+        correlation_id: corrId,
       })
       store.updateConversationItemStatus(hitlId, 'approved')
     } else if (variant === 'ask_user') {
@@ -482,7 +508,9 @@ function App() {
   }, [])
 
   const handleHitlDecline = useCallback((hitlId: string) => {
-    wsClientRef.current?.send({ type: 'security_approval', approved: false })
+    const corrId = crypto.randomUUID()
+    setPendingCorrelationId(corrId)
+    wsClientRef.current?.send({ type: 'security_approval', approved: false, correlation_id: corrId })
     useAppStore.getState().updateConversationItemStatus(hitlId, 'rejected')
     setOperatorNote('Action declined.')
   }, [])
@@ -492,9 +520,12 @@ function App() {
     if (userInput !== undefined) {
       answer.user_input = userInput
     }
+    const corrId = crypto.randomUUID()
+    setPendingCorrelationId(corrId)
     wsClientRef.current?.send({
       type: 'ask_user_response',
       answer: answer,
+      correlation_id: corrId,
     })
     const store = useAppStore.getState()
     const pendingHitl = store.conversationItems.find(
@@ -508,9 +539,12 @@ function App() {
 
   const handleHitlSkip = useCallback((hitlId: string) => {
     useAppStore.getState().updateConversationItemStatus(hitlId, 'dismissed')
+    const corrId = crypto.randomUUID()
+    setPendingCorrelationId(corrId)
     wsClientRef.current?.send({
       type: 'ask_user_response',
       answer: { skipped: true },
+      correlation_id: corrId,
     })
     setOperatorNote('Skipped clarification.')
   }, [])

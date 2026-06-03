@@ -9,6 +9,7 @@ export interface ChatMessage {
 
 export interface UserMessageEvent {
   type: 'user.message'
+  correlation_id?: string
   id: string
   content: string
   message?: string
@@ -20,17 +21,20 @@ export interface UserMessageEvent {
 export interface SecurityApprovalClientEvent {
   type: 'security_approval'
   approved: boolean
+  correlation_id?: string
 }
 
 export interface AskUserResponseClientEvent {
   type: 'ask_user_response'
   answer: Record<string, unknown>
+  correlation_id?: string
 }
 
 export interface PlanReviewResponseClientEvent {
   type: 'plan_review_response'
   approved: boolean
   feedback?: string
+  correlation_id?: string
 }
 
 export interface AssistantMessageEvent {

@@ -22,6 +22,9 @@ _EXPLICIT_SIGNALS = {
     "framework": {"react", "vue", "angular", "svelte", "tkinter", "pyqt", "electron", "tauri"},
 }
 
+_CREATIVE_SIGNALS = {"story", "poem", "essay", "review", "explain", "why", "describe"}
+_REFACTOR_SIGNALS = {"improve", "refactor", "optimize", "modify", "review", "rewrite", "fix", "update"}
+
 
 def needs_clarification(message: str) -> tuple[bool, list[str]]:
     """Heuristic check: does a user message describe an underspecified build request?
@@ -35,6 +38,17 @@ def needs_clarification(message: str) -> tuple[bool, list[str]]:
     has_build_pattern = bool(_BUILD_PATTERN.search(lowered))
 
     if not (has_build_verb or has_build_pattern):
+        return False, []
+
+    if any(sig in lowered for sig in _CREATIVE_SIGNALS):
+        return False, []
+
+    # Check for refactor signals + code symbols
+    has_refactor = any(sig in lowered for sig in _REFACTOR_SIGNALS)
+    has_code_symbol = bool(re.search(r'\.(py|js|ts|tsx|jsx|html|css|json|md|rs|go|java|cpp)\b', lowered)) or \
+                      "_" in lowered or \
+                      "function" in lowered or "class" in lowered
+    if has_refactor and has_code_symbol:
         return False, []
 
     # Skip if message is long and detailed (likely has explicit specs)

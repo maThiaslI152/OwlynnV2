@@ -277,6 +277,7 @@ export function AppShell({
   onRenameChat,
 }: AppShellProps) {
   const connectionState = useAppStore((s) => s.connectionState)
+  const pendingCorrelationId = useAppStore((s) => s.pendingCorrelationId)
   const messages = useAppStore((s) => s.messages)
   const conversationItems = useAppStore((s) => s.conversationItems)
   const operatorNote = useAppStore((s) => s.operatorNote)
@@ -696,7 +697,7 @@ export function AppShell({
             </span>
           </div>
         )}
-        <Composer onSend={onSend} disabled={connectionState !== 'connected'} hitlBlocked={hasPendingHitl} compact={isCompact} />
+        <Composer onSend={onSend} disabled={connectionState !== 'connected' || !!pendingCorrelationId} hitlBlocked={hasPendingHitl} compact={isCompact} />
       </main>
 
       {/* ── Right Panel ── */}

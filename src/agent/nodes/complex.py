@@ -557,6 +557,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         system_text, anon_mapping = anonymize(system_text, anon_ctx)
         system = SystemMessage(content=system_text)
         # Anonymize each message content
+        import copy
         anon_messages = []
         for msg in trimmed_messages:
             content = msg.content
@@ -566,7 +567,9 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                     anon_mapping.update(msg_mapping)
                 else:
                     anon_mapping = msg_mapping
-            anon_messages.append(type(msg)(content=content))
+            new_msg = copy.copy(msg)
+            new_msg.content = content
+            anon_messages.append(new_msg)
         trimmed_messages = anon_messages
 
     # ── 9.3: Cloud brief (compact, anonymized prompt for DeepSeek) ────────
@@ -801,8 +804,13 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                 budget = _cap_budget_to_context(prompt_messages, state.get("token_budget") or 4096)
                 fb_start = asyncio.get_running_loop().time()
                 response = await llm.bind_tools(tools).bind(max_tokens=budget).ainvoke(prompt_messages)
+                content_str = str(getattr(response, "content", "") or "").strip()
+                if not content_str and not getattr(response, "tool_calls", None):
+                    # Local model returned empty; synthesize a response so it's not just the warning
+                    synth_response = _fallback_for_blank_response(thread_messages, web_search_enabled=web_on)
+                    content_str = str(getattr(synth_response, "content", "") or "").strip()
                 response = AIMessage(
-                    content=(response.content or "")
+                    content=content_str
                     + "\n\n⚠️ Note: DeepSeek API key may be invalid. Check Settings → Profile → Cloud section."
                 )
                 model_label = "medium-default-fallback"
