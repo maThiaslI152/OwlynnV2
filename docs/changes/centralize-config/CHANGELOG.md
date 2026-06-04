@@ -141,3 +141,81 @@ Cleared all model-related overrides from `data/user_profile.json` (set to empty/
 - `src/config/config_loader.py` — Deep-merge extra_body in get_model_config()
 - `src/agent/llm.py` — Pass extra_body from config to ChatOpenAI constructors
 - `data/user_profile.json` — Cleared model overrides (YAML now sole source of truth)
+
+---
+
+## Debugging Session — 3 Cycles (2026-06-04)
+
+### Eval Trajectory
+
+| Eval | Score | Key Finding | Response |
+|------|-------|------------|----------|
+| v5 (Qwen3.5 initial) | **2.44** | 33% error rate, 9/12 misrouted to simple, keyword bypass "hi" → "Chiang" | 5 bugs found + fixed |
+| v6 (HITL + budgets fixed) | **3.67** | 0 errors, medium model working, 105-205s latency | Router bypasses added |
+| v7-final | **~4.0 est.** | Router bypasses confirmed, preload+warmup working, 16K context stable | Ongoing |
+
+### Bugs Found and Fixed (14 total)
+
+| # | Bug | Symptom | Fix |
+|---|-----|---------|-----|
+| 1 | YAML `${...}` refs not resolved | "Connection error" | Literal URLs in defaults.yaml |
+| 2 | Profile None overriding `.get()` | `float(None)` error | Removed override keys from `_DEFAULTS` |
+| 3 | SwapManager empty profile | Medium model can't load | Fallback to config loader |
+| 4 | `"hi"` substring → "Chiang", "which" | 6/12 misrouted to simple | Word-boundary regex `\b(...)\b` |
+| 5 | GraphInterrupt in API mode | All requests empty | Skip interrupt when `mode=="api"` |
+| 6 | Qwen3.5 thinking eats budget | Empty responses | Budgets: 512→1024, 8192→16384 |
+| 7 | No `request_timeout` on LLMs | Infinite hangs | Added to small + medium clients |
+| 8 | 0.8B handles complex tasks | Shallow reviews/writing | Keyword bypasses (code_review, creative_writing, explain_compare) |
+| 9 | Budget capped at 3072 | Truncated responses | `_LONG_FORM_HINTS` → budget_max=16384 |
+| 10 | Router 500-char truncation | Misses code content | `max_input_chars: 500→2000` |
+| 11 | `max_cutoff_retries: 3` | Extra LLM calls | Reduced to 1 |
+| 12 | API no conversation persistence | No continuity | Accept optional `thread_id` |
+| 13 | LM Studio startup race | 0s failures on first call | Preload + warmup both models |
+| 14 | LM Studio n_ctx=8192 too small | Prompt exceeds context | Set to 32768 in LM Studio; code-side cap at 16384 |
+
+### Config Audit — True Single Source of Truth
+
+- 4 missing YAML entries added (`models.cloud.context_window`, `request_timeout`, voice settings)
+- 6 stale code fallbacks synced to match YAML
+- `ConfigValidator` checks 60+ paths at startup
+- `validate_config()` → 0 missing, 0 warnings
+- Dev-startup guide updated with config contract + env var table
+
+### Quick Improvements
+
+| Item | Change |
+|------|--------|
+| Web search timeout | `asyncio.wait_for(search, 60s)` aggregate cap |
+| Thinking artifact stripping | Enhanced `<think>` + `Thinking Process:` removal |
+| Topics manifest | "## Topics Discussed" section in summarization |
+| mem0 deps | `mem0ai[nlp]` for spaCy/fastembed |
+
+### Model Preloading
+
+Both models now preload + warmup at server startup:
+- Small (0.8B): client created → 3s settle → inference call "hi"
+- Medium (9B): swap if needed → client created → 3s settle → inference call "hi"
+- Prevents 0-second first-call failures
+
+### Current Model Config
+
+| Slot | Model | Context | Temp | Max Tokens |
+|------|-------|---------|------|------------|
+| Router | `qwen3.5-0.8b` | 16384 | 0.2 | 1024 |
+| Complex | `qwen3.5-9b-uncensored-hauhaucs-aggressive@q6_k` | 16384 | 0.7 | 16384 |
+| Cloud | `deepseek-v4` | 131072 | 0.4 | 8192 |
+
+### To Swap Models
+
+Edit 2 lines in `src/config/defaults.yaml`:
+```yaml
+models:
+  small:
+    model_name: "your-router-model"        # Line ~43
+  medium:
+    variants:
+      default:
+        model_name: "your-complex-model"   # Line ~70
+```
+
+Override priority: **defaults.yaml → env vars → user_profile.json**
