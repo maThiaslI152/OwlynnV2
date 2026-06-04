@@ -1,17 +1,63 @@
 ---
 status: active
 category: standards
-last_updated: 2026-05-31
+last_updated: 2026-06-04
 owner: human
 ---
 
 # Owlynn Status
 
-> **Purpose:** Project status tracker — bug inventory, phase progress, and current risks.
+> **Purpose:** Project status tracker — bug inventory, phase progress, current risks, and remaining tasks.
 
 ## Overview
 
-Project status tracker. Last updated: 2026-05-31 v6 (Browser audit bugs all fixed).
+Project status tracker. Last updated: 2026-06-04 — Config centralization + Qwen3.5 model swap + 14 bugs fixed.
+
+## Recent Changes (2026-06-04)
+
+| Change | Impact | Commits |
+|--------|--------|---------|
+| **Config centralization** | ~100 settings → 1 file (`defaults.yaml`). Override chain: YAML → env → profile | `bb04b25` |
+| **Qwen3.5 model swap** | Router: qwen3.5-0.8b. Complex: qwen3.5-9b Q6_K. Author-tuned. | `dd69035` → `6367323` |
+| **14 bugs fixed** | HITL GraphInterrupt, keyword bypass, thinking budgets, request_timeout, startup race, context overflow | `2b907d2` → `acd9f8d` |
+| **Router bypasses** | Code review, creative writing, explain/compare → force complex (9B model) | `6da48bd` |
+| **Config audit** | 4 missing entries, 6 stale fallbacks synced, ConfigValidator (60+ paths) | `4011a27` |
+| **Model preloading** | Both models preload + warmup at startup. No more 0s first-call failures. | `acd9f8d` |
+| **Documentation** | HITL.md, MEMORY.md, architecture overview rewritten, INDEX.md v3 | `ce736b5` → `4ea8223` |
+
+## Current Model Config
+
+| Slot | Model | Context | Temp | Max Tokens |
+|------|-------|---------|------|------------|
+| Router | `qwen3.5-0.8b` | 16384 | 0.2 | 1024 |
+| Complex | `qwen3.5-9b-uncensored-hauhaucs-aggressive@q6_k` | 16384 | 0.7 | 16384 |
+| Cloud | `deepseek-v4` | 131072 | 0.4 | 8192 |
+
+## Evaluation Trajectory
+
+| Eval | Score | Key Finding |
+|------|-------|------------|
+| v4 (gemma-4 baseline) | 4.02 | Complex latency 180-350s |
+| v5 (Qwen3.5 initial) | 2.44 | 33% error rate, 9/12 misrouted |
+| v6 (HITL + budgets) | 3.67 | 0 errors, medium model working |
+| v7-final | ~4.0 est. | Bypasses confirmed, preload working |
+
+## Remaining Tasks
+
+### 🔴 High Impact
+- **R1**: One-turn lag — message correlation IDs in browser (40% eval point losses)
+- **R5**: Response coherence check — detect wrong answers, calibrate confidence
+- **R2**: Inference latency — 105-276s vs SLO <8s (hardware-limited on M4 Air)
+
+### 🟡 Medium Impact
+- **R3**: Cloud fallback test with valid DeepSeek key
+- **R7**: Verify web search aggregate timeout (coded, untested)
+- **R9**: Verify API thread persistence (coded, untested)
+- **R8**: Thermal throttling — run evals on AC power, not battery
+
+### 🟢 Documentation & Code Health
+- D1: Decompose `server.py` (2283 lines)
+- D2: Refactor `complex.py` (1194 lines)
 
 ## Entry Points
 

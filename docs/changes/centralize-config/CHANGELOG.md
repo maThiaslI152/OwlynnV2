@@ -219,3 +219,44 @@ models:
 ```
 
 Override priority: **defaults.yaml → env vars → user_profile.json**
+
+---
+
+## Remaining Tasks
+
+### 🔴 High Impact
+
+| # | Task | Why | Effort | Files |
+|---|------|-----|--------|-------|
+| **R1** | One-turn lag — message correlation IDs | 40% eval losses from browser client sending next prompt before response completes | 2-3 hrs | `server.py`, frontend WS handler |
+| **R5** | Response coherence check | System never detects wrong answers; confidence always 95% regardless of quality | 1-2 hrs | new module |
+| **R2** | Inference latency reduction | 105-276s vs SLO <8s. Explore Q4_K_M or smaller models | Investigation | `defaults.yaml` |
+
+### 🟡 Medium Impact
+
+| # | Task | Why | Effort | Files |
+|---|------|-----|--------|-------|
+| **R3** | Cloud fallback test with valid DeepSeek key | Ensure cloud escalation path works end-to-end | 15 min | `complex.py`, `llm.py` |
+| **R7** | Verify web search aggregate timeout | Coded with `asyncio.wait_for(search, 60s)` but never tested with live SearXNG | 15 min | `web_tools.py` |
+| **R9** | Verify API thread persistence | `thread_id` parameter coded, never tested end-to-end | 15 min | `server.py` |
+| **R8** | M4 thermal throttling mitigation | Battery + no cooling = 160-276s latency. AC power recommended | Hardware | N/A |
+
+### 🟢 Documentation & Code Health
+
+| # | Task | Effort |
+|---|------|--------|
+| D1 | Decompose `server.py` (2283 lines) into `api/routes/*.py` | 3-4 hrs |
+| D2 | Refactor `complex.py` (1194 lines) — extract FallbackExecutor, ToolBinder | 2-3 hrs |
+
+### Completed ✅
+
+| # | Task | Commit |
+|---|------|--------|
+| F1-F14 | Config centralization + 14 bugs | `bb04b25` → `376d140` |
+| B1-B7 | Router bypasses + request_timeout + budgets | `6da48bd` |
+| C1-C2 | Config audit + validation | `4011a27` |
+| R7/R10/R6/R12 | Web search timeout, think stripping, topics, deps | `0d1f15c` |
+| Preload | Both models preload + warmup at startup | `acd9f8d` |
+| Context | 16K practical windows + 600s timeout | `6367323` |
+| D5/D6/F3 | HITL.md, MEMORY.md, README, INDEX, architecture overview | `ce736b5` → `4ea8223` |
+| Long eval | 6/17 completed (thermal throttle on battery) | `df51a4e` |
