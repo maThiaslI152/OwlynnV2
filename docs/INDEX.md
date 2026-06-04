@@ -1,7 +1,7 @@
 ---
 status: active
 category: reference
-last_updated: 2026-05-31
+last_updated: 2026-06-04
 owner: ai-agent
 ---
 
@@ -11,9 +11,67 @@ owner: ai-agent
 
 ```yaml
 manifest:
-  version: 2
-  generated: "2026-05-31T20:00:00Z"
+  version: 3
+  generated: "2026-06-04T15:00:00Z"
   files:
+    # ── New in v3 ──
+    - path: docs/HITL.md
+      status: active
+      category: architecture
+      last_updated: 2026-06-04
+    - path: docs/MEMORY.md
+      status: active
+      category: architecture
+      last_updated: 2026-06-04
+    - path: docs/changes/centralize-config/CHANGELOG.md
+      status: active
+      category: changelog
+      last_updated: 2026-06-04
+    - path: docs/evaluations/centralize-config-qwen35-2026-06-04.md
+      status: active
+      category: evaluation
+      last_updated: 2026-06-04
+    - path: docs/evaluations/optimization-analysis-2026-06-03.md
+      status: active
+      category: evaluation
+      last_updated: 2026-06-03
+    - path: docs/evaluations/owlynn-conversation-2026-06-03.md
+      status: active
+      category: evaluation
+      last_updated: 2026-06-03
+    - path: docs/evaluations/owlynn-conversation-2026-06-03-v2.md
+      status: active
+      category: evaluation
+      last_updated: 2026-06-03
+    - path: docs/evaluations/owlynn-conversation-2026-06-03-v3.md
+      status: active
+      category: evaluation
+      last_updated: 2026-06-03
+    - path: docs/evaluations/owlynn-conversation-2026-06-03-v4.md
+      status: active
+      category: evaluation
+      last_updated: 2026-06-03
+    - path: docs/evaluations/owlynn-conversation-2026-06-04-v5.md
+      status: active
+      category: evaluation
+      last_updated: 2026-06-04
+    - path: docs/evaluations/owlynn-conversation-2026-06-04-v6.md
+      status: active
+      category: evaluation
+      last_updated: 2026-06-04
+    - path: docs/evaluations/owlynn-conversation-2026-06-04-v7-final.md
+      status: active
+      category: evaluation
+      last_updated: 2026-06-04
+    - path: docs/evaluations/long-conversation-2026-06-04.md
+      status: active
+      category: evaluation
+      last_updated: 2026-06-04
+    - path: docs/guides/dev-startup.md
+      status: active
+      category: guide
+      last_updated: 2026-06-04
+    # ── Existing ──
     - path: docs/ADR.md
       status: active
       category: architecture
@@ -109,7 +167,7 @@ manifest:
     - path: docs/README.md
       status: active
       category: reference
-      last_updated: 2026-05-31
+      last_updated: 2026-06-04
     - path: docs/ROLLBACK_DRY_RUN_LOG.md
       status: active
       category: debugging
@@ -344,4 +402,4 @@ manifest:
 
 ## Last updated
 
-2026-05-31 — `docs-standards-timeline` full recursive manifest
+2026-06-04 — config centralization + Qwen3.5 swap + docs/HITL.md + docs/MEMORY.md
