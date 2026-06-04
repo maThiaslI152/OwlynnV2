@@ -48,6 +48,53 @@ Copy the template and fill in the values:
 cp .env.example .env
 ```
 
+### Centralized Configuration (New — June 2026)
+
+All project settings are in **`src/config/defaults.yaml`** — the single source of truth. Override priority (lowest → highest):
+
+```
+defaults.yaml  →  environment variables  →  user_profile.json
+```
+
+To swap a model, change 1-2 lines in `defaults.yaml`. No code changes needed.
+
+**Key config sections:**
+| Section | What it controls |
+|---------|-----------------|
+| `models.small` | Router/model for simple tasks (name, base_url, temp, max_tokens, context_window) |
+| `models.medium` | Complex task model + variants (default/vision/longctx) |
+| `models.cloud` | DeepSeek API cloud fallback |
+| `routing` | Confidence thresholds, budget tiers, keyword bypasses |
+| `memory` | Max facts, cache TTL, decay constants |
+| `web_search` | Search backend timeouts, user-agents |
+| `summarization` | Threshold ratio, context windows |
+| `complex` | Safety margins, cutoff retries |
+
+**Config validation** runs at startup. Missing paths or missing YAML sections produce warnings in the backend log. Run manually:
+```bash
+python3 -c "from src.config.config_loader import validate_config; print(validate_config())"
+```
+
+**All env-overridable variables:**
+| Env Var | Overrides | YAML Default |
+|---------|-----------|-------------|
+| `HOST` | `server.host` | `127.0.0.1` |
+| `PORT` | `server.port` | `8000` |
+| `SMALL_LLM_BASE_URL` | `models.small.base_url` | `http://127.0.0.1:1234/v1` |
+| `MEDIUM_LLM_BASE_URL` | `models.medium.base_url` | same |
+| `CLOUD_LLM_BASE_URL` | `models.cloud.base_url` | `https://api.deepseek.com/v1` |
+| `SMALL_LLM_MODEL_NAME` | `models.small.model_name` | `qwen3.5-0.8b` |
+| `MEDIUM_LLM_MODEL_NAME` | `models.medium.variants.default.model_name` | `qwen3.5-9b-...@q6_k` |
+| `CLOUD_LLM_MODEL_NAME` | `models.cloud.model_name` | `deepseek-v4` |
+| `MEDIUM_LONGCTX_CONTEXT` | `models.medium.variants.longctx.context_window` | `131072` |
+| `QDRANT_HOST` / `QDRANT_PORT` | `external_services.qdrant.*` | `localhost:6333` |
+| `REDIS_URL` | `external_services.redis.url` | `redis://localhost:6379` |
+| `SEARXNG_URL` | `external_services.searxng.url` | `""` |
+| `VOICE_WAKE_WORD` | `server.voice.wake_word` | `Athena` |
+| `VOICE_AUTO_TTS` | `server.voice.auto_tts` | `true` |
+| `WEB_RAG_*` (7 vars) | `web_rag.*` | see defaults.yaml |
+| `WEB_SEARCH_*` (3 vars) | `web_search.*` | see defaults.yaml |
+
 ### Mandatory variables to configure
 
 | Variable | What to set | Where to get the value |

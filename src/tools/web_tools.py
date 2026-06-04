@@ -334,7 +334,7 @@ async def _web_search_wttr_in(query: str, backend: str, news: bool) -> str | Non
     headers = {"User-Agent": config.get("web_search.user_agents.weather", "Owlynn/1.0")}
     try:
         async with httpx.AsyncClient(
-            timeout=float(config.get("web_search.timeouts.weather", 20.0)),
+            timeout=float(config.get("web_search.timeouts.weather", 10.0)),
             headers=headers, follow_redirects=True
         ) as client:
             resp = await client.get(url)
@@ -386,7 +386,7 @@ async def _web_search_bing_httpx(
     }
     try:
         async with httpx.AsyncClient(
-            timeout=float(config.get("web_search.timeouts.bing", 22.0)),
+            timeout=float(config.get("web_search.timeouts.bing", 15.0)),
             headers=headers, follow_redirects=True
         ) as client:
             resp = await client.get(url)
@@ -488,7 +488,7 @@ async def _web_search_httpx_ddg_html(
     """Plain HTTP GET to DDG HTML lite."""
     import httpx
 
-    ddg_timeout = float(config.get("web_search.timeouts.ddg", 25.0))
+    ddg_timeout = float(config.get("web_search.timeouts.ddg", 15.0))
     ddg_ua = config.get("web_search.user_agents.ddg",
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")

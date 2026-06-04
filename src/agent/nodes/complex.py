@@ -34,7 +34,7 @@ _MIN_OUTPUT_TOKENS = int(config.get("complex.min_output_tokens", 512))
 _CONTEXT_SAFETY_MARGIN = int(config.get("complex.context_safety_margin", 256))
 
 # Maximum number of automatic continuation rounds when the LLM hits its token budget
-MAX_CUTOFF_RETRIES = int(config.get("complex.max_cutoff_retries", 3))
+MAX_CUTOFF_RETRIES = int(config.get("complex.max_cutoff_retries", 1))
 
 # Max retries for cloud LLM calls with exponential backoff
 _MAX_CLOUD_RETRIES = int(config.get("complex.max_cloud_retries", 3))

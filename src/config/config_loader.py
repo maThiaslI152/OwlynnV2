@@ -54,6 +54,9 @@ _ENV_OVERRIDE_MAP: dict[str, str] = {
     "CLOUD_LLM_MODEL_NAME": "models.cloud.model_name",
     # Longctx variant
     "MEDIUM_LONGCTX_CONTEXT": "models.medium.variants.longctx.context_window",
+    # Voice
+    "VOICE_WAKE_WORD": "server.voice.wake_word",
+    "VOICE_AUTO_TTS": "server.voice.auto_tts",
     # Web RAG
     "WEB_RAG_ENABLED": "web_rag.enabled",
     "WEB_RAG_EMBED_MODEL": "web_rag.embed_model",
@@ -354,3 +357,86 @@ def get_m4_optimization() -> dict[str, Any]:
             "queue_size": cfg.get("threading", {}).get("queue_size", 10),
         },
     }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Config validation — runs at startup to detect mismatches
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_REQUIRED_PATHS: list[str] = [
+    # Server
+    "server.host", "server.port",
+    # External services
+    "external_services.qdrant.host", "external_services.qdrant.port",
+    "external_services.redis.url",
+    "external_services.lm_studio.base_url", "external_services.lm_studio.management_url",
+    # Models — small
+    "models.small.base_url", "models.small.model_name", "models.small.temperature",
+    "models.small.max_tokens", "models.small.context_window", "models.small.timeout",
+    # Models — medium
+    "models.medium.base_url", "models.medium.temperature",
+    "models.medium.max_tokens", "models.medium.timeout", "models.medium.request_timeout",
+    "models.medium.variants.default.model_name", "models.medium.variants.default.context_window",
+    "models.medium.variants.longctx.model_name", "models.medium.variants.longctx.context_window",
+    "models.medium.swap.timeout", "models.medium.swap.poll_interval",
+    # Models — cloud
+    "models.cloud.base_url", "models.cloud.model_name", "models.cloud.timeout",
+    "models.cloud.context_window",
+    # Models — embedding
+    "models.embedding.base_url", "models.embedding.model_name", "models.embedding.timeout",
+    # Routing
+    "routing.confidence_threshold", "routing.swap_threshold",
+    "routing.max_input_chars", "routing.hitl_enabled",
+    "routing.budget_tiers", "routing.input_reserves", "routing.budget_max",
+    # Memory
+    "memory.max_facts", "memory.search_window", "memory.cache.ttl",
+    # Web
+    "web_search.timeout_seconds", "web_search.timeouts.aggregate",
+    "web_rag.enabled", "web_rag.top_k", "web_rag.chunk_chars",
+    # Summarization
+    "summarization.threshold_ratio", "summarization.keep_recent_turns",
+    # Complex
+    "complex.min_output_tokens", "complex.max_cutoff_retries",
+    "complex.default_token_budget",
+    # Cloud infra
+    "cloud.circuit_breaker.failure_threshold", "cloud.circuit_breaker.cooldown_seconds",
+    # Tool output
+    "tool_output.max_tool_output_chars", "tool_output.max_read_chars",
+    # Threading
+    "threading.max_workers",
+    # Router LLM
+    "router_llm.temperature", "router_llm.max_tokens",
+    # Chat title
+    "chat_title.temperature", "chat_title.max_tokens",
+]
+
+
+def validate_config() -> dict[str, list[str]]:
+    """Validate that all required config paths resolve. Returns {missing, warnings}."""
+    missing: list[str] = []
+    warnings: list[str] = []
+
+    cfg = config.get_config()
+    if not cfg:
+        warnings.append("defaults.yaml is empty or failed to load")
+        return {"missing": _REQUIRED_PATHS, "warnings": warnings}
+
+    for path in _REQUIRED_PATHS:
+        val = config.get(path)
+        if val is None or val == "":
+            missing.append(path)
+
+    # Check top-level keys exist
+    expected_sections = [
+        "server", "external_services", "models", "routing",
+        "memory", "web_search", "web_rag", "summarization",
+        "complex", "cloud", "tool_output", "file_indexing",
+        "pdf_rendering", "audit", "threading", "secret_store",
+        "file_decode", "chat_title", "router_llm",
+    ]
+    cfg_keys = set(cfg.keys())
+    for section in expected_sections:
+        if section not in cfg_keys:
+            warnings.append(f"Missing top-level section: {section}")
+
+    return {"missing": missing, "warnings": warnings}

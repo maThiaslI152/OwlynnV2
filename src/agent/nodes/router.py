@@ -464,7 +464,7 @@ async def router_node(state: AgentState) -> AgentState:
     try:
         router_llm = small_llm.bind(
             temperature=float(config.get("router_llm.temperature", 0.05)),
-            max_tokens=int(config.get("router_llm.max_tokens", 128)),
+            max_tokens=int(config.get("router_llm.max_tokens", 512)),
         )
         response = await router_llm.ainvoke(
             [HumanMessage(

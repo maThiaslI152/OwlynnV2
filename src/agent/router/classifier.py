@@ -17,7 +17,7 @@ from src.config.config_loader import config
 logger = logging.getLogger(__name__)
 
 # Max characters of user input included in the classification prompt.
-_MAX_INPUT_CHARS = int(config.get("routing.max_input_chars", 500))
+_MAX_INPUT_CHARS = int(config.get("routing.max_input_chars", 2000))
 
 # ── Classification prompt ────────────────────────────────────────────────
 

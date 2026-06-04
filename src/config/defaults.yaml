@@ -15,6 +15,9 @@
 server:
   host: "127.0.0.1"       # HOST env
   port: 8000               # PORT env
+  voice:
+    wake_word: "Athena"    # VOICE_WAKE_WORD env
+    auto_tts: true         # VOICE_AUTO_TTS env
 
 # ── External Services ────────────────────────────────────────────────────────
 external_services:
@@ -87,6 +90,8 @@ models:
     temperature: 0.4
     max_tokens: 8192
     timeout: 180
+    request_timeout: 180                     # HTTP request timeout
+    context_window: 131072                   # DeepSeek V4 context
     pricing:
       input_per_1m_usd: 0.14
       output_per_1m_usd: 0.28
