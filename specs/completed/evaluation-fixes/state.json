@@ -1,0 +1,10 @@
+{
+  "slug": "evaluation-fixes",
+  "status": "plan",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true,
+    "implement": true
+  }
+}

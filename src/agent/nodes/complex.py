@@ -118,6 +118,20 @@ def _cap_budget_to_context(prompt_messages: list, requested_budget: int) -> int:
     return capped
 
 
+def _total_prompt_tokens(prompt_messages: list) -> int:
+    """Estimate total tokens in the assembled prompt."""
+    return _estimate_message_tokens(prompt_messages)
+
+
+_HARD_PROMPT_LIMIT_RATIO = 0.85  # Max 85% of context window for prompt (leaves 15% for response)
+
+def _needs_prompt_truncation(prompt_messages: list) -> bool:
+    """Check if the prompt exceeds the hard safety limit for the model context."""
+    total = _estimate_message_tokens(prompt_messages)
+    limit = int(_LARGE_CONTEXT_WINDOW * _HARD_PROMPT_LIMIT_RATIO)
+    return total > limit
+
+
 def _strip_thinking_tags(text: str) -> str:
     """Remove <think>...</think> blocks from reasoning output."""
     if not text:

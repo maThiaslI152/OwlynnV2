@@ -1,0 +1,17 @@
+{
+  "change": "owlynn-conversation-eval",
+  "phase": "verify",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true,
+    "implement": true,
+    "verify": true
+  },
+  "pending_review": null,
+  "verification": {
+    "tasks": {}
+  },
+  "allowed_paths": [],
+  "updated_at": "2026-06-03T13:55:00Z"
+}

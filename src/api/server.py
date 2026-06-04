@@ -144,16 +144,56 @@ async def lifespan(app: FastAPI):
     app.state.agent = await init_agent()
     app.state.sessions = {} # thread_id -> GraphSession
 
-    # Preload medium LLM (gemma4) in background.
-    # Avoids cold-start swap latency on the first complex request.
-    async def _preload_medium():
+    # Preload both LLM tiers at startup + warmup inference calls.
+    # Avoids cold-start swap latency and 0-second failures on first request.
+    async def _preload_llms():
+        from src.agent.llm import LLMPool
+        from langchain_core.messages import HumanMessage
+        import asyncio as _asyncio
+
+        # 1. Preload medium (triggers LM Studio swap if needed)
         try:
-            from src.agent.llm import LLMPool
             await LLMPool.get_medium_llm("default")
-            logger.info("[startup] Medium LLM preloaded successfully")
+            logger.info("[startup] Medium LLM client created")
         except Exception as e:
             logger.warning("[startup] Medium LLM preload skipped: %s", e)
-    asyncio.create_task(_preload_medium())
+            return  # don't continue if medium fails
+
+        # 2. Preload small — separate slot, not affected by medium swap
+        try:
+            await LLMPool.get_small_llm()
+            logger.info("[startup] Small LLM client created")
+        except Exception as e:
+            logger.warning("[startup] Small LLM preload skipped: %s", e)
+
+        # 3. Let LM Studio settle after model load/unload operations
+        await _asyncio.sleep(3)
+
+        # 4. Warmup inference — send a trivial prompt through each model
+        #    so LM Studio has them fully loaded and ready before first user request.
+        warmup_text = [HumanMessage(content="hi")]
+        try:
+            small_llm = await LLMPool.get_small_llm()
+            await _asyncio.wait_for(
+                small_llm.ainvoke(warmup_text),
+                timeout=30,
+            )
+            logger.info("[startup] Small LLM warmup complete")
+        except Exception as e:
+            logger.warning("[startup] Small LLM warmup failed: %s", e)
+
+        try:
+            med_llm = await LLMPool.get_medium_llm("default")
+            await _asyncio.wait_for(
+                med_llm.ainvoke(warmup_text),
+                timeout=120,
+            )
+            logger.info("[startup] Medium LLM warmup complete")
+        except Exception as e:
+            logger.warning("[startup] Medium LLM warmup failed: %s", e)
+
+        logger.info("[startup] All LLMs preloaded and warmed up")
+    asyncio.create_task(_preload_llms())
 
     # Embedding models are pre-pulled manually via `ollama pull` or LM Studio UI.
     # The app relies on them being already available; no auto-load at startup.

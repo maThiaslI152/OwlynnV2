@@ -248,9 +248,12 @@ def format_memory_context(results: list, profile: dict, enhanced_context: str = 
         lines.append(project_instructions)
         lines.append("=== END PROJECT CONTEXT ===")
     
-    # Add enhanced memory context (topics, interests, recent convos)
+    # Add enhanced memory context (topics, interests, recent convos) — capped to stay within model context
     if enhanced_context:
         lines.append("\n=== Your Knowledge About User ===")
+        max_enhanced_chars = 6000  # ~1500 tokens — leave room for system prompt + messages
+        if len(enhanced_context) > max_enhanced_chars:
+            enhanced_context = enhanced_context[:max_enhanced_chars] + "\n... [truncated for context budget]"
         lines.append(enhanced_context)
     
     # Add user profile (only human-relevant fields, not config)

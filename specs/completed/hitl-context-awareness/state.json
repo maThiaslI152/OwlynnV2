@@ -1,0 +1,55 @@
+{
+  "change": "hitl-context-awareness",
+  "phase": "complete",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true,
+    "implement": true,
+    "verify": true
+  },
+  "pending_review": null,
+  "verification": {
+    "tasks": {
+      "1": {
+        "status": "pass",
+        "ran_at": "2026-06-01T17:30:00Z",
+        "commands": [
+          "security_proxy tests: 34 passed",
+          "full suite: ~793 passed"
+        ]
+      },
+      "2": {
+        "status": "pass",
+        "ran_at": "2026-06-01T17:31:00Z",
+        "commands": [
+          "TypeScript compiles (zero errors)",
+          "frontend vitest: 96 passed"
+        ]
+      },
+      "3": {
+        "status": "pass",
+        "ran_at": "2026-06-01T17:32:00Z",
+        "commands": [
+          "context.py intent builder verified",
+          "full suite: ~793 passed"
+        ]
+      },
+      "4": {
+        "status": "pass",
+        "ran_at": "2026-06-01T18:44:00Z",
+        "commands": [
+          "CI --quick: 822 unit + 22 audit + 96 frontend = 940 passed",
+          "TypeScript compiles (zero errors after allows_user_input fix)"
+        ]
+      }
+    }
+  },
+  "allowed_paths": [
+    "src/agent/nodes/security_proxy.py",
+    "src/agent/hitl/context.py",
+    "frontend-v2/src/components/HitlPromptCard.tsx",
+    "frontend-v2/src/hitl-cards.css"
+  ],
+  "updated_at": "2026-06-02T16:22:00Z"
+}
