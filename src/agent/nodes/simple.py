@@ -39,6 +39,10 @@ def _clean_response(text: str) -> str:
         return ""
     # Remove <think>...</think> blocks
     out = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+    # Remove <｜end▁of▁thinking｜> blocks (Qwen3.5 alternate format)
+    out = re.sub(r"<thinking>.*?</thinking>", "", out, flags=re.DOTALL).strip()
+    # Strip "Thinking Process:" sections — Qwen3.5 sometimes embeds these even with enable_thinking=false
+    out = re.sub(r"Thinking Process:.*?(?=\n\n[^\d]|\Z)", "", out, flags=re.DOTALL).strip()
     # Strip self-descriptive preambles (model echoing system prompt folded into user message)
     out = re.sub(
         r"^\[SYSTEM INSTRUCTIONS BEGIN\].*?\[SYSTEM INSTRUCTIONS END\]\s*",

@@ -57,6 +57,8 @@ _SUMMARIZE_PROMPT = (
     "Summarize the following conversation into the categories below. "
     "Be concise — each bullet ≤ 25 words. "
     "If a category has no entries, omit it.\n\n"
+    "## Topics Discussed\n"
+    "- (main subjects, one per bullet, ordered by when they appeared)\n\n"
     "## Decisions\n"
     "- (decisions made)\n\n"
     "## Facts\n"

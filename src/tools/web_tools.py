@@ -75,12 +75,13 @@ def _bot_block_detail(html_content: str) -> str:
     return "Anti-bot challenge detected"
 
 
-def _structured_search_failure(query: str, attempts: list[SearchAttempt]) -> str:
+def _structured_search_failure(query: str, attempts: list[SearchAttempt], extra: str = "") -> str:
     lines = [
         f'[web_search] Unable to retrieve online results for "{query}".',
-        "",
-        "Diagnostics:",
     ]
+    if extra:
+        lines.append(extra)
+    lines.extend(["", "Diagnostics:"])
     for a in attempts:
         detail = f" ({a.detail})" if a.detail else ""
         lines.append(f"- {a.tier} / {a.source}: {a.status}{detail}")
@@ -682,87 +683,97 @@ async def web_search(
         backend = (backend or "auto").strip().lower()
         attempts: list[SearchAttempt] = []
 
-        # Explicit backend handling
-        if backend == "google":
-            return await _google_search_playwright(query, focus_query)
+        # Wrap the entire sequential search pipeline in an aggregate timeout
+        # to prevent cascading tier fallbacks from eating the eval window.
+        aggregate_timeout = float(config.get("web_search.timeouts.aggregate", 60.0))
 
-        # Weather fast path
-        if not news:
-            wt = await _web_search_wttr_in(query, backend, news)
-            if wt:
-                attempts.append(SearchAttempt("tier0", "wttr", "ok"))
-                return wt
-            attempts.append(SearchAttempt("tier0", "wttr", "empty", "Not a weather query or wttr unavailable"))
+        async def _search_pipeline():
+            # Explicit backend handling
+            if backend == "google":
+                return await _google_search_playwright(query, focus_query)
 
-        # Tier 0.5: SearXNG (self-hosted metasearch — no API keys, no bot blocking)
-        if SEARXNG_URL:
-            try:
-                from src.tools.web_search_enhanced import searxng_search
-                categories = "news" if news else "general"
-                max_r = 15 if (focus_query or "").strip() else 8
-                sx_hits = await searxng_search(query, categories=categories, max_results=max_r)
-                if sx_hits:
-                    hits = [{"title": h["title"], "href": h["href"], "body": h["body"]} for h in sx_hits]
-                    hits = await _maybe_rerank_search_hits(focus_query, hits)
-                    attempts.append(SearchAttempt("tier0.5", "searxng", "ok"))
-                    return _format_search_hits_markdown(query, backend, news, hits, "via SearXNG")
-                attempts.append(SearchAttempt("tier0.5", "searxng", "empty", "No results"))
-            except Exception as e:
-                attempts.append(SearchAttempt("tier0.5", "searxng", "error", str(e)[:120]))
+            # Weather fast path
+            if not news:
+                wt = await _web_search_wttr_in(query, backend, news)
+                if wt:
+                    attempts.append(SearchAttempt("tier0", "wttr", "ok"))
+                    return wt
+                attempts.append(SearchAttempt("tier0", "wttr", "empty", "Not a weather query or wttr unavailable"))
 
-        # Tier 1B: curl_cffi browser-like TLS fallback
-        curl_out, curl_attempt = await _web_search_curl_cffi(query, backend, news, focus_query)
-        attempts.append(curl_attempt)
-        if curl_out:
-            return curl_out
-
-        # Tier 2: DDGS API
-        DDGS = _get_ddgs_class()
-        if DDGS is not None:
-            try:
-                max_r = 15 if (focus_query or "").strip() else 5
-
-                def _search():
-                    with DDGS() as ddgs:
-                        if news:
-                            return ddgs.news(query, backend=backend, max_results=max_r)
-                        return ddgs.text(query, backend=backend, max_results=max_r)
-
-                results = await asyncio.to_thread(_search)
-            except Exception as e:
-                attempts.append(SearchAttempt("tier2", "ddgs", "network_error", str(e)[:180]))
-                results = None
-            else:
-                if results:
-                    hits = _normalize_hits(results, max_hits=max_r)
-                    if hits:
+            # Tier 0.5: SearXNG (self-hosted metasearch — no API keys, no bot blocking)
+            if SEARXNG_URL:
+                try:
+                    from src.tools.web_search_enhanced import searxng_search
+                    categories = "news" if news else "general"
+                    max_r = 15 if (focus_query or "").strip() else 8
+                    sx_hits = await searxng_search(query, categories=categories, max_results=max_r)
+                    if sx_hits:
+                        hits = [{"title": h["title"], "href": h["href"], "body": h["body"]} for h in sx_hits]
                         hits = await _maybe_rerank_search_hits(focus_query, hits)
-                        return _format_search_hits_markdown(query, backend, news, hits, "via DDGS")
-                attempts.append(SearchAttempt("tier2", "ddgs", "empty", "No hits"))
-        else:
-            attempts.append(SearchAttempt("tier2", "ddgs", "unavailable_dependency", "duckduckgo-search not installed"))
+                        attempts.append(SearchAttempt("tier0.5", "searxng", "ok"))
+                        return _format_search_hits_markdown(query, backend, news, hits, "via SearXNG")
+                    attempts.append(SearchAttempt("tier0.5", "searxng", "empty", "No results"))
+                except Exception as e:
+                    attempts.append(SearchAttempt("tier0.5", "searxng", "error", str(e)[:120]))
 
-        # Tier 2C: legacy HTTP parsers
-        hx = await _web_search_httpx_ddg_html(query, backend, news, focus_query)
-        attempts.append(SearchAttempt("tier2", "httpx_ddg_html", "ok" if hx else "empty"))
-        if hx:
-            return hx
-        bi = await _web_search_bing_httpx(query, backend, news, focus_query)
-        attempts.append(SearchAttempt("tier2", "httpx_bing_html", "ok" if bi else "empty"))
-        if bi:
-            return bi
-        dl = await _web_search_ddg_lite_httpx(query, backend, news, focus_query)
-        attempts.append(SearchAttempt("tier2", "httpx_ddg_lite", "ok" if dl else "empty"))
-        if dl:
-            return dl
+            # Tier 1B: curl_cffi browser-like TLS fallback
+            curl_out, curl_attempt = await _web_search_curl_cffi(query, backend, news, focus_query)
+            attempts.append(curl_attempt)
+            if curl_out:
+                return curl_out
 
-        # Tier 3: dynamic browser fallback
-        dyn_out, dyn_attempt = await _web_search_dynamic_playwright(query, backend, news, focus_query)
-        attempts.append(dyn_attempt)
-        if dyn_out:
-            return dyn_out
+            # Tier 2: DDGS API
+            DDGS = _get_ddgs_class()
+            if DDGS is not None:
+                try:
+                    max_r = 15 if (focus_query or "").strip() else 5
 
-        return _structured_search_failure(query, attempts)
+                    def _search():
+                        with DDGS() as ddgs:
+                            if news:
+                                return ddgs.news(query, backend=backend, max_results=max_r)
+                            return ddgs.text(query, backend=backend, max_results=max_r)
+
+                    results = await asyncio.to_thread(_search)
+                except Exception as e:
+                    attempts.append(SearchAttempt("tier2", "ddgs", "network_error", str(e)[:180]))
+                    results = None
+                else:
+                    if results:
+                        hits = _normalize_hits(results, max_hits=max_r)
+                        if hits:
+                            hits = await _maybe_rerank_search_hits(focus_query, hits)
+                            return _format_search_hits_markdown(query, backend, news, hits, "via DDGS")
+                    attempts.append(SearchAttempt("tier2", "ddgs", "empty", "No hits"))
+            else:
+                attempts.append(SearchAttempt("tier2", "ddgs", "unavailable_dependency", "duckduckgo-search not installed"))
+
+            # Tier 2C: legacy HTTP parsers
+            hx = await _web_search_httpx_ddg_html(query, backend, news, focus_query)
+            attempts.append(SearchAttempt("tier2", "httpx_ddg_html", "ok" if hx else "empty"))
+            if hx:
+                return hx
+            bi = await _web_search_bing_httpx(query, backend, news, focus_query)
+            attempts.append(SearchAttempt("tier2", "httpx_bing_html", "ok" if bi else "empty"))
+            if bi:
+                return bi
+            dl = await _web_search_ddg_lite_httpx(query, backend, news, focus_query)
+            attempts.append(SearchAttempt("tier2", "httpx_ddg_lite", "ok" if dl else "empty"))
+            if dl:
+                return dl
+
+            # Tier 3: dynamic browser fallback
+            dyn_out, dyn_attempt = await _web_search_dynamic_playwright(query, backend, news, focus_query)
+            attempts.append(dyn_attempt)
+            if dyn_out:
+                return dyn_out
+
+            return _structured_search_failure(query, attempts)
+
+        try:
+            return await asyncio.wait_for(_search_pipeline(), timeout=aggregate_timeout)
+        except asyncio.TimeoutError:
+            return _structured_search_failure(query, attempts, extra=f"(Search timed out after {aggregate_timeout:.0f}s)")
     except Exception as e:
         logger.error(f"web_search error: {e}")
         return f"[web_search] Error: {str(e)}"
