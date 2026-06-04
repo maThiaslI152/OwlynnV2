@@ -1,7 +1,7 @@
 ---
 status: active
 category: reference
-last_updated: 2026-05-31
+last_updated: 2026-06-04
 owner: ai-agent
 ---
 
@@ -18,11 +18,13 @@ owner: ai-agent
 2. **[`docs/architecture/overview.md`](architecture/overview.md)** — system context, modules, data flow
 3. **[`specs/memory/constitution.md`](../specs/memory/constitution.md)** — non-negotiable rules
 4. **[`docs/standards/coding-style.md`](standards/coding-style.md)** — formatting, naming, patterns
-5. **Active change context:**
+5. **Configuration:** [`src/config/defaults.yaml`](../src/config/defaults.yaml) — single source of truth for all settings
+6. **Subsystem docs:** [`docs/HITL.md`](HITL.md) — safety gates · [`docs/MEMORY.md`](MEMORY.md) — memory tiers
+7. **Active change context:**
    - `specs/active/<slug>/` — requirements, design, tasks
    - `.cursorplan/active/<slug>/plan.md` — canonical plan
    - `docs/changes/<slug>/CHANGELOG.md` — per-task edit history
-6. **Then touch code.**
+8. **Then touch code.**
 
 ## Structure
 
@@ -31,9 +33,12 @@ docs/
 ├── README.md                      # This file — project map
 ├── INDEX.md                       # Machine-readable manifest
 ├── PROJECT_TIMELINE.md            # Aggregated project timeline
+├── HITL.md                        # Human-in-the-Loop safety system documentation
+├── MEMORY.md                      # Three-tier memory system documentation
 ├── architecture/
 │   └── overview.md                # System design overview
 ├── debugging/                     # Debugging guides by subsystem
+├── evaluations/                   # Conversation evaluation reports (v1→v7)
 ├── guides/                        # How-to guides
 ├── standards/
 │   ├── coding-style.md            # Language-agnostic conventions
