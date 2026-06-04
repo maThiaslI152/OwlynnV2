@@ -23,7 +23,7 @@ _EXPLICIT_SIGNALS = {
 }
 
 _CREATIVE_SIGNALS = {"story", "poem", "essay", "review", "explain", "why", "describe"}
-_REFACTOR_SIGNALS = {"improve", "refactor", "optimize", "modify", "review", "rewrite", "fix", "update"}
+_REFACTOR_SIGNALS = {"improve", "refactor", "optimize", "modify", "review", "rewrite", "fix", "update", "improved"}
 
 
 def needs_clarification(message: str) -> tuple[bool, list[str]]:

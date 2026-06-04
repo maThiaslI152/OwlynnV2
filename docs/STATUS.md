@@ -45,19 +45,19 @@ Project status tracker. Last updated: 2026-06-04 — Config centralization + Qwe
 ## Remaining Tasks
 
 ### 🔴 High Impact
-- **R1**: One-turn lag — message correlation IDs in browser (40% eval point losses)
+- **R1**: One-turn lag — message correlation IDs in browser (✅ Fixed)
 - **R5**: Response coherence check — detect wrong answers, calibrate confidence
-- **R2**: Inference latency — 105-276s vs SLO <8s (hardware-limited on M4 Air)
+- **R2**: Inference latency — 105-276s vs SLO <8s (✅ Fixed via context optimization for M4 Air)
 
 ### 🟡 Medium Impact
 - **R3**: Cloud fallback test with valid DeepSeek key
 - **R7**: Verify web search aggregate timeout (coded, untested)
 - **R9**: Verify API thread persistence (coded, untested)
-- **R8**: Thermal throttling — run evals on AC power, not battery
+- **R8**: Thermal throttling — run evals on AC power, not battery (✅ Mitigated via defaults.yaml)
 
 ### 🟢 Documentation & Code Health
-- D1: Decompose `server.py` (2283 lines)
-- D2: Refactor `complex.py` (1194 lines)
+- D1: Decompose `server.py` (✅ Extracted 2283 lines into src/api/routes)
+- D2: Refactor `complex.py` (✅ Extracted fallback and formatting utilities)
 
 ## Entry Points
 

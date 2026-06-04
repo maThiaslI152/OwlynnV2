@@ -241,7 +241,7 @@ def recall_all_memories(query: str = "", project_id: str = "") -> str:
     try:
         user_id = f"project:{project_id}" if project_id else "owner"
         search_query = query if query else " "
-        results_dict = mem0_memory.search(search_query, user_id=user_id, filters=None, limit=20)
+        results_dict = mem0_memory.search(search_query, filters={"user_id": user_id}, limit=20)
         results = results_dict.get("results", []) if isinstance(results_dict, dict) else results_dict
         
         if not results:

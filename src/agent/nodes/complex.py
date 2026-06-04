@@ -17,6 +17,13 @@ from src.agent.tool_sets import (
 )
 from src.agent.lm_studio_compat import is_local_server, with_system_for_local_server
 from src.agent.anonymization import anonymize, deanonymize
+
+from .complex_utils.fallback import _fallback_for_blank_response
+from .complex_utils.formatter import (
+    _strip_thinking_tags,
+    _flatten_human_content,
+    _synthetic_answer_from_web_search_tool
+)
 from src.agent.hitl.cloud_brief import build_cloud_brief, estimate_brief_tokens
 from src.memory.user_profile import get_profile
 
@@ -132,12 +139,6 @@ def _needs_prompt_truncation(prompt_messages: list) -> bool:
     return total > limit
 
 
-def _strip_thinking_tags(text: str) -> str:
-    """Remove <think>...</think> blocks from reasoning output."""
-    if not text:
-        return text
-    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
-    return cleaned if cleaned else text
 
 
 COMPLEX_PROMPT = """### Identity
@@ -215,25 +216,6 @@ def _web_search_tool_output_has_results(content: str) -> bool:
     return ("🔍" in c or "search results for" in c) and "URL:" in c
 
 
-def _synthetic_answer_from_web_search_tool(content: str) -> str:
-    """
-    When the LLM returns empty after a successful web_search, surface the tool text
-    so the user still gets a usable answer in the UI.
-    """
-    c = (content or "").strip()
-    if not c:
-        return (
-            "I ran **web_search** but the tool returned no text. "
-            "Try again or narrow the query."
-        )
-    pref = (
-        "The model returned an empty message after **web_search**, so here is the "
-        "search payload directly (you can use the links below):\n\n"
-    )
-    cap = int(config.get("complex.synthetic_answer_max_chars", 4500))
-    if len(c) > cap:
-        return pref + c[:cap] + "\n\n… [truncated]"
-    return pref + c
 
 
 def build_web_search_answer_nudge_messages(tool_messages: list) -> list[HumanMessage]:
@@ -306,62 +288,8 @@ def build_fetch_retry_nudge_messages(tool_messages: list) -> list[HumanMessage]:
     return out
 
 
-def _fallback_for_blank_response(messages: list, *, web_search_enabled: bool) -> AIMessage:
-    """
-    When the model returns empty assistant content, synthesize a safe user-visible reply.
-
-    Prefers context from recent ``ToolMessage`` outputs (successful or failed ``web_search``).
-    If there are no tool messages yet (first LLM turn before any tools) or no match, returns a
-    generic message so the thread does not stay blank.
-    """
-    for m in reversed(messages):
-        if not isinstance(m, ToolMessage):
-            continue
-        c = m.content if isinstance(m.content, str) else str(m.content or "")
-        if (getattr(m, "name", None) or "") == "web_search":
-            if _web_search_tool_output_has_results(c):
-                return AIMessage(content=_synthetic_answer_from_web_search_tool(c))
-            if (
-                c.startswith("[web_search]")
-                or "Unable to retrieve online results" in c
-                or "blocked_by_captcha" in c
-            ):
-                return AIMessage(
-                    content=(
-                        "I couldn't verify this online right now because web search providers returned "
-                        "errors or bot challenges. I did not find reliable live sources in this run. "
-                        "If you want, I can retry with a narrower query, a different provider, or use "
-                        "another source you provide."
-                    )
-                )
-    if web_search_enabled:
-        return AIMessage(
-            content=(
-                "I didn't get a usable reply from the model this time (empty response). "
-                "Try rephrasing or shortening your message, confirm your LLM server is running, "
-                "or retry. If you need live web facts, we can try again once the model responds normally."
-            )
-        )
-    return AIMessage(
-        content=(
-            "I didn't get a usable reply from the model this time (empty response). "
-            "Try rephrasing your question or confirm your local LLM is running correctly, then retry."
-        )
-    )
 
 
-def _flatten_human_content(content) -> str:
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        parts: list[str] = []
-        for block in content:
-            if isinstance(block, str):
-                parts.append(block)
-            elif isinstance(block, dict) and block.get("type") == "text":
-                parts.append(str(block.get("text", "")))
-        return "\n".join(parts)
-    return str(content or "")
 
 
 def _latest_user_text(messages: list) -> str:

@@ -35,7 +35,7 @@ def search_workspace_docs(query: str) -> str:
         user_id = f"project:{project_id}"
         
         # Search the project vector store (Qdrant)
-        results_dict = mem0_memory.search(query, user_id=user_id, filters=None, limit=8)
+        results_dict = mem0_memory.search(query, filters={"user_id": user_id}, limit=8)
         results = results_dict.get("results", []) if isinstance(results_dict, dict) else results_dict
         
         if not results:
