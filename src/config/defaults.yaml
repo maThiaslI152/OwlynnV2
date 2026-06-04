@@ -47,7 +47,7 @@ models:
     temperature: 0.2                         # Low temp for consistent routing
     max_tokens: 1024                          # Room for Qwen3.5 reasoning_content + output
     max_output_tokens: 1024
-    context_window: 32768                    # Qwen3.5 native 262K; practical ~32K on M4
+    context_window: 16384                    # Practical: 32K is slow on M4; 16K sufficient for routing
     timeout: 10                              # M4: 10s, standard: 15s
     request_timeout: 10                      # HTTP request timeout
     extra_body:
@@ -60,8 +60,8 @@ models:
     temperature: 0.7                         # Qwen non-thinking rec: 0.7, top_p=0.8, top_k=20
     max_tokens: 16384                        # Ample room for reasoning_content + output
     max_output_tokens: 16384
-    timeout: 120                             # M4: 120s, standard: 90s — Qwen3.5 thinking needs time
-    request_timeout: 120                     # HTTP request timeout — prevents infinite hangs
+    timeout: 600                             # M4: 600s — Qwen3.5 9B@Q6_K 32K ctx is slow
+    request_timeout: 600                     # HTTP request timeout — prevents infinite hangs
     fold_system: true                        # LM Studio Jinja compat
     extra_body:
       chat_template_kwargs:
@@ -71,13 +71,13 @@ models:
     variants:
       default:
         model_name: "qwen3.5-9b-uncensored-hauhaucs-aggressive@q6_k"
-        context_window: 32768                # Practical limit on M4 Air 24GB with Q6_K (~7GB)
+        context_window: 16384                # Practical limit — 32K is too slow on M4 Air Q6_K
       vision:
         model_name: "qwen3.5-9b-uncensored-hauhaucs-aggressive@q6_k"
-        context_window: 32768
+        context_window: 16384
       longctx:
         model_name: "qwen3.5-9b-uncensored-hauhaucs-aggressive@q6_k"
-        context_window: 131072               # Try full context if VRAM permits
+        context_window: 32768
 
     swap:
       timeout: 120                           # Max wait for LM Studio model swap
