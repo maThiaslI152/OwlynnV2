@@ -64,7 +64,9 @@ class RouteSelector:
         # Cloud route — separate infrastructure, no M-tier swap
         if target_route == "complex-cloud":
             if features.has_images:
-                logger.warning("[selector] Cloud requested but task has images; downgrading to complex-default")
+                logger.warning(
+                    "[selector] Cloud requested but task has images; downgrading to complex-default"
+                )
                 return "complex-default", toolbox
             return target_route, toolbox
 

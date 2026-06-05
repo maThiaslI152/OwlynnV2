@@ -1,12 +1,13 @@
 from fastapi import APIRouter
 from src.config.settings_constants import (
-import logging
-logger = logging.getLogger(__name__)
     _ADVANCED_SETTINGS_DEFAULTS,
     _UNIFIED_SETTINGS_CLOUD_BUDGET_DEFAULTS,
 )
 
 router = APIRouter()
+import logging
+
+logger = logging.getLogger(__name__)
 from src.memory.user_profile import get_profile, update_profile, VALID_FIELDS
 from src.memory.persona import get_persona, update_persona_field
 from src.config.config_loader import config

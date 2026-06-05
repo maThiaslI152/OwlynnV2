@@ -23,6 +23,7 @@ from ..config.settings import WORKSPACE_DIR as _WORKSPACE_PATH
 from .workspace_context import tool_workspace_root
 
 import logging
+
 logger = logging.getLogger(__name__)
 BASE_WORKSPACE_DIR = str(_WORKSPACE_PATH.resolve())
 

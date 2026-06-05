@@ -23,9 +23,9 @@ import logging
 import os
 import sys
 
-
-import logging
 logger = logging.getLogger(__name__)
+
+
 def setup_logging(level: int = logging.INFO) -> None:
     """Configure root logger, application handler, and audit subsystem.
 

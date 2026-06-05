@@ -1144,7 +1144,7 @@ async def deep_research(
     # 2. Extract URLs from the formatted markdown output
     # web_search format: "   URL: https://..."
     urls = re.findall(r"URL:\s+(https?://[^\s]+)", search_out)
-    
+
     # Deduplicate and limit
     seen = set()
     unique_urls = []
@@ -1167,21 +1167,24 @@ async def deep_research(
     # 4. Context Reranking (Web RAG)
     from src.config.config_loader import config
     from src.tools.web_retrieval import rank_chunks_to_source_pack
-    
-    web_rag_enabled = str(config.get("web_search.web_rag.enabled", "true")).lower() == "true"
+
+    web_rag_enabled = (
+        str(config.get("web_search.web_rag.enabled", "true")).lower() == "true"
+    )
     min_chars = int(config.get("web_search.web_rag.min_chars_for_rank", 1800))
-    
+
     final_output = crawl_markdown
     if web_rag_enabled and len(crawl_markdown) > min_chars:
         # We pass the full crawled markdown to be chunked and ranked against the query
-        pack = await rank_chunks_to_source_pack(query, "Multiple Sources (deep_research)", crawl_markdown)
+        pack = await rank_chunks_to_source_pack(
+            query, "Multiple Sources (deep_research)", crawl_markdown
+        )
         if pack:
             final_output = pack
-            
+
     # 5. Return combined deep context with Prompt Injection security tags
     return f"""🔍 Deep Research Results for: "{query}"
 
 <web_context>
 {final_output}
 </web_context>"""
-

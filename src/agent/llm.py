@@ -18,7 +18,6 @@ from typing import Optional, TYPE_CHECKING
 from langchain_openai import ChatOpenAI
 
 
-
 from src.config.config_loader import get_model_config
 from src.config.settings import DEEPSEEK_API_KEY, M4_MAC_OPTIMIZATION
 from src.memory.user_profile import get_profile
@@ -141,9 +140,7 @@ class LLMPool:
             extra_body["max_output_tokens"] = model_cfg.get("max_output_tokens", 4096)
 
             cls._medium_llm = ChatOpenAI(
-                model=model_cfg.get(
-                    "model_name", "qwen2.5-3b-instruct"
-                ),
+                model=model_cfg.get("model_name", "qwen2.5-3b-instruct"),
                 api_key="sk-local-no-key-needed",
                 base_url=model_cfg.get("base_url", "http://127.0.0.1:1234/v1"),
                 temperature=model_cfg.get("temperature", 0.4),

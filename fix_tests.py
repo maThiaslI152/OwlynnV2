@@ -6,7 +6,12 @@ bench_file = "tests/benchmarks/test_complex_benchmark.py"
 with open(bench_file, "r") as f:
     content = f.read()
 # Remove ModelSwapError fallback test
-content = re.sub(r'\s*@pytest\.mark\.asyncio\s*async def test_medium_fallback_on_swap_error\(self\):.*?(?=\s*@pytest\.mark\.asyncio|\Z)', '\n', content, flags=re.DOTALL)
+content = re.sub(
+    r"\s*@pytest\.mark\.asyncio\s*async def test_medium_fallback_on_swap_error\(self\):.*?(?=\s*@pytest\.mark\.asyncio|\Z)",
+    "\n",
+    content,
+    flags=re.DOTALL,
+)
 with open(bench_file, "w") as f:
     f.write(content)
 
@@ -23,9 +28,24 @@ os.remove(anon_file)
 prop_file = "tests/test_complex_node_properties.py"
 with open(prop_file, "r") as f:
     content = f.read()
-content = re.sub(r'\s*def test_vision_route_produces_medium_vision.*?(?=\s*def |\Z)', '\n', content, flags=re.DOTALL)
-content = re.sub(r'\s*def test_longctx_route_produces_medium_longctx.*?(?=\s*def |\Z)', '\n', content, flags=re.DOTALL)
-content = re.sub(r'\s*def test_fallback_label_has_suffix_on_swap_error.*?(?=\s*def |\Z)', '\n', content, flags=re.DOTALL)
+content = re.sub(
+    r"\s*def test_vision_route_produces_medium_vision.*?(?=\s*def |\Z)",
+    "\n",
+    content,
+    flags=re.DOTALL,
+)
+content = re.sub(
+    r"\s*def test_longctx_route_produces_medium_longctx.*?(?=\s*def |\Z)",
+    "\n",
+    content,
+    flags=re.DOTALL,
+)
+content = re.sub(
+    r"\s*def test_fallback_label_has_suffix_on_swap_error.*?(?=\s*def |\Z)",
+    "\n",
+    content,
+    flags=re.DOTALL,
+)
 with open(prop_file, "w") as f:
     f.write(content)
 
@@ -33,8 +53,18 @@ with open(prop_file, "w") as f:
 pool_file = "tests/test_llm_pool.py"
 with open(pool_file, "r") as f:
     content = f.read()
-content = re.sub(r'\s*@pytest\.mark\.asyncio\s*async def test_get_medium_llm_triggers_swap_on_variant_mismatch.*?(?=\s*@pytest\.mark\.asyncio|\Z)', '\n', content, flags=re.DOTALL)
-content = re.sub(r'\s*@pytest\.mark\.asyncio\s*async def test_get_medium_llm_variant_tracking.*?(?=\s*@pytest\.mark\.asyncio|\Z)', '\n', content, flags=re.DOTALL)
+content = re.sub(
+    r"\s*@pytest\.mark\.asyncio\s*async def test_get_medium_llm_triggers_swap_on_variant_mismatch.*?(?=\s*@pytest\.mark\.asyncio|\Z)",
+    "\n",
+    content,
+    flags=re.DOTALL,
+)
+content = re.sub(
+    r"\s*@pytest\.mark\.asyncio\s*async def test_get_medium_llm_variant_tracking.*?(?=\s*@pytest\.mark\.asyncio|\Z)",
+    "\n",
+    content,
+    flags=re.DOTALL,
+)
 with open(pool_file, "w") as f:
     f.write(content)
 
@@ -47,7 +77,9 @@ if os.path.exists(pool_prop):
 prompt_file = "tests/test_prompt_regression.py"
 with open(prompt_file, "r") as f:
     content = f.read()
-content = content.replace('"complex-vision"', '"complex-cloud"').replace('"complex-longctx"', '"complex-cloud"')
+content = content.replace('"complex-vision"', '"complex-cloud"').replace(
+    '"complex-longctx"', '"complex-cloud"'
+)
 with open(prompt_file, "w") as f:
     f.write(content)
 
@@ -55,7 +87,9 @@ with open(prompt_file, "w") as f:
 sent_file = "tests/test_sentence_routing_and_response.py"
 with open(sent_file, "r") as f:
     content = f.read()
-content = content.replace('complex-vision', 'complex-cloud').replace('complex-longctx', 'complex-cloud')
+content = content.replace("complex-vision", "complex-cloud").replace(
+    "complex-longctx", "complex-cloud"
+)
 with open(sent_file, "w") as f:
     f.write(content)
 

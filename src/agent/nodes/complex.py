@@ -111,7 +111,9 @@ def _estimate_message_tokens(messages: list) -> int:
     return int(total_chars / 3.5)
 
 
-def _cap_budget_to_context(prompt_messages: list, requested_budget: int, max_context: int) -> int:
+def _cap_budget_to_context(
+    prompt_messages: list, requested_budget: int, max_context: int
+) -> int:
     """
     Given the assembled prompt and a requested output budget, cap it so that
     input + output doesn't exceed the context window.
@@ -476,7 +478,9 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     security_reason = state.get("security_reason")
 
     system_text = COMPLEX_PROMPT.format(
-        current_date=__import__("datetime").datetime.now().strftime("%B %d, %Y, %I:%M %p"),
+        current_date=__import__("datetime")
+        .datetime.now()
+        .strftime("%B %d, %Y, %I:%M %p"),
         memory_context=memory_context,
         persona=persona,
         style_hint=style_hint,
@@ -683,7 +687,6 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                 llm = await get_cloud_llm()
                 model_label = "large-cloud"
 
-
             else:
                 llm = await get_medium_llm("default")
                 model_label = "medium-default"
@@ -703,8 +706,9 @@ async def complex_llm_node(state: AgentState) -> AgentState:
 
         budget = _cap_budget_to_context(
             prompt_messages,
-            state.get("token_budget", max_context)
-            or int(config.get("complex.default_token_budget")),
+            state.get("token_budget")
+            or int(config.get("complex.default_token_budget", 4096)),
+            max_context,
         )
         response = await llm.bind(max_tokens=budget).ainvoke(prompt_messages)
         return {
@@ -797,7 +801,9 @@ async def complex_llm_node(state: AgentState) -> AgentState:
 
     budget = _cap_budget_to_context(
         prompt_messages,
-        state.get("token_budget", max_context) or int(config.get("complex.default_token_budget")),
+        state.get("token_budget")
+        or int(config.get("complex.default_token_budget", 4096)),
+        max_context,
     )
     bound_llm = llm.bind_tools(tools).bind(max_tokens=budget)
     audit_debug("agent.token", "budget_computed", token_budget=budget, route=route)
@@ -857,7 +863,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                     )
                     budget = _cap_budget_to_context(
                         prompt_messages,
-                        state.get("token_budget", max_context)
+                        state.get("token_budget")
                         or int(config.get("complex.default_token_budget", 4096)),
                     )
                     fb_start = asyncio.get_running_loop().time()
@@ -912,7 +918,8 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                 budget = _cap_budget_to_context(
                     prompt_messages,
                     state.get("token_budget", max_context)
-                    or int(config.get("complex.default_token_budget")),
+                    or int(config.get("complex.default_token_budget", 4096)),
+                    max_context,
                 )
                 fb_start = asyncio.get_running_loop().time()
                 response = (
@@ -977,8 +984,9 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                 )
                 budget = _cap_budget_to_context(
                     prompt_messages,
-                    state.get("token_budget", max_context)
-                    or int(config.get("complex.default_token_budget")),
+                    state.get("token_budget")
+                    or int(config.get("complex.default_token_budget", 4096)),
+                    max_context,
                 )
                 fb_start = asyncio.get_running_loop().time()
                 response = (
@@ -1025,8 +1033,9 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             prompt_messages = with_system_for_local_server(system, trimmed_messages)
             budget = _cap_budget_to_context(
                 prompt_messages,
-                state.get("token_budget", max_context)
-                or int(config.get("complex.default_token_budget")),
+                state.get("token_budget")
+                or int(config.get("complex.default_token_budget", 4096)),
+                max_context,
             )
             fb_start = asyncio.get_running_loop().time()
             response = (
@@ -1052,8 +1061,9 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                 llm = await get_cloud_llm()
                 budget = _cap_budget_to_context(
                     [system, *trimmed_messages],
-                    state.get("token_budget", max_context)
-                    or int(config.get("complex.default_token_budget")),
+                    state.get("token_budget")
+                    or int(config.get("complex.default_token_budget", 4096)),
+                    max_context,
                 )
                 response = (
                     await llm.bind_tools(tools)
@@ -1103,8 +1113,9 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                 prompt_messages = with_system_for_local_server(system, trimmed_messages)
                 budget = _cap_budget_to_context(
                     prompt_messages,
-                    state.get("token_budget", max_context)
-                    or int(config.get("complex.default_token_budget")),
+                    state.get("token_budget")
+                    or int(config.get("complex.default_token_budget", 4096)),
+                    max_context,
                 )
                 fb_start = asyncio.get_running_loop().time()
                 response = (
@@ -1216,8 +1227,9 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                 )
                 recapped = _cap_budget_to_context(
                     second_prompt,
-                    state.get("token_budget", max_context)
-                    or int(config.get("complex.default_token_budget")),
+                    state.get("token_budget")
+                    or int(config.get("complex.default_token_budget", 4096)),
+                    max_context,
                 )
                 llm_recapped = llm.bind_tools(tools).bind(max_tokens=recapped)
                 response = await llm_recapped.ainvoke(second_prompt)

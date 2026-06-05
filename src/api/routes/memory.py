@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 import logging
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 from src.memory.memory_manager import load_memories, save_memory, delete_memory

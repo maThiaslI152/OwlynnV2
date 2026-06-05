@@ -91,7 +91,7 @@ async def test_prompt_regression_complex_route():
     mock_large_base.bind = MagicMock(return_value=mock_bound)
     mock_large_base.bind_tools = MagicMock(return_value=mock_bound)
 
-    LLMPool.set_test_overrides({"small": mock_router_llm, "default": mock_large_base})
+    LLMPool.set_test_overrides({"small": mock_router_llm, "medium": mock_large_base})
     try:
         app = build_graph().compile()
 

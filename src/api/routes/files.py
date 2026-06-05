@@ -2,7 +2,7 @@ from fastapi import APIRouter, File, UploadFile
 from fastapi.responses import FileResponse, PlainTextResponse
 
 import logging
-logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 import os

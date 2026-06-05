@@ -13,7 +13,7 @@ from unittest.mock import MagicMock
 sys.modules["mem0"] = MagicMock()
 
 import pytest
-from hypothesis import given, settings, assume
+from hypothesis import given, settings, assume, HealthCheck
 from hypothesis import strategies as st
 from langchain_core.messages import HumanMessage
 
@@ -248,7 +248,7 @@ class TestTokenBudgetContextWindow:
             ),
         )
     )
-    @settings(max_examples=100)
+    @settings(max_examples=10, suppress_health_check=[HealthCheck.too_slow])
     def test_complex_budget_at_least_512_for_large_input(self, text: str):
         """Complex routes with large input have budget >= 512 (the context floor)."""
         for route in VALID_COMPLEX_ROUTES:

@@ -1,7 +1,5 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-import logging
-logger = logging.getLogger(__name__)
 router = APIRouter()
 
 import json

@@ -9,6 +9,7 @@ import socket
 from urllib.parse import urlparse
 
 import logging
+
 logger = logging.getLogger(__name__)
 _BLOCKED_HOSTNAMES = frozenset(
     {

@@ -27,7 +27,12 @@ _PATTERNS: list[tuple[str, re.Pattern]] = [
     # 3. Localhost URLs with ports
     ("URL", re.compile(r"https?://(?:localhost|127\.0\.0\.1):\d+")),
     # 4. File system paths (exclude trailing punctuation like commas or quotes)
-    ("PATH", re.compile(r"(?:/(?:Users|home|etc|var|opt|tmp)/\S+|~/\S+|[A-Z]:\\\\?\S+)(?<![.,!?;'\"])")),
+    (
+        "PATH",
+        re.compile(
+            r"(?:/(?:Users|home|etc|var|opt|tmp)/\S+|~/\S+|[A-Z]:\\\\?\S+)(?<![.,!?;'\"])"
+        ),
+    ),
     # 5. IP addresses (IPv4 and IPv6)
     (
         "IP",

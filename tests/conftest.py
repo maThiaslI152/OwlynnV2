@@ -15,11 +15,13 @@ def pytest_configure(config):
 
     import tempfile
     import pytest
-    
+
     # Sandbox data and workspace dirs globally for all tests
     pytest.test_data_dir = tempfile.TemporaryDirectory(prefix="owlynn_test_data_")
-    pytest.test_workspace_dir = tempfile.TemporaryDirectory(prefix="owlynn_test_workspace_")
-    
+    pytest.test_workspace_dir = tempfile.TemporaryDirectory(
+        prefix="owlynn_test_workspace_"
+    )
+
     os.environ["OWLYNN_DATA_DIR"] = pytest.test_data_dir.name
     os.environ["OWLYNN_WORKSPACE_DIR"] = pytest.test_workspace_dir.name
 

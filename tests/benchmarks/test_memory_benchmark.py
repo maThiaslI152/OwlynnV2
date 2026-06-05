@@ -1,4 +1,5 @@
 import time
+
 """
 Benchmark: Memory node overhead — memory_inject and memory_write latency.
 

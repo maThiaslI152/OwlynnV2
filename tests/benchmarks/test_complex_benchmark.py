@@ -1,4 +1,5 @@
 import time
+
 """
 Benchmark: Complex node per-route latency, fallback chain coverage,
 context trimming efficiency, post-processing overhead, tool action throughput,
@@ -167,7 +168,6 @@ class TestFallbackChainCoverage:
             metadata={"fallback_type": "CloudUnavailableError"},
         )
         record_entry(entry)
-
 
     @pytest.mark.asyncio
     async def test_medium_default_graceful_error(self):

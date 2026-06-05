@@ -2,8 +2,6 @@ import logging
 import re
 from langchain_core.messages import AIMessage, ToolMessage
 
-import logging
-logger = logging.getLogger(__name__)
 logger = logging.getLogger("src.api")
 
 connected_websockets = set()

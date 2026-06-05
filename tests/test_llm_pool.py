@@ -39,14 +39,12 @@ def test_clear_resets_all_slots():
     LLMPool._small_llm = "fake"
     LLMPool._medium_llm = "fake"
     LLMPool._cloud_llm = "fake"
-    LLMPool._current_medium_variant = "vision"
 
     LLMPool.clear()
 
     assert LLMPool._small_llm is None
     assert LLMPool._medium_llm is None
     assert LLMPool._cloud_llm is None
-    assert LLMPool._current_medium_variant is None
 
 
 @pytest.mark.anyio
@@ -57,52 +55,11 @@ async def test_get_medium_llm_cache_hit():
 
     fake_llm = MagicMock()
     LLMPool._medium_llm = fake_llm
-    LLMPool._current_medium_variant = "default"
 
     result = await LLMPool.get_medium_llm("default")
 
     assert result is fake_llm
     mock_swap.swap_model.assert_not_called()
-
-
-@pytest.mark.anyio
-async def test_get_medium_llm_triggers_swap_on_variant_mismatch():
-    """When variant differs, swap_model is called."""
-    mock_swap = AsyncMock()
-    LLMPool._swap_manager = mock_swap
-    LLMPool._current_medium_variant = "default"
-
-    with (
-        patch("src.agent.llm.get_profile", return_value=PROFILE),
-        patch("src.agent.llm.ChatOpenAI") as MockChat,
-    ):
-        MockChat.return_value = MagicMock()
-        result = await LLMPool.get_medium_llm("vision")
-
-    mock_swap.swap_model.assert_called_once_with("vision")
-    assert LLMPool._current_medium_variant == "vision"
-
-
-@pytest.mark.anyio
-async def test_get_medium_llm_variant_tracking():
-    """After sequential calls, _current_medium_variant tracks the last one."""
-    mock_swap = AsyncMock()
-    LLMPool._swap_manager = mock_swap
-
-    with (
-        patch("src.agent.llm.get_profile", return_value=PROFILE),
-        patch("src.agent.llm.ChatOpenAI") as MockChat,
-    ):
-        MockChat.return_value = MagicMock()
-
-        await LLMPool.get_medium_llm("default")
-        assert LLMPool._current_medium_variant == "default"
-
-        await LLMPool.get_medium_llm("vision")
-        assert LLMPool._current_medium_variant == "vision"
-
-        await LLMPool.get_medium_llm("longctx")
-        assert LLMPool._current_medium_variant == "longctx"
 
 
 @pytest.mark.anyio
@@ -174,19 +131,3 @@ async def test_get_cloud_llm_config():
     assert call_kwargs["max_tokens"] == 8192
     assert call_kwargs["temperature"] == 0.4
     assert call_kwargs["request_timeout"] == 180
-
-
-@pytest.mark.anyio
-async def test_get_large_llm_is_alias():
-    """get_large_llm() delegates to get_medium_llm('default')."""
-    mock_swap = AsyncMock()
-    LLMPool._swap_manager = mock_swap
-
-    with (
-        patch("src.agent.llm.get_profile", return_value=PROFILE),
-        patch("src.agent.llm.ChatOpenAI") as MockChat,
-    ):
-        MockChat.return_value = MagicMock()
-        result = await LLMPool.get_large_llm()
-
-    assert LLMPool._current_medium_variant == "default"
