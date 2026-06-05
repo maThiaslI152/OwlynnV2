@@ -57,6 +57,7 @@ chat_list_st = st.lists(
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
+
 def _create_fresh_manager_with_two_projects():
     """Create a ProjectManager and two fresh test projects, returning (pm, proj_a, proj_b)."""
     pm = ProjectManager()
@@ -77,6 +78,7 @@ def _cleanup(pm, *projects):
 # ═════════════════════════════════════════════════════════════════════════
 # Property 27: Separate chat histories per project
 # ═════════════════════════════════════════════════════════════════════════
+
 
 class TestSeparateChatHistories:
     """
@@ -204,7 +206,7 @@ class TestSeparateChatHistories:
                 f"Project B should have 1 chat but has {len(chats_b)}"
             )
             assert chats_b[0]["id"] == chat_b["id"], (
-                f"Project B's chat ID changed after deleting from Project A"
+                "Project B's chat ID changed after deleting from Project A"
             )
         finally:
             _cleanup(pm, proj_a, proj_b)

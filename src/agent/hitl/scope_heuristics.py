@@ -12,18 +12,64 @@ _BUILD_VERBS = {"build", "create", "implement", "make", "develop", "write"}
 # Catches "build a calculator", "create an API", "write a script", etc.
 # without needing an exhaustive noun list.
 _BUILD_PATTERN = re.compile(
-    r'\b(build|create|make|implement|develop|write)\s+(a|an|the|some|me\s+a)\b',
+    r"\b(build|create|make|implement|develop|write)\s+(a|an|the|some|me\s+a)\b",
     re.IGNORECASE,
 )
 
 _EXPLICIT_SIGNALS = {
-    "language": {"python", "javascript", "typescript", "rust", "go", "java", "c++", "react", "vue", "tkinter", "electron", "next.js", "express", "flask", "django", "fastapi"},
-    "ui": {"web", "desktop", "cli", "tui", "terminal", "gui", "browser", "command line", "api"},
-    "framework": {"react", "vue", "angular", "svelte", "tkinter", "pyqt", "electron", "tauri"},
+    "language": {
+        "python",
+        "javascript",
+        "typescript",
+        "rust",
+        "go",
+        "java",
+        "c++",
+        "react",
+        "vue",
+        "tkinter",
+        "electron",
+        "next.js",
+        "express",
+        "flask",
+        "django",
+        "fastapi",
+    },
+    "ui": {
+        "web",
+        "desktop",
+        "cli",
+        "tui",
+        "terminal",
+        "gui",
+        "browser",
+        "command line",
+        "api",
+    },
+    "framework": {
+        "react",
+        "vue",
+        "angular",
+        "svelte",
+        "tkinter",
+        "pyqt",
+        "electron",
+        "tauri",
+    },
 }
 
 _CREATIVE_SIGNALS = {"story", "poem", "essay", "review", "explain", "why", "describe"}
-_REFACTOR_SIGNALS = {"improve", "refactor", "optimize", "modify", "review", "rewrite", "fix", "update", "improved"}
+_REFACTOR_SIGNALS = {
+    "improve",
+    "refactor",
+    "optimize",
+    "modify",
+    "review",
+    "rewrite",
+    "fix",
+    "update",
+    "improved",
+}
 
 
 def needs_clarification(message: str) -> tuple[bool, list[str]]:
@@ -45,9 +91,16 @@ def needs_clarification(message: str) -> tuple[bool, list[str]]:
 
     # Check for refactor signals + code symbols
     has_refactor = any(sig in lowered for sig in _REFACTOR_SIGNALS)
-    has_code_symbol = bool(re.search(r'\.(py|js|ts|tsx|jsx|html|css|json|md|rs|go|java|cpp)\b', lowered)) or \
-                      "_" in lowered or \
-                      "function" in lowered or "class" in lowered
+    has_code_symbol = (
+        bool(
+            re.search(
+                r"\.(py|js|ts|tsx|jsx|html|css|json|md|rs|go|java|cpp)\b", lowered
+            )
+        )
+        or "_" in lowered
+        or "function" in lowered
+        or "class" in lowered
+    )
     if has_refactor and has_code_symbol:
         return False, []
 

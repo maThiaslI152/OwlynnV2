@@ -31,7 +31,7 @@ REPORT_PATH = _REPORT_DIR / "benchmark_report.json"
 
 def _env_int(name: str, default: int) -> int:
     try:
-        return int(Path(f"/dev/null").read_text() or "0") or int(
+        return int(Path("/dev/null").read_text() or "0") or int(
             __import__("os").environ.get(name, str(default))
         )
     except Exception:
@@ -81,9 +81,7 @@ class MockDelayLLM:
         self.call_count += 1
         await asyncio.sleep(self._delay)
         self.total_latency += self._delay
-        return AIMessage(
-            content=self._content, tool_calls=self._tool_calls or []
-        )
+        return AIMessage(content=self._content, tool_calls=self._tool_calls or [])
 
 
 def make_mock_llm(
@@ -121,11 +119,13 @@ class ProfileBuilder:
     small_llm_base_url: str = "http://127.0.0.1:1234/v1"
     small_llm_model_name: str = "ibm-grok4-ultrafast-coder-1b"
     llm_base_url: str = "http://127.0.0.1:1234/v1"
-    medium_models: dict = field(default_factory=lambda: {
-        "default": "gemma-4-e4b-uncensored-hauhaucs-aggressive",
-        "vision": "zai-org/glm-4.6v-flash",
-        "longctx": "lfm2-8b-a1b-gguf-q8_0",
-    })
+    medium_models: dict = field(
+        default_factory=lambda: {
+            "default": "gemma-4-e4b-uncensored-hauhaucs-aggressive",
+            "vision": "zai-org/glm-4.6v-flash",
+            "longctx": "lfm2-8b-a1b-gguf-q8_0",
+        }
+    )
     custom_sensitive_terms: list = field(default_factory=list)
     deepseek_api_key: str = ""
     web_search_enabled: bool = True
@@ -213,7 +213,9 @@ class LatencyTracker:
             "p95_ms": round(self.p95 * 1000, 2),
             "p99_ms": round(self.p99 * 1000, 2),
             "throughput_ops_per_sec": (
-                round(self.count / (self.max - self.min), 2) if self.count > 1 and self.max > self.min else 0
+                round(self.count / (self.max - self.min), 2)
+                if self.count > 1 and self.max > self.min
+                else 0
             ),
         }
 
@@ -226,9 +228,7 @@ async def time_async_call(fn, *args, **kwargs) -> tuple[float, object]:
     return elapsed, result
 
 
-async def time_concurrent(
-    fn, args_list: list, concurrency: int = 4
-) -> LatencyTracker:
+async def time_concurrent(fn, args_list: list, concurrency: int = 4) -> LatencyTracker:
     """Run *fn* concurrently across *args_list*. Returns LatencyTracker."""
     sem = asyncio.Semaphore(concurrency)
     tracker = LatencyTracker()
@@ -361,8 +361,8 @@ COMPLEX_INPUTS = [
 ]
 
 LARGE_INPUTS = [
-    "x" * 1000,   # ~1KB input
-    "x" * 5000,   # ~5KB input
+    "x" * 1000,  # ~1KB input
+    "x" * 5000,  # ~5KB input
     "x" * 15000,  # ~15KB input
     "x" * 50000,  # ~50KB input
 ]
@@ -382,6 +382,7 @@ def pytest_sessionfinish(session, exitstatus):
     """Write benchmark_report.json after all tests complete."""
     try:
         from tests.benchmarks.report import write_report, print_summary
+
         path = write_report()
         print(f"\n[benchmark] Report written to {path}")
         print_summary()

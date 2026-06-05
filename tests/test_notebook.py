@@ -1,10 +1,17 @@
 """Tests for the notebook (stateful REPL) tool."""
+
 import sys
 from unittest.mock import MagicMock
+
 sys.modules["mem0"] = MagicMock()
 
 import pytest
-from src.tools.notebook import notebook_run, notebook_reset, notebook_vars, _reset_notebook
+from src.tools.notebook import (
+    notebook_run,
+    notebook_reset,
+    notebook_vars,
+    _reset_notebook,
+)
 
 
 @pytest.fixture(autouse=True)

@@ -35,6 +35,7 @@ lm_studio_fold_st = st.booleans()
 
 # ── Fixtures ─────────────────────────────────────────────────────────────
 
+
 @pytest.fixture(autouse=True)
 def isolated_profile(tmp_path):
     """
@@ -64,6 +65,7 @@ def client():
 # Property 1: Bug Condition - Settings Fields Dropped and GET Response
 #             Incomplete
 # ═════════════════════════════════════════════════════════════════════════
+
 
 class TestBugConditionSettingsDropped:
     """
@@ -187,8 +189,12 @@ class TestBugConditionSettingsDropped:
 # ── Strategies for preservation tests ────────────────────────────────────
 
 # Currently-working fields that the GET endpoint returns on unfixed code
-temperature_st = st.floats(min_value=0.0, max_value=2.0, allow_nan=False, allow_infinity=False)
-top_p_st = st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False)
+temperature_st = st.floats(
+    min_value=0.0, max_value=2.0, allow_nan=False, allow_infinity=False
+)
+top_p_st = st.floats(
+    min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False
+)
 max_tokens_st = st.integers(min_value=256, max_value=8192)
 top_k_st = st.integers(min_value=0, max_value=100)
 bool_toggle_st = st.booleans()

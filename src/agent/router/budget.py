@@ -15,31 +15,50 @@ from src.config.settings import (
 )
 
 # ── Context window constants per model tier ──────────────────────────────
-_MEDIUM_DEFAULT_CONTEXT = MEDIUM_DEFAULT_CONTEXT   # 100_000
-_MEDIUM_LONGCTX_CONTEXT = MEDIUM_LONGCTX_CONTEXT   # 131_072
-_CLOUD_CONTEXT = CLOUD_CONTEXT                     # 131_072
+_MEDIUM_DEFAULT_CONTEXT = MEDIUM_DEFAULT_CONTEXT  # 100_000
+_MEDIUM_LONGCTX_CONTEXT = MEDIUM_LONGCTX_CONTEXT  # 131_072
+_CLOUD_CONTEXT = CLOUD_CONTEXT  # 131_072
 _SMALL_MODEL_CONTEXT = 4096
 
 # Tier definitions: (max_input_chars, tier_budget)
 _BUDGET_TIERS = [
-    (40,   256),
-    (150,  512),
-    (400,  1536),
-    (800,  3072),
+    (40, 256),
+    (150, 512),
+    (400, 1536),
+    (800, 3072),
     (1600, 4096),
 ]
 
 # Keywords that signal the user wants a long/detailed answer
 _LONG_ANSWER_HINTS = {
-    "explain", "write", "create", "implement", "build", "generate",
-    "refactor", "analyze", "compare", "review", "summarize", "translate",
-    "step by step", "in detail", "full code", "complete",
+    "explain",
+    "write",
+    "create",
+    "implement",
+    "build",
+    "generate",
+    "refactor",
+    "analyze",
+    "compare",
+    "review",
+    "summarize",
+    "translate",
+    "step by step",
+    "in detail",
+    "full code",
+    "complete",
 }
 
 # Keywords that signal a short answer is fine
 _SHORT_ANSWER_HINTS = {
-    "yes or no", "true or false", "which one", "what is",
-    "how much", "how many", "when", "where",
+    "yes or no",
+    "true or false",
+    "which one",
+    "what is",
+    "how much",
+    "how many",
+    "when",
+    "where",
 }
 
 

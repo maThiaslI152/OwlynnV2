@@ -58,12 +58,10 @@ error_type_st = st.sampled_from(["rate_limit_429", "auth_401", "generic_error"])
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
+
 def _build_pii_message(filler: str) -> str:
     """Build a message containing known PII values with optional filler text."""
-    return (
-        f"Hello {KNOWN_NAME}, {filler} email me at {KNOWN_EMAIL} "
-        f"about {KNOWN_PATH}"
-    )
+    return f"Hello {KNOWN_NAME}, {filler} email me at {KNOWN_EMAIL} about {KNOWN_PATH}"
 
 
 def _make_state(text: str) -> dict:
@@ -162,7 +160,9 @@ def _extract_all_text_from_messages(messages: list) -> str:
     return "\n".join(parts)
 
 
-async def _passthrough_cloud_retry(bound_llm, prompt_messages, *, fallback_chain, model_label, route):
+async def _passthrough_cloud_retry(
+    bound_llm, prompt_messages, *, fallback_chain, model_label, route
+):
     """Bypass circuit breaker / cost tracker — just call ainvoke directly."""
     return await bound_llm.ainvoke(prompt_messages)
 
@@ -213,11 +213,19 @@ class TestBugConditionFallbackAnonymizationLeak:
         async def _get_medium_llm(variant="default"):
             return fallback_llm
 
-        with patch("src.agent.nodes.complex.get_cloud_llm", side_effect=_get_cloud_llm), \
-             patch("src.agent.nodes.complex.get_medium_llm", side_effect=_get_medium_llm), \
-             patch("src.agent.nodes.complex.get_profile", return_value=profile), \
-             patch("src.agent.nodes.complex._invoke_with_cloud_retry", side_effect=_passthrough_cloud_retry):
+        with (
+            patch("src.agent.nodes.complex.get_cloud_llm", side_effect=_get_cloud_llm),
+            patch(
+                "src.agent.nodes.complex.get_medium_llm", side_effect=_get_medium_llm
+            ),
+            patch("src.agent.nodes.complex.get_profile", return_value=profile),
+            patch(
+                "src.agent.nodes.complex._invoke_with_cloud_retry",
+                side_effect=_passthrough_cloud_retry,
+            ),
+        ):
             from src.agent.nodes.complex import complex_llm_node
+
             result = await complex_llm_node(state)
 
         # The fallback LLM must have been called
@@ -239,9 +247,7 @@ class TestBugConditionFallbackAnonymizationLeak:
     @given(filler=filler_text_st, error_type=error_type_st)
     @settings(max_examples=20, deadline=60000)
     @pytest.mark.asyncio
-    async def test_fallback_contains_original_pii(
-        self, filler: str, error_type: str
-    ):
+    async def test_fallback_contains_original_pii(self, filler: str, error_type: str):
         """
         Property: For all cloud fallback scenarios with anonymization enabled,
         the prompt_messages passed to the fallback LLM must contain the
@@ -262,11 +268,19 @@ class TestBugConditionFallbackAnonymizationLeak:
         async def _get_medium_llm(variant="default"):
             return fallback_llm
 
-        with patch("src.agent.nodes.complex.get_cloud_llm", side_effect=_get_cloud_llm), \
-             patch("src.agent.nodes.complex.get_medium_llm", side_effect=_get_medium_llm), \
-             patch("src.agent.nodes.complex.get_profile", return_value=profile), \
-             patch("src.agent.nodes.complex._invoke_with_cloud_retry", side_effect=_passthrough_cloud_retry):
+        with (
+            patch("src.agent.nodes.complex.get_cloud_llm", side_effect=_get_cloud_llm),
+            patch(
+                "src.agent.nodes.complex.get_medium_llm", side_effect=_get_medium_llm
+            ),
+            patch("src.agent.nodes.complex.get_profile", return_value=profile),
+            patch(
+                "src.agent.nodes.complex._invoke_with_cloud_retry",
+                side_effect=_passthrough_cloud_retry,
+            ),
+        ):
             from src.agent.nodes.complex import complex_llm_node
+
             result = await complex_llm_node(state)
 
         assert len(captured_prompts) > 0, (
@@ -287,7 +301,9 @@ class TestBugConditionFallbackAnonymizationLeak:
 # ── Additional helpers for preservation tests ────────────────────────────
 
 # Non-cloud route strategy
-non_cloud_route_st = st.sampled_from(["complex-default", "complex-vision", "complex-longctx"])
+non_cloud_route_st = st.sampled_from(
+    ["complex-default", "complex-vision", "complex-longctx"]
+)
 
 
 def _make_state_with_route(text: str, route: str) -> dict:
@@ -324,7 +340,9 @@ def _mock_profile_anon_disabled() -> dict:
     }
 
 
-def _make_capturing_cloud_llm(response_content: str = "Hello [NAME_1], your email is [EMAIL_1]"):
+def _make_capturing_cloud_llm(
+    response_content: str = "Hello [NAME_1], your email is [EMAIL_1]",
+):
     """
     Create a mock cloud LLM that succeeds and captures the prompt_messages
     passed to its ainvoke call. Returns an AIMessage with the given content.
@@ -362,11 +380,13 @@ def _make_capturing_cloud_llm_with_tool_calls(anon_mapping: dict):
     tool_call_args = {"filename": "[PATH_1]", "query": "info about [NAME_1]"}
     mock_response = AIMessage(
         content="",
-        tool_calls=[{
-            "name": "read_workspace_file",
-            "args": dict(tool_call_args),
-            "id": "call_123",
-        }],
+        tool_calls=[
+            {
+                "name": "read_workspace_file",
+                "args": dict(tool_call_args),
+                "id": "call_123",
+            }
+        ],
     )
 
     mock_bound = MagicMock()
@@ -425,7 +445,8 @@ class TestPreservationCloudAnonymization:
     @settings(max_examples=20, deadline=60000)
     @pytest.mark.asyncio
     async def test_successful_cloud_receives_anonymized_input_and_response_is_deanonymized(
-        self, filler: str,
+        self,
+        filler: str,
     ):
         """
         Property: For all successful cloud calls with anonymization enabled,
@@ -441,7 +462,7 @@ class TestPreservationCloudAnonymization:
 
         # Cloud LLM succeeds — response contains placeholders that should be deanonymized
         cloud_llm, captured_prompts = _make_capturing_cloud_llm(
-            response_content=f"Hello [NAME_1], your email is [EMAIL_1] and path is [PATH_1]"
+            response_content="Hello [NAME_1], your email is [EMAIL_1] and path is [PATH_1]"
         )
 
         async def _get_cloud_llm():
@@ -450,11 +471,19 @@ class TestPreservationCloudAnonymization:
         async def _get_medium_llm(variant="default"):
             raise AssertionError("Medium LLM should not be called for successful cloud")
 
-        with patch("src.agent.nodes.complex.get_cloud_llm", side_effect=_get_cloud_llm), \
-             patch("src.agent.nodes.complex.get_medium_llm", side_effect=_get_medium_llm), \
-             patch("src.agent.nodes.complex.get_profile", return_value=profile), \
-             patch("src.agent.nodes.complex._invoke_with_cloud_retry", side_effect=_passthrough_cloud_retry):
+        with (
+            patch("src.agent.nodes.complex.get_cloud_llm", side_effect=_get_cloud_llm),
+            patch(
+                "src.agent.nodes.complex.get_medium_llm", side_effect=_get_medium_llm
+            ),
+            patch("src.agent.nodes.complex.get_profile", return_value=profile),
+            patch(
+                "src.agent.nodes.complex._invoke_with_cloud_retry",
+                side_effect=_passthrough_cloud_retry,
+            ),
+        ):
             from src.agent.nodes.complex import complex_llm_node
+
             result = await complex_llm_node(state)
 
         # Cloud LLM must have been called
@@ -464,8 +493,8 @@ class TestPreservationCloudAnonymization:
         cloud_text = _extract_all_text_from_messages(captured_prompts[0])
         placeholders_found = PLACEHOLDER_RE.findall(cloud_text)
         assert len(placeholders_found) > 0, (
-            f"Cloud LLM did NOT receive anonymized input — no placeholders found. "
-            f"Expected [NAME_1], [EMAIL_1], [PATH_1] etc."
+            "Cloud LLM did NOT receive anonymized input — no placeholders found. "
+            "Expected [NAME_1], [EMAIL_1], [PATH_1] etc."
         )
 
         # The original PII should NOT be in the cloud input
@@ -490,7 +519,9 @@ class TestPreservationCloudAnonymization:
     @settings(max_examples=20, deadline=60000)
     @pytest.mark.asyncio
     async def test_non_cloud_routes_skip_anonymization(
-        self, filler: str, route: str,
+        self,
+        filler: str,
+        route: str,
     ):
         """
         Property: For all non-cloud routes (complex-default, complex-vision,
@@ -508,10 +539,20 @@ class TestPreservationCloudAnonymization:
         async def _get_medium_llm(variant="default"):
             return local_llm
 
-        with patch("src.agent.nodes.complex.get_medium_llm", side_effect=_get_medium_llm), \
-             patch("src.agent.nodes.complex.get_profile", return_value=profile), \
-             patch("src.agent.anonymization.anonymize", wraps=__import__("src.agent.anonymization", fromlist=["anonymize"]).anonymize) as mock_anon:
+        with (
+            patch(
+                "src.agent.nodes.complex.get_medium_llm", side_effect=_get_medium_llm
+            ),
+            patch("src.agent.nodes.complex.get_profile", return_value=profile),
+            patch(
+                "src.agent.anonymization.anonymize",
+                wraps=__import__(
+                    "src.agent.anonymization", fromlist=["anonymize"]
+                ).anonymize,
+            ) as mock_anon,
+        ):
             from src.agent.nodes.complex import complex_llm_node
+
             result = await complex_llm_node(state)
 
         # anonymize should never have been called
@@ -542,7 +583,8 @@ class TestPreservationCloudAnonymization:
     @settings(max_examples=20, deadline=60000)
     @pytest.mark.asyncio
     async def test_cloud_route_anon_disabled_skips_anonymization(
-        self, filler: str,
+        self,
+        filler: str,
     ):
         """
         Property: For cloud route with cloud_anonymization_enabled=False,
@@ -564,12 +606,25 @@ class TestPreservationCloudAnonymization:
         async def _get_medium_llm(variant="default"):
             raise AssertionError("Medium LLM should not be called for successful cloud")
 
-        with patch("src.agent.nodes.complex.get_cloud_llm", side_effect=_get_cloud_llm), \
-             patch("src.agent.nodes.complex.get_medium_llm", side_effect=_get_medium_llm), \
-             patch("src.agent.nodes.complex.get_profile", return_value=profile), \
-             patch("src.agent.nodes.complex._invoke_with_cloud_retry", side_effect=_passthrough_cloud_retry), \
-             patch("src.agent.anonymization.anonymize", wraps=__import__("src.agent.anonymization", fromlist=["anonymize"]).anonymize) as mock_anon:
+        with (
+            patch("src.agent.nodes.complex.get_cloud_llm", side_effect=_get_cloud_llm),
+            patch(
+                "src.agent.nodes.complex.get_medium_llm", side_effect=_get_medium_llm
+            ),
+            patch("src.agent.nodes.complex.get_profile", return_value=profile),
+            patch(
+                "src.agent.nodes.complex._invoke_with_cloud_retry",
+                side_effect=_passthrough_cloud_retry,
+            ),
+            patch(
+                "src.agent.anonymization.anonymize",
+                wraps=__import__(
+                    "src.agent.anonymization", fromlist=["anonymize"]
+                ).anonymize,
+            ) as mock_anon,
+        ):
             from src.agent.nodes.complex import complex_llm_node
+
             result = await complex_llm_node(state)
 
         # anonymize should never have been called
@@ -590,7 +645,8 @@ class TestPreservationCloudAnonymization:
     @settings(max_examples=20, deadline=60000)
     @pytest.mark.asyncio
     async def test_successful_cloud_tool_calls_are_deanonymized(
-        self, filler: str,
+        self,
+        filler: str,
     ):
         """
         Property: For successful cloud responses with tool calls containing
@@ -606,6 +662,7 @@ class TestPreservationCloudAnonymization:
         # construct a realistic cloud response with anonymized tool call args.
         # Run anonymize on the PII text to get the mapping.
         from src.agent.anonymization import anonymize as real_anonymize
+
         anon_ctx = {
             "name": profile.get("name", ""),
             "custom_sensitive_terms": profile.get("custom_sensitive_terms", []),
@@ -614,7 +671,9 @@ class TestPreservationCloudAnonymization:
 
         # The cloud LLM returns tool calls with anonymized args
         # Use placeholders that the anonymization would produce
-        cloud_llm, captured_prompts = _make_capturing_cloud_llm_with_tool_calls(expected_mapping)
+        cloud_llm, captured_prompts = _make_capturing_cloud_llm_with_tool_calls(
+            expected_mapping
+        )
 
         async def _get_cloud_llm():
             return cloud_llm
@@ -622,17 +681,26 @@ class TestPreservationCloudAnonymization:
         async def _get_medium_llm(variant="default"):
             raise AssertionError("Medium LLM should not be called for successful cloud")
 
-        with patch("src.agent.nodes.complex.get_cloud_llm", side_effect=_get_cloud_llm), \
-             patch("src.agent.nodes.complex.get_medium_llm", side_effect=_get_medium_llm), \
-             patch("src.agent.nodes.complex.get_profile", return_value=profile), \
-             patch("src.agent.nodes.complex._invoke_with_cloud_retry", side_effect=_passthrough_cloud_retry):
+        with (
+            patch("src.agent.nodes.complex.get_cloud_llm", side_effect=_get_cloud_llm),
+            patch(
+                "src.agent.nodes.complex.get_medium_llm", side_effect=_get_medium_llm
+            ),
+            patch("src.agent.nodes.complex.get_profile", return_value=profile),
+            patch(
+                "src.agent.nodes.complex._invoke_with_cloud_retry",
+                side_effect=_passthrough_cloud_retry,
+            ),
+        ):
             from src.agent.nodes.complex import complex_llm_node
+
             result = await complex_llm_node(state)
 
         # The response should have tool calls
         response_msgs = result["messages"]
         tool_call_msgs = [
-            m for m in response_msgs
+            m
+            for m in response_msgs
             if isinstance(m, AIMessage) and getattr(m, "tool_calls", None)
         ]
         assert len(tool_call_msgs) > 0, "No tool call messages in response"
@@ -668,11 +736,19 @@ def test_auth_fallback_preserves_original_input_and_emits_auth_note():
         return fallback_llm
 
     async def _run():
-        with patch("src.agent.nodes.complex.get_cloud_llm", side_effect=_get_cloud_llm), \
-             patch("src.agent.nodes.complex.get_medium_llm", side_effect=_get_medium_llm), \
-             patch("src.agent.nodes.complex.get_profile", return_value=profile), \
-             patch("src.agent.nodes.complex._invoke_with_cloud_retry", side_effect=_passthrough_cloud_retry):
+        with (
+            patch("src.agent.nodes.complex.get_cloud_llm", side_effect=_get_cloud_llm),
+            patch(
+                "src.agent.nodes.complex.get_medium_llm", side_effect=_get_medium_llm
+            ),
+            patch("src.agent.nodes.complex.get_profile", return_value=profile),
+            patch(
+                "src.agent.nodes.complex._invoke_with_cloud_retry",
+                side_effect=_passthrough_cloud_retry,
+            ),
+        ):
             from src.agent.nodes.complex import complex_llm_node
+
             return await complex_llm_node(state)
 
     result = asyncio.run(_run())
@@ -708,11 +784,19 @@ def test_non_auth_cloud_fallback_preserves_original_input(error_type: str):
         return fallback_llm
 
     async def _run():
-        with patch("src.agent.nodes.complex.get_cloud_llm", side_effect=_get_cloud_llm), \
-             patch("src.agent.nodes.complex.get_medium_llm", side_effect=_get_medium_llm), \
-             patch("src.agent.nodes.complex.get_profile", return_value=profile), \
-             patch("src.agent.nodes.complex._invoke_with_cloud_retry", side_effect=_passthrough_cloud_retry):
+        with (
+            patch("src.agent.nodes.complex.get_cloud_llm", side_effect=_get_cloud_llm),
+            patch(
+                "src.agent.nodes.complex.get_medium_llm", side_effect=_get_medium_llm
+            ),
+            patch("src.agent.nodes.complex.get_profile", return_value=profile),
+            patch(
+                "src.agent.nodes.complex._invoke_with_cloud_retry",
+                side_effect=_passthrough_cloud_retry,
+            ),
+        ):
             from src.agent.nodes.complex import complex_llm_node
+
             return await complex_llm_node(state)
 
     result = asyncio.run(_run())

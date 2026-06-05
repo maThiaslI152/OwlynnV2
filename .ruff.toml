@@ -1,0 +1,8 @@
+[lint]
+# Ignore E402 globally for tests since tests mock sys.modules before imports.
+# We also ignore some common test-only errors like F841 (unused var) and E722 (bare except).
+extend-ignore = ["E402", "F841", "E722", "F401"]
+
+[lint.per-file-ignores]
+# Ignore F401 (unused import) in __init__.py files
+"__init__.py" = ["F401"]

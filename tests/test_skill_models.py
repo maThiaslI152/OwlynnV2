@@ -1,6 +1,8 @@
 """Tests for SkillParam and SkillDefinition dataclasses."""
+
 import sys
 from unittest.mock import MagicMock
+
 sys.modules["mem0"] = MagicMock()
 
 import pytest
@@ -22,14 +24,18 @@ def _make_skill(**overrides) -> SkillDefinition:
 
 class TestSkillParam:
     def test_basic_creation(self):
-        p = SkillParam(name="depth", description="How deep", required=True, default=None)
+        p = SkillParam(
+            name="depth", description="How deep", required=True, default=None
+        )
         assert p.name == "depth"
         assert p.description == "How deep"
         assert p.required is True
         assert p.default is None
 
     def test_optional_param_with_default(self):
-        p = SkillParam(name="format", description="Output format", required=False, default="json")
+        p = SkillParam(
+            name="format", description="Output format", required=False, default="json"
+        )
         assert p.required is False
         assert p.default == "json"
 
@@ -73,7 +79,9 @@ class TestSkillDefinition:
             _make_skill(name="   ")
 
     def test_empty_triggers_raises(self):
-        with pytest.raises(ValueError, match="triggers must contain at least one entry"):
+        with pytest.raises(
+            ValueError, match="triggers must contain at least one entry"
+        ):
             _make_skill(triggers=[])
 
     def test_empty_prompt_raises(self):

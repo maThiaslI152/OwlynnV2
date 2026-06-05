@@ -18,24 +18,19 @@ _DEFAULTS = {
     "response_style": "detailed",
     "system_prompt": "",
     "custom_instructions": "",
-
     # ── Memory ──────────────────────────────────────────────────────────
     "short_term_enabled": True,
     "long_term_enabled": True,
-
     # ── Display ─────────────────────────────────────────────────────────
     "streaming_enabled": True,
     "show_thinking": False,
     "show_tool_execution": True,
-
     # ── Execution ───────────────────────────────────────────────────────
     "execution_policy": "auto_approve",
-
     # ── Audit logging ───────────────────────────────────────────────────
     "audit_log_enabled": True,
     "audit_log_levels": {},
     "audit_log_dir": "",
-
     # ── Config overrides are NOT in _DEFAULTS — see note below ───────────
     # The following fields exist ONLY when the user explicitly sets them
     # in data/user_profile.json. If absent, code reads defaults from
@@ -121,15 +116,17 @@ def get_profile() -> dict:
 def update_profile(field: str, value) -> dict:
     """Update a single field in the user profile and return the updated profile."""
     if field not in VALID_FIELDS:
-        raise ValueError(f"Unknown profile field '{field}'. Valid fields: {list(VALID_FIELDS.keys())}")
-    
+        raise ValueError(
+            f"Unknown profile field '{field}'. Valid fields: {list(VALID_FIELDS.keys())}"
+        )
+
     profile = get_profile()
-    
+
     # Coerce value type
     expected_type = VALID_FIELDS[field]
-    if expected_type == list and isinstance(value, str):
+    if expected_type is list and isinstance(value, str):
         value = [v.strip() for v in value.split(",")]
-    
+
     profile[field] = value
     _save_profile(profile)
     return profile
@@ -144,9 +141,12 @@ def _save_profile(profile: dict):
 def profile_to_context(profile: dict) -> str:
     """Format the profile as a system prompt context block."""
     lang_map = {"en": "English", "th": "Thai", "ja": "Japanese", "zh": "Chinese"}
-    lang = lang_map.get(profile.get("preferred_language", "en"), profile.get("preferred_language", "English"))
+    lang = lang_map.get(
+        profile.get("preferred_language", "en"),
+        profile.get("preferred_language", "English"),
+    )
     domains = ", ".join(profile.get("domains_of_interest", [])) or "general topics"
-    
+
     return (
         f"USER PROFILE:\n"
         f"- Name: {profile.get('name', 'User')}\n"

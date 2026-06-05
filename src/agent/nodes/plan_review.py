@@ -14,7 +14,7 @@ from langgraph.types import interrupt
 from langchain_core.messages import AIMessage
 
 from src.agent.state import AgentState
-from src.agent.hitl.policy import is_sensitive_call, CATEGORY_REMEDIATION
+from src.agent.hitl.policy import is_sensitive_call
 from src.memory.user_profile import get_profile
 
 logger = logging.getLogger(__name__)
@@ -82,9 +82,13 @@ async def plan_review_node(state: AgentState) -> AgentState:
     # ── Build plan summary ──────────────────────────────────────
     plan_summary_lines = []
     for c in sensitive_calls:
-        plan_summary_lines.append(f"Tool: {c.get('name', 'unknown')}, Args: {c.get('args', {})}")
+        plan_summary_lines.append(
+            f"Tool: {c.get('name', 'unknown')}, Args: {c.get('args', {})}"
+        )
     for c in safe_calls:
-        plan_summary_lines.append(f"Tool (safe): {c.get('name', 'unknown')}, Args: {c.get('args', {})}")
+        plan_summary_lines.append(
+            f"Tool (safe): {c.get('name', 'unknown')}, Args: {c.get('args', {})}"
+        )
     plan_summary = "\n".join(plan_summary_lines)
 
     # ── Generate intent + pitfalls with Small LLM ─────────────────
@@ -93,24 +97,31 @@ async def plan_review_node(state: AgentState) -> AgentState:
 
     try:
         from src.agent.llm import get_small_llm
+
         small_llm = await get_small_llm()
         review_prompt = _PLAN_REVIEW_PROMPT.format(plan_summary=plan_summary)
         response = await small_llm.ainvoke(review_prompt)
-        result = _parse_json(response.content if hasattr(response, "content") else str(response))
+        result = _parse_json(
+            response.content if hasattr(response, "content") else str(response)
+        )
         stated_intent = result.get("stated_intent", "")
         pitfalls = result.get("pitfalls", [])
     except Exception as e:
         logger.warning("[plan_review] Small LLM failed: %s", e)
-        pitfalls = ["Unable to automatically analyze plan risks — please review manually."]
+        pitfalls = [
+            "Unable to automatically analyze plan risks — please review manually."
+        ]
 
     # ── Build interrupt payload ──────────────────────────────────
     from src.agent.hitl.context import build_hitl_context
+
     ctx = build_hitl_context(state)
 
     interrupt_payload: dict[str, Any] = {
         "type": "plan_review_required",
         "title": f"Plan review — {len(sensitive_calls)} sensitive action(s) planned",
-        "stated_intent": stated_intent or "Owlynn plans to execute sensitive workspace operations.",
+        "stated_intent": stated_intent
+        or "Owlynn plans to execute sensitive workspace operations.",
         "conversation_snippet": ctx.get("conversation_snippet", ""),
         "planned_actions": [
             {"tool": c.get("name", "unknown"), "summary": str(c.get("args", {}))[:200]}
@@ -127,11 +138,17 @@ async def plan_review_node(state: AgentState) -> AgentState:
     if approved:
         logger.info("[plan_review] Plan approved by human reviewer")
         approved_tools = [str(c.get("name", "unknown")) for c in tool_calls]
-        log_hitl_event("plan_reviewed", decision="approved",
-                        tools=approved_tools, pitfalls=pitfalls[:3])
+        log_hitl_event(
+            "plan_reviewed",
+            decision="approved",
+            tools=approved_tools,
+            pitfalls=pitfalls[:3],
+        )
         return {
             "plan_review_approved": True,
-            "plan_review_feedback": decision.get("feedback", "") if isinstance(decision, dict) else "",
+            "plan_review_feedback": decision.get("feedback", "")
+            if isinstance(decision, dict)
+            else "",
             "execution_approved": True,
             "pending_tool_calls": True,
             "pending_tool_names": [str(c.get("name", "unknown")) for c in tool_calls],
@@ -141,9 +158,12 @@ async def plan_review_node(state: AgentState) -> AgentState:
     # Denied — block and write denied message
     denied_tool_names = [str(c.get("name", "unknown")) for c in sensitive_calls]
     prior_denied = state.get("denied_tools") or []
-    log_hitl_event("plan_reviewed", decision="denied",
-                    tools=denied_tool_names,
-                    feedback=decision.get("feedback", "") if isinstance(decision, dict) else "")
+    log_hitl_event(
+        "plan_reviewed",
+        decision="denied",
+        tools=denied_tool_names,
+        feedback=decision.get("feedback", "") if isinstance(decision, dict) else "",
+    )
     denied_message = AIMessage(
         content=(
             f"[PLAN REVIEW BLOCK] Human reviewer denied {', '.join(denied_tool_names)}. "
@@ -159,7 +179,9 @@ async def plan_review_node(state: AgentState) -> AgentState:
         "pending_tool_calls": False,
         "denied_tools": prior_denied + denied_tool_names,
         "plan_review_approved": False,
-        "plan_review_feedback": decision.get("feedback", "") if isinstance(decision, dict) else "",
+        "plan_review_feedback": decision.get("feedback", "")
+        if isinstance(decision, dict)
+        else "",
     }
 
 
@@ -167,13 +189,27 @@ def _normalize_approval(decision: Any) -> bool:
     if isinstance(decision, bool):
         return decision
     if isinstance(decision, str):
-        return decision.strip().lower() in {"approve", "approved", "allow", "yes", "y", "true"}
+        return decision.strip().lower() in {
+            "approve",
+            "approved",
+            "allow",
+            "yes",
+            "y",
+            "true",
+        }
     if isinstance(decision, dict):
         approved = decision.get("approved")
         if isinstance(approved, bool):
             return approved
         if isinstance(approved, str):
-            return approved.strip().lower() in {"approve", "approved", "allow", "yes", "y", "true"}
+            return approved.strip().lower() in {
+                "approve",
+                "approved",
+                "allow",
+                "yes",
+                "y",
+                "true",
+            }
     return False
 
 

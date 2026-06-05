@@ -7,9 +7,14 @@ logger = logging.getLogger("src.api")
 connected_websockets = set()
 _session_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
-_TOOL_DESTRUCTIVE_RE = re.compile(r"(?:\brm\s+-rf\b|\bdrop\b|\bdelete\b|\btruncate\b)", re.IGNORECASE)
-_TOOL_NETWORK_RE = re.compile(r"(?:\bcurl\b|\bwget\b|\bhttp[s]?://\b|\bscp\b|\bssh\b)", re.IGNORECASE)
+_TOOL_DESTRUCTIVE_RE = re.compile(
+    r"(?:\brm\s+-rf\b|\bdrop\b|\bdelete\b|\btruncate\b)", re.IGNORECASE
+)
+_TOOL_NETWORK_RE = re.compile(
+    r"(?:\bcurl\b|\bwget\b|\bhttp[s]?://\b|\bscp\b|\bssh\b)", re.IGNORECASE
+)
 _TOOL_PRIV_RE = re.compile(r"(?:\bsudo\b|\bchmod\b|\bchown\b)", re.IGNORECASE)
+
 
 def _stringify_lc_message_content(content) -> str:
     """Flatten LangChain message content (str or list of blocks) for JSON/UI."""
@@ -35,6 +40,7 @@ def _stringify_lc_message_content(content) -> str:
         return "".join(parts)
     return str(content)
 
+
 def serialize_message(msg):
     """
     Converts Langchain BaseMessage objects into raw UI-friendly dictionaries
@@ -55,14 +61,18 @@ def serialize_message(msg):
         serialized["tool_call_id"] = getattr(msg, "tool_call_id", "")
         # Truncate content for UI readability/performance if too large
         if isinstance(msg.content, str) and len(msg.content) > 500:
-            serialized["content"] = msg.content[:500] + "\n\n... [Content Truncated for UI] ..."
+            serialized["content"] = (
+                msg.content[:500] + "\n\n... [Content Truncated for UI] ..."
+            )
 
     return serialized
+
 
 def extract_pdf_text(raw_bytes: bytes) -> str:
     """Extract text from a PDF using PyMuPDF."""
     try:
         import fitz  # PyMuPDF
+
         doc = fitz.open(stream=raw_bytes, filetype="pdf")
         try:
             pages_text = []
@@ -75,6 +85,7 @@ def extract_pdf_text(raw_bytes: bytes) -> str:
         logger.error("PyMuPDF text extraction failed: %s", e)
         return ""
 
+
 async def build_message_content(text: str, files: list):
     """
     Builds the message content block for LangChain, supporting:
@@ -86,9 +97,9 @@ async def build_message_content(text: str, files: list):
     import base64
     import asyncio
     from src.config.config_loader import config
-    
+
     MAX_INLINE_PDF_CHARS = int(config.get("tool_output.max_inline_pdf_chars", 16000))
-    
+
     content_parts = []
     text_injections = []
     has_multimodal = False
@@ -97,20 +108,22 @@ async def build_message_content(text: str, files: list):
         mime = f.get("type", "")
         data_b64 = f.get("data", "")
         name = f.get("name", "file")
-        
+
         try:
             raw_bytes = base64.b64decode(data_b64)
         except Exception:
             continue
-        
+
         if mime.startswith("image/"):
             # Regular image — forward directly to vision model
             has_multimodal = True
-            content_parts.append({
-                "type": "image_url",
-                "image_url": {"url": f"data:{mime};base64,{data_b64}"}
-            })
-        
+            content_parts.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{mime};base64,{data_b64}"},
+                }
+            )
+
         elif mime == "application/pdf" or name.lower().endswith(".pdf"):
             logger.info("Uploaded '%s'. Extracting text for chat context.", name)
             pdf_text = await asyncio.to_thread(extract_pdf_text, raw_bytes)

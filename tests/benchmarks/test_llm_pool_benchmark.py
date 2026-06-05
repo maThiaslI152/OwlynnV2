@@ -40,6 +40,7 @@ def _clean():
 # Pool concurrent access
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 @pytest.mark.benchmark
 class TestPoolConcurrentAccess:
     """Measure LLMPool lock contention under concurrent get_*llm() calls."""
@@ -60,9 +61,7 @@ class TestPoolConcurrentAccess:
             return await LLMPool.get_small_llm()
 
         args_list = [() for _ in range(concurrency * 5)]
-        tracker = await time_concurrent(
-            _get, args_list, concurrency=concurrency
-        )
+        tracker = await time_concurrent(_get, args_list, concurrency=concurrency)
 
         entry = BenchmarkEntry(
             name=f"pool_get_small_c{concurrency}",
@@ -90,9 +89,7 @@ class TestPoolConcurrentAccess:
             return await LLMPool.get_medium_llm("default")
 
         args_list = [() for _ in range(concurrency * 5)]
-        tracker = await time_concurrent(
-            _get, args_list, concurrency=concurrency
-        )
+        tracker = await time_concurrent(_get, args_list, concurrency=concurrency)
 
         entry = BenchmarkEntry(
             name=f"pool_get_medium_c{concurrency}",
@@ -109,6 +106,7 @@ class TestPoolConcurrentAccess:
 # Pool cold vs warm
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 @pytest.mark.benchmark
 class TestPoolColdVsWarm:
     """Measure first-call (cold) vs cached-call (warm) latency for each slot."""
@@ -117,6 +115,7 @@ class TestPoolColdVsWarm:
     async def test_pool_small_cold_vs_warm(self):
         """First get_small_llm() vs subsequent calls."""
         from src.agent.llm import LLMPool
+
         LLMPool.clear()
 
         mock = make_mock_llm(delay_ms=0, content="pooled")
@@ -140,7 +139,10 @@ class TestPoolColdVsWarm:
             warmup_iters=0,
             measured_iters=tracker.count,
             samples_ms=[s * 1000 for s in tracker.samples],
-            metadata={"cold_ms": round(cold_elapsed, 2), "warm_p50_ms": round(tracker.p50 * 1000, 2)},
+            metadata={
+                "cold_ms": round(cold_elapsed, 2),
+                "warm_p50_ms": round(tracker.p50 * 1000, 2),
+            },
         )
         record_entry(entry)
 
@@ -148,6 +150,7 @@ class TestPoolColdVsWarm:
     async def test_pool_medium_warm_cache_hit(self):
         """Medium LLM with same variant returns cached instance instantly."""
         from src.agent.llm import LLMPool
+
         LLMPool.clear()
 
         mock = make_mock_llm(delay_ms=0, content="pooled")
@@ -174,13 +177,14 @@ class TestPoolColdVsWarm:
 
         # Warm cached calls should be near-instant
         assert tracker.p50 * 1000 < 5, (
-            f"Pool warm cache p50 {tracker.p50*1000:.1f}ms exceeds 5ms"
+            f"Pool warm cache p50 {tracker.p50 * 1000:.1f}ms exceeds 5ms"
         )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Swap manager simulation
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 @pytest.mark.benchmark
 class TestSwapManagerSimulation:
@@ -189,6 +193,7 @@ class TestSwapManagerSimulation:
     @pytest.mark.asyncio
     async def test_swap_manager_mock_roundtrip(self):
         """Simulate full swap cycle: unload + load + poll."""
+
         # Simulate the swap manager's _poll_until_loaded pattern
         async def _simulate_poll(model_key: str, timeout: int, poll_interval: float):
             deadline = asyncio.get_event_loop().time() + timeout
@@ -212,11 +217,15 @@ class TestSwapManagerSimulation:
             warmup_iters=0,
             measured_iters=BENCH_ITERATIONS,
             samples_ms=[s * 1000 for s in tracker.samples],
-            metadata={"simulated_unload_ms": 50, "simulated_load_ms": 50, "simulated_poll_ms": 500},
+            metadata={
+                "simulated_unload_ms": 50,
+                "simulated_load_ms": 50,
+                "simulated_poll_ms": 500,
+            },
         )
         record_entry(entry)
 
         # Simulated swap should complete in ~600ms
         assert tracker.p50 * 1000 < 800, (
-            f"Swap simulation p50 {tracker.p50*1000:.1f}ms exceeds 800ms"
+            f"Swap simulation p50 {tracker.p50 * 1000:.1f}ms exceeds 800ms"
         )

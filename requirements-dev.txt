@@ -6,3 +6,6 @@ anyio>=4.0
 hypothesis
 scikit-learn>=1.0
 pytest-cov>=4.0
+pytest-xdist>=3.5.0
+ruff>=0.9.0
+mypy>=1.0.0

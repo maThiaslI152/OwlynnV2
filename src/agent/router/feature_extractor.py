@@ -39,21 +39,49 @@ _WEBISH_HINTS = (
 )
 
 _FRONTIER_HINTS = {
-    "prove", "theorem", "formal proof", "mathematical proof",
-    "symbolic", "calculus", "differential equation",
-    "optimize algorithm", "complexity proof",
-    "best possible", "highest quality", "frontier",
+    "prove",
+    "theorem",
+    "formal proof",
+    "mathematical proof",
+    "symbolic",
+    "calculus",
+    "differential equation",
+    "optimize algorithm",
+    "complexity proof",
+    "best possible",
+    "highest quality",
+    "frontier",
 }
 
 _DOC_KEYWORDS = (
-    "summarize", "summary", "document", "paper", "article", "report",
-    "analyze this", "long text", "pdf", "book", "chapter", "transcript",
+    "summarize",
+    "summary",
+    "document",
+    "paper",
+    "article",
+    "report",
+    "analyze this",
+    "long text",
+    "pdf",
+    "book",
+    "chapter",
+    "transcript",
 )
 
 _VISION_KEYWORDS = (
-    "image", "picture", "photo", "screenshot", "diagram",
-    "chart", "graph", "visual", "look at", "what do you see",
-    "describe this", "ocr", "read the text in",
+    "image",
+    "picture",
+    "photo",
+    "screenshot",
+    "diagram",
+    "chart",
+    "graph",
+    "visual",
+    "look at",
+    "what do you see",
+    "describe this",
+    "ocr",
+    "read the text in",
 )
 
 _CODE_KEYWORDS = ("code", "function", "debug", "implement", "refactor")
@@ -64,6 +92,7 @@ _FILE_ATTACHMENT_HINTS = ("[file:", "uploaded to workspace", "workspace file")
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────
+
 
 def _has_image_content(state: dict[str, Any]) -> bool:
     """Check if the last message contains image attachments."""
@@ -106,6 +135,7 @@ def _needs_frontier_quality(text: str) -> bool:
 
 
 # ── Main extraction function ─────────────────────────────────────────────
+
 
 def extract_features(user_text: str, state: dict[str, Any]) -> TaskFeatures:
     """

@@ -6,6 +6,7 @@ Tests:
   Property 4 (partial) — Round-trip Consistency (Requirements 15.4)
   Property 6 — Cache Consistency (Requirements 2.4, 2.5)
 """
+
 import sys
 import tempfile
 from pathlib import Path
@@ -36,12 +37,12 @@ from src.tools.skills import (
 # break front-matter parsing (no colons, dashes-at-start, brackets, hashes,
 # newlines, or leading/trailing whitespace).
 _safe_char = st.sampled_from(
-    "abcdefghijklmnopqrstuvwxyz"
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    "0123456789 "
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 "
 )
-safe_text = st.text(_safe_char, min_size=1, max_size=60).map(str.strip).filter(
-    lambda s: len(s) > 0
+safe_text = (
+    st.text(_safe_char, min_size=1, max_size=60)
+    .map(str.strip)
+    .filter(lambda s: len(s) > 0)
 )
 
 # A trigger word: lowercase alpha only, no spaces (keeps YAML list simple).
@@ -61,6 +62,7 @@ category_st = st.sampled_from(sorted(ALLOWED_CATEGORIES))
 # ---------------------------------------------------------------------------
 # Helper: serialize a SkillDefinition back to front-matter + prompt text
 # ---------------------------------------------------------------------------
+
 
 def _serialize_skill(sd: SkillDefinition) -> str:
     """Serialize a SkillDefinition to a markdown string with YAML front-matter."""
@@ -96,6 +98,7 @@ def _serialize_skill(sd: SkillDefinition) -> str:
 # defaults for category ("general"), params ([]), tools_used ([]),
 # chain_compatible (True), version ("1.0").
 # ---------------------------------------------------------------------------
+
 
 @given(
     name=safe_text,
@@ -205,7 +208,9 @@ skill_definition_st = st.builds(
     chain_compatible=st.booleans(),
     version=st.sampled_from(["1.0", "2.0"]),
     tools_used=st.lists(
-        st.text(st.sampled_from("abcdefghijklmnopqrstuvwxyz_"), min_size=1, max_size=20),
+        st.text(
+            st.sampled_from("abcdefghijklmnopqrstuvwxyz_"), min_size=1, max_size=20
+        ),
         min_size=0,
         max_size=3,
     ),
@@ -341,7 +346,9 @@ _matching_trigger = st.text(
     min_size=3,
     max_size=15,
 )
-_matching_trigger_list = st.lists(_matching_trigger, min_size=1, max_size=5, unique=True)
+_matching_trigger_list = st.lists(
+    _matching_trigger, min_size=1, max_size=5, unique=True
+)
 
 # A SkillDefinition suitable for matching tests (realistic, valid).
 matching_skill_st = st.builds(
@@ -517,6 +524,7 @@ def test_property4_chain_length_bound(skill_names):
     pipeline = ChainPipeline(loader, injector)
 
     import pytest
+
     with pytest.raises(ValueError, match="Chain too long"):
         pipeline.build(skill_names, context="test context")
 
@@ -554,5 +562,6 @@ def test_property8_chain_validation_missing_skill(existing_names, missing_name):
     chain_steps = [existing_names[0], missing_name]
 
     import pytest
+
     with pytest.raises(ValueError, match="Skill not found"):
         pipeline.build(chain_steps, context="test context")

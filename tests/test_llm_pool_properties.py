@@ -69,6 +69,7 @@ empty_key_st = st.sampled_from(["", None])
 
 # ── Property 3: LLMPool Variant Tracking ─────────────────────────────────
 
+
 class TestVariantTracking:
     """
     Property 3: For any sequence of get_medium_llm(variant) calls,
@@ -84,8 +85,10 @@ class TestVariantTracking:
         with fresh_pool():
             LLMPool._swap_manager = AsyncMock()
 
-            with patch("src.agent.llm.get_profile", return_value=PROFILE), \
-                 patch("src.agent.llm.ChatOpenAI", return_value=MagicMock()):
+            with (
+                patch("src.agent.llm.get_profile", return_value=PROFILE),
+                patch("src.agent.llm.ChatOpenAI", return_value=MagicMock()),
+            ):
                 for v in variants:
                     await LLMPool.get_medium_llm(v)
 
@@ -116,8 +119,10 @@ class TestVariantTracking:
             mock_swap = AsyncMock()
             LLMPool._swap_manager = mock_swap
 
-            with patch("src.agent.llm.get_profile", return_value=PROFILE), \
-                 patch("src.agent.llm.ChatOpenAI", return_value=MagicMock()):
+            with (
+                patch("src.agent.llm.get_profile", return_value=PROFILE),
+                patch("src.agent.llm.ChatOpenAI", return_value=MagicMock()),
+            ):
                 for v in variants:
                     await LLMPool.get_medium_llm(v)
 
@@ -138,8 +143,10 @@ class TestVariantTracking:
         with fresh_pool():
             LLMPool._swap_manager = AsyncMock()
 
-            with patch("src.agent.llm.get_profile", return_value=PROFILE), \
-                 patch("src.agent.llm.ChatOpenAI", return_value=MagicMock()):
+            with (
+                patch("src.agent.llm.get_profile", return_value=PROFILE),
+                patch("src.agent.llm.ChatOpenAI", return_value=MagicMock()),
+            ):
                 for v in variants:
                     await LLMPool.get_medium_llm(v)
 
@@ -151,6 +158,7 @@ class TestVariantTracking:
 
 
 # ── Property 10: API Key Resolution Order ────────────────────────────────
+
 
 class TestAPIKeyResolution:
     """
@@ -167,9 +175,14 @@ class TestAPIKeyResolution:
         with fresh_pool():
             profile = {**PROFILE, "deepseek_api_key": profile_key}
 
-            with patch("src.config.secret_store.resolve_deepseek_api_key", return_value=env_key), \
-                 patch("src.agent.llm.get_profile", return_value=profile), \
-                 patch("src.agent.llm.ChatOpenAI") as MockChat:
+            with (
+                patch(
+                    "src.config.secret_store.resolve_deepseek_api_key",
+                    return_value=env_key,
+                ),
+                patch("src.agent.llm.get_profile", return_value=profile),
+                patch("src.agent.llm.ChatOpenAI") as MockChat,
+            ):
                 MockChat.return_value = MagicMock()
                 await LLMPool.get_cloud_llm()
 
@@ -183,9 +196,14 @@ class TestAPIKeyResolution:
         with fresh_pool():
             profile = {**PROFILE, "deepseek_api_key": profile_key}
 
-            with patch("src.config.secret_store.resolve_deepseek_api_key", return_value=profile_key), \
-                 patch("src.agent.llm.get_profile", return_value=profile), \
-                 patch("src.agent.llm.ChatOpenAI") as MockChat:
+            with (
+                patch(
+                    "src.config.secret_store.resolve_deepseek_api_key",
+                    return_value=profile_key,
+                ),
+                patch("src.agent.llm.get_profile", return_value=profile),
+                patch("src.agent.llm.ChatOpenAI") as MockChat,
+            ):
                 MockChat.return_value = MagicMock()
                 await LLMPool.get_cloud_llm()
 
@@ -200,7 +218,11 @@ class TestAPIKeyResolution:
             profile = {**PROFILE, "deepseek_api_key": ""}
             env_val = empty_env if empty_env is not None else ""
 
-            with patch("src.config.secret_store.resolve_deepseek_api_key", return_value=""), \
-                 patch("src.agent.llm.get_profile", return_value=profile):
+            with (
+                patch(
+                    "src.config.secret_store.resolve_deepseek_api_key", return_value=""
+                ),
+                patch("src.agent.llm.get_profile", return_value=profile),
+            ):
                 with pytest.raises(CloudUnavailableError):
                     await LLMPool.get_cloud_llm()

@@ -156,7 +156,7 @@ async def rank_chunks_to_source_pack(
         return None
 
     lines = [
-        f"Retrieved excerpts for: \"{fq}\"",
+        f'Retrieved excerpts for: "{fq}"',
         f"Source URL: {page_url}",
         "Cite as [1], [2], ... matching the excerpts below.",
         "",

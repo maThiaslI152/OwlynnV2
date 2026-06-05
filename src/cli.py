@@ -14,6 +14,7 @@ import httpx
 
 DEFAULT_URL = "http://127.0.0.1:8000"
 
+
 def get_base_url() -> str:
     return os.getenv("OWLYNN_URL", DEFAULT_URL).rstrip("/")
 
@@ -27,25 +28,27 @@ def cli():
 @cli.command()
 @click.argument("prompt")
 @click.option("--project", default="default", help="Project workspace ID")
-@click.option("--approve-sensitive", is_flag=True, help="Auto-approve sensitive tool calls")
+@click.option(
+    "--approve-sensitive", is_flag=True, help="Auto-approve sensitive tool calls"
+)
 def query(prompt: str, project: str, approve_sensitive: bool):
     """Send a single prompt to the agent and display the response."""
     url = f"{get_base_url()}/v1/chat/completions"
-    
+
     payload = {
         "model": "gemma-4",
         "messages": [{"role": "user", "content": prompt}],
         "stream": False,
         "project_id": project,
-        "auto_approve_sensitive": approve_sensitive
+        "auto_approve_sensitive": approve_sensitive,
     }
-    
+
     click.echo(f"Sending prompt to agent (project: {project})...")
-    
+
     try:
         with httpx.Client(timeout=60.0) as client:
             response = client.post(url, json=payload)
-            
+
             if response.status_code != 200:
                 click.echo(f"Error: Server returned status {response.status_code}")
                 try:
@@ -53,7 +56,7 @@ def query(prompt: str, project: str, approve_sensitive: bool):
                 except Exception:
                     click.echo(response.text[:200])
                 sys.exit(1)
-                
+
             data = response.json()
             choices = data.get("choices", [])
             if choices:
@@ -63,37 +66,41 @@ def query(prompt: str, project: str, approve_sensitive: bool):
             else:
                 click.echo("Error: No choices in response payload.")
                 click.echo(json.dumps(data, indent=2))
-                
-    except httpx.RequestError as e:
-        click.echo(f"Failed to connect to agent server at {url}. Make sure start.sh is running.")
+
+    except httpx.RequestError:
+        click.echo(
+            f"Failed to connect to agent server at {url}. Make sure start.sh is running."
+        )
         sys.exit(1)
 
 
 @cli.command()
 @click.argument("prompt")
 @click.option("--project", default="default", help="Project workspace ID")
-@click.option("--approve-sensitive", is_flag=True, help="Auto-approve sensitive tool calls")
+@click.option(
+    "--approve-sensitive", is_flag=True, help="Auto-approve sensitive tool calls"
+)
 def stream(prompt: str, project: str, approve_sensitive: bool):
     """Send a prompt and stream token chunks in real-time."""
     url = f"{get_base_url()}/v1/chat/completions"
-    
+
     payload = {
         "model": "gemma-4",
         "messages": [{"role": "user", "content": prompt}],
         "stream": True,
         "project_id": project,
-        "auto_approve_sensitive": approve_sensitive
+        "auto_approve_sensitive": approve_sensitive,
     }
-    
+
     click.echo(f"Streaming prompt response (project: {project})...")
     click.echo("--- Agent Response ---", nl=True)
-    
+
     try:
         with httpx.stream("POST", url, json=payload, timeout=60.0) as r:
             if r.status_code != 200:
                 click.echo(f"Error: Server returned status {r.status_code}")
                 sys.exit(1)
-                
+
             for line in r.iter_lines():
                 if not line.strip():
                     continue
@@ -112,10 +119,12 @@ def stream(prompt: str, project: str, approve_sensitive: bool):
                                 sys.stdout.flush()
                     except json.JSONDecodeError:
                         continue
-            click.echo() # final newline
-            
-    except httpx.RequestError as e:
-        click.echo(f"Failed to connect to agent server at {url}. Make sure start.sh is running.")
+            click.echo()  # final newline
+
+    except httpx.RequestError:
+        click.echo(
+            f"Failed to connect to agent server at {url}. Make sure start.sh is running."
+        )
         sys.exit(1)
 
 

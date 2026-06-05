@@ -35,6 +35,7 @@ def _models_response(loaded_key: str | None = None) -> dict:
 
 # ── tests ────────────────────────────────────────────────────────────────
 
+
 def test_get_current_variant_initially_none():
     sm = SwapManager()
     assert sm.get_current_variant() is None
@@ -116,8 +117,10 @@ async def test_swap_model_success():
     client.post = AsyncMock(return_value=post_resp_ok)
     sm._client = client
 
-    with patch("src.agent.swap_manager.get_profile", return_value=PROFILE), \
-         patch("src.agent.swap_manager.asyncio.sleep", new_callable=AsyncMock):
+    with (
+        patch("src.agent.swap_manager.get_profile", return_value=PROFILE),
+        patch("src.agent.swap_manager.asyncio.sleep", new_callable=AsyncMock),
+    ):
         await sm.swap_model(target)
 
     assert sm.get_current_variant() == "vision"
@@ -146,8 +149,10 @@ async def test_swap_model_timeout_raises():
     swap_cfg = {"swap_timeout": 0, "poll_interval": 0}
     patched_opt = {"medium_models": swap_cfg}
 
-    with patch("src.agent.swap_manager.get_profile", return_value=PROFILE), \
-         patch("src.agent.swap_manager.M4_MAC_OPTIMIZATION", patched_opt):
+    with (
+        patch("src.agent.swap_manager.get_profile", return_value=PROFILE),
+        patch("src.agent.swap_manager.M4_MAC_OPTIMIZATION", patched_opt),
+    ):
         with pytest.raises(ModelSwapError, match="did not appear"):
             await sm.swap_model("default")
 
@@ -191,8 +196,10 @@ async def test_swap_model_unload_failure_continues():
     client.post = mock_post
     sm._client = client
 
-    with patch("src.agent.swap_manager.get_profile", return_value=PROFILE), \
-         patch("src.agent.swap_manager.asyncio.sleep", new_callable=AsyncMock):
+    with (
+        patch("src.agent.swap_manager.get_profile", return_value=PROFILE),
+        patch("src.agent.swap_manager.asyncio.sleep", new_callable=AsyncMock),
+    ):
         await sm.swap_model("default")
 
     assert sm.get_current_variant() == "default"

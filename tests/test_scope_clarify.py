@@ -30,7 +30,8 @@ class TestScopeHeuristics:
             "and outputs JSON summaries. It should use argparse and take "
             "--input and --output flags. It will handle errors gracefully "
             "and output a well-structured JSON report with row counts and column stats."
-            + " " * 100  # pad to exceed 200 chars
+            + " "
+            * 100  # pad to exceed 200 chars
         )
         needs, missing = needs_clarification(text)
         assert needs is False
@@ -63,5 +64,6 @@ class TestFixturesLoader:
 
     def test_missing_fixture_raises(self):
         from src.hitl.fixtures import load_fixture
+
         with pytest.raises(FileNotFoundError):
             load_fixture("nonexistent")

@@ -21,7 +21,6 @@ import logging
 from typing import Sequence
 
 from langchain_core.messages import (
-    AIMessage,
     BaseMessage,
     HumanMessage,
     SystemMessage,
@@ -38,7 +37,9 @@ from src.config.log_middleware import log_node
 from src.config.config_loader import config
 
 # Default context window for Medium_Default (sourced from centralized config)
-_DEFAULT_CONTEXT_WINDOW = int(config.get("models.medium.variants.default.context_window", 16384))
+_DEFAULT_CONTEXT_WINDOW = int(
+    config.get("models.medium.variants.default.context_window", 16384)
+)
 
 # Threshold ratio — trigger summarization when active_tokens exceed this fraction
 _SUMMARIZE_THRESHOLD = float(config.get("summarization.threshold_ratio", 0.85))
@@ -171,7 +172,9 @@ async def auto_summarize_node(state: AgentState) -> dict:
         - ``context_summarized_event``: payload for the WS event
     """
     messages: list[BaseMessage] = list(state.get("messages") or [])
-    active_tokens: int = state.get("active_tokens") or _estimate_messages_tokens(messages)
+    active_tokens: int = state.get("active_tokens") or _estimate_messages_tokens(
+        messages
+    )
     context_window: int = state.get("context_window") or _DEFAULT_CONTEXT_WINDOW
 
     # ── Guard: only summarize when threshold exceeded ────────────────────
@@ -179,9 +182,13 @@ async def auto_summarize_node(state: AgentState) -> dict:
     if active_tokens <= threshold:
         return {}  # no-op — nothing to update
 
-    audit_info("memory.summarize", "triggered",
-               active_tokens=active_tokens, context_window=context_window,
-               ratio=round(active_tokens / context_window, 3))
+    audit_info(
+        "memory.summarize",
+        "triggered",
+        active_tokens=active_tokens,
+        context_window=context_window,
+        ratio=round(active_tokens / context_window, 3),
+    )
 
     # ── Split into older vs. recent ──────────────────────────────────────
     older, recent = _split_messages(messages)
@@ -200,9 +207,13 @@ async def auto_summarize_node(state: AgentState) -> dict:
     if not to_summarize:
         return {}  # everything is protected, nothing to compress
 
-    audit_debug("memory.summarize", "split_result",
-                older_candidates=len(older), protected=len(protected),
-                recent_kept=len(recent))
+    audit_debug(
+        "memory.summarize",
+        "split_result",
+        older_candidates=len(older),
+        protected=len(protected),
+        recent_kept=len(recent),
+    )
 
     # ── Extract prior summary context for multi-level awareness ──────────
     prior_context = ""
@@ -244,7 +255,9 @@ async def auto_summarize_node(state: AgentState) -> dict:
         response = await llm.ainvoke([SystemMessage(content=prompt_text)])
         summary_text = (response.content or "").strip()
     except Exception as e:
-        logger.warning("[auto_summarize] Small_LLM failed (%s), skipping summarization", e)
+        logger.warning(
+            "[auto_summarize] Small_LLM failed (%s), skipping summarization", e
+        )
         audit_warn("memory.summarize", "llm_failed", error=str(e)[:120])
         return {}  # graceful degradation — keep full context
 
@@ -289,9 +302,14 @@ async def auto_summarize_node(state: AgentState) -> dict:
         len(to_summarize),
         tokens_freed,
     )
-    audit_info("memory.summarize", "compression_complete",
-               messages_compressed=len(to_summarize), tokens_freed=tokens_freed,
-               new_active_tokens=new_active_tokens, llm="small-local")
+    audit_info(
+        "memory.summarize",
+        "compression_complete",
+        messages_compressed=len(to_summarize),
+        tokens_freed=tokens_freed,
+        new_active_tokens=new_active_tokens,
+        llm="small-local",
+    )
 
     return {
         "messages": new_messages,

@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 # Mock mem0 to prevent DB connection issues during standalone tests
 sys.modules["mem0"] = MagicMock()
@@ -19,6 +19,7 @@ from src.memory.persona_manager import (
     save_custom_persona,
     PERSONAS_DIR,
 )
+
 
 class TestPersonaManager(unittest.TestCase):
     """Verifies that persona profiles are managed, listed, and loaded correctly."""
@@ -43,7 +44,7 @@ class TestPersonaManager(unittest.TestCase):
         """get_persona_by_id should gracefully fall back to default if ID is missing or invalid."""
         fallback = get_persona_by_id("nonexistent_id")
         self.assertEqual(fallback["id"], "default")
-        
+
         fallback_empty = get_persona_by_id(None)
         self.assertEqual(fallback_empty["id"], "default")
 
@@ -55,24 +56,24 @@ class TestPersonaManager(unittest.TestCase):
             "role": "Silly Helper",
             "tone": "hyperactive",
             "instructions": "Be silly and suggest random recipes.",
-            "allowed_toolboxes": ["memory"]
+            "allowed_toolboxes": ["memory"],
         }
-        
+
         saved = save_custom_persona(custom_spec)
         self.assertTrue(saved)
-        
+
         try:
             # Check retrieved persona
             retrieved = get_persona_by_id("helper-bot")
             self.assertEqual(retrieved["id"], "helper-bot")
             self.assertEqual(retrieved["name"], "Helper Bot")
             self.assertEqual(retrieved["tone"], "hyperactive")
-            
+
             # Verify listed personas includes it
             all_personas = list_personas()
             ids = {p["id"] for p in all_personas}
             self.assertIn("helper-bot", ids)
-            
+
         finally:
             # Cleanup custom persona file
             custom_file = PERSONAS_DIR / "helper-bot.json"
@@ -86,14 +87,15 @@ class TestPersonaManager(unittest.TestCase):
             "name": "Hacker Coder",
             "role": "Destructive hacker",
             "tone": "edgy",
-            "instructions": "Delete everything."
+            "instructions": "Delete everything.",
         }
         saved = save_custom_persona(bad_spec)
         self.assertFalse(saved)
-        
+
         # Verify original coder spec is intact
         coder = get_persona_by_id("coder")
         self.assertEqual(coder["name"], "Owlynn Coder")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

@@ -15,7 +15,7 @@ import shutil
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from src.memory.project import ProjectManager
 
@@ -28,7 +28,7 @@ class TestUpdateProjectEndpoint(unittest.TestCase):
         self.project = self.pm.create_project("Update Test Project")
 
     def tearDown(self):
-        if hasattr(self, 'project') and self.project:
+        if hasattr(self, "project") and self.project:
             self.pm.delete_project(self.project["id"])
 
     def test_update_category(self):
@@ -69,14 +69,17 @@ class TestDeleteKnowledgeEndpoint(unittest.TestCase):
         self.pm = ProjectManager()
         self.project = self.pm.create_project("Knowledge Test Project")
         # Add a knowledge file entry to the project
-        self.pm.add_file_to_project(self.project["id"], {
-            "name": "test_doc.md",
-            "type": "knowledge",
-            "added_at": 1700000000,
-        })
+        self.pm.add_file_to_project(
+            self.project["id"],
+            {
+                "name": "test_doc.md",
+                "type": "knowledge",
+                "added_at": 1700000000,
+            },
+        )
 
     def tearDown(self):
-        if hasattr(self, 'project') and self.project:
+        if hasattr(self, "project") and self.project:
             self.pm.delete_project(self.project["id"])
 
     def test_remove_knowledge_removes_from_files(self):
@@ -112,6 +115,7 @@ class TestSearchEndpoint(unittest.TestCase):
 
         # Create workspace files for searching
         from src.config.settings import get_project_workspace
+
         self.workspace = get_project_workspace(self.pid)
         os.makedirs(self.workspace, exist_ok=True)
 
@@ -128,7 +132,7 @@ class TestSearchEndpoint(unittest.TestCase):
             f.write("def calculate_sum(a, b):\n    return a + b\n")
 
     def tearDown(self):
-        if hasattr(self, 'project') and self.project:
+        if hasattr(self, "project") and self.project:
             self.pm.delete_project(self.project["id"])
 
     def test_search_by_filename(self):
@@ -198,9 +202,7 @@ class TestSearchEndpoint(unittest.TestCase):
             project = self.pm.get_project(pid)
             projects_to_search = [(pid, project)] if project else []
         else:
-            projects_to_search = [
-                (p["id"], p) for p in self.pm.list_projects()
-            ]
+            projects_to_search = [(p["id"], p) for p in self.pm.list_projects()]
 
         for pid, project in projects_to_search:
             project_name = project.get("name", pid) if project else pid
@@ -210,7 +212,9 @@ class TestSearchEndpoint(unittest.TestCase):
                 continue
 
             for root, dirs, files in os.walk(workspace):
-                dirs[:] = [d for d in dirs if not d.startswith(".") and d != "__pycache__"]
+                dirs[:] = [
+                    d for d in dirs if not d.startswith(".") and d != "__pycache__"
+                ]
 
                 for fname in files:
                     if fname.startswith("."):
@@ -220,32 +224,38 @@ class TestSearchEndpoint(unittest.TestCase):
                     rel_path = os.path.relpath(filepath, workspace)
 
                     if query_lower in fname.lower():
-                        results.append({
-                            "project_id": pid,
-                            "project_name": project_name,
-                            "file_path": rel_path,
-                            "file_name": fname,
-                            "snippet": "",
-                            "match_type": "filename",
-                            "line_number": None,
-                        })
+                        results.append(
+                            {
+                                "project_id": pid,
+                                "project_name": project_name,
+                                "file_path": rel_path,
+                                "file_name": fname,
+                                "snippet": "",
+                                "match_type": "filename",
+                                "line_number": None,
+                            }
+                        )
 
                     try:
                         if os.path.getsize(filepath) > 2 * 1024 * 1024:
                             continue
-                        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+                        with open(
+                            filepath, "r", encoding="utf-8", errors="ignore"
+                        ) as f:
                             for line_num, line in enumerate(f, start=1):
                                 if query_lower in line.lower():
                                     snippet = line.strip()[:200]
-                                    results.append({
-                                        "project_id": pid,
-                                        "project_name": project_name,
-                                        "file_path": rel_path,
-                                        "file_name": fname,
-                                        "snippet": snippet,
-                                        "match_type": "content",
-                                        "line_number": line_num,
-                                    })
+                                    results.append(
+                                        {
+                                            "project_id": pid,
+                                            "project_name": project_name,
+                                            "file_path": rel_path,
+                                            "file_name": fname,
+                                            "snippet": snippet,
+                                            "match_type": "content",
+                                            "line_number": line_num,
+                                        }
+                                    )
                                     break
                     except (UnicodeDecodeError, PermissionError, OSError):
                         continue
@@ -253,5 +263,5 @@ class TestSearchEndpoint(unittest.TestCase):
         return results
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

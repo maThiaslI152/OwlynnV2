@@ -8,7 +8,9 @@ tests, dev API, and frontend mock previews.
 import json
 from pathlib import Path
 
-_FIXTURE_DIR = Path(__file__).resolve().parent.parent.parent / "tests" / "fixtures" / "hitl"
+_FIXTURE_DIR = (
+    Path(__file__).resolve().parent.parent.parent / "tests" / "fixtures" / "hitl"
+)
 
 
 def load_fixture(name: str) -> dict:

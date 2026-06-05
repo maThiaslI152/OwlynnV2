@@ -37,6 +37,7 @@ def _clean():
 # Memory inject overhead
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 @pytest.mark.benchmark
 class TestMemoryInject:
     """Measure memory_inject_node call time with mocked Mem0/Qdrant."""
@@ -50,11 +51,26 @@ class TestMemoryInject:
 
         profile = ProfileBuilder().build()
 
-        with patch("src.memory.long_term.memory", mock_mem0), \
-             patch("src.agent.nodes.memory.get_profile", return_value=profile), \
-             patch("src.agent.nodes.memory.get_persona_by_id", return_value={"id": "default", "name": "Owlynn", "role": "General Workspace Assistant", "tone": "friendly", "instructions": "Help the user.", "allowed_toolboxes": ["all"]}), \
-             patch("src.agent.nodes.memory.get_memory_context_for_prompt", return_value="Mock context"), \
-             patch("src.agent.nodes.memory.MemoryContextCache") as mock_cache:
+        with (
+            patch("src.memory.long_term.memory", mock_mem0),
+            patch("src.agent.nodes.memory.get_profile", return_value=profile),
+            patch(
+                "src.agent.nodes.memory.get_persona_by_id",
+                return_value={
+                    "id": "default",
+                    "name": "Owlynn",
+                    "role": "General Workspace Assistant",
+                    "tone": "friendly",
+                    "instructions": "Help the user.",
+                    "allowed_toolboxes": ["all"],
+                },
+            ),
+            patch(
+                "src.agent.nodes.memory.get_memory_context_for_prompt",
+                return_value="Mock context",
+            ),
+            patch("src.agent.nodes.memory.MemoryContextCache") as mock_cache,
+        ):
             mock_cache.get.return_value = None  # force cache miss
 
             from src.agent.nodes.memory import memory_inject_node
@@ -87,7 +103,7 @@ class TestMemoryInject:
 
         # Memory inject should complete quickly with mocked DB
         assert tracker.p50 * 1000 < 50, (
-            f"Memory inject p50 {tracker.p50*1000:.1f}ms exceeds 50ms threshold"
+            f"Memory inject p50 {tracker.p50 * 1000:.1f}ms exceeds 50ms threshold"
         )
 
     @pytest.mark.asyncio
@@ -95,9 +111,21 @@ class TestMemoryInject:
         """Latency when context is cached (fast path)."""
         profile = ProfileBuilder().build()
 
-        with patch("src.agent.nodes.memory.get_profile", return_value=profile), \
-             patch("src.agent.nodes.memory.get_persona_by_id", return_value={"id": "default", "name": "Owlynn", "role": "General Workspace Assistant", "tone": "friendly", "instructions": "Help the user.", "allowed_toolboxes": ["all"]}), \
-             patch("src.agent.nodes.memory.MemoryContextCache") as mock_cache:
+        with (
+            patch("src.agent.nodes.memory.get_profile", return_value=profile),
+            patch(
+                "src.agent.nodes.memory.get_persona_by_id",
+                return_value={
+                    "id": "default",
+                    "name": "Owlynn",
+                    "role": "General Workspace Assistant",
+                    "tone": "friendly",
+                    "instructions": "Help the user.",
+                    "allowed_toolboxes": ["all"],
+                },
+            ),
+            patch("src.agent.nodes.memory.MemoryContextCache") as mock_cache,
+        ):
             mock_cache.get.return_value = "Cached context string"
             mock_cache.set = MagicMock()
 
@@ -126,13 +154,14 @@ class TestMemoryInject:
 
         # Cache hit path should be near-instant
         assert tracker.p50 * 1000 < 10, (
-            f"Memory inject cache-hit p50 {tracker.p50*1000:.1f}ms exceeds 10ms"
+            f"Memory inject cache-hit p50 {tracker.p50 * 1000:.1f}ms exceeds 10ms"
         )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Memory write overhead
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 @pytest.mark.benchmark
 class TestMemoryWrite:
@@ -146,14 +175,18 @@ class TestMemoryWrite:
 
         profile = ProfileBuilder().build()
 
-        with patch("src.memory.long_term.memory", mock_mem0), \
-             patch("src.agent.nodes.memory.get_profile", return_value=profile), \
-             patch("src.agent.nodes.memory.record_conversation", return_value=None), \
-             patch("src.agent.nodes.memory._should_save_memory", return_value=True), \
-             patch("src.agent.nodes.memory._is_semantically_similar", return_value=False), \
-             patch("src.agent.nodes.memory.TopicExtractor") as mock_extract, \
-             patch("src.agent.nodes.memory.MemoryEnricher") as mock_enrich, \
-             patch("src.agent.nodes.memory.MemoryContextCache") as mock_cache:
+        with (
+            patch("src.memory.long_term.memory", mock_mem0),
+            patch("src.agent.nodes.memory.get_profile", return_value=profile),
+            patch("src.agent.nodes.memory.record_conversation", return_value=None),
+            patch("src.agent.nodes.memory._should_save_memory", return_value=True),
+            patch(
+                "src.agent.nodes.memory._is_semantically_similar", return_value=False
+            ),
+            patch("src.agent.nodes.memory.TopicExtractor") as mock_extract,
+            patch("src.agent.nodes.memory.MemoryEnricher") as mock_enrich,
+            patch("src.agent.nodes.memory.MemoryContextCache") as mock_cache,
+        ):
             mock_extract.extract_topics.return_value = []
             mock_extract.extract_interests.return_value = []
             mock_enrich.enrich_memory.return_value = "enriched fact"
@@ -186,7 +219,7 @@ class TestMemoryWrite:
         record_entry(entry)
 
         assert tracker.p50 * 1000 < 50, (
-            f"Memory write p50 {tracker.p50*1000:.1f}ms exceeds 50ms threshold"
+            f"Memory write p50 {tracker.p50 * 1000:.1f}ms exceeds 50ms threshold"
         )
 
     @pytest.mark.asyncio
@@ -194,9 +227,10 @@ class TestMemoryWrite:
         """Latency when _should_save_memory returns False (fast skip)."""
         profile = ProfileBuilder().build()
 
-        with patch("src.agent.nodes.memory.get_profile", return_value=profile), \
-             patch("src.agent.nodes.memory._should_save_memory", return_value=False):
-
+        with (
+            patch("src.agent.nodes.memory.get_profile", return_value=profile),
+            patch("src.agent.nodes.memory._should_save_memory", return_value=False),
+        ):
             from src.agent.nodes.memory import memory_write_node
 
             state = {
@@ -224,13 +258,14 @@ class TestMemoryWrite:
         record_entry(entry)
 
         assert tracker.p50 * 1000 < 5, (
-            f"Memory write gate-skip p50 {tracker.p50*1000:.1f}ms exceeds 5ms"
+            f"Memory write gate-skip p50 {tracker.p50 * 1000:.1f}ms exceeds 5ms"
         )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Context formatting cost
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 @pytest.mark.benchmark
 class TestContextFormatting:
@@ -267,5 +302,5 @@ class TestContextFormatting:
 
         # Formatting 100 results should still be fast (< 5ms p50)
         assert tracker.p50 * 1000 < 5, (
-            f"Format context p50 {tracker.p50*1000:.1f}ms exceeds 5ms for {num_results} results"
+            f"Format context p50 {tracker.p50 * 1000:.1f}ms exceeds 5ms for {num_results} results"
         )

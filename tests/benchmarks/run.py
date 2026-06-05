@@ -99,6 +99,7 @@ QUICK_SKIP = "not e2e and not concurrency and not concurrent and not batch_throu
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
+
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Owlynn Agent Benchmark Runner",
@@ -113,21 +114,32 @@ Examples:
     parser.add_argument("--all", action="store_true", help="Run all benchmarks")
     parser.add_argument("--router", action="store_true", help="Router benchmarks")
     parser.add_argument("--simple", action="store_true", help="Simple node benchmarks")
-    parser.add_argument("--complex", action="store_true", help="Complex node benchmarks")
+    parser.add_argument(
+        "--complex", action="store_true", help="Complex node benchmarks"
+    )
     parser.add_argument("--memory", action="store_true", help="Memory node benchmarks")
     parser.add_argument("--pool", action="store_true", help="LLM pool benchmarks")
-    parser.add_argument("--amdahl", action="store_true", help="Run Amdahl analysis only")
-    parser.add_argument("--quick", action="store_true", help="Skip E2E graph and concurrency tests (faster)")
-    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose pytest output")
+    parser.add_argument(
+        "--amdahl", action="store_true", help="Run Amdahl analysis only"
+    )
+    parser.add_argument(
+        "--quick",
+        action="store_true",
+        help="Skip E2E graph and concurrency tests (faster)",
+    )
+    parser.add_argument(
+        "--verbose", "-v", action="store_true", help="Verbose pytest output"
+    )
     return parser.parse_args()
 
 
 # ── Core logic ────────────────────────────────────────────────────────────────
 
+
 def header(text: str):
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print(f"  {text}")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
 
 
 def info(text: str):
@@ -163,17 +175,22 @@ def show_menu():
             print(f"       • {item}")
         print(f"       Run when: {bm['when_to_run']}")
         print()
-    print(f"  [6] AMD AHL   — Compute LLM optimization ceiling (needs existing report)")
-    print(f"  [7] ALL       — Run all benchmarks")
-    print(f"  [8] ALL+AMD   — Run all benchmarks + Amdahl analysis")
-    print(f"  [q] QUIT")
+    print("  [6] AMD AHL   — Compute LLM optimization ceiling (needs existing report)")
+    print("  [7] ALL       — Run all benchmarks")
+    print("  [8] ALL+AMD   — Run all benchmarks + Amdahl analysis")
+    print("  [q] QUIT")
     print()
 
     choice = input("  Select [1-8/q]: ").strip().lower()
     return choice
 
 
-def run_pytest(test_file: str, extra_args: list[str] | None = None, quick: bool = False, verbose: bool = False) -> int:
+def run_pytest(
+    test_file: str,
+    extra_args: list[str] | None = None,
+    quick: bool = False,
+    verbose: bool = False,
+) -> int:
     """Run pytest on a specific test file and return exit code."""
     args = ["python", "-m", "pytest", test_file, "-m", "benchmark"]
     if verbose:
@@ -239,9 +256,13 @@ def main():
     if not suites_to_run:
         choice = show_menu()
         mapping = {
-            "1": ["router"], "2": ["simple"], "3": ["complex"],
-            "4": ["memory"], "5": ["pool"],
-            "6": [], "7": list(BENCHMARKS.keys()),
+            "1": ["router"],
+            "2": ["simple"],
+            "3": ["complex"],
+            "4": ["memory"],
+            "5": ["pool"],
+            "6": [],
+            "7": list(BENCHMARKS.keys()),
             "8": list(BENCHMARKS.keys()),
             "q": [],
         }

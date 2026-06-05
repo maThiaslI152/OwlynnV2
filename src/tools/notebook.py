@@ -7,8 +7,10 @@ in-process so variables, imports, and DataFrames survive between calls.
 """
 
 import io
-import sys
 import traceback
+import logging
+
+logger = logging.getLogger(__name__)
 import threading
 from contextlib import redirect_stdout, redirect_stderr
 from langchain_core.tools import tool
@@ -16,7 +18,9 @@ from langchain_core.tools import tool
 # Per-thread notebook state to prevent cross-session contamination
 # when multiple users share the same server process.
 _notebook_lock = threading.Lock()
-_notebook_sessions: dict[int, dict] = {}  # thread_id -> {"globals": dict, "counter": int}
+_notebook_sessions: dict[
+    int, dict
+] = {}  # thread_id -> {"globals": dict, "counter": int}
 
 
 def _get_session() -> dict:
@@ -56,30 +60,34 @@ def notebook_run(code: str) -> str:
         code: Python code to execute. Variables from previous cells are available.
     """
     if not code or not code.strip():
-        return "Error: No code provided. Please pass Python code in the 'code' parameter."
-    
+        return (
+            "Error: No code provided. Please pass Python code in the 'code' parameter."
+        )
+
     # Get per-thread session state
     session = _get_session()
     _notebook_globals = session["globals"]
-    
+
     # Inject workspace path so code can find files
     from src.tools.workspace_context import tool_workspace_root
+
     _notebook_globals["WORKSPACE_DIR"] = tool_workspace_root()
-    
+
     # Auto-fix common bare filename patterns: if code references a file without
     # WORKSPACE_DIR, prepend it. This handles the case where the LLM writes
     # pd.read_csv('file.csv') instead of pd.read_csv(f'{WORKSPACE_DIR}/file.csv')
     # Only match simple filenames (with extension, no path separators) to avoid
     # rewriting paths that are already absolute or use subdirectories intentionally.
     import re
+
     ws_dir = tool_workspace_root()
     # Fix read_csv, read_excel, open, etc. with bare filenames (no slashes)
     code = re.sub(
         r"""(read_csv|read_excel|read_json|read_parquet|read_table|open)\s*\(\s*(['"])(?!/|\.\./)([^'"\/]+\.[a-zA-Z0-9]+)\2""",
-        lambda m: f'{m.group(1)}({m.group(2)}{ws_dir}/{m.group(3)}{m.group(2)}',
-        code
+        lambda m: f"{m.group(1)}({m.group(2)}{ws_dir}/{m.group(3)}{m.group(2)}",
+        code,
     )
-    
+
     session["counter"] += 1
     cell_num = session["counter"]
 
@@ -115,6 +123,7 @@ def notebook_run(code: str) -> str:
         result = "\n".join(parts)
         # Cap output (sourced from centralized config)
         from src.config.config_loader import config
+
         max_output = int(config.get("tool_output.max_notebook_chars", 8000))
         if len(result) > max_output:
             result = result[:max_output] + "\n... [output truncated]"

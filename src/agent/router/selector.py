@@ -153,7 +153,5 @@ class RouteSelector:
                 "[selector] Cloud unavailable, downgrading to complex-longctx"
             )
             return "complex-longctx"
-        logger.warning(
-            "[selector] Cloud unavailable, downgrading to complex-default"
-        )
+        logger.warning("[selector] Cloud unavailable, downgrading to complex-default")
         return "complex-default"

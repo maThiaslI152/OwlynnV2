@@ -3,6 +3,7 @@
 Remove the legacy Mem0 collection `cowork_memory` (BGE embedder) from Qdrant.
 Safe to run when Qdrant is up; no-op if the collection is missing or DB is down.
 """
+
 import sys
 from pathlib import Path
 
@@ -26,7 +27,10 @@ def main() -> int:
         client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
         collections = client.get_collections().collections
     except Exception as e:
-        print(f"Qdrant not reachable at {QDRANT_HOST}:{QDRANT_PORT} ({e}); skip.", file=sys.stderr)
+        print(
+            f"Qdrant not reachable at {QDRANT_HOST}:{QDRANT_PORT} ({e}); skip.",
+            file=sys.stderr,
+        )
         return 0
 
     names = {c.name for c in collections}

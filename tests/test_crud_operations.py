@@ -23,7 +23,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 
 # Add src to path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from src.memory.project import ProjectManager
 
@@ -93,7 +93,6 @@ class TestProjectCRUD(unittest.TestCase):
         self.assertEqual(fetched["chats"], result["chats"])
         self.assertEqual(fetched["category"], result["category"])
 
-
     # --- Task 1.2: Edit project tests ---
     # Validates: Requirements 2.1, 2.2, 2.3, 2.4, 7.1
 
@@ -106,7 +105,9 @@ class TestProjectCRUD(unittest.TestCase):
 
     def test_edit_project_preserves_other_fields(self):
         """Verify id, instructions, chats, files, category unchanged after name update. (Req 2.2)"""
-        project = self._create_and_track("Preserve Fields Test", instructions="Custom instructions")
+        project = self._create_and_track(
+            "Preserve Fields Test", instructions="Custom instructions"
+        )
         original_id = project["id"]
         original_instructions = project["instructions"]
         original_chats = project["chats"]
@@ -183,7 +184,11 @@ class TestChatCRUD(unittest.TestCase):
 
     def test_add_duplicate_chat_ignored(self):
         """Verify adding same chat ID twice results in one entry. (Req 4.2)"""
-        duplicate_chat = {"id": "chat-001", "name": "Duplicate Chat", "created_at": 2000.0}
+        duplicate_chat = {
+            "id": "chat-001",
+            "name": "Duplicate Chat",
+            "created_at": 2000.0,
+        }
         self.pm.add_chat_to_project(self.pid, duplicate_chat)
         project = self.pm.get_project(self.pid)
         matching = [c for c in project["chats"] if c["id"] == "chat-001"]
@@ -322,7 +327,11 @@ class TestEdgeCases(unittest.TestCase):
     def test_chat_add_special_characters(self):
         """Verify adding a chat with special character name works."""
         project = self._create_and_track("Edge Chat Project")
-        chat_info = {"id": "edge-chat-001", "name": "Chat <>&\"' 🎉", "created_at": 1000.0}
+        chat_info = {
+            "id": "edge-chat-001",
+            "name": "Chat <>&\"' 🎉",
+            "created_at": 1000.0,
+        }
         self.pm.add_chat_to_project(project["id"], chat_info)
         fetched = self.pm.get_project(project["id"])
         chat = next(c for c in fetched["chats"] if c["id"] == "edge-chat-001")
@@ -333,7 +342,9 @@ class TestEdgeCases(unittest.TestCase):
         project = self._create_and_track("Unicode Chat Project")
         chat_info = {"id": "edge-chat-002", "name": "Original", "created_at": 2000.0}
         self.pm.add_chat_to_project(project["id"], chat_info)
-        self.pm.update_chat_in_project(project["id"], "edge-chat-002", name="新しい名前 🌟")
+        self.pm.update_chat_in_project(
+            project["id"], "edge-chat-002", name="新しい名前 🌟"
+        )
         fetched = self.pm.get_project(project["id"])
         chat = next(c for c in fetched["chats"] if c["id"] == "edge-chat-002")
         self.assertEqual(chat["name"], "新しい名前 🌟")
@@ -373,7 +384,9 @@ class TestConcurrentCRUDInvariants(unittest.TestCase):
 
         def _ops_a(i: int):
             cid = f"a-{i}"
-            self.pm.add_chat_to_project(pid_a, {"id": cid, "name": f"A {i}", "created_at": float(i)})
+            self.pm.add_chat_to_project(
+                pid_a, {"id": cid, "name": f"A {i}", "created_at": float(i)}
+            )
             if i % 2 == 0:
                 self.pm.update_chat_in_project(pid_a, cid, name=f"A updated {i}")
             if i % 3 == 0:
@@ -381,7 +394,9 @@ class TestConcurrentCRUDInvariants(unittest.TestCase):
 
         def _ops_b(i: int):
             cid = f"b-{i}"
-            self.pm.add_chat_to_project(pid_b, {"id": cid, "name": f"B {i}", "created_at": float(i)})
+            self.pm.add_chat_to_project(
+                pid_b, {"id": cid, "name": f"B {i}", "created_at": float(i)}
+            )
             if i % 2 == 1:
                 self.pm.update_chat_in_project(pid_b, cid, name=f"B updated {i}")
             if i % 4 == 0:
@@ -394,8 +409,13 @@ class TestConcurrentCRUDInvariants(unittest.TestCase):
         project_a = self.pm.get_project(pid_a)
         project_b = self.pm.get_project(pid_b)
 
-        self.assertTrue(all(str(c.get("id", "")).startswith("a-") for c in project_a["chats"]))
-        self.assertTrue(all(str(c.get("id", "")).startswith("b-") for c in project_b["chats"]))
+        self.assertTrue(
+            all(str(c.get("id", "")).startswith("a-") for c in project_a["chats"])
+        )
+        self.assertTrue(
+            all(str(c.get("id", "")).startswith("b-") for c in project_b["chats"])
+        )
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

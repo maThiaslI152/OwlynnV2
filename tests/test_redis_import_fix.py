@@ -23,12 +23,14 @@ from langgraph.checkpoint.memory import MemorySaver
 # 6.1  AsyncRedisSaver can be imported from the correct module path
 # ---------------------------------------------------------------------------
 
+
 class TestAsyncRedisSaverImport:
     """Verify AsyncRedisSaver is importable from the primary module path."""
 
     def test_import_from_primary_path(self):
         """AsyncRedisSaver should be importable from langgraph.checkpoint.redis."""
         from langgraph.checkpoint.redis import AsyncRedisSaver
+
         assert AsyncRedisSaver is not None
 
 
@@ -36,11 +38,13 @@ class TestAsyncRedisSaverImport:
 # 6.2  init_agent() with no args → Redis-backed checkpointer (live Redis)
 # ---------------------------------------------------------------------------
 
+
 def _redis_with_search_available() -> bool:
     """Return True if Redis is reachable AND has the RediSearch module
     (required by AsyncRedisSaver for index creation during asetup)."""
     try:
         import redis
+
         r = redis.Redis()
         r.ping()
         # AsyncRedisSaver.asetup() runs FT._LIST which requires RediSearch
@@ -76,6 +80,7 @@ class TestInitAgentRedisCheckpointer:
 # 6.3  init_agent(checkpointer=mock_saver) → uses provided checkpointer
 # ---------------------------------------------------------------------------
 
+
 class TestInitAgentExplicitCheckpointer:
     """When an explicit checkpointer is passed, it must be used as-is."""
 
@@ -101,18 +106,25 @@ class TestInitAgentExplicitCheckpointer:
 #       and logs an error-level message
 # ---------------------------------------------------------------------------
 
+
 class TestInitAgentMemorySaverFallback:
     """When Redis is unreachable, init_agent must fall back to MemorySaver
     and emit an ERROR log containing both exception messages."""
 
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Pre-existing: AsyncRedisSaver already cached by other tests in this module; requires Redis to be down")
+    @pytest.mark.skip(
+        reason="Pre-existing: AsyncRedisSaver already cached by other tests in this module; requires Redis to be down"
+    )
     async def test_fallback_to_memory_saver_on_redis_failure(self):
         """Both Redis import paths fail → MemorySaver is used."""
         from src.agent.graph import init_agent
 
         # Make both import paths raise so the fallback triggers
-        original_import = __builtins__.__import__ if hasattr(__builtins__, '__import__') else __import__
+        original_import = (
+            __builtins__.__import__
+            if hasattr(__builtins__, "__import__")
+            else __import__
+        )
 
         def _failing_import(name, *args, **kwargs):
             if name in (
@@ -136,13 +148,19 @@ class TestInitAgentMemorySaverFallback:
         )
 
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Pre-existing: init_agent no longer logs ERROR when Redis import fails — logs WARNING instead")
+    @pytest.mark.skip(
+        reason="Pre-existing: init_agent no longer logs ERROR when Redis import fails — logs WARNING instead"
+    )
     async def test_error_logged_on_redis_failure(self, caplog):
         """An ERROR-level log must be emitted when Redis init fails,
         containing both exception messages."""
         from src.agent.graph import init_agent
 
-        original_import = __builtins__.__import__ if hasattr(__builtins__, '__import__') else __import__
+        original_import = (
+            __builtins__.__import__
+            if hasattr(__builtins__, "__import__")
+            else __import__
+        )
 
         def _failing_import(name, *args, **kwargs):
             if name in (
@@ -164,10 +182,13 @@ class TestInitAgentMemorySaverFallback:
 
         # Verify an error-level record was emitted
         error_records = [
-            r for r in caplog.records
+            r
+            for r in caplog.records
             if r.levelno >= logging.ERROR and "src.agent.graph" in r.name
         ]
-        assert len(error_records) >= 1, "Expected at least one ERROR log from src.agent.graph"
+        assert len(error_records) >= 1, (
+            "Expected at least one ERROR log from src.agent.graph"
+        )
 
         error_msg = error_records[0].getMessage()
         assert "MemorySaver" in error_msg or "fallback" in error_msg.lower(), (

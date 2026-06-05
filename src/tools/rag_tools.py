@@ -11,12 +11,13 @@ from src.tools.workspace_context import _active_project_id
 
 logger = logging.getLogger(__name__)
 
+
 @tool
 def search_workspace_docs(query: str) -> str:
     """
-    Performs a deep semantic vector search over all indexed workspace documents 
+    Performs a deep semantic vector search over all indexed workspace documents
     (PDF, DOCX, XLSX, Markdown, code files) within the active project workspace.
-    Use this when you need to answer specific questions about files in the workspace 
+    Use this when you need to answer specific questions about files in the workspace
     or retrieve content matching a concept.
 
     Args:
@@ -26,21 +27,25 @@ def search_workspace_docs(query: str) -> str:
         from src.memory.long_term import memory as mem0_memory
     except Exception:
         return "Error: Mem0 memory not available."
-    
+
     if mem0_memory is None:
         return "Error: Mem0/Qdrant vector memory is not initialized."
-    
+
     try:
         project_id = _active_project_id.get() or "default"
         user_id = f"project:{project_id}"
-        
+
         # Search the project vector store (Qdrant)
         results_dict = mem0_memory.search(query, filters={"user_id": user_id}, limit=8)
-        results = results_dict.get("results", []) if isinstance(results_dict, dict) else results_dict
-        
+        results = (
+            results_dict.get("results", [])
+            if isinstance(results_dict, dict)
+            else results_dict
+        )
+
         if not results:
             return f"No matching workspace document content found for: '{query}'"
-        
+
         lines = [f"📚 Found relevant document sections in workspace '{project_id}':"]
         for item in results:
             if isinstance(item, dict):

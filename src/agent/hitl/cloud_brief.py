@@ -6,8 +6,6 @@ Inputs come from local state (post-HITL) — never sends raw chat history,
 workspace files, or tool output blobs to cloud.
 """
 
-from typing import Any
-
 BRIEF_TEMPLATE = """--- OWLYNN CLOUD BRIEF (local-prepared, user-approved) ---
 Requirements: {clarified_scope}
 Constraints: {constraints}
@@ -44,7 +42,12 @@ def build_cloud_brief(
         intent = plan_review_summary.get("stated_intent", "")
         pitfalls = plan_review_summary.get("pitfalls", [])
         if approved:
-            parts.append(("constraints", f"Plan approved. Intent: {intent} Pitfalls acknowledged: {'; '.join(pitfalls) if pitfalls else 'none'}."))
+            parts.append(
+                (
+                    "constraints",
+                    f"Plan approved. Intent: {intent} Pitfalls acknowledged: {'; '.join(pitfalls) if pitfalls else 'none'}.",
+                )
+            )
         else:
             parts.append(("constraints", "Plan review skipped or denied."))
 
@@ -108,7 +111,13 @@ def _format_scope(scope: dict) -> str:
 def _filter_memory_context(memory: str) -> str:
     """Strip known sensitive patterns from memory before cloud send."""
     import re
-    cleaned = re.sub(r"(?:api[_-]?key|token|secret|password)\s*[:=]\s*\S+", "[REDACTED]", memory, flags=re.IGNORECASE)
+
+    cleaned = re.sub(
+        r"(?:api[_-]?key|token|secret|password)\s*[:=]\s*\S+",
+        "[REDACTED]",
+        memory,
+        flags=re.IGNORECASE,
+    )
     return _truncate(cleaned, 1000)
 
 

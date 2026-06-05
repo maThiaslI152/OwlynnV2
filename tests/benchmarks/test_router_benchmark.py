@@ -46,18 +46,22 @@ def _clean():
 # Router throughput — single-invocation latency by input size
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 @pytest.mark.benchmark
 class TestRouterThroughput:
     """Measure router_node latency across varied input sizes."""
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("input_text", [
-        "Hello",                                        # short
-        "What is machine learning?",                    # medium
-        "Write a Python function to parse a large CSV " # long
-        "file, filter rows where column 'status' is 'active', "
-        "and write the results to a new file with timestamp columns added.",
-    ])
+    @pytest.mark.parametrize(
+        "input_text",
+        [
+            "Hello",  # short
+            "What is machine learning?",  # medium
+            "Write a Python function to parse a large CSV "  # long
+            "file, filter rows where column 'status' is 'active', "
+            "and write the results to a new file with timestamp columns added.",
+        ],
+    )
     async def test_router_latency_by_input_size(self, input_text: str):
         """p50/p95/p99 latency for router_node at different input lengths."""
         from src.agent.nodes.router import router_node
@@ -70,8 +74,10 @@ class TestRouterThroughput:
         setup_benchmark_llms(small=mock_small)
         profile = ProfileBuilder().build()
 
-        with patch("src.agent.nodes.router.get_profile", return_value=profile), \
-             patch("src.agent.nodes.router._check_cloud_available", return_value=False):
+        with (
+            patch("src.agent.nodes.router.get_profile", return_value=profile),
+            patch("src.agent.nodes.router._check_cloud_available", return_value=False),
+        ):
             state = make_router_state(text=input_text)
 
             # Warmup
@@ -96,7 +102,7 @@ class TestRouterThroughput:
         record_entry(entry)
 
         assert tracker.p50 * 1000 < 500, (
-            f"Router p50 latency {tracker.p50*1000:.1f}ms exceeds 500ms threshold"
+            f"Router p50 latency {tracker.p50 * 1000:.1f}ms exceeds 500ms threshold"
         )
 
     @pytest.mark.asyncio
@@ -113,9 +119,10 @@ class TestRouterThroughput:
 
         states = [make_router_state(text=t) for t in ROUTER_INPUTS * 5]
 
-        with patch("src.agent.nodes.router.get_profile", return_value=profile), \
-             patch("src.agent.nodes.router._check_cloud_available", return_value=False):
-
+        with (
+            patch("src.agent.nodes.router.get_profile", return_value=profile),
+            patch("src.agent.nodes.router._check_cloud_available", return_value=False),
+        ):
             # Warmup
             for _ in range(BENCH_WARMUP):
                 await router_node(states[0])
@@ -144,17 +151,21 @@ class TestRouterThroughput:
 # Token budget accuracy
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 @pytest.mark.benchmark
 class TestTokenBudgetAccuracy:
     """Verify estimate_token_budget stays within per-route caps."""
 
-    @pytest.mark.parametrize("route,budget_max", [
-        ("simple", 4096 - 1500),
-        ("complex-default", 8192),
-        ("complex-vision", 8192),
-        ("complex-longctx", 8192),
-        ("complex-cloud", 16384),
-    ])
+    @pytest.mark.parametrize(
+        "route,budget_max",
+        [
+            ("simple", 4096 - 1500),
+            ("complex-default", 8192),
+            ("complex-vision", 8192),
+            ("complex-longctx", 8192),
+            ("complex-cloud", 16384),
+        ],
+    )
     def test_budget_within_route_cap(self, route: str, budget_max: int):
         """Token budget never exceeds the route's max."""
         from src.agent.nodes.router import estimate_token_budget
@@ -171,9 +182,7 @@ class TestTokenBudgetAccuracy:
         from src.agent.nodes.router import estimate_token_budget
 
         short_budget = estimate_token_budget("hi", "complex-default")
-        long_budget = estimate_token_budget(
-            "x" * 2000, "complex-default"
-        )
+        long_budget = estimate_token_budget("x" * 2000, "complex-default")
         assert long_budget >= short_budget, (
             f"Long input budget {long_budget} should be >= short budget {short_budget}"
         )
@@ -182,7 +191,12 @@ class TestTokenBudgetAccuracy:
         """Complex routes never drop below 512 token budget."""
         from src.agent.nodes.router import estimate_token_budget
 
-        for route in ["complex-default", "complex-vision", "complex-longctx", "complex-cloud"]:
+        for route in [
+            "complex-default",
+            "complex-vision",
+            "complex-longctx",
+            "complex-cloud",
+        ]:
             budget = estimate_token_budget("x" * 100000, route)
             assert budget >= 512, (
                 f"Budget floor for {route} is {budget}, expected >= 512"
@@ -192,6 +206,7 @@ class TestTokenBudgetAccuracy:
 # ═══════════════════════════════════════════════════════════════════════════
 # HITL interception rate
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 @pytest.mark.benchmark
 class TestHITLInterceptRate:
@@ -213,7 +228,9 @@ class TestHITLInterceptRate:
             if confidence < confidence_threshold:
                 hitl_count += 1
 
-        expected_rate = sum(1 for c in confidences if c < confidence_threshold) / len(confidences)
+        expected_rate = sum(1 for c in confidences if c < confidence_threshold) / len(
+            confidences
+        )
         actual_rate = hitl_count / len(confidences)
 
         assert abs(actual_rate - expected_rate) < 0.01, (
@@ -224,6 +241,7 @@ class TestHITLInterceptRate:
 # ═══════════════════════════════════════════════════════════════════════════
 # Skill matcher latency
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 @pytest.mark.benchmark
 class TestSkillMatcherLatency:
@@ -262,13 +280,14 @@ class TestSkillMatcherLatency:
 
         # Skill matcher should complete under 100ms p50
         assert tracker.p50 * 1000 < 100, (
-            f"Skill matcher p50 {tracker.p50*1000:.1f}ms exceeds 100ms"
+            f"Skill matcher p50 {tracker.p50 * 1000:.1f}ms exceeds 100ms"
         )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Router concurrency
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 @pytest.mark.benchmark
 class TestRouterConcurrency:
@@ -288,21 +307,23 @@ class TestRouterConcurrency:
         profile = ProfileBuilder().build()
 
         args_list = [
-            (make_router_state(text=t),) for t in ROUTER_INPUTS * (concurrency // 2 or 1)
+            (make_router_state(text=t),)
+            for t in ROUTER_INPUTS * (concurrency // 2 or 1)
         ]
 
-        with patch("src.agent.nodes.router.get_profile", return_value=profile), \
-             patch("src.agent.nodes.router._check_cloud_available", return_value=False):
-
+        with (
+            patch("src.agent.nodes.router.get_profile", return_value=profile),
+            patch("src.agent.nodes.router._check_cloud_available", return_value=False),
+        ):
             tracker = await time_concurrent(
                 router_node,
-                args_list[:max(10, concurrency * 3)],
+                args_list[: max(10, concurrency * 3)],
                 concurrency=concurrency,
             )
 
         thr = tracker.count / sum(tracker.samples) if tracker.samples else 0
         entry = BenchmarkEntry(
-            name=f"router_concurrency",
+            name="router_concurrency",
             category="router",
             warmup_iters=0,
             measured_iters=tracker.count,

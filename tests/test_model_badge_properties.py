@@ -12,6 +12,7 @@ from hypothesis import strategies as st
 
 # ── Python equivalent of frontend getModelBadgeClass ─────────────────────
 
+
 def get_model_badge_class(model: str | None) -> str:
     """
     Python equivalent of the JavaScript getModelBadgeClass function.
@@ -37,9 +38,9 @@ def get_model_badge_class(model: str | None) -> str:
 # ── Badge class → color mapping ──────────────────────────────────────────
 
 BADGE_COLORS = {
-    "model-badge-small": "#374151",     # gray
-    "model-badge-medium": "#1e3a5f",    # blue
-    "model-badge-cloud": "#2b2646",     # purple
+    "model-badge-small": "#374151",  # gray
+    "model-badge-medium": "#1e3a5f",  # blue
+    "model-badge-cloud": "#2b2646",  # purple
     "model-badge-fallback": "#451a03",  # orange
 }
 
@@ -69,26 +70,28 @@ known_model_st = st.sampled_from(KNOWN_MODELS)
 suffix_st = st.text(
     min_size=0,
     max_size=50,
-    alphabet=st.characters(whitelist_categories=("L", "N", "P"), whitelist_characters="-_"),
+    alphabet=st.characters(
+        whitelist_categories=("L", "N", "P"), whitelist_characters="-_"
+    ),
 )
 
 # Models starting with "small"
 small_model_st = st.builds(lambda s: "small" + s, suffix_st)
 
 # Models starting with "medium" (without "fallback")
-medium_model_st = st.builds(
-    lambda s: "medium" + s, suffix_st
-).filter(lambda m: "fallback" not in m)
+medium_model_st = st.builds(lambda s: "medium" + s, suffix_st).filter(
+    lambda m: "fallback" not in m
+)
 
 # Models starting with "large" (without "fallback")
-large_model_st = st.builds(
-    lambda s: "large" + s, suffix_st
-).filter(lambda m: "fallback" not in m)
+large_model_st = st.builds(lambda s: "large" + s, suffix_st).filter(
+    lambda m: "fallback" not in m
+)
 
 # Models starting with "cloud" (without "fallback")
-cloud_model_st = st.builds(
-    lambda s: "cloud" + s, suffix_st
-).filter(lambda m: "fallback" not in m)
+cloud_model_st = st.builds(lambda s: "cloud" + s, suffix_st).filter(
+    lambda m: "fallback" not in m
+)
 
 # Models containing "fallback" anywhere
 fallback_model_st = st.one_of(
@@ -102,13 +105,16 @@ fallback_model_st = st.one_of(
 arbitrary_model_st = st.text(
     min_size=1,
     max_size=100,
-    alphabet=st.characters(whitelist_categories=("L", "N", "P"), whitelist_characters="-_./"),
+    alphabet=st.characters(
+        whitelist_categories=("L", "N", "P"), whitelist_characters="-_./"
+    ),
 )
 
 
 # ═════════════════════════════════════════════════════════════════════════
 # Property 13: Model Badge Color Mapping
 # ═════════════════════════════════════════════════════════════════════════
+
 
 class TestModelBadgeColorMapping:
     """

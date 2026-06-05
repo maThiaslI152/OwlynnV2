@@ -4,7 +4,9 @@ from contextvars import ContextVar, Token
 
 from src.config.settings import get_project_workspace, normalize_project_id
 
-_active_project_id: ContextVar[str | None] = ContextVar("owlynn_active_project_id", default=None)
+_active_project_id: ContextVar[str | None] = ContextVar(
+    "owlynn_active_project_id", default=None
+)
 
 
 def tool_workspace_root() -> str:

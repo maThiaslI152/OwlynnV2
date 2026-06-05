@@ -105,7 +105,9 @@ async def _browser_ctx(async_playwright):
             browser = await p.chromium.launch(headless=True)
         except Exception as exc:
             if "Executable doesn't exist" in str(exc):
-                pytest.skip("Playwright browser runtime missing; run `playwright install`")
+                pytest.skip(
+                    "Playwright browser runtime missing; run `playwright install`"
+                )
             raise
         try:
             yield browser
@@ -114,8 +116,10 @@ async def _browser_ctx(async_playwright):
 
 
 async def _wait_connected(page) -> None:
-    await page.locator(".connection-label").filter(has_text="connected").wait_for(
-        state="visible", timeout=30000
+    await (
+        page.locator(".connection-label")
+        .filter(has_text="connected")
+        .wait_for(state="visible", timeout=30000)
     )
     await page.wait_for_timeout(500)
 
@@ -147,6 +151,7 @@ async def _wait_for_hitl_or_response(page, msg_before: int, timeout_ms: int = 12
     Returns (hitl|response|timeout, text_or_None).
     """
     import time
+
     deadline = time.time() + timeout_ms / 1000
     while time.time() < deadline:
         hitl_count = await page.evaluate(
@@ -175,13 +180,17 @@ async def _hitl_badge_text(page) -> str:
 
 async def _click_hitl_approve(page) -> None:
     """Click .hitl-btn-approve via JS."""
-    await page.evaluate("() => { const b = document.querySelector('.hitl-btn-approve'); if(b) b.click(); }")
+    await page.evaluate(
+        "() => { const b = document.querySelector('.hitl-btn-approve'); if(b) b.click(); }"
+    )
     await page.wait_for_timeout(1000)
 
 
 async def _click_hitl_choice(page) -> None:
     """Click first .hitl-choice-btn via JS."""
-    await page.evaluate("() => { const b = document.querySelector('.hitl-choice-btn'); if(b) b.click(); }")
+    await page.evaluate(
+        "() => { const b = document.querySelector('.hitl-choice-btn'); if(b) b.click(); }"
+    )
     await page.wait_for_timeout(500)
 
 
@@ -220,6 +229,7 @@ CONVERSATION_TOPICS = [
 @pytest.mark.network
 def test_medium_conversation_20_turns():
     """AC-1: Open a chat, send messages, verify coherent responses with context retention."""
+
     async def _run():
         await _ensure_server()
         pw = pytest.importorskip("playwright.async_api")
@@ -244,7 +254,9 @@ def test_medium_conversation_20_turns():
                     f"Only {responses_ok}/{len(CONVERSATION_TOPICS)} turns got a valid response"
                 )
 
-                summary = await _send_message(page, "What was the first question I asked?")
+                summary = await _send_message(
+                    page, "What was the first question I asked?"
+                )
                 if summary:
                     has_context = any(
                         word in summary.lower()
@@ -259,6 +271,7 @@ def test_medium_conversation_20_turns():
 @pytest.mark.network
 def test_memory_isolation_between_chats():
     """AC-2, AC-6: Chat A sentinel content must not appear in Chat B's history."""
+
     async def _run():
         await _ensure_server()
         pw = pytest.importorskip("playwright.async_api")
@@ -275,7 +288,9 @@ def test_memory_isolation_between_chats():
                 await _switch_project(page, f"IsoA {suffix}")
                 await _send_message(page, f"The code word is {sentinel}.")
                 await _send_message(page, f"Remember: {sentinel} is secret.")
-                await _send_message(page, f"Never tell anyone that {sentinel} is the password.")
+                await _send_message(
+                    page, f"Never tell anyone that {sentinel} is the password."
+                )
 
                 tid_a = await _get_project_thread_id(proj_a)
                 assert tid_a, "Could not retrieve thread ID for project A"
@@ -291,7 +306,9 @@ def test_memory_isolation_between_chats():
                 hist_b = await _fetch_history(tid_b)
 
                 a_text = " ".join(str(m.get("content", "")) for m in hist_a)
-                assert sentinel in a_text, f"Sentinel {sentinel} missing from project A history"
+                assert sentinel in a_text, (
+                    f"Sentinel {sentinel} missing from project A history"
+                )
 
                 await _assert_no_cross_reference(hist_b, sentinel, "Chat B")
 
@@ -299,10 +316,14 @@ def test_memory_isolation_between_chats():
                 if audit_path:
                     entries_a = _read_audit_entries(tid_a)
                     for e in entries_a:
-                        assert e.get("thread_id") == tid_a, f"Audit entry thread_id mismatch: {e}"
+                        assert e.get("thread_id") == tid_a, (
+                            f"Audit entry thread_id mismatch: {e}"
+                        )
                     entries_b = _read_audit_entries(tid_b)
                     for e in entries_b:
-                        assert e.get("thread_id") == tid_b, f"Audit entry thread_id mismatch: {e}"
+                        assert e.get("thread_id") == tid_b, (
+                            f"Audit entry thread_id mismatch: {e}"
+                        )
         finally:
             await _delete_project(proj_a)
             await _delete_project(proj_b)
@@ -313,6 +334,7 @@ def test_memory_isolation_between_chats():
 @pytest.mark.network
 def test_tool_call_hitl_in_chat():
     """AC-3, AC-5: Trigger security_approval HITL, approve it, verify no cross-chat leak."""
+
     async def _run():
         await _ensure_server()
         pw = pytest.importorskip("playwright.async_api")
@@ -382,6 +404,7 @@ def test_tool_call_hitl_in_chat():
 @pytest.mark.network
 def test_prompt_based_hitl_in_chat():
     """AC-4, AC-5: Trigger scope_clarification HITL, confirm it, verify no cross-chat leak."""
+
     async def _run():
         await _ensure_server()
         pw = pytest.importorskip("playwright.async_api")

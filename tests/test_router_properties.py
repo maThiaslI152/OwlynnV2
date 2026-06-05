@@ -29,16 +29,31 @@ from src.tools.skills import SkillDefinition
 
 
 # ── Valid route set ──────────────────────────────────────────────────────
-VALID_ROUTES = {"simple", "complex-default", "complex-vision", "complex-longctx", "complex-cloud"}
-VALID_COMPLEX_ROUTES = {"complex-default", "complex-vision", "complex-longctx", "complex-cloud"}
+VALID_ROUTES = {
+    "simple",
+    "complex-default",
+    "complex-vision",
+    "complex-longctx",
+    "complex-cloud",
+}
+VALID_COMPLEX_ROUTES = {
+    "complex-default",
+    "complex-vision",
+    "complex-longctx",
+    "complex-cloud",
+}
 
 
 # ── Strategies ───────────────────────────────────────────────────────────
 
 # Arbitrary user text (non-empty)
-user_text_st = st.text(min_size=1, max_size=5000, alphabet=st.characters(
-    whitelist_categories=("L", "N", "P", "Z"),
-))
+user_text_st = st.text(
+    min_size=1,
+    max_size=5000,
+    alphabet=st.characters(
+        whitelist_categories=("L", "N", "P", "Z"),
+    ),
+)
 
 # Route values for budget testing
 route_st = st.sampled_from(list(VALID_ROUTES))
@@ -62,10 +77,17 @@ def _make_text_state(text: str, web_search: bool = True) -> dict:
 def _make_image_state(text: str = "Describe this image") -> dict:
     """Build a minimal AgentState with an image attachment."""
     return {
-        "messages": [HumanMessage(content=[
-            {"type": "text", "text": text},
-            {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}},
-        ])],
+        "messages": [
+            HumanMessage(
+                content=[
+                    {"type": "text", "text": text},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/png;base64,abc"},
+                    },
+                ]
+            )
+        ],
         "web_search_enabled": True,
     }
 
@@ -73,6 +95,7 @@ def _make_image_state(text: str = "Describe this image") -> dict:
 # ═════════════════════════════════════════════════════════════════════════
 # Property 2: Route Decision Domain
 # ═════════════════════════════════════════════════════════════════════════
+
 
 class TestRouteDecisionDomain:
     """
@@ -110,8 +133,9 @@ class TestRouteDecisionDomain:
         text = "x" * 310000
         state = _make_text_state(text)
         route, _ = _resolve_complex_route(text, state, ["all"])
-        assert route in ("complex-longctx", "complex-cloud"), \
+        assert route in ("complex-longctx", "complex-cloud"), (
             f"Large input should route to longctx or cloud, got {route}"
+        )
 
     def test_very_large_input_routes_to_cloud(self):
         """Input exceeding 80% of Medium_LongCtx context routes to complex-cloud."""
@@ -122,9 +146,15 @@ class TestRouteDecisionDomain:
         route, _ = _resolve_complex_route(text, state, ["all"])
         assert route == "complex-cloud"
 
-    @given(text=st.text(min_size=1, max_size=100, alphabet=st.characters(
-        whitelist_categories=("L", "N", "Z"),
-    )))
+    @given(
+        text=st.text(
+            min_size=1,
+            max_size=100,
+            alphabet=st.characters(
+                whitelist_categories=("L", "N", "Z"),
+            ),
+        )
+    )
     @settings(max_examples=100)
     def test_short_text_no_frontier_routes_default(self, text: str):
         """Short text without frontier hints or images routes to complex-default."""
@@ -135,11 +165,16 @@ class TestRouteDecisionDomain:
 
     def test_frontier_hints_route_to_cloud(self):
         """Text with frontier-quality indicators routes to complex-cloud."""
-        for hint in ["prove this theorem", "formal proof of convergence",
-                     "solve this differential equation"]:
+        for hint in [
+            "prove this theorem",
+            "formal proof of convergence",
+            "solve this differential equation",
+        ]:
             state = _make_text_state(hint)
             route, _ = _resolve_complex_route(hint, state, ["all"])
-            assert route == "complex-cloud", f"Frontier hint '{hint}' should route to cloud"
+            assert route == "complex-cloud", (
+                f"Frontier hint '{hint}' should route to cloud"
+            )
 
     @given(text=user_text_st)
     @settings(max_examples=100)
@@ -154,6 +189,7 @@ class TestRouteDecisionDomain:
 # ═════════════════════════════════════════════════════════════════════════
 # Property 4: Token Budget Uses Correct Context Window
 # ═════════════════════════════════════════════════════════════════════════
+
 
 class TestTokenBudgetContextWindow:
     """
@@ -203,15 +239,23 @@ class TestTokenBudgetContextWindow:
             budget = estimate_token_budget(text, route)
             assert budget > 0, f"Budget must be positive for route={route}"
 
-    @given(text=st.text(min_size=1600, max_size=5000, alphabet=st.characters(
-        whitelist_categories=("L", "N", "Z"),
-    )))
+    @given(
+        text=st.text(
+            min_size=1600,
+            max_size=5000,
+            alphabet=st.characters(
+                whitelist_categories=("L", "N", "Z"),
+            ),
+        )
+    )
     @settings(max_examples=100)
     def test_complex_budget_at_least_512_for_large_input(self, text: str):
         """Complex routes with large input have budget >= 512 (the context floor)."""
         for route in VALID_COMPLEX_ROUTES:
             budget = estimate_token_budget(text, route)
-            assert budget >= 512, f"Complex budget should be >= 512, got {budget} for {route}"
+            assert budget >= 512, (
+                f"Complex budget should be >= 512, got {budget} for {route}"
+            )
 
     def test_cloud_has_higher_budget_cap_than_default(self):
         """Cloud route allows a higher max budget than default/longctx."""
@@ -243,6 +287,7 @@ class TestTokenBudgetContextWindow:
 # ═════════════════════════════════════════════════════════════════════════
 # Property 15: Router HITL Threshold Behavior
 # ═════════════════════════════════════════════════════════════════════════
+
 
 class TestRouterHITLThreshold:
     """
@@ -286,7 +331,9 @@ class TestRouterHITLThreshold:
 
     @given(threshold=st.floats(min_value=0.01, max_value=1.0, allow_nan=False))
     @settings(max_examples=100)
-    def test_confidence_just_below_threshold_triggers_when_enabled(self, threshold: float):
+    def test_confidence_just_below_threshold_triggers_when_enabled(
+        self, threshold: float
+    ):
         """Confidence just below threshold triggers when enabled."""
         confidence = threshold - 1e-10
         enabled = True
@@ -315,6 +362,7 @@ class TestRouterHITLThreshold:
 # Property 2 (supplement): parse_routing always returns valid structure
 # ═════════════════════════════════════════════════════════════════════════
 
+
 class TestParseRoutingProperty:
     """parse_routing always returns a valid (decision, confidence, toolbox) tuple."""
 
@@ -331,7 +379,9 @@ class TestParseRoutingProperty:
     @given(
         routing=st.sampled_from(["simple", "complex"]),
         confidence=st.floats(min_value=0.0, max_value=1.0, allow_nan=False),
-        toolbox=st.sampled_from(["web_search", "file_ops", "data_viz", "productivity", "memory", "all"]),
+        toolbox=st.sampled_from(
+            ["web_search", "file_ops", "data_viz", "productivity", "memory", "all"]
+        ),
     )
     @settings(max_examples=100)
     def test_parse_routing_valid_json_round_trip(
@@ -339,11 +389,14 @@ class TestParseRoutingProperty:
     ):
         """Valid JSON input is parsed correctly."""
         import json
-        content = json.dumps({
-            "routing": routing,
-            "confidence": confidence,
-            "toolbox": toolbox,
-        })
+
+        content = json.dumps(
+            {
+                "routing": routing,
+                "confidence": confidence,
+                "toolbox": toolbox,
+            }
+        )
         dec, conf, tb = parse_routing(content)
         assert dec == routing
         assert abs(conf - confidence) < 1e-6
@@ -354,32 +407,42 @@ class TestParseRoutingProperty:
 # Property: _toolbox_for_skill maps skill categories correctly
 # ═════════════════════════════════════════════════════════════════════════
 
+
 class TestToolboxForSkill:
     """_toolbox_for_skill returns valid toolbox lists for skill definitions."""
 
     def test_research_skill_maps_to_web_search(self):
         skill = SkillDefinition(
-            file="research.md", name="Research",
-            triggers=["research"], description="Research things",
-            prompt="Research: {context}", category="research",
+            file="research.md",
+            name="Research",
+            triggers=["research"],
+            description="Research things",
+            prompt="Research: {context}",
+            category="research",
         )
         toolbox = _toolbox_for_skill(skill)
         assert "web_search" in toolbox
 
     def test_writing_skill_maps_to_data_viz(self):
         skill = SkillDefinition(
-            file="write.md", name="Writer",
-            triggers=["write"], description="Write things",
-            prompt="Write: {context}", category="writing",
+            file="write.md",
+            name="Writer",
+            triggers=["write"],
+            description="Write things",
+            prompt="Write: {context}",
+            category="writing",
         )
         toolbox = _toolbox_for_skill(skill)
         assert "data_viz" in toolbox
 
     def test_skill_with_web_tools_gets_web_search(self):
         skill = SkillDefinition(
-            file="scan.md", name="Scanner",
-            triggers=["scan"], description="Scan things",
-            prompt="Scan: {context}", category="general",
+            file="scan.md",
+            name="Scanner",
+            triggers=["scan"],
+            description="Scan things",
+            prompt="Scan: {context}",
+            category="general",
             tools_used=["web_search", "fetch_webpage"],
         )
         toolbox = _toolbox_for_skill(skill)
@@ -387,9 +450,12 @@ class TestToolboxForSkill:
 
     def test_skill_with_file_tools_gets_file_ops(self):
         skill = SkillDefinition(
-            file="review.md", name="Reviewer",
-            triggers=["review"], description="Review code",
-            prompt="Review: {context}", category="general",
+            file="review.md",
+            name="Reviewer",
+            triggers=["review"],
+            description="Review code",
+            prompt="Review: {context}",
+            category="general",
             tools_used=["read_workspace_file"],
         )
         toolbox = _toolbox_for_skill(skill)
@@ -397,9 +463,12 @@ class TestToolboxForSkill:
 
     def test_unknown_category_defaults_to_all(self):
         skill = SkillDefinition(
-            file="unknown.md", name="Unknown",
-            triggers=["unknown"], description="Unknown skill",
-            prompt="Do: {context}", category="general",
+            file="unknown.md",
+            name="Unknown",
+            triggers=["unknown"],
+            description="Unknown skill",
+            prompt="Do: {context}",
+            category="general",
         )
         toolbox = _toolbox_for_skill(skill)
         assert toolbox == ["all"]

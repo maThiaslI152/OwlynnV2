@@ -43,6 +43,7 @@ web_enabled_st = st.booleans()
 
 # ── Property 5: Resolve Tools Produces Correct Union ─────────────────────
 
+
 class TestResolveToolsProperty:
     """
     Property 5: For any subset of valid toolbox names and any web_search_enabled
@@ -118,5 +119,5 @@ class TestResolveToolsProperty:
 
         for tool in result:
             assert id(tool) in allowed_ids, (
-                f"Unexpected tool in result not from requested toolboxes"
+                "Unexpected tool in result not from requested toolboxes"
             )

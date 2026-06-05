@@ -23,8 +23,12 @@ SENSITIVE_PATTERN_RE = re.compile(
     re.IGNORECASE,
 )
 
-_DESTRUCTIVE_RE = re.compile(r"(?:\brm\s+-rf\b|\bdrop\b|\bdelete\b|\btruncate\b)", re.IGNORECASE)
-_NETWORK_RE = re.compile(r"(?:\bcurl\b|\bwget\b|\bhttp[s]?://\b|\bscp\b|\bssh\b)", re.IGNORECASE)
+_DESTRUCTIVE_RE = re.compile(
+    r"(?:\brm\s+-rf\b|\bdrop\b|\bdelete\b|\btruncate\b)", re.IGNORECASE
+)
+_NETWORK_RE = re.compile(
+    r"(?:\bcurl\b|\bwget\b|\bhttp[s]?://\b|\bscp\b|\bssh\b)", re.IGNORECASE
+)
 _PRIVILEGE_RE = re.compile(r"(?:\bsudo\b|\bchmod\b|\bchown\b)", re.IGNORECASE)
 
 CATEGORY_REMEDIATION = {
@@ -54,7 +58,10 @@ def is_sensitive_call(tool_name: str, args) -> bool:
     if is_information_retrieval(tool_name):
         return False
     import json
+
     if tool_name in SENSITIVE_TOOLS:
         return True
-    args_text = json.dumps(args, ensure_ascii=True) if not isinstance(args, str) else args
+    args_text = (
+        json.dumps(args, ensure_ascii=True) if not isinstance(args, str) else args
+    )
     return bool(SENSITIVE_PATTERN_RE.search(args_text))

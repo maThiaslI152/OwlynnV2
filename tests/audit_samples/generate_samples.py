@@ -3,6 +3,7 @@
 Each file contains known, verifiable content that we can test against
 after the LLM reads them via the Owlynn pipeline.
 """
+
 import os
 
 SAMPLES_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -14,13 +15,13 @@ def create_pdf():
 
     doc = fitz.Document()
     page1 = doc.new_page()
-    
+
     # Insert page 1 content immediately (before creating page 2)
     html1 = (
         '<p style="font-size:18px;"><b>Owlynn RAG Audit - Test Document PDF</b></p>'
-        '<br>'
+        "<br>"
         '<p style="font-size:14px;"><b>Project Omega - Q1 2026 Financial Summary</b></p>'
-        '<hr>'
+        "<hr>"
         '<p style="font-size:13px;"><b>Project Omega revenue: 4,200,000 THB (4.2M) in Q1 2026</b></p>'
         '<p style="font-size:12px;">Gross margin: 62 percent  |  Operating costs: 1,600,000 THB</p>'
         '<p style="font-size:12px;">Team size: 12 engineers  |  Office: Bangkok, Thailand</p>'
@@ -31,15 +32,15 @@ def create_pdf():
     page2 = doc.new_page()
     html2 = (
         '<p style="font-size:16px;"><b>Page 2 - Additional Details</b></p>'
-        '<br>'
+        "<br>"
         '<p style="font-size:12px;">Project Omega launched in January 2026 with a focus</p>'
         '<p style="font-size:12px;">on AI-powered document intelligence. By end of Q1,</p>'
         '<p style="font-size:12px;">the platform processed 15,000+ documents across 3 formats.</p>'
-        '<br>'
+        "<br>"
         '<p style="font-size:13px;"><b>Key Technologies:</b></p>'
-        '<p>1. PyMuPDF for PDF text extraction</p>'
-        '<p>2. python-docx for Word documents</p>'
-        '<p>3. pandas + openpyxl for Excel spreadsheets</p>'
+        "<p>1. PyMuPDF for PDF text extraction</p>"
+        "<p>2. python-docx for Word documents</p>"
+        "<p>3. pandas + openpyxl for Excel spreadsheets</p>"
     )
     page2.insert_htmlbox(fitz.Rect(50, 50, 545, 500), html2)
 
@@ -57,7 +58,9 @@ def create_docx():
 
     doc = Document()
     doc.add_heading("Audit Specification Document", level=1)
-    doc.add_paragraph("This document contains the specification for the Owlynn RAG audit test.")
+    doc.add_paragraph(
+        "This document contains the specification for the Owlynn RAG audit test."
+    )
 
     doc.add_heading("Core Components (5 items)", level=2)
     items = [

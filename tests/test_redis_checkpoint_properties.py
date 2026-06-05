@@ -92,6 +92,7 @@ messages_st = st.lists(
 
 # ── Mock Checkpoint Store ────────────────────────────────────────────────
 
+
 class MockCheckpointStore:
     """
     Dict-based mock that mimics Redis checkpointer put/get behavior.
@@ -123,8 +124,7 @@ class MockCheckpointStore:
         for key, value in state.items():
             if key == "messages":
                 out[key] = [
-                    {"type": type(m).__name__, "content": m.content}
-                    for m in value
+                    {"type": type(m).__name__, "content": m.content} for m in value
                 ]
             else:
                 out[key] = copy.deepcopy(value)
@@ -150,6 +150,7 @@ class MockCheckpointStore:
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
+
 def _build_checkpoint_state(
     messages_pairs: list[tuple[str, str]],
     route: str,
@@ -174,6 +175,7 @@ def _build_checkpoint_state(
 # ═════════════════════════════════════════════════════════════════════════
 # Property 11: Redis Checkpoint Round-Trip
 # ═════════════════════════════════════════════════════════════════════════
+
 
 class TestRedisCheckpointRoundTrip:
     """
@@ -276,8 +278,18 @@ class TestRedisCheckpointRoundTrip:
     @settings(max_examples=100)
     def test_thread_isolation(
         self,
-        pairs_a, route_a, model_a, toolboxes_a, budget_a, thread_a,
-        pairs_b, route_b, model_b, toolboxes_b, budget_b, thread_b,
+        pairs_a,
+        route_a,
+        model_a,
+        toolboxes_a,
+        budget_a,
+        thread_a,
+        pairs_b,
+        route_b,
+        model_b,
+        toolboxes_b,
+        budget_b,
+        thread_b,
     ):
         """
         Storing states for different thread_ids does not cause interference.

@@ -1,6 +1,8 @@
 """Tests for v2.0 front-matter parsing and _parse_skill_file helper."""
+
 import sys
 from unittest.mock import MagicMock
+
 sys.modules["mem0"] = MagicMock()
 
 import pytest
@@ -113,6 +115,7 @@ def test_parse_v1_still_works():
 # ---------------------------------------------------------------------------
 # _parse_skill_file: full SkillDefinition construction
 # ---------------------------------------------------------------------------
+
 
 def test_parse_skill_file_v2():
     sd = _parse_skill_file(V2_FULL, "research_assistant.md")

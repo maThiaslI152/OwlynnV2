@@ -35,11 +35,24 @@ async def test_prompt_regression_small_route():
     try:
         app = build_graph().compile()
 
-        with patch("src.agent.nodes.memory.get_profile", return_value={}), \
-             patch("src.agent.nodes.memory.get_persona_by_id", return_value={"id": "default", "name": "Owlynn", "role": "assistant", "tone": "friendly", "instructions": ""}), \
-             patch("src.agent.nodes.memory.get_memory_context_for_prompt", return_value=""), \
-             patch("src.agent.nodes.memory.record_conversation", return_value=None), \
-             patch("src.memory.long_term.memory", None):
+        with (
+            patch("src.agent.nodes.memory.get_profile", return_value={}),
+            patch(
+                "src.agent.nodes.memory.get_persona_by_id",
+                return_value={
+                    "id": "default",
+                    "name": "Owlynn",
+                    "role": "assistant",
+                    "tone": "friendly",
+                    "instructions": "",
+                },
+            ),
+            patch(
+                "src.agent.nodes.memory.get_memory_context_for_prompt", return_value=""
+            ),
+            patch("src.agent.nodes.memory.record_conversation", return_value=None),
+            patch("src.memory.long_term.memory", None),
+        ):
             state: AgentState = {
                 "messages": [HumanMessage(content=SMALL_PROMPT)],
                 "thread_id": "prompt-reg-small",
@@ -65,7 +78,9 @@ async def test_prompt_regression_complex_route():
 
     mock_router_llm = AsyncMock()
     mock_router_llm.bind = MagicMock(return_value=mock_router_llm)
-    mock_router_llm.ainvoke.return_value = AIMessage(content='{"routing": "complex", "confidence": 0.99}')
+    mock_router_llm.ainvoke.return_value = AIMessage(
+        content='{"routing": "complex", "confidence": 0.99}'
+    )
 
     mock_bound = AsyncMock()
     mock_bound.bind = MagicMock(return_value=mock_bound)
@@ -80,11 +95,24 @@ async def test_prompt_regression_complex_route():
     try:
         app = build_graph().compile()
 
-        with patch("src.agent.nodes.memory.get_profile", return_value={}), \
-             patch("src.agent.nodes.memory.get_persona_by_id", return_value={"id": "default", "name": "Owlynn", "role": "assistant", "tone": "friendly", "instructions": ""}), \
-             patch("src.agent.nodes.memory.get_memory_context_for_prompt", return_value=""), \
-             patch("src.agent.nodes.memory.record_conversation", return_value=None), \
-             patch("src.memory.long_term.memory", None):
+        with (
+            patch("src.agent.nodes.memory.get_profile", return_value={}),
+            patch(
+                "src.agent.nodes.memory.get_persona_by_id",
+                return_value={
+                    "id": "default",
+                    "name": "Owlynn",
+                    "role": "assistant",
+                    "tone": "friendly",
+                    "instructions": "",
+                },
+            ),
+            patch(
+                "src.agent.nodes.memory.get_memory_context_for_prompt", return_value=""
+            ),
+            patch("src.agent.nodes.memory.record_conversation", return_value=None),
+            patch("src.memory.long_term.memory", None),
+        ):
             state: AgentState = {
                 "messages": [HumanMessage(content=COMPLEX_PROMPT)],
                 "thread_id": "prompt-reg-complex",
@@ -112,10 +140,23 @@ async def test_prompt_regression_memory_injection():
         "thread_id": "prompt-reg-memory",
     }
 
-    with patch("src.agent.nodes.memory.get_profile", return_value={"name": "Tim"}), \
-         patch("src.agent.nodes.memory.get_persona_by_id", return_value={"id": "default", "name": "Owlynn", "role": "helpful assistant", "tone": "friendly", "instructions": ""}), \
-         patch("src.agent.nodes.memory.get_memory_context_for_prompt", return_value=marker), \
-         patch("src.memory.long_term.memory", None):
+    with (
+        patch("src.agent.nodes.memory.get_profile", return_value={"name": "Tim"}),
+        patch(
+            "src.agent.nodes.memory.get_persona_by_id",
+            return_value={
+                "id": "default",
+                "name": "Owlynn",
+                "role": "helpful assistant",
+                "tone": "friendly",
+                "instructions": "",
+            },
+        ),
+        patch(
+            "src.agent.nodes.memory.get_memory_context_for_prompt", return_value=marker
+        ),
+        patch("src.memory.long_term.memory", None),
+    ):
         result = await memory_inject_node(state)
 
     assert "memory_context" in result

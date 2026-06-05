@@ -17,9 +17,7 @@ Memory scoping:
 - Default project uses the user's profile name or ``"owner"`` (shared global).
 """
 
-from langchain_core.messages import AIMessage
 from src.agent.state import AgentState
-from src.memory.memory_manager import save_memory, search_memories
 from src.memory.user_profile import get_profile
 from src.memory.persona_manager import get_persona_by_id
 from src.config.config_loader import config
@@ -30,25 +28,26 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-from src.config.audit_log import audit_debug, audit_info, audit_event
+from src.config.audit_log import audit_debug, audit_info
 from src.config.log_middleware import log_node
 
 # Import enhanced personal assistant memory system
 from src.memory.personal_assistant import (
-    TopicExtractor, ConversationSummary, MemoryEnricher,
-    record_conversation, get_memory_context_for_prompt,
-    get_relevant_topics, get_user_interests_summary
+    TopicExtractor,
+    MemoryEnricher,
+    record_conversation,
+    get_memory_context_for_prompt,
 )
 
 
 def _get_mem0_user_id(state: dict) -> str:
     """
     Return a STABLE user identifier for Mem0.
-    
+
     Memory scoping strategy:
     - Non-default project → "project:<project_id>" (isolated per project)
     - Default project     → user profile name or "owner" (shared global memory)
-    
+
     This means project-specific conversations stay within that project's
     knowledge silo, while general chats share a common memory pool.
     """
@@ -67,6 +66,7 @@ def _get_mem0_user_id(state: dict) -> str:
         pass
     return "owner"
 
+
 # --- M4 OPTIMIZATION: Memory Context Cache ---
 class MemoryContextCache:
     """In-memory TTL cache for formatted memory context strings.
@@ -77,10 +77,11 @@ class MemoryContextCache:
 
     Uses a threading lock to prevent race conditions from concurrent async tasks.
     """
+
     _cache = {}
     _ttl_seconds = int(config.get("memory.cache.ttl", 300))  # default 5 minutes
     _lock = __import__("threading").Lock()
-    
+
     @classmethod
     def get(cls, thread_id: str, project_id: str) -> Optional[str]:
         """Get cached context if still valid."""
@@ -90,28 +91,41 @@ class MemoryContextCache:
                 cached_at, context = cls._cache[cache_key]
                 age = datetime.now() - cached_at
                 if age < timedelta(seconds=cls._ttl_seconds):
-                    audit_debug("memory.cache", "cache_hit", age_seconds=int(age.total_seconds()))
+                    audit_debug(
+                        "memory.cache",
+                        "cache_hit",
+                        age_seconds=int(age.total_seconds()),
+                    )
                     return context
                 else:
-                    audit_debug("memory.cache", "cache_miss", reason="expired", age_seconds=int(age.total_seconds()))
+                    audit_debug(
+                        "memory.cache",
+                        "cache_miss",
+                        reason="expired",
+                        age_seconds=int(age.total_seconds()),
+                    )
                     del cls._cache[cache_key]
             else:
                 audit_debug("memory.cache", "cache_miss", reason="not_found")
             return None
+
     @classmethod
     def set(cls, thread_id: str, project_id: str, context: str):
         """Cache context with timestamp."""
         cache_key = f"{thread_id}:{project_id}"
         with cls._lock:
             cls._cache[cache_key] = (datetime.now(), context)
+
     @classmethod
     def invalidate(cls, thread_id: str):
         """Invalidate cache when memory updates."""
         with cls._lock:
-            keys_to_delete = [k for k in cls._cache.keys() if k.startswith(f"{thread_id}:")]
+            keys_to_delete = [
+                k for k in cls._cache.keys() if k.startswith(f"{thread_id}:")
+            ]
             for k in keys_to_delete:
                 del cls._cache[k]
-    
+
     @classmethod
     def invalidate_on_write(cls, thread_id: str):
         """Called by memory_write_node after saving new memories.
@@ -125,10 +139,14 @@ class MemoryContextCache:
         """Remove expired cache entries."""
         now = datetime.now()
         with cls._lock:
-            expired = [k for k, (t, _) in cls._cache.items() 
-                       if now - t > timedelta(seconds=cls._ttl_seconds)]
+            expired = [
+                k
+                for k, (t, _) in cls._cache.items()
+                if now - t > timedelta(seconds=cls._ttl_seconds)
+            ]
             for k in expired:
                 del cls._cache[k]
+
 
 # --- READ: fires before the brain node ---
 @log_node("memory_inject")
@@ -145,9 +163,9 @@ async def memory_inject_node(state: AgentState) -> AgentState:
 
     Returns state updates: ``memory_context`` and ``persona``.
     """
-    thread_id    = state.get("thread_id", "default")
+    thread_id = state.get("thread_id", "default")
     user_message = state["messages"][-1].content if state.get("messages") else ""
-    
+
     # Check cache first (M4 optimization - avoid rebuilding context repeatedly)
     project_id = state.get("project_id") or "default"
     cached_context = MemoryContextCache.get(thread_id, project_id)
@@ -155,25 +173,33 @@ async def memory_inject_node(state: AgentState) -> AgentState:
         persona_id = state.get("persona_id") or "default"
         persona = get_persona_by_id(persona_id)
         persona_summary = f"You are {persona['name']}, a {persona['role']}. Tone: {persona['tone']}. {persona['instructions']}"
-        audit_debug("memory.inject", "context_from_cache", context_chars=len(cached_context))
-        return {
-            "memory_context": cached_context,
-            "persona": persona_summary
-        }
-    
+        audit_debug(
+            "memory.inject", "context_from_cache", context_chars=len(cached_context)
+        )
+        return {"memory_context": cached_context, "persona": persona_summary}
+
     # Semantic search against long-term memory.
     # Strategy: always search project-scoped memories, and also pull global
     # user memories so the assistant still knows who you are.
     from src.memory.long_term import memory
+
     mem0_uid = _get_mem0_user_id(state)
     project_id = state.get("project_id") or "default"
-    
+
     results = []
     if memory is not None:
         # 1. Project-scoped memories (or global if default project)
         try:
-            results_dict = await asyncio.to_thread(lambda: memory.search(user_message, filters={"user_id": mem0_uid}, limit=5))
-            results = results_dict.get("results", []) if isinstance(results_dict, dict) else results_dict
+            results_dict = await asyncio.to_thread(
+                lambda: memory.search(
+                    user_message, filters={"user_id": mem0_uid}, limit=5
+                )
+            )
+            results = (
+                results_dict.get("results", [])
+                if isinstance(results_dict, dict)
+                else results_dict
+            )
         except Exception as e:
             logger.warning("[mem0] search failed: %s", e)
 
@@ -189,8 +215,16 @@ async def memory_inject_node(state: AgentState) -> AgentState:
                         global_uid = n
                 except Exception:
                     pass
-                global_dict = await asyncio.to_thread(lambda: memory.search(user_message, filters={"user_id": global_uid}, limit=3))
-                global_results = global_dict.get("results", []) if isinstance(global_dict, dict) else global_dict
+                global_dict = await asyncio.to_thread(
+                    lambda: memory.search(
+                        user_message, filters={"user_id": global_uid}, limit=3
+                    )
+                )
+                global_results = (
+                    global_dict.get("results", [])
+                    if isinstance(global_dict, dict)
+                    else global_dict
+                )
                 results.extend(global_results)
             except Exception as e:
                 logger.warning("[mem0] global search failed: %s", e)
@@ -201,7 +235,7 @@ async def memory_inject_node(state: AgentState) -> AgentState:
     # Pull persona summary
     persona_id = state.get("persona_id") or "default"
     persona = get_persona_by_id(persona_id)
-    
+
     # Get enhanced memory context with topics and interests
     enhanced_context = get_memory_context_for_prompt()
 
@@ -211,6 +245,7 @@ async def memory_inject_node(state: AgentState) -> AgentState:
     if project_id and project_id != "default":
         try:
             from src.memory.project import project_manager
+
             project = project_manager.get_project(project_id)
             if project:
                 parts = []
@@ -222,116 +257,177 @@ async def memory_inject_node(state: AgentState) -> AgentState:
                 # Include file count so the assistant knows what's available
                 file_count = len(project.get("files", []))
                 if file_count:
-                    parts.append(f"This project has {file_count} knowledge file(s) indexed.")
+                    parts.append(
+                        f"This project has {file_count} knowledge file(s) indexed."
+                    )
                 project_instructions = "\n".join(parts)
         except Exception as e:
             logger.warning("[project] instructions fetch failed: %s", e)
 
     # Format into a clean context block
-    memory_context = format_memory_context(results, profile, enhanced_context, project_instructions)
-    
+    memory_context = format_memory_context(
+        results, profile, enhanced_context, project_instructions
+    )
+
     # Cache for subsequent requests (M4 optimization)
     MemoryContextCache.set(thread_id, project_id, memory_context)
-    audit_info("memory.inject", "context_assembled", context_chars=len(memory_context), result_count=len(results))
-    
-    persona_summary = f"You are {persona['name']}, a {persona['role']}. Tone: {persona['tone']}. {persona['instructions']}"
-    return {
-        "memory_context": memory_context,
-        "persona": persona_summary
-    }
+    audit_info(
+        "memory.inject",
+        "context_assembled",
+        context_chars=len(memory_context),
+        result_count=len(results),
+    )
 
-def format_memory_context(results: list, profile: dict, enhanced_context: str = "", project_instructions: str = "") -> str:
+    persona_summary = f"You are {persona['name']}, a {persona['role']}. Tone: {persona['tone']}. {persona['instructions']}"
+    return {"memory_context": memory_context, "persona": persona_summary}
+
+
+def format_memory_context(
+    results: list,
+    profile: dict,
+    enhanced_context: str = "",
+    project_instructions: str = "",
+) -> str:
     """Format memory context with profile, relevant memories, enriched personal knowledge, and project instructions."""
     lines = []
 
     # Add project instructions first (highest priority — shapes all responses)
     if project_instructions:
-        lines.append("=== ACTIVE PROJECT CONTEXT (follow these instructions closely) ===")
+        lines.append(
+            "=== ACTIVE PROJECT CONTEXT (follow these instructions closely) ==="
+        )
         lines.append(project_instructions)
         lines.append("=== END PROJECT CONTEXT ===")
-    
+
     # Add enhanced memory context (topics, interests, recent convos) — capped to stay within model context
     if enhanced_context:
         lines.append("\n=== Your Knowledge About User ===")
-        max_enhanced_chars = 6000  # ~1500 tokens — leave room for system prompt + messages
+        max_enhanced_chars = (
+            6000  # ~1500 tokens — leave room for system prompt + messages
+        )
         if len(enhanced_context) > max_enhanced_chars:
-            enhanced_context = enhanced_context[:max_enhanced_chars] + "\n... [truncated for context budget]"
+            enhanced_context = (
+                enhanced_context[:max_enhanced_chars]
+                + "\n... [truncated for context budget]"
+            )
         lines.append(enhanced_context)
-    
+
     # Add user profile (only human-relevant fields, not config)
     _PROFILE_SKIP = {
-        'system_prompt', 'custom_instructions', 'llm_base_url', 'llm_model_name',
-        'small_llm_base_url', 'small_llm_model_name', 'large_llm_base_url', 'large_llm_model_name',
-        'temperature', 'top_p', 'max_tokens', 'top_k', 'streaming_enabled',
-        'show_thinking', 'show_tool_execution', 'lm_studio_fold_system',
-        'short_term_enabled', 'long_term_enabled', 'domains_of_interest',
+        "system_prompt",
+        "custom_instructions",
+        "llm_base_url",
+        "llm_model_name",
+        "small_llm_base_url",
+        "small_llm_model_name",
+        "large_llm_base_url",
+        "large_llm_model_name",
+        "temperature",
+        "top_p",
+        "max_tokens",
+        "top_k",
+        "streaming_enabled",
+        "show_thinking",
+        "show_tool_execution",
+        "lm_studio_fold_system",
+        "short_term_enabled",
+        "long_term_enabled",
+        "domains_of_interest",
     }
     if profile:
-         lines.append("\n=== User Profile ===")
-         for k, v in profile.items():
-              if v and k not in _PROFILE_SKIP:
-                  lines.append(f"  {k}: {v}")
-    
+        lines.append("\n=== User Profile ===")
+        for k, v in profile.items():
+            if v and k not in _PROFILE_SKIP:
+                lines.append(f"  {k}: {v}")
+
     # Add relevant past context
     if results:
-         lines.append("\n=== Relevant Past Context ===")
-         for item in results:
-              if isinstance(item, dict):
-                  lines.append(f"  - {item.get('memory', item)}")
-              else:
-                   lines.append(f"  - {item}")
-    
+        lines.append("\n=== Relevant Past Context ===")
+        for item in results:
+            if isinstance(item, dict):
+                lines.append(f"  - {item.get('memory', item)}")
+            else:
+                lines.append(f"  - {item}")
+
     final_text = "\n".join(lines) if lines else "No prior memory available."
     if len(final_text) > 12000:
         final_text = final_text[:12000] + "\n... [truncated for context budget]"
     return final_text
 
+
 # --- WRITE: fires after response is generated ---
 async def _should_save_memory(last_human: str, last_ai: str) -> bool:
     """Selective memory gate: only save if the conversation has meaningful content.
-    
+
     Skips:
     - Very short or empty messages
-    - Purely casual/greeting exchanges  
+    - Purely casual/greeting exchanges
     - Messages where the AI response is just a confirmation/hand-off
     """
     human_stripped = last_human.strip()
     ai_stripped = last_ai.strip()
-    
+
     # Skip empty
     if not human_stripped or not ai_stripped:
         return False
-    
+
     # Skip very short messages (< 10 chars)
     if len(human_stripped) < 10 and len(ai_stripped) < 10:
         return False
-    
+
     # Skip common greeting patterns
-    greeting_patterns = {"hello", "hi", "hey", "thanks", "thank you", "ok", "okay", "goodbye", "bye"}
+    greeting_patterns = {
+        "hello",
+        "hi",
+        "hey",
+        "thanks",
+        "thank you",
+        "ok",
+        "okay",
+        "goodbye",
+        "bye",
+    }
     human_lower = human_stripped.lower().rstrip(".!?")
     if human_lower in greeting_patterns:
         return False
-    
+
     # Skip if AI response is very short and appears to be a simple acknowledgment
     ai_lower = ai_stripped.lower()
-    simple_acknowledgments = {"you're welcome", "you are welcome", "no problem", "happy to help",
-                               "glad to help", "anytime", "sure", "okay", "done", "got it"}
+    simple_acknowledgments = {
+        "you're welcome",
+        "you are welcome",
+        "no problem",
+        "happy to help",
+        "glad to help",
+        "anytime",
+        "sure",
+        "okay",
+        "done",
+        "got it",
+    }
     if ai_stripped.strip(".! ").lower() in simple_acknowledgments:
         return False
-    
+
     return True
 
 
 async def _is_semantically_similar(memory, new_text: str, user_id: str) -> bool:
     """Check if a semantically similar memory already exists to avoid duplicates."""
     from src.memory.long_term import memory as mem0_memory
+
     if mem0_memory is None:
         return False
     try:
         results_dict = await asyncio.to_thread(
-            lambda: mem0_memory.search(new_text[:200], filters={"user_id": user_id}, limit=3),
+            lambda: mem0_memory.search(
+                new_text[:200], filters={"user_id": user_id}, limit=3
+            ),
         )
-        results = results_dict.get("results", []) if isinstance(results_dict, dict) else results_dict
+        results = (
+            results_dict.get("results", [])
+            if isinstance(results_dict, dict)
+            else results_dict
+        )
         for item in results:
             if isinstance(item, dict):
                 existing = (item.get("memory") or item.get("text", "")).lower().strip()
@@ -358,30 +454,47 @@ async def memory_write_node(state: AgentState) -> AgentState:
     7. Set ``memory_invalidated=True`` to trigger WebSocket notification
     """
     thread_id = state.get("thread_id", "default")
-    messages  = state.get("messages", [])
+    messages = state.get("messages", [])
     session_id = state.get("session_id", thread_id)
-    
+
     if not messages:
         return {}
-    
+
     # Extract last human and AI messages
     last_human = next(
-        (m.content for m in reversed(messages) if hasattr(m, "type") and m.type == "human"), None
+        (
+            m.content
+            for m in reversed(messages)
+            if hasattr(m, "type") and m.type == "human"
+        ),
+        None,
     )
     last_ai = next(
-        (m.content for m in reversed(messages) if hasattr(m, "type") and m.type == "ai"), None
+        (
+            m.content
+            for m in reversed(messages)
+            if hasattr(m, "type") and m.type == "ai"
+        ),
+        None,
     )
-    
+
     if not (last_human and last_ai):
         return {}
-    
+
     # --- Selective memory gate ---
     if not await _should_save_memory(last_human, last_ai):
-        logger.debug("[Memory] Skipping memory save (gate rejected trivial/greeting exchange)")
-        audit_debug("memory.write", "gate_skipped", reason="greeting_or_trivial",
-                     human_len=len(str(last_human)), ai_len=len(str(last_ai)))
+        logger.debug(
+            "[Memory] Skipping memory save (gate rejected trivial/greeting exchange)"
+        )
+        audit_debug(
+            "memory.write",
+            "gate_skipped",
+            reason="greeting_or_trivial",
+            human_len=len(str(last_human)),
+            ai_len=len(str(last_ai)),
+        )
         return {}
-    
+
     # Record this turn in conversation
     try:
         # Convert messages to dict format
@@ -391,18 +504,19 @@ async def memory_write_node(state: AgentState) -> AgentState:
                 role = "user" if msg.type == "human" else "assistant"
             else:
                 role = msg.get("role", "user")
-            
+
             content = msg.content if hasattr(msg, "content") else msg.get("content", "")
             message_dicts.append({"role": role, "content": content})
-        
+
         # Record conversation and extract topics/interests
         await asyncio.to_thread(record_conversation, message_dicts, session_id)
-        
+
     except Exception as e:
         logger.warning("[Memory] Failed to record conversation: %s", e)
-    
+
     # Save enriched facts to long-term memory
     from src.memory.long_term import memory
+
     mem0_uid = _get_mem0_user_id(state)
     if memory is not None:
         try:
@@ -410,32 +524,44 @@ async def memory_write_node(state: AgentState) -> AgentState:
             conversation_text = f"{last_human} {last_ai}"
             topics = TopicExtractor.extract_topics(conversation_text)
             interests = TopicExtractor.extract_interests(conversation_text)
-            
+
             # Create enriched fact
             fact_text = f"User asked: {last_human}. AI answered: {last_ai}"
             enriched_fact = MemoryEnricher.enrich_memory(fact_text, topics, interests)
-            
+
             # --- Dedup check ---
             # Only use the fact_text for dedup (not the enriched version which includes topics)
             is_dup = await _is_semantically_similar(memory, fact_text, mem0_uid)
             if is_dup:
-                logger.debug("[Memory] Skipping memory save (semantically similar exists)")
-                audit_debug("memory.write", "dedup_skip", reason="semantically_similar", user_id=mem0_uid)
+                logger.debug(
+                    "[Memory] Skipping memory save (semantically similar exists)"
+                )
+                audit_debug(
+                    "memory.write",
+                    "dedup_skip",
+                    reason="semantically_similar",
+                    user_id=mem0_uid,
+                )
             else:
                 await asyncio.to_thread(
-                    memory.add, 
-                    fact_text, 
-                    user_id=mem0_uid, 
+                    memory.add,
+                    fact_text,
+                    user_id=mem0_uid,
                     infer=False,
                 )
-                audit_info("memory.write", "mem0_saved", user_id=mem0_uid, fact_chars=len(fact_text), topic_count=len(topics))
-            
+                audit_info(
+                    "memory.write",
+                    "mem0_saved",
+                    user_id=mem0_uid,
+                    fact_chars=len(fact_text),
+                    topic_count=len(topics),
+                )
+
             # Invalidate memory context cache since memory was updated (M4 optimization)
             # Uses invalidate_on_write to signal WebSocket forwarder
             MemoryContextCache.invalidate_on_write(thread_id)
-            
+
         except Exception as e:
             logger.warning("[Memory] Failed to save enriched memory: %s", e)
-    
-    return {"memory_invalidated": True}
 
+    return {"memory_invalidated": True}

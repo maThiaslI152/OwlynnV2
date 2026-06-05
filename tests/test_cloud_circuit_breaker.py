@@ -10,7 +10,11 @@ sys.modules["mem0"] = MagicMock()
 
 @pytest.fixture
 def fresh_breaker():
-    from src.agent.cloud_circuit_breaker import CloudCircuitBreaker, reset_circuit_breaker
+    from src.agent.cloud_circuit_breaker import (
+        CloudCircuitBreaker,
+        reset_circuit_breaker,
+    )
+
     reset_circuit_breaker()
     cb = CloudCircuitBreaker(failure_threshold=3, cooldown_seconds=1)
     yield cb
@@ -47,27 +51,30 @@ class TestCloudCircuitBreaker:
 
     def test_cooldown_expiry_half_open(self, fresh_breaker):
         import time
+
         fresh_breaker.record_failure()
         fresh_breaker.record_failure()
         fresh_breaker.record_failure()
         assert fresh_breaker.is_open()
         # Fast-forward past cooldown by patching time
-        with patch.object(fresh_breaker, '_last_failure_time', time.monotonic() - 2):
+        with patch.object(fresh_breaker, "_last_failure_time", time.monotonic() - 2):
             assert fresh_breaker.is_closed()  # Half-open — allows trial
 
     def test_success_after_cooldown_closes(self, fresh_breaker):
         import time
+
         fresh_breaker.record_failure()
         fresh_breaker.record_failure()
         fresh_breaker.record_failure()
         # Simulate cooldown expiry
-        with patch.object(fresh_breaker, '_last_failure_time', time.monotonic() - 2):
+        with patch.object(fresh_breaker, "_last_failure_time", time.monotonic() - 2):
             assert fresh_breaker.is_closed()
             fresh_breaker.record_success()
             assert fresh_breaker.consecutive_failures == 0
 
     def test_remaining_cooldown(self, fresh_breaker):
         import time
+
         fresh_breaker.record_failure()
         fresh_breaker.record_failure()
         fresh_breaker.record_failure()
@@ -83,7 +90,11 @@ class TestCloudCircuitBreaker:
         assert fresh_breaker.remaining_cooldown == 0
 
     def test_singleton_is_shared(self):
-        from src.agent.cloud_circuit_breaker import get_circuit_breaker, reset_circuit_breaker
+        from src.agent.cloud_circuit_breaker import (
+            get_circuit_breaker,
+            reset_circuit_breaker,
+        )
+
         reset_circuit_breaker()
         cb1 = get_circuit_breaker()
         cb2 = get_circuit_breaker()

@@ -33,6 +33,7 @@ from src.agent.nodes.summarize import (
 
 # ── Helper to build a conversation with N turns ──────────────────────────
 
+
 def _make_turns(n: int) -> list:
     """Create n human/AI turn pairs."""
     msgs = []
@@ -43,6 +44,7 @@ def _make_turns(n: int) -> list:
 
 
 # ── _estimate_tokens ─────────────────────────────────────────────────────
+
 
 class TestEstimateTokens:
     def test_empty_string(self):
@@ -58,6 +60,7 @@ class TestEstimateTokens:
 
 
 # ── _is_protected ────────────────────────────────────────────────────────
+
 
 class TestIsProtected:
     def test_tool_message_is_protected(self):
@@ -81,11 +84,14 @@ class TestIsProtected:
         assert _is_protected(msg) is True
 
     def test_user_fact_message_is_protected(self):
-        msg = HumanMessage(content="my name is X", additional_kwargs={"user_fact": True})
+        msg = HumanMessage(
+            content="my name is X", additional_kwargs={"user_fact": True}
+        )
         assert _is_protected(msg) is True
 
 
 # ── _split_messages ──────────────────────────────────────────────────────
+
 
 class TestSplitMessages:
     def test_empty_messages(self):
@@ -121,6 +127,7 @@ class TestSplitMessages:
 
 
 # ── auto_summarize_node ──────────────────────────────────────────────────
+
 
 class TestAutoSummarizeNode:
     @pytest.mark.asyncio
@@ -183,7 +190,9 @@ class TestAutoSummarizeNode:
         msgs = _make_turns(15)
         # Insert a ToolMessage and a pinned message early in the conversation
         tool_msg = ToolMessage(content="tool result", tool_call_id="tc1")
-        pinned_msg = HumanMessage(content="pinned fact", additional_kwargs={"pinned": True})
+        pinned_msg = HumanMessage(
+            content="pinned fact", additional_kwargs={"pinned": True}
+        )
         msgs.insert(2, tool_msg)
         msgs.insert(3, pinned_msg)
 

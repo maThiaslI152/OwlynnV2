@@ -99,7 +99,7 @@ def test_blank_response_fallback_synthetic_when_web_search_succeeded():
 
 def test_blank_response_fallback_when_web_search_failed():
     msg = ToolMessage(
-        content="[web_search] Unable to retrieve online results for \"x\".",
+        content='[web_search] Unable to retrieve online results for "x".',
         name="web_search",
         tool_call_id="tc3",
     )

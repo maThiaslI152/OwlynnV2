@@ -43,17 +43,24 @@ def _clean():
 # Simple node latency by input size
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 @pytest.mark.benchmark
 class TestSimpleLatency:
     """Measure simple_node latency across input sizes."""
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("input_text,label", [
-        ("Hello", "short"),
-        ("What is the capital of Thailand?", "medium"),
-        ("Explain the difference between HTTP/1.1 and HTTP/2 in terms of "
-         "multiplexing, header compression, and server push.", "long"),
-    ])
+    @pytest.mark.parametrize(
+        "input_text,label",
+        [
+            ("Hello", "short"),
+            ("What is the capital of Thailand?", "medium"),
+            (
+                "Explain the difference between HTTP/1.1 and HTTP/2 in terms of "
+                "multiplexing, header compression, and server push.",
+                "long",
+            ),
+        ],
+    )
     async def test_simple_latency_by_input_size(self, input_text: str, label: str):
         """p50/p95/p99 latency for simple_node at different input lengths."""
         from src.agent.nodes.simple import simple_node
@@ -85,7 +92,7 @@ class TestSimpleLatency:
         record_entry(entry)
 
         assert tracker.p50 * 1000 < 300, (
-            f"Simple node p50 {tracker.p50*1000:.1f}ms exceeds 300ms threshold"
+            f"Simple node p50 {tracker.p50 * 1000:.1f}ms exceeds 300ms threshold"
         )
 
     @pytest.mark.asyncio
@@ -123,6 +130,7 @@ class TestSimpleLatency:
 # ═══════════════════════════════════════════════════════════════════════════
 # Simple node fallback overhead
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 @pytest.mark.benchmark
 class TestSimpleFallback:
@@ -165,6 +173,7 @@ class TestSimpleFallback:
 # Simple node concurrency
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 @pytest.mark.benchmark
 class TestSimpleConcurrency:
     """Measure simple_node throughput under concurrent load."""
@@ -184,7 +193,7 @@ class TestSimpleConcurrency:
 
         tracker = await time_concurrent(
             simple_node,
-            args_list[:max(10, concurrency * 3)],
+            args_list[: max(10, concurrency * 3)],
             concurrency=concurrency,
         )
 

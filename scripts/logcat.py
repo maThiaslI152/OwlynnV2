@@ -47,6 +47,7 @@ def _resolve_log_dir(args: argparse.Namespace) -> Path:
     # Try profile setting
     try:
         from src.memory.user_profile import get_profile
+
         profile = get_profile()
         audit_dir_str = profile.get("audit_log_dir", "")
         if audit_dir_str:
@@ -199,25 +200,30 @@ Examples:
 """,
     )
     parser.add_argument(
-        "--channel", "-c",
+        "--channel",
+        "-c",
         help="Comma-separated channel names (exact or prefix match, e.g. 'memory' matches all memory.*)",
     )
     parser.add_argument(
-        "--level", "-l",
+        "--level",
+        "-l",
         choices=["DEBUG", "INFO", "WARN", "WARNING", "ERROR"],
         help="Minimum log level to show",
     )
     parser.add_argument(
-        "--thread-id", "-t",
+        "--thread-id",
+        "-t",
         help="Filter by thread ID",
     )
     parser.add_argument(
-        "--follow", "-f",
+        "--follow",
+        "-f",
         action="store_true",
         help="Follow the log in real-time (like tail -f)",
     )
     parser.add_argument(
-        "--log-dir", "-d",
+        "--log-dir",
+        "-d",
         help="Path to audit log directory (overrides env var and profile)",
     )
     parser.add_argument(

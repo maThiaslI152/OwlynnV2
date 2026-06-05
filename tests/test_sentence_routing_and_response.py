@@ -35,7 +35,9 @@ COMPLEX_CASES = [
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sentence,expected_route,expected_model,expected_reply", SIMPLE_CASES)
+@pytest.mark.parametrize(
+    "sentence,expected_route,expected_model,expected_reply", SIMPLE_CASES
+)
 async def test_sentence_matrix_simple_route_and_response(
     sentence: str, expected_route: str, expected_model: str, expected_reply: str
 ):
@@ -49,12 +51,28 @@ async def test_sentence_matrix_simple_route_and_response(
     try:
         app = build_graph().compile()
 
-        with patch("src.agent.nodes.memory.get_profile", return_value={}), \
-             patch("src.agent.nodes.memory.get_persona_by_id", return_value={"id": "default", "name": "Owlynn", "role": "assistant", "tone": "friendly", "instructions": ""}), \
-             patch("src.agent.nodes.memory.get_memory_context_for_prompt", return_value=""), \
-             patch("src.agent.nodes.memory.record_conversation", return_value=None), \
-             patch("src.memory.long_term.memory", None):
-            state: AgentState = {"messages": [HumanMessage(content=sentence)], "thread_id": "route-simple"}
+        with (
+            patch("src.agent.nodes.memory.get_profile", return_value={}),
+            patch(
+                "src.agent.nodes.memory.get_persona_by_id",
+                return_value={
+                    "id": "default",
+                    "name": "Owlynn",
+                    "role": "assistant",
+                    "tone": "friendly",
+                    "instructions": "",
+                },
+            ),
+            patch(
+                "src.agent.nodes.memory.get_memory_context_for_prompt", return_value=""
+            ),
+            patch("src.agent.nodes.memory.record_conversation", return_value=None),
+            patch("src.memory.long_term.memory", None),
+        ):
+            state: AgentState = {
+                "messages": [HumanMessage(content=sentence)],
+                "thread_id": "route-simple",
+            }
             result = await app.ainvoke(
                 state,
                 config={"configurable": {"thread_id": "route-simple"}},
@@ -68,7 +86,9 @@ async def test_sentence_matrix_simple_route_and_response(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("sentence,expected_route,expected_model,expected_reply", COMPLEX_CASES)
+@pytest.mark.parametrize(
+    "sentence,expected_route,expected_model,expected_reply", COMPLEX_CASES
+)
 async def test_sentence_matrix_complex_route_and_response(
     sentence: str, expected_route: str, expected_model: str, expected_reply: str
 ):
@@ -77,7 +97,9 @@ async def test_sentence_matrix_complex_route_and_response(
     # Force router classification for non-keyword complex prompts.
     mock_router_llm = AsyncMock()
     mock_router_llm.bind = MagicMock(return_value=mock_router_llm)
-    mock_router_llm.ainvoke.return_value = AIMessage(content='{"routing": "complex", "confidence": 0.99}')
+    mock_router_llm.ainvoke.return_value = AIMessage(
+        content='{"routing": "complex", "confidence": 0.99}'
+    )
 
     mock_bound = AsyncMock()
     mock_bound.bind = MagicMock(return_value=mock_bound)
@@ -90,12 +112,28 @@ async def test_sentence_matrix_complex_route_and_response(
     try:
         app = build_graph().compile()
 
-        with patch("src.agent.nodes.memory.get_profile", return_value={}), \
-             patch("src.agent.nodes.memory.get_persona_by_id", return_value={"id": "default", "name": "Owlynn", "role": "assistant", "tone": "friendly", "instructions": ""}), \
-             patch("src.agent.nodes.memory.get_memory_context_for_prompt", return_value=""), \
-             patch("src.agent.nodes.memory.record_conversation", return_value=None), \
-             patch("src.memory.long_term.memory", None):
-            state: AgentState = {"messages": [HumanMessage(content=sentence)], "thread_id": "route-complex"}
+        with (
+            patch("src.agent.nodes.memory.get_profile", return_value={}),
+            patch(
+                "src.agent.nodes.memory.get_persona_by_id",
+                return_value={
+                    "id": "default",
+                    "name": "Owlynn",
+                    "role": "assistant",
+                    "tone": "friendly",
+                    "instructions": "",
+                },
+            ),
+            patch(
+                "src.agent.nodes.memory.get_memory_context_for_prompt", return_value=""
+            ),
+            patch("src.agent.nodes.memory.record_conversation", return_value=None),
+            patch("src.memory.long_term.memory", None),
+        ):
+            state: AgentState = {
+                "messages": [HumanMessage(content=sentence)],
+                "thread_id": "route-complex",
+            }
             result = await app.ainvoke(
                 state,
                 config={"configurable": {"thread_id": "route-complex"}},

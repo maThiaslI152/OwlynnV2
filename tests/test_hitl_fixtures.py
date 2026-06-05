@@ -16,6 +16,7 @@ class TestHitlFixtures:
 
     def test_router_fixtures(self):
         from src.hitl.fixtures import load_fixture
+
         fix = load_fixture("router_skill_ambiguity")
         assert fix["type"] == "ask_user"
         assert len(fix["choices"]) >= 2
@@ -25,6 +26,7 @@ class TestHitlFixtures:
 
     def test_security_fixture(self):
         from src.hitl.fixtures import load_fixture
+
         fix = load_fixture("security_delete_file")
         assert fix["type"] == "security_approval_required"
         assert "sensitive_tool_calls" in fix
@@ -32,6 +34,7 @@ class TestHitlFixtures:
 
     def test_plan_review_fixture(self):
         from src.hitl.fixtures import load_fixture
+
         fix = load_fixture("plan_review_write_file")
         assert fix["type"] == "plan_review_required"
         assert "planned_actions" in fix
@@ -39,12 +42,14 @@ class TestHitlFixtures:
 
     def test_scope_clarification_fixture(self):
         from src.hitl.fixtures import load_fixture
+
         fix = load_fixture("scope_clarification_calculator")
         assert fix["type"] == "scope_clarification_required"
         assert len(fix["questions"]) == 3
 
     def test_ask_user_fixture(self):
         from src.hitl.fixtures import load_fixture
+
         fix = load_fixture("ask_user_mid_task")
         assert fix["type"] == "ask_user"
         assert len(fix["choices"]) == 3
@@ -54,6 +59,7 @@ class TestFixturesRoundTrip:
     def test_fixture_serializable(self):
         """All fixtures should be JSON-serializable."""
         from src.hitl.fixtures import load_fixture, list_fixtures
+
         for name in list_fixtures():
             fixture = load_fixture(name)
             # Should not raise

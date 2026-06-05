@@ -28,7 +28,14 @@ def run_pytest(extra_args: list[str]) -> int:
 
 def run_pytest_all(extra_args: list[str]) -> int:
     root = _project_root()
-    cmd = [sys.executable, "-m", "pytest", str(root / "tests"), "--tb=short", *extra_args]
+    cmd = [
+        sys.executable,
+        "-m",
+        "pytest",
+        str(root / "tests"),
+        "--tb=short",
+        *extra_args,
+    ]
     return subprocess.run(cmd, cwd=root).returncode
 
 

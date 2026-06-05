@@ -89,6 +89,7 @@ def _setup_audit_file_output() -> None:
     enabled = True
     try:
         from src.memory.user_profile import get_profile
+
         profile = get_profile()
         channel_levels_raw = profile.get("audit_log_levels")
         if isinstance(channel_levels_raw, dict) and channel_levels_raw:

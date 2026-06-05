@@ -15,9 +15,7 @@ STYLE_INSTRUCTIONS: dict[str, str] = {
         "\n\nResponse style: Explanatory — structured answer with clear sections or bullets; "
         "assume the reader is new to the topic."
     ),
-    "formal": (
-        "\n\nResponse style: Formal and professional tone throughout."
-    ),
+    "formal": ("\n\nResponse style: Formal and professional tone throughout."),
 }
 
 

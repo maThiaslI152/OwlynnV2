@@ -13,16 +13,19 @@ from dataclasses import dataclass, field
 
 VALID_TASK_CATEGORIES = frozenset({"general", "document", "vision", "code", "analysis"})
 
-VALID_ROUTES = frozenset({
-    "simple",
-    "complex-default",
-    "complex-vision",
-    "complex-longctx",
-    "complex-cloud",
-})
+VALID_ROUTES = frozenset(
+    {
+        "simple",
+        "complex-default",
+        "complex-vision",
+        "complex-longctx",
+        "complex-cloud",
+    }
+)
 
 
 # ── TaskFeatures ─────────────────────────────────────────────────────────
+
 
 @dataclass
 class TaskFeatures:
@@ -65,6 +68,7 @@ class TaskFeatures:
 
 # ── RouteClassification ─────────────────────────────────────────────────
 
+
 @dataclass
 class RouteClassification:
     """Result of the routing classification step."""
@@ -89,6 +93,7 @@ class RouteClassification:
 
 
 # ── RouterConfig ─────────────────────────────────────────────────────────
+
 
 @dataclass
 class RouterConfig:

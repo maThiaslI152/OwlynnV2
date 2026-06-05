@@ -17,10 +17,7 @@ Functions:
 Falls back gracefully (returns ``None``) if SearXNG is not configured or unreachable.
 """
 
-import asyncio
-import json
 import logging
-from urllib.parse import quote_plus
 
 from src.config.settings import SEARXNG_URL
 
@@ -48,7 +45,10 @@ async def searxng_search(
         "safesearch": 0,
     }
     try:
-        async with httpx.AsyncClient(timeout=15.0, headers={"User-Agent": "Owlynn/1.0", "Accept": "application/json"}) as client:
+        async with httpx.AsyncClient(
+            timeout=15.0,
+            headers={"User-Agent": "Owlynn/1.0", "Accept": "application/json"},
+        ) as client:
             resp = await client.get(f"{SEARXNG_URL}/search", params=params)
             resp.raise_for_status()
             data = resp.json()
@@ -62,12 +62,14 @@ async def searxng_search(
 
     hits = []
     for r in results[:max_results]:
-        hits.append({
-            "title": r.get("title", "No title"),
-            "href": r.get("url", ""),
-            "body": r.get("content", r.get("snippet", "No snippet")),
-            "engine": r.get("engine", "unknown"),
-        })
+        hits.append(
+            {
+                "title": r.get("title", "No title"),
+                "href": r.get("url", ""),
+                "body": r.get("content", r.get("snippet", "No snippet")),
+                "engine": r.get("engine", "unknown"),
+            }
+        )
     return hits if hits else None
 
 
@@ -76,8 +78,12 @@ async def searxng_available() -> bool:
     if not SEARXNG_URL:
         return False
     import httpx
+
     try:
-        async with httpx.AsyncClient(timeout=5.0, headers={"User-Agent": "Owlynn/1.0", "Accept": "application/json"}) as client:
+        async with httpx.AsyncClient(
+            timeout=5.0,
+            headers={"User-Agent": "Owlynn/1.0", "Accept": "application/json"},
+        ) as client:
             resp = await client.get(f"{SEARXNG_URL}/healthz")
             return resp.status_code == 200
     except Exception:

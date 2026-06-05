@@ -21,9 +21,10 @@ class _DummyAgent:
 def test_root_serves_frontend_v2_index_and_assets():
     from src.api.server import app
 
-    with patch("src.api.server.init_agent", autospec=True) as init_agent_mock, patch(
-        "src.api.server.start_watcher", autospec=True
-    ) as watcher_mock:
+    with (
+        patch("src.api.server.init_agent", autospec=True) as init_agent_mock,
+        patch("src.api.server.start_watcher", autospec=True) as watcher_mock,
+    ):
         init_agent_mock.return_value = _DummyAgent()
         watcher_mock.return_value = _DummyWatcher()
 
@@ -43,9 +44,10 @@ def test_root_serves_frontend_v2_index_and_assets():
 def test_legacy_static_endpoints_are_retired():
     from src.api.server import app
 
-    with patch("src.api.server.init_agent", autospec=True) as init_agent_mock, patch(
-        "src.api.server.start_watcher", autospec=True
-    ) as watcher_mock:
+    with (
+        patch("src.api.server.init_agent", autospec=True) as init_agent_mock,
+        patch("src.api.server.start_watcher", autospec=True) as watcher_mock,
+    ):
         init_agent_mock.return_value = _DummyAgent()
         watcher_mock.return_value = _DummyWatcher()
 
@@ -58,9 +60,10 @@ def test_legacy_static_endpoints_are_retired():
 def test_legacy_assets_are_not_served_via_static_mount():
     from src.api.server import app
 
-    with patch("src.api.server.init_agent", autospec=True) as init_agent_mock, patch(
-        "src.api.server.start_watcher", autospec=True
-    ) as watcher_mock:
+    with (
+        patch("src.api.server.init_agent", autospec=True) as init_agent_mock,
+        patch("src.api.server.start_watcher", autospec=True) as watcher_mock,
+    ):
         init_agent_mock.return_value = _DummyAgent()
         watcher_mock.return_value = _DummyWatcher()
 

@@ -33,6 +33,7 @@ def _get_keyring():
     if _keyring is None:
         try:
             import keyring as kr
+
             _keyring = kr
         except ImportError:
             logger.debug("keyring not installed — Keychain storage unavailable")
@@ -43,12 +44,14 @@ def _get_keyring():
 def get_service_name() -> str:
     """Return the Keychain service name (configurable via defaults.yaml)."""
     from src.config.config_loader import config
+
     return config.get("secret_store.keychain_service", _SERVICE_NAME) or _SERVICE_NAME
 
 
 def get_account_name() -> str:
     """Return the Keychain account name (configurable via defaults.yaml)."""
     from src.config.config_loader import config
+
     return config.get("secret_store.keychain_account", _ACCOUNT_NAME) or _ACCOUNT_NAME
 
 
@@ -67,11 +70,13 @@ def resolve_deepseek_api_key() -> str:
 
     # 2. Environment variable
     from src.config.settings import DEEPSEEK_API_KEY
+
     if DEEPSEEK_API_KEY:
         return DEEPSEEK_API_KEY
 
     # 3. Legacy profile file (deprecated — will be migrated on next store)
     from src.memory.user_profile import get_profile
+
     profile = get_profile()
     profile_key = (profile.get("deepseek_api_key") or "").strip()
     if profile_key:
@@ -99,7 +104,9 @@ def store_deepseek_api_key(api_key: str) -> None:
     kr = _get_keyring()
     if kr is None:
         logger.error("keyring not available — cannot store API key")
-        raise RuntimeError("keyring library not installed. Install with: pip install keyring")
+        raise RuntimeError(
+            "keyring library not installed. Install with: pip install keyring"
+        )
 
     # Store in Keychain
     try:
@@ -149,8 +156,12 @@ def verify_deepseek_api_key(api_key: str) -> tuple[bool, str]:
         return False, "Empty API key"
 
     profile = get_profile()
-    base_url = profile.get("cloud_llm_base_url") or config.get("models.cloud.base_url", "https://api.deepseek.com/v1")
-    model = profile.get("cloud_llm_model_name") or config.get("models.cloud.model_name", "deepseek-v4")
+    base_url = profile.get("cloud_llm_base_url") or config.get(
+        "models.cloud.base_url", "https://api.deepseek.com/v1"
+    )
+    model = profile.get("cloud_llm_model_name") or config.get(
+        "models.cloud.model_name", "deepseek-v4"
+    )
 
     try:
         with httpx.Client(timeout=15.0) as client:
@@ -169,7 +180,10 @@ def verify_deepseek_api_key(api_key: str) -> tuple[bool, str]:
             if response.status_code == 200:
                 return True, "Key is valid"
             if response.status_code in (401, 403):
-                return False, f"{response.status_code} Unauthorized — invalid or expired key"
+                return (
+                    False,
+                    f"{response.status_code} Unauthorized — invalid or expired key",
+                )
             if response.status_code == 429:
                 return True, "Key is valid but currently rate-limited"
             return False, f"Unexpected response: HTTP {response.status_code}"
@@ -194,10 +208,7 @@ def rotate_deepseek_api_key(new_api_key: str) -> None:
     new_prefix = new_api_key[:7] + "..." if len(new_api_key) > 7 else "(empty)"
 
     store_deepseek_api_key(new_api_key)
-    logger.info(
-        "DeepSeek API key rotated: old=%s → new=%s",
-        old_prefix, new_prefix
-    )
+    logger.info("DeepSeek API key rotated: old=%s → new=%s", old_prefix, new_prefix)
 
 
 # ── private helpers ──────────────────────────────────────────────
@@ -219,6 +230,7 @@ def _clear_profile_key() -> None:
     """Clear the deepseek_api_key field from user profile."""
     try:
         from src.memory.user_profile import get_profile, _save_profile
+
         profile = get_profile()
         if profile.get("deepseek_api_key"):
             profile["deepseek_api_key"] = ""

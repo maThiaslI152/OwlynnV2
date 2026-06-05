@@ -55,7 +55,11 @@ def build_hitl_context(state: dict) -> dict[str, Any]:
         if last_user and last_assistant:
             break
 
-    snippet = f"User: {last_user}\nOwlynn: {last_assistant}" if last_user or last_assistant else ""
+    snippet = (
+        f"User: {last_user}\nOwlynn: {last_assistant}"
+        if last_user or last_assistant
+        else ""
+    )
 
     # Stated intent from tool calls (more accurate than last AI content)
     intent = _build_intent_from_tool_calls(messages)
@@ -113,8 +117,18 @@ def _build_intent_from_tool_calls(messages: list) -> str:
             # Extract primary resource argument
             resource = ""
             if isinstance(args, dict):
-                for key in ("path", "file_path", "filename", "name", "file_name",
-                            "target", "source_path", "question", "query", "url"):
+                for key in (
+                    "path",
+                    "file_path",
+                    "filename",
+                    "name",
+                    "file_name",
+                    "target",
+                    "source_path",
+                    "question",
+                    "query",
+                    "url",
+                ):
                     val = args.get(key)
                     if val:
                         resource = str(val)
@@ -134,7 +148,9 @@ def _build_intent_from_tool_calls(messages: list) -> str:
     for msg in reversed(messages):
         if isinstance(msg, AIMessage):
             content = str(msg.content or "")
-            return f"Owlynn wants to {_truncate(content, 150)}" if content.strip() else ""
+            return (
+                f"Owlynn wants to {_truncate(content, 150)}" if content.strip() else ""
+            )
 
     return ""
 
@@ -148,6 +164,7 @@ def _truncate(text: str, max_len: int) -> str:
 def _extract_affected_resources(messages: list) -> list[str]:
     """Extract file paths from pending tool call args."""
     import json
+
     paths = []
     for msg in reversed(messages):
         if not isinstance(msg, AIMessage):

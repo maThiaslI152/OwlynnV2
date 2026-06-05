@@ -6,7 +6,7 @@ import tempfile
 from unittest.mock import patch
 from pathlib import Path
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from src.memory.project import ProjectManager, _DEFAULT_PROJECT
 
@@ -19,7 +19,7 @@ class TestProjectCategoryField(unittest.TestCase):
         self.project = self.pm.create_project("Category Test Project")
 
     def tearDown(self):
-        if hasattr(self, 'project') and self.project:
+        if hasattr(self, "project") and self.project:
             self.pm.delete_project(self.project["id"])
 
     def test_default_project_has_category(self):
@@ -43,7 +43,14 @@ class TestProjectCategoryField(unittest.TestCase):
 
     def test_update_category_to_various_values(self):
         """Category can be set to any valid category string."""
-        for cat in ["cybersec", "writing", "research", "development", "data", "general"]:
+        for cat in [
+            "cybersec",
+            "writing",
+            "research",
+            "development",
+            "data",
+            "general",
+        ]:
             updated = self.pm.update_project(self.project["id"], category=cat)
             self.assertEqual(updated["category"], cat)
 
@@ -62,5 +69,5 @@ class TestProjectCategoryField(unittest.TestCase):
         self.assertEqual(self.pm.projects[pid]["category"], "general")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

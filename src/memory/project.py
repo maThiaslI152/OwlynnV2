@@ -68,7 +68,11 @@ class ProjectManager:
                 raw = json.loads(_PROJECTS_PATH.read_text(encoding="utf-8"))
                 self.projects = raw if isinstance(raw, dict) else {}
             except (json.JSONDecodeError, OSError) as exc:
-                logger.error("Failed to load %s — starting with defaults: %s", _PROJECTS_PATH, exc)
+                logger.error(
+                    "Failed to load %s — starting with defaults: %s",
+                    _PROJECTS_PATH,
+                    exc,
+                )
                 self.projects = {"default": _deep_copy(_DEFAULT_PROJECT)}
                 self._save()
                 return
@@ -100,7 +104,9 @@ class ProjectManager:
                 suffix=".tmp",
                 delete=False,
             ) as tmp_file:
-                tmp_file.write(json.dumps(self.projects, ensure_ascii=False, indent=2) + "\n")
+                tmp_file.write(
+                    json.dumps(self.projects, ensure_ascii=False, indent=2) + "\n"
+                )
                 tmp_path = Path(tmp_file.name)
             tmp_path.replace(_PROJECTS_PATH)
         except OSError as exc:
@@ -113,6 +119,7 @@ class ProjectManager:
 
     def create_project(self, name: str, instructions: Optional[str] = None) -> dict:
         import uuid
+
         with self._lock:
             pid = str(uuid.uuid4())[:8]
             while pid in self.projects:
@@ -160,6 +167,7 @@ class ProjectManager:
         workspace = Path(get_project_workspace(project_id))
         if workspace.exists():
             import shutil
+
             try:
                 shutil.rmtree(workspace)
             except OSError as exc:
@@ -185,7 +193,9 @@ class ProjectManager:
             project = self.projects.get(project_id)
             if project is None:
                 return
-            project["chats"] = [c for c in project.get("chats", []) if c.get("id") != chat_id]
+            project["chats"] = [
+                c for c in project.get("chats", []) if c.get("id") != chat_id
+            ]
             self._save()
 
     def update_chat_in_project(self, project_id: str, chat_id: str, **kwargs) -> None:
@@ -211,14 +221,17 @@ class ProjectManager:
                 return False
 
         from src.memory.long_term import memory
+
         if memory is None:
             logger.info("Mem0 unavailable — skipping knowledge indexing for %s", name)
             return False
 
         try:
             import asyncio
+
             await asyncio.to_thread(
-                memory.add, content,
+                memory.add,
+                content,
                 user_id=f"project:{project_id}",
                 metadata={"filename": name},
                 infer=False,
@@ -233,7 +246,9 @@ class ProjectManager:
                 return False
             files: list = current_project.setdefault("files", [])
             if not any(f.get("name") == name for f in files):
-                files.append({"name": name, "type": "knowledge", "added_at": time.time()})
+                files.append(
+                    {"name": name, "type": "knowledge", "added_at": time.time()}
+                )
                 self._save()
         return True
 
@@ -242,14 +257,19 @@ class ProjectManager:
             project = self.projects.get(project_id)
             if project is None:
                 return
-            project["files"] = [f for f in project.get("files", []) if f.get("name") != name]
+            project["files"] = [
+                f for f in project.get("files", []) if f.get("name") != name
+            ]
             self._save()
-        
+
         # Also remove vectors from Qdrant/Mem0 to avoid orphaned embeddings
         try:
             from src.memory.long_term import memory
+
             if memory is not None:
-                memory.delete(user_id=f"project:{project_id}", metadata={"filename": name})
+                memory.delete(
+                    user_id=f"project:{project_id}", metadata={"filename": name}
+                )
         except Exception as exc:
             logger.warning("Failed to remove knowledge vectors for %s: %s", name, exc)
 

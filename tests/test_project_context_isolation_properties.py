@@ -42,14 +42,18 @@ project_name_st = st.text(
 
 # Custom instructions: non-empty text with identifiable content
 instruction_st = st.text(
-    st.characters(whitelist_categories=("L", "N", "P", "Z"), min_codepoint=32, max_codepoint=126),
+    st.characters(
+        whitelist_categories=("L", "N", "P", "Z"), min_codepoint=32, max_codepoint=126
+    ),
     min_size=10,
     max_size=200,
 ).filter(lambda s: s.strip())
 
 # Memory results: list of memory dicts
 memory_entry_st = st.text(
-    st.characters(whitelist_categories=("L", "N", "P", "Z"), min_codepoint=32, max_codepoint=126),
+    st.characters(
+        whitelist_categories=("L", "N", "P", "Z"), min_codepoint=32, max_codepoint=126
+    ),
     min_size=5,
     max_size=100,
 ).filter(lambda s: s.strip())
@@ -62,6 +66,7 @@ memory_results_st = st.lists(
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────
+
 
 def _build_state_for_project(project_id: str) -> dict:
     """Build a minimal agent state dict scoped to a project."""
@@ -84,6 +89,7 @@ def _simulate_context_load(project_name: str, instructions: str, memories: list)
 # ═════════════════════════════════════════════════════════════════════════
 # Property 25: Project context isolation
 # ═════════════════════════════════════════════════════════════════════════
+
 
 class TestProjectContextIsolation:
     """
@@ -129,9 +135,7 @@ class TestProjectContextIsolation:
         state = _build_state_for_project(pid)
         uid = _get_mem0_user_id(state)
 
-        assert pid in uid, (
-            f"mem0 user_id '{uid}' does not contain project_id '{pid}'"
-        )
+        assert pid in uid, f"mem0 user_id '{uid}' does not contain project_id '{pid}'"
 
     @given(
         name_a=project_name_st,
@@ -158,12 +162,12 @@ class TestProjectContextIsolation:
 
         # The new context should contain project B's data
         assert tagged_b in context_b, (
-            f"New project context missing project B instructions"
+            "New project context missing project B instructions"
         )
 
         # The new context should NOT contain project A's tagged instructions
         assert tagged_a not in context_b, (
-            f"New project context still contains project A instructions"
+            "New project context still contains project A instructions"
         )
 
     @given(
@@ -179,12 +183,8 @@ class TestProjectContextIsolation:
         """
         context = _simulate_context_load(name, instr, memories)
 
-        assert instr.strip() in context, (
-            f"Context missing project instructions"
-        )
-        assert name.strip() in context, (
-            f"Context missing project name '{name}'"
-        )
+        assert instr.strip() in context, "Context missing project instructions"
+        assert name.strip() in context, f"Context missing project name '{name}'"
         assert "ACTIVE PROJECT CONTEXT" in context, (
             "Context missing project context section header"
         )

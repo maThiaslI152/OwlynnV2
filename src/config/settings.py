@@ -4,6 +4,7 @@ Global project settings and configuration.
 Delegates to the centralized config_loader (defaults.yaml → env → profile)
 while preserving backward-compatible module-level constants.
 """
+
 import os
 from pathlib import Path
 
@@ -50,7 +51,9 @@ MCP_CONFIG_PATH = PROJECT_ROOT / "mcp_config.json"
 # ── Web RAG ──────────────────────────────────────────────────────────────────
 
 WEB_RAG_ENABLED = config.get("web_rag.enabled", True)
-WEB_RAG_EMBED_MODEL = config.get("web_rag.embed_model", "text-embedding-nomic-embed-text-v1.5-embedding")
+WEB_RAG_EMBED_MODEL = config.get(
+    "web_rag.embed_model", "text-embedding-nomic-embed-text-v1.5-embedding"
+)
 WEB_RAG_TOP_K = int(config.get("web_rag.top_k", 5))
 WEB_RAG_CHUNK_CHARS = int(config.get("web_rag.chunk_chars", 720))
 WEB_RAG_CHUNK_OVERLAP = int(config.get("web_rag.chunk_overlap", 120))
@@ -61,7 +64,9 @@ WEB_SEARCH_RERANK_TOP_N = int(config.get("web_rag.rerank_top_n", 8))
 
 WEB_SEARCH_TIMEOUT_SECONDS = float(config.get("web_search.timeout_seconds", 22))
 WEB_SEARCH_ENABLE_CURL_CFFI = config.get("web_search.enable_curl_cffi", True)
-WEB_SEARCH_ENABLE_BROWSER_FALLBACK = config.get("web_search.enable_browser_fallback", True)
+WEB_SEARCH_ENABLE_BROWSER_FALLBACK = config.get(
+    "web_search.enable_browser_fallback", True
+)
 
 # ── SearXNG ──────────────────────────────────────────────────────────────────
 
@@ -72,12 +77,21 @@ SEARXNG_URL = config.get("external_services.searxng.url", "") or ""
 REDIS_URL = config.get("external_services.redis.url", "redis://localhost:6379")
 DEEPSEEK_API_KEY = (os.getenv("DEEPSEEK_API_KEY", "") or "").strip()
 VOICE_WAKE_WORD = (os.getenv("VOICE_WAKE_WORD", "Athena") or "Athena").strip()
-VOICE_AUTO_TTS = os.getenv("VOICE_AUTO_TTS", "true").strip().lower() in {"1", "true", "yes", "on"}
+VOICE_AUTO_TTS = os.getenv("VOICE_AUTO_TTS", "true").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 
 # ── Context Windows ──────────────────────────────────────────────────────────
 
-MEDIUM_DEFAULT_CONTEXT = int(config.get("models.medium.variants.default.context_window", 16384))
-MEDIUM_LONGCTX_CONTEXT = int(config.get("models.medium.variants.longctx.context_window", 131072))
+MEDIUM_DEFAULT_CONTEXT = int(
+    config.get("models.medium.variants.default.context_window", 16384)
+)
+MEDIUM_LONGCTX_CONTEXT = int(
+    config.get("models.medium.variants.longctx.context_window", 131072)
+)
 CLOUD_CONTEXT = int(config.get("models.cloud.context_window", 131072))
 
 # ── M4 Mac Optimization ──────────────────────────────────────────────────────
@@ -86,7 +100,10 @@ M4_MAC_OPTIMIZATION = get_m4_optimization()
 
 # ── Model Timeouts & Tokens (M4 vs standard) ─────────────────────────────────
 
-if os.getenv("MACHINE_TYPE") == "M4_MAC" or os.getenv("OPTIMIZE_FOR_M4", "").lower() == "true":
+if (
+    os.getenv("MACHINE_TYPE") == "M4_MAC"
+    or os.getenv("OPTIMIZE_FOR_M4", "").lower() == "true"
+):
     MODEL_TIMEOUT_SMALL = M4_MAC_OPTIMIZATION["small_model"]["timeout"]
     MODEL_TIMEOUT_MEDIUM = M4_MAC_OPTIMIZATION["medium_model"]["timeout"]
     MAX_TOKENS_SMALL = M4_MAC_OPTIMIZATION["small_model"]["max_tokens"]

@@ -30,12 +30,13 @@ MODELS_TO_TEST = [
     "zai-org/glm-4.6v-flash",
 ]
 
-LOAD_TIMEOUT = 300   # seconds — large models can be slow
+LOAD_TIMEOUT = 300  # seconds — large models can be slow
 HTTP_TIMEOUT = 30
 UNLOAD_POLL_TIMEOUT = 60
 
 
 # ── helpers ──────────────────────────────────────────────────────────────
+
 
 def get_all_models(client: httpx.Client) -> list[dict]:
     """Return the full model list from the native LM Studio API."""
@@ -62,10 +63,7 @@ def loaded_instance_ids(client: httpx.Client, model_key: str) -> list[str]:
 
 def all_loaded_model_keys(client: httpx.Client) -> list[str]:
     """Return keys of every model that has at least one loaded instance."""
-    return [
-        m["key"] for m in get_all_models(client)
-        if m.get("loaded_instances")
-    ]
+    return [m["key"] for m in get_all_models(client) if m.get("loaded_instances")]
 
 
 def unload_all_instances(client: httpx.Client, model_key: str) -> bool:
@@ -81,7 +79,9 @@ def unload_all_instances(client: httpx.Client, model_key: str) -> bool:
             timeout=HTTP_TIMEOUT,
         )
         if r.status_code not in (200, 204):
-            print(f"  [WARN] unload instance {inst_id!r} returned {r.status_code}: {r.text[:200]}")
+            print(
+                f"  [WARN] unload instance {inst_id!r} returned {r.status_code}: {r.text[:200]}"
+            )
             ok = False
     return ok
 
@@ -99,7 +99,9 @@ def load_model(client: httpx.Client, model_key: str) -> bool:
     return False
 
 
-def wait_until_loaded(client: httpx.Client, model_key: str, timeout: int = LOAD_TIMEOUT) -> bool:
+def wait_until_loaded(
+    client: httpx.Client, model_key: str, timeout: int = LOAD_TIMEOUT
+) -> bool:
     deadline = time.time() + timeout
     while time.time() < deadline:
         if loaded_instance_ids(client, model_key):
@@ -108,7 +110,9 @@ def wait_until_loaded(client: httpx.Client, model_key: str, timeout: int = LOAD_
     return False
 
 
-def wait_until_unloaded(client: httpx.Client, model_key: str, timeout: int = UNLOAD_POLL_TIMEOUT) -> bool:
+def wait_until_unloaded(
+    client: httpx.Client, model_key: str, timeout: int = UNLOAD_POLL_TIMEOUT
+) -> bool:
     deadline = time.time() + timeout
     while time.time() < deadline:
         if not loaded_instance_ids(client, model_key):
@@ -118,6 +122,7 @@ def wait_until_unloaded(client: httpx.Client, model_key: str, timeout: int = UNL
 
 
 # ── main test loop ───────────────────────────────────────────────────────
+
 
 def run_tests() -> bool:
     passed = 0
@@ -131,35 +136,37 @@ def run_tests() -> bool:
     try:
         models = get_all_models(client)
         loaded = all_loaded_model_keys(client)
-        print(f"  Connected. {len(models)} models available, {len(loaded)} currently loaded: {loaded}\n")
+        print(
+            f"  Connected. {len(models)} models available, {len(loaded)} currently loaded: {loaded}\n"
+        )
     except Exception as e:
         print(f"  FAIL — cannot reach LM Studio: {e}")
         print("  Make sure LM Studio is running with the local server enabled.")
         return False
 
     for model_key in MODELS_TO_TEST:
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         print(f"Testing model: {model_key}")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         entry = get_model_entry(client, model_key)
         if entry is None:
-            print(f"  SKIP — model not found in LM Studio (not downloaded?)")
+            print("  SKIP — model not found in LM Studio (not downloaded?)")
             skipped += 1
             continue
 
         # If already loaded, unload first so we test a clean cycle
         if loaded_instance_ids(client, model_key):
-            print(f"  (pre-cleanup) Model already loaded — unloading first ...")
+            print("  (pre-cleanup) Model already loaded — unloading first ...")
             unload_all_instances(client, model_key)
             if not wait_until_unloaded(client, model_key):
-                print(f"  SKIP — could not unload pre-existing instance")
+                print("  SKIP — could not unload pre-existing instance")
                 skipped += 1
                 continue
-            print(f"  (pre-cleanup) Done.\n")
+            print("  (pre-cleanup) Done.\n")
 
         # ── Step 1: Load ──
-        print(f"  [1/4] Loading model ...")
+        print("  [1/4] Loading model ...")
         t0 = time.time()
         try:
             ok = load_model(client, model_key)
@@ -168,12 +175,12 @@ def run_tests() -> bool:
             skipped += 1
             continue
         if not ok:
-            print(f"  FAIL — load request was not accepted")
+            print("  FAIL — load request was not accepted")
             failed += 1
             continue
 
         # ── Step 2: Confirm loaded ──
-        print(f"  [2/4] Waiting for model to appear in loaded_instances ...")
+        print("  [2/4] Waiting for model to appear in loaded_instances ...")
         if wait_until_loaded(client, model_key):
             elapsed = time.time() - t0
             ids = loaded_instance_ids(client, model_key)
@@ -184,7 +191,7 @@ def run_tests() -> bool:
             continue
 
         # ── Step 3: Unload ──
-        print(f"  [3/4] Unloading model ...")
+        print("  [3/4] Unloading model ...")
         try:
             ok = unload_all_instances(client, model_key)
         except Exception as e:
@@ -193,9 +200,9 @@ def run_tests() -> bool:
             continue
 
         # ── Step 4: Confirm unloaded ──
-        print(f"  [4/4] Waiting for model to disappear from loaded_instances ...")
+        print("  [4/4] Waiting for model to disappear from loaded_instances ...")
         if wait_until_unloaded(client, model_key):
-            print(f"  PASS — model unloaded successfully")
+            print("  PASS — model unloaded successfully")
             passed += 1
         else:
             print(f"  FAIL — model still loaded after {UNLOAD_POLL_TIMEOUT}s")
@@ -206,9 +213,11 @@ def run_tests() -> bool:
     client.close()
 
     total = passed + failed + skipped
-    print(f"\n{'='*60}")
-    print(f"RESULTS: {passed} passed, {failed} failed, {skipped} skipped / {total} total")
-    print(f"{'='*60}")
+    print(f"\n{'=' * 60}")
+    print(
+        f"RESULTS: {passed} passed, {failed} failed, {skipped} skipped / {total} total"
+    )
+    print(f"{'=' * 60}")
     return failed == 0
 
 

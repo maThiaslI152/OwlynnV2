@@ -19,13 +19,16 @@ class TestCloudRetry:
         from src.agent.nodes.complex import _invoke_with_cloud_retry
 
         mock_response = MagicMock()
-        mock_response.response_metadata = {"token_usage": {"input_tokens": 10, "output_tokens": 5}}
+        mock_response.response_metadata = {
+            "token_usage": {"input_tokens": 10, "output_tokens": 5}
+        }
         mock_llm = MagicMock()
         mock_llm.ainvoke = AsyncMock(return_value=mock_response)
 
         fallback_chain = []
         result = await _invoke_with_cloud_retry(
-            mock_llm, [MagicMock()],
+            mock_llm,
+            [MagicMock()],
             fallback_chain=fallback_chain,
             model_label="large-cloud",
             route="complex-cloud",
@@ -38,18 +41,23 @@ class TestCloudRetry:
         from src.agent.nodes.complex import _invoke_with_cloud_retry
 
         mock_response = MagicMock()
-        mock_response.response_metadata = {"token_usage": {"input_tokens": 10, "output_tokens": 5}}
+        mock_response.response_metadata = {
+            "token_usage": {"input_tokens": 10, "output_tokens": 5}
+        }
         mock_llm = MagicMock()
         # Fails twice with 429, succeeds on third attempt
-        mock_llm.ainvoke = AsyncMock(side_effect=[
-            Exception("429 Rate limit exceeded"),
-            Exception("429 Too many requests"),
-            mock_response,
-        ])
+        mock_llm.ainvoke = AsyncMock(
+            side_effect=[
+                Exception("429 Rate limit exceeded"),
+                Exception("429 Too many requests"),
+                mock_response,
+            ]
+        )
 
         fallback_chain = []
         result = await _invoke_with_cloud_retry(
-            mock_llm, [MagicMock()],
+            mock_llm,
+            [MagicMock()],
             fallback_chain=fallback_chain,
             model_label="large-cloud",
             route="complex-cloud",
@@ -64,14 +72,17 @@ class TestCloudRetry:
         mock_response = MagicMock()
         mock_response.response_metadata = {"token_usage": {}}
         mock_llm = MagicMock()
-        mock_llm.ainvoke = AsyncMock(side_effect=[
-            Exception("500 Internal Server Error"),
-            mock_response,
-        ])
+        mock_llm.ainvoke = AsyncMock(
+            side_effect=[
+                Exception("500 Internal Server Error"),
+                mock_response,
+            ]
+        )
 
         fallback_chain = []
         result = await _invoke_with_cloud_retry(
-            mock_llm, [MagicMock()],
+            mock_llm,
+            [MagicMock()],
             fallback_chain=fallback_chain,
             model_label="large-cloud",
             route="complex-cloud",
@@ -89,7 +100,8 @@ class TestCloudRetry:
         fallback_chain = []
         with pytest.raises(Exception, match="401"):
             await _invoke_with_cloud_retry(
-                mock_llm, [MagicMock()],
+                mock_llm,
+                [MagicMock()],
                 fallback_chain=fallback_chain,
                 model_label="large-cloud",
                 route="complex-cloud",
@@ -106,7 +118,8 @@ class TestCloudRetry:
         fallback_chain = []
         with pytest.raises(Exception, match="429"):
             await _invoke_with_cloud_retry(
-                mock_llm, [MagicMock()],
+                mock_llm,
+                [MagicMock()],
                 fallback_chain=fallback_chain,
                 model_label="large-cloud",
                 route="complex-cloud",
@@ -125,7 +138,8 @@ class TestCloudRetry:
             mock_cb.return_value.is_open.return_value = True
             with pytest.raises(Exception, match="Circuit breaker open"):
                 await _invoke_with_cloud_retry(
-                    mock_llm, [MagicMock()],
+                    mock_llm,
+                    [MagicMock()],
                     fallback_chain=fallback_chain,
                     model_label="large-cloud",
                     route="complex-cloud",

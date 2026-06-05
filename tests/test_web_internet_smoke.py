@@ -7,11 +7,16 @@ from src.tools.web_tools import fetch_webpage, web_search
 
 
 def _extract_urls(search_output: str) -> list[str]:
-    return re.findall(r"^\s*URL:\s*(https?://\S+)\s*$", search_output, flags=re.MULTILINE)
+    return re.findall(
+        r"^\s*URL:\s*(https?://\S+)\s*$", search_output, flags=re.MULTILINE
+    )
 
 
 def _skip_if_search_unavailable(out: str) -> None:
-    if "[web_search] Error" in out or "[web_search] Unable to retrieve online results" in out:
+    if (
+        "[web_search] Error" in out
+        or "[web_search] Unable to retrieve online results" in out
+    ):
         pytest.skip(f"Search providers unavailable in this environment: {out}")
 
 
@@ -46,7 +51,9 @@ async def test_web_search_general_fallback_chain_mocked(monkeypatch):
     monkeypatch.setattr(web_tools, "_web_search_bing_httpx", bing)
     monkeypatch.setattr(web_tools, "_get_ddgs_class", lambda: None)
 
-    out = await web_search.ainvoke({"query": "python programming language", "backend": "auto"})
+    out = await web_search.ainvoke(
+        {"query": "python programming language", "backend": "auto"}
+    )
     assert calls == [
         "wttr",
         "curl_cffi",
@@ -119,7 +126,9 @@ async def test_web_search_news_flow_mocked(monkeypatch):
         ("other", "what is photosynthesis", {"backend": "auto"}),
     ],
 )
-async def test_web_search_common_internet_scenarios(label: str, query: str, kwargs: dict):
+async def test_web_search_common_internet_scenarios(
+    label: str, query: str, kwargs: dict
+):
     out = await web_search.ainvoke({"query": query, **kwargs})
     # Weather has an independent wttr path and should not silently fail.
     if label == "weather":

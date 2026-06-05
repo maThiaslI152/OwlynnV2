@@ -17,20 +17,20 @@ class AgentState(TypedDict):
     Represents the internal state of the Local Cowork Agent during execution.
     It relies entirely on standard Python dicts to be easily serializable by Langgraph checks.
     """
-    
+
     # The active conversation/reasoning history
     # Using `add_messages` allows handling `RemoveMessage` to delete older items.
     messages: Annotated[Sequence[BaseMessage], add_messages]
-    
+
     # Internal scratchpad/status that doesn't need to be kept forever in messages
     current_task: str | None
-    
+
     # Any structured facts discovered in this specific thread (to be sent to Mem0 eventually)
     extracted_facts: Annotated[list[str], operator.add]
-    
+
     # Arbitrary context retrieved from VectorDB/Mem0 before reasoning
     long_term_context: str | None
-    
+
     # Execution mode: 'tools_off' or 'tools_on'
     mode: str | None
 
@@ -54,9 +54,9 @@ class AgentState(TypedDict):
     # Model provenance: 'small-local', 'medium-default', 'medium-vision', 'medium-longctx',
     # 'large-cloud', or any of these with '-fallback' suffix
     model_used: str | None
-    memory_context: str | None     # Formatted context string
-    persona: str | None            # Persona summary string
-    persona_id: str | None         # Active persona ID (e.g. 'coder', 'writer', 'default')
+    memory_context: str | None  # Formatted context string
+    persona: str | None  # Persona summary string
+    persona_id: str | None  # Active persona ID (e.g. 'coder', 'writer', 'default')
 
     # Which M-tier variant is currently loaded ("default", "vision", "longctx", or None)
     current_medium_model: str | None
@@ -113,10 +113,8 @@ class AgentState(TypedDict):
     summary_takeaways: list[str] | None
     # Payload for the context_summarized WS event
     context_summarized_event: dict | None
-    
+
     # ── Internal Continuation Flags ───────────────────────────────────────
     _cutoff_pending: bool | None
     _cutoff_round: int | None
     web_search_suggested: bool | None
-
-

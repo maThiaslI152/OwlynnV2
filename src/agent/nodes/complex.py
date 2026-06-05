@@ -1,13 +1,14 @@
 import asyncio
 import json
 import logging
+from typing import Any
 import re
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.prebuilt import ToolNode
 
 from src.agent.state import AgentState
-from src.agent.llm import get_large_llm, get_medium_llm, get_cloud_llm, CloudUnavailableError
+from src.agent.llm import get_medium_llm, get_cloud_llm, CloudUnavailableError
 from src.agent.swap_manager import ModelSwapError
 from src.agent.response_styles import style_instruction_for_prompt
 from src.agent.tool_sets import (
@@ -19,22 +20,20 @@ from src.agent.lm_studio_compat import is_local_server, with_system_for_local_se
 from src.agent.anonymization import anonymize, deanonymize
 
 from .complex_utils.fallback import _fallback_for_blank_response
-from .complex_utils.formatter import (
-    _strip_thinking_tags,
-    _flatten_human_content,
-    _synthetic_answer_from_web_search_tool
-)
+from .complex_utils.formatter import _strip_thinking_tags, _flatten_human_content
 from src.agent.hitl.cloud_brief import build_cloud_brief, estimate_brief_tokens
 from src.memory.user_profile import get_profile
 
 logger = logging.getLogger(__name__)
 
-from src.config.audit_log import audit_debug, audit_info, audit_warn
+from src.config.audit_log import audit_debug
 from src.config.log_middleware import log_model_attempt, log_node
 from src.config.config_loader import config
 
 # Context window for the local model (sourced from centralized config)
-_LARGE_CONTEXT_WINDOW = int(config.get("models.medium.variants.default.context_window", 16384))
+_LARGE_CONTEXT_WINDOW = int(
+    config.get("models.medium.variants.default.context_window", 16384)
+)
 # Minimum output tokens — if less than this is available, we still try
 _MIN_OUTPUT_TOKENS = int(config.get("complex.min_output_tokens", 512))
 # Safety margin to avoid hitting the exact limit
@@ -47,7 +46,9 @@ MAX_CUTOFF_RETRIES = int(config.get("complex.max_cutoff_retries", 1))
 _MAX_CLOUD_RETRIES = int(config.get("complex.max_cloud_retries", 3))
 
 
-async def _invoke_with_cloud_retry(bound_llm, prompt_messages, *, fallback_chain, model_label, route):
+async def _invoke_with_cloud_retry(
+    bound_llm, prompt_messages, *, fallback_chain, model_label, route
+):
     """Invoke cloud LLM with circuit breaker check, retry logic, and cost tracking.
 
     Retries on 429 (rate limit) and 5xx (server errors) with exponential
@@ -82,7 +83,7 @@ async def _invoke_with_cloud_retry(bound_llm, prompt_messages, *, fallback_chain
                 breaker.record_failure()
                 raise
 
-            wait = 2 ** attempt
+            wait = 2**attempt
             await asyncio.sleep(wait)
 
     breaker.record_failure()
@@ -130,15 +131,16 @@ def _total_prompt_tokens(prompt_messages: list) -> int:
     return _estimate_message_tokens(prompt_messages)
 
 
-_HARD_PROMPT_LIMIT_RATIO = 0.85  # Max 85% of context window for prompt (leaves 15% for response)
+_HARD_PROMPT_LIMIT_RATIO = (
+    0.85  # Max 85% of context window for prompt (leaves 15% for response)
+)
+
 
 def _needs_prompt_truncation(prompt_messages: list) -> bool:
     """Check if the prompt exceeds the hard safety limit for the model context."""
     total = _estimate_message_tokens(prompt_messages)
     limit = int(_LARGE_CONTEXT_WINDOW * _HARD_PROMPT_LIMIT_RATIO)
     return total > limit
-
-
 
 
 COMPLEX_PROMPT = """### Identity
@@ -219,6 +221,7 @@ Summarize tool results clearly for the user."""
 
 from .complex_utils.helpers import _web_search_tool_output_has_results
 
+
 def build_web_search_answer_nudge_messages(tool_messages: list) -> list[HumanMessage]:
     """After a successful web_search, remind the model it must write the final answer (non-empty)."""
     if not tool_messages:
@@ -287,10 +290,6 @@ def build_fetch_retry_nudge_messages(tool_messages: list) -> list[HumanMessage]:
             )
         )
     return out
-
-
-
-
 
 
 def _latest_user_text(messages: list) -> str:
@@ -365,6 +364,7 @@ def _looks_like_prose_tool_stall(response: AIMessage) -> bool:
 async def _auto_read_workspace_bundle(paths: list[str]) -> str:
     """Read files via the same tool implementation the graph uses (thread pool)."""
     from src.tools.core_tools import read_workspace_file
+
     sections: list[str] = []
     # With 100k context, we can afford more content per file
     per_cap = 28_000
@@ -415,7 +415,9 @@ def _trim_tool_history(messages: list, max_tool_cycles: int = 6) -> list:
     for ti in old_tool_indices:
         # The AI message with tool_calls is typically right before the tool message(s)
         for j in range(ti - 1, -1, -1):
-            if isinstance(messages[j], AIMessage) and getattr(messages[j], 'tool_calls', None):
+            if isinstance(messages[j], AIMessage) and getattr(
+                messages[j], "tool_calls", None
+            ):
                 old_ai_indices.add(j)
                 break
 
@@ -423,17 +425,21 @@ def _trim_tool_history(messages: list, max_tool_cycles: int = 6) -> list:
     for i, msg in enumerate(messages):
         if i in old_tool_indices:
             # Replace old tool output with a compact summary
-            content = msg.content if isinstance(msg.content, str) else str(msg.content or "")
-            tool_name = getattr(msg, 'name', 'tool') or 'tool'
+            content = (
+                msg.content if isinstance(msg.content, str) else str(msg.content or "")
+            )
+            tool_name = getattr(msg, "name", "tool") or "tool"
             if "Error" in content[:100]:
                 summary = f"[{tool_name}: returned an error]"
             else:
                 summary = f"[{tool_name}: completed, {len(content)} chars output]"
-            trimmed.append(ToolMessage(
-                content=summary,
-                tool_call_id=msg.tool_call_id,
-                name=getattr(msg, 'name', None)
-            ))
+            trimmed.append(
+                ToolMessage(
+                    content=summary,
+                    tool_call_id=msg.tool_call_id,
+                    name=getattr(msg, "name", None),
+                )
+            )
         elif i in old_ai_indices:
             # Keep the AI message but it needs to stay for the tool_call_id chain
             trimmed.append(msg)
@@ -468,13 +474,15 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     security_reason = state.get("security_reason")
 
     system_text = COMPLEX_PROMPT.format(
-        current_date=__import__('datetime').date.today().strftime('%B %d, %Y'),
+        current_date=__import__("datetime").date.today().strftime("%B %d, %Y"),
         memory_context=memory_context,
         persona=persona,
         style_hint=style_hint,
     )
     if mode != "tools_off":
-        system_text += COMPLEX_TOOL_GUIDANCE_WEB if web_on else COMPLEX_TOOL_GUIDANCE_NO_WEB
+        system_text += (
+            COMPLEX_TOOL_GUIDANCE_WEB if web_on else COMPLEX_TOOL_GUIDANCE_NO_WEB
+        )
 
     if security_decision == "denied":
         system_text += (
@@ -486,11 +494,17 @@ async def complex_llm_node(state: AgentState) -> AgentState:
 
     denied_tools = state.get("denied_tools") or []
     if denied_tools:
-        system_text += f"\n\nBLOCKED TOOLS (do NOT call these): {', '.join(denied_tools)}"
+        system_text += (
+            f"\n\nBLOCKED TOOLS (do NOT call these): {', '.join(denied_tools)}"
+        )
 
     # ── Inject user-approved clarified_scope if present ────────────────────
     clarified_scope = state.get("clarified_scope")
-    if clarified_scope and isinstance(clarified_scope, dict) and not clarified_scope.get("skipped"):
+    if (
+        clarified_scope
+        and isinstance(clarified_scope, dict)
+        and not clarified_scope.get("skipped")
+    ):
         scope_lines = ["\n\nCONFIRMED REQUIREMENTS (user-approved, do not contradict):"]
         for key, value in clarified_scope.items():
             if key in ("skipped", "_raw", "_source"):
@@ -498,7 +512,9 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             if isinstance(value, dict):
                 label = value.get("label", str(value))
                 user_input = value.get("user_input", "")
-                scope_lines.append(f"- {key}: {label}" + (f" ({user_input})" if user_input else ""))
+                scope_lines.append(
+                    f"- {key}: {label}" + (f" ({user_input})" if user_input else "")
+                )
             else:
                 scope_lines.append(f"- {key}: {value}")
         system_text += "\n".join(scope_lines)
@@ -547,6 +563,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         system = SystemMessage(content=system_text)
         # Anonymize each message content
         import copy
+
         anon_messages = []
         for msg in trimmed_messages:
             content = msg.content
@@ -583,7 +600,9 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             if isinstance(msg, AIMessage) and not last_assistant_summary:
                 content = str(msg.content)
                 # Truncate long assistant responses to just a summary line
-                last_assistant_summary = content[:300] if len(content) > 300 else content
+                last_assistant_summary = (
+                    content[:300] if len(content) > 300 else content
+                )
             if last_user_message and last_assistant_summary:
                 break
 
@@ -616,9 +635,13 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                     anon_mapping.update(brief_mapping)
                 else:
                     anon_mapping = brief_mapping
-                anonymization_placeholders_count = len(brief_mapping) if brief_mapping else 0
+                anonymization_placeholders_count = (
+                    len(brief_mapping) if brief_mapping else 0
+                )
             else:
-                anonymization_placeholders_count = len(anon_mapping) if anon_mapping else 0
+                anonymization_placeholders_count = (
+                    len(anon_mapping) if anon_mapping else 0
+                )
 
             cloud_brief_tokens_est = estimate_brief_tokens(brief)
             logger.info(
@@ -629,7 +652,9 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             # Replace full trimmed messages with the compact brief
             trimmed_messages = [HumanMessage(content=brief)]
         else:
-            logger.info("[complex] Cloud brief empty, falling back to full trimmed messages")
+            logger.info(
+                "[complex] Cloud brief empty, falling back to full trimmed messages"
+            )
 
     # ── 9.1 continued: Determine base_url for message format decision ────
     if route == "complex-cloud":
@@ -662,13 +687,23 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                 model_label = "medium-default"
             log_model_attempt(model_label, "success", reason="tools_off_direct")
         except (ModelSwapError, CloudUnavailableError) as e:
-            logger.warning("[complex] Model %s unavailable (%s), falling back to medium-default", route, e)
+            logger.warning(
+                "[complex] Model %s unavailable (%s), falling back to medium-default",
+                route,
+                e,
+            )
             log_model_attempt(model_label or route, "failed", reason=str(e)[:120])
             llm = await get_medium_llm("default")
             model_label = "medium-default-fallback"
-            log_model_attempt(model_label, "success", reason="fallback_from_unavailable")
+            log_model_attempt(
+                model_label, "success", reason="fallback_from_unavailable"
+            )
 
-        budget = _cap_budget_to_context(prompt_messages, state.get("token_budget") or int(config.get("complex.default_token_budget")))
+        budget = _cap_budget_to_context(
+            prompt_messages,
+            state.get("token_budget")
+            or int(config.get("complex.default_token_budget")),
+        )
         response = await llm.bind(max_tokens=budget).ainvoke(prompt_messages)
         return {
             "messages": [AIMessage(content=response.content)],
@@ -693,14 +728,14 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     # to ensure ToolMessage references remain valid
     prev_tool_names: set[str] = set()
     for msg in thread_messages:
-        if hasattr(msg, 'tool_calls') and msg.tool_calls:
+        if hasattr(msg, "tool_calls") and msg.tool_calls:
             for tc in msg.tool_calls:
-                prev_tool_names.add(tc.get('name', ''))
+                prev_tool_names.add(tc.get("name", ""))
 
     if prev_tool_names:
         all_tools = COMPLEX_TOOLS_WITH_WEB if web_on else COMPLEX_TOOLS_NO_WEB
         for t in all_tools:
-            if getattr(t, 'name', '') in prev_tool_names and t not in tools:
+            if getattr(t, "name", "") in prev_tool_names and t not in tools:
                 tools.append(t)
 
     # ── 9.4: Tiered fallback — model acquisition ────────────────────────
@@ -726,35 +761,58 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             model_label = "medium-default"
             log_model_attempt("medium-default", "success", reason="initial_route")
     except (ModelSwapError, CloudUnavailableError) as e:
-        logger.warning("[complex] Model %s unavailable (%s), falling back to medium-default", route, e)
-        fallback_chain.append({
-            "model": model_label if model_label != "medium-default" else route,
-            "status": "failed",
-            "reason": str(e)[:120],
-            "duration_ms": 0,
-        })
-        log_model_attempt(model_label if model_label != "medium-default" else route, "failed", reason=str(e)[:120])
+        logger.warning(
+            "[complex] Model %s unavailable (%s), falling back to medium-default",
+            route,
+            e,
+        )
+        fallback_chain.append(
+            {
+                "model": model_label if model_label != "medium-default" else route,
+                "status": "failed",
+                "reason": str(e)[:120],
+                "duration_ms": 0,
+            }
+        )
+        log_model_attempt(
+            model_label if model_label != "medium-default" else route,
+            "failed",
+            reason=str(e)[:120],
+        )
         llm = await get_medium_llm("default")
         model_label = "medium-default-fallback"
-        log_model_attempt("medium-default-fallback", "success", reason="fallback_from_unavailable")
-        fallback_chain.append({
-            "model": "medium-default-fallback",
-            "status": "success",
-            "reason": "fallback_from_unavailable",
-            "duration_ms": 0,
-        })
+        log_model_attempt(
+            "medium-default-fallback", "success", reason="fallback_from_unavailable"
+        )
+        fallback_chain.append(
+            {
+                "model": "medium-default-fallback",
+                "status": "success",
+                "reason": "fallback_from_unavailable",
+                "duration_ms": 0,
+            }
+        )
 
-    budget = _cap_budget_to_context(prompt_messages, state.get("token_budget") or int(config.get("complex.default_token_budget")))
+    budget = _cap_budget_to_context(
+        prompt_messages,
+        state.get("token_budget") or int(config.get("complex.default_token_budget")),
+    )
     bound_llm = llm.bind_tools(tools).bind(max_tokens=budget)
     audit_debug("agent.token", "budget_computed", token_budget=budget, route=route)
 
     # ── Enforce Tool Discipline ───────────────────────────────────────────
-    if selected_toolboxes and any(t in selected_toolboxes for t in ("file_ops", "web_search", "data_viz")):
+    if selected_toolboxes and any(
+        t in selected_toolboxes for t in ("file_ops", "web_search", "data_viz")
+    ):
         # Only inject if we aren't in a cutoff loop and haven't just finished a tool call
-        if not state.get("_cutoff_pending") and not any(isinstance(m, ToolMessage) for m in prompt_messages[-3:]):
-            prompt_messages.append(SystemMessage(
-                content="[SYSTEM INSTRUCTION]: The user specifically requested a tool action (web search, file ops, etc.). YOU MUST EMIT A VALID JSON TOOL_CALL IN THIS TURN. Do not output prose describing your actions without actually calling the tool."
-            ))
+        if not state.get("_cutoff_pending") and not any(
+            isinstance(m, ToolMessage) for m in prompt_messages[-3:]
+        ):
+            prompt_messages.append(
+                SystemMessage(
+                    content="[SYSTEM INSTRUCTION]: The user specifically requested a tool action (web search, file ops, etc.). YOU MUST EMIT A VALID JSON TOOL_CALL IN THIS TURN. Do not output prose describing your actions without actually calling the tool."
+                )
+            )
 
     # ── 9.4: Tiered fallback — LLM invocation with error handling ────────
     try:
@@ -769,142 +827,331 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                 try:
                     response = await bound_llm.ainvoke(prompt_messages)
                 except Exception:
-                    logger.warning("[complex] Cloud retry failed, falling back to medium-default")
-                    fallback_chain.append({
-                        "model": "large-cloud",
-                        "status": "failed",
-                        "reason": "rate_limit_retry_failed",
-                        "duration_ms": max(0, int((asyncio.get_running_loop().time() - loop_start_time) * 1000)) if loop_start_time else 0,
-                    })
+                    logger.warning(
+                        "[complex] Cloud retry failed, falling back to medium-default"
+                    )
+                    fallback_chain.append(
+                        {
+                            "model": "large-cloud",
+                            "status": "failed",
+                            "reason": "rate_limit_retry_failed",
+                            "duration_ms": max(
+                                0,
+                                int(
+                                    (
+                                        asyncio.get_running_loop().time()
+                                        - loop_start_time
+                                    )
+                                    * 1000
+                                ),
+                            )
+                            if loop_start_time
+                            else 0,
+                        }
+                    )
                     llm = await get_medium_llm("default")
-                    prompt_messages = with_system_for_local_server(system, original_trimmed_messages)
-                    budget = _cap_budget_to_context(prompt_messages, state.get("token_budget") or int(config.get("complex.default_token_budget", 4096)))
+                    prompt_messages = with_system_for_local_server(
+                        system, original_trimmed_messages
+                    )
+                    budget = _cap_budget_to_context(
+                        prompt_messages,
+                        state.get("token_budget")
+                        or int(config.get("complex.default_token_budget", 4096)),
+                    )
                     fb_start = asyncio.get_running_loop().time()
-                    response = await llm.bind_tools(tools).bind(max_tokens=budget).ainvoke(prompt_messages)
+                    response = (
+                        await llm.bind_tools(tools)
+                        .bind(max_tokens=budget)
+                        .ainvoke(prompt_messages)
+                    )
                     model_label = "medium-default-fallback"
-                    fallback_chain.append({
-                        "model": "medium-default-fallback",
-                        "status": "success",
-                        "reason": "fallback_rate_limit",
-                        "duration_ms": max(0, int((asyncio.get_running_loop().time() - fb_start) * 1000)),
-                    })
+                    fallback_chain.append(
+                        {
+                            "model": "medium-default-fallback",
+                            "status": "success",
+                            "reason": "fallback_rate_limit",
+                            "duration_ms": max(
+                                0,
+                                int(
+                                    (asyncio.get_running_loop().time() - fb_start)
+                                    * 1000
+                                ),
+                            ),
+                        }
+                    )
             elif "401" in str(e) or "403" in str(e):
                 # Auth error: fall back with note
-                fallback_chain.append({
-                    "model": "large-cloud",
-                    "status": "failed",
-                    "reason": "auth_error_401_403",
-                    "duration_ms": max(0, int((asyncio.get_running_loop().time() - (loop_start_time or asyncio.get_running_loop().time())) * 1000)) if loop_start_time else 0,
-                })
+                fallback_chain.append(
+                    {
+                        "model": "large-cloud",
+                        "status": "failed",
+                        "reason": "auth_error_401_403",
+                        "duration_ms": max(
+                            0,
+                            int(
+                                (
+                                    asyncio.get_running_loop().time()
+                                    - (
+                                        loop_start_time
+                                        or asyncio.get_running_loop().time()
+                                    )
+                                )
+                                * 1000
+                            ),
+                        )
+                        if loop_start_time
+                        else 0,
+                    }
+                )
                 llm = await get_medium_llm("default")
-                prompt_messages = with_system_for_local_server(system, original_trimmed_messages)
-                budget = _cap_budget_to_context(prompt_messages, state.get("token_budget") or int(config.get("complex.default_token_budget")))
+                prompt_messages = with_system_for_local_server(
+                    system, original_trimmed_messages
+                )
+                budget = _cap_budget_to_context(
+                    prompt_messages,
+                    state.get("token_budget")
+                    or int(config.get("complex.default_token_budget")),
+                )
                 fb_start = asyncio.get_running_loop().time()
-                response = await llm.bind_tools(tools).bind(max_tokens=budget).ainvoke(prompt_messages)
+                response = (
+                    await llm.bind_tools(tools)
+                    .bind(max_tokens=budget)
+                    .ainvoke(prompt_messages)
+                )
                 content_str = str(getattr(response, "content", "") or "").strip()
                 if not content_str and not getattr(response, "tool_calls", None):
                     # Local model returned empty; synthesize a response so it's not just the warning
-                    synth_response = _fallback_for_blank_response(thread_messages, web_search_enabled=web_on)
-                    content_str = str(getattr(synth_response, "content", "") or "").strip()
+                    synth_response = _fallback_for_blank_response(
+                        thread_messages, web_search_enabled=web_on
+                    )
+                    content_str = str(
+                        getattr(synth_response, "content", "") or ""
+                    ).strip()
                 response = AIMessage(
                     content=content_str
                     + "\n\n⚠️ Note: DeepSeek API key may be invalid. Check Settings → Profile → Cloud section."
                 )
                 model_label = "medium-default-fallback"
-                fallback_chain.append({
-                    "model": "medium-default-fallback",
-                    "status": "success",
-                    "reason": "fallback_auth_error",
-                    "duration_ms": max(0, int((asyncio.get_running_loop().time() - fb_start) * 1000)),
-                })
+                fallback_chain.append(
+                    {
+                        "model": "medium-default-fallback",
+                        "status": "success",
+                        "reason": "fallback_auth_error",
+                        "duration_ms": max(
+                            0,
+                            int((asyncio.get_running_loop().time() - fb_start) * 1000),
+                        ),
+                    }
+                )
             else:
-                logger.warning("[complex] Cloud error (%s), falling back to medium-default", e)
-                fallback_chain.append({
-                    "model": "large-cloud",
+                logger.warning(
+                    "[complex] Cloud error (%s), falling back to medium-default", e
+                )
+                fallback_chain.append(
+                    {
+                        "model": "large-cloud",
+                        "status": "failed",
+                        "reason": str(e)[:120],
+                        "duration_ms": max(
+                            0,
+                            int(
+                                (
+                                    asyncio.get_running_loop().time()
+                                    - (
+                                        loop_start_time
+                                        or asyncio.get_running_loop().time()
+                                    )
+                                )
+                                * 1000
+                            ),
+                        )
+                        if loop_start_time
+                        else 0,
+                    }
+                )
+                llm = await get_medium_llm("default")
+                prompt_messages = with_system_for_local_server(
+                    system, original_trimmed_messages
+                )
+                budget = _cap_budget_to_context(
+                    prompt_messages,
+                    state.get("token_budget")
+                    or int(config.get("complex.default_token_budget")),
+                )
+                fb_start = asyncio.get_running_loop().time()
+                response = (
+                    await llm.bind_tools(tools)
+                    .bind(max_tokens=budget)
+                    .ainvoke(prompt_messages)
+                )
+                model_label = "medium-default-fallback"
+                fallback_chain.append(
+                    {
+                        "model": "medium-default-fallback",
+                        "status": "success",
+                        "reason": "fallback_generic_cloud_error",
+                        "duration_ms": max(
+                            0,
+                            int((asyncio.get_running_loop().time() - fb_start) * 1000),
+                        ),
+                    }
+                )
+        elif route == "complex-vision":
+            logger.warning(
+                "[complex] Vision model failed (%s), falling back to medium-default", e
+            )
+            fallback_chain.append(
+                {
+                    "model": "medium-vision",
                     "status": "failed",
                     "reason": str(e)[:120],
-                    "duration_ms": max(0, int((asyncio.get_running_loop().time() - (loop_start_time or asyncio.get_running_loop().time())) * 1000)) if loop_start_time else 0,
-                })
-                llm = await get_medium_llm("default")
-                prompt_messages = with_system_for_local_server(system, original_trimmed_messages)
-                budget = _cap_budget_to_context(prompt_messages, state.get("token_budget") or int(config.get("complex.default_token_budget")))
-                fb_start = asyncio.get_running_loop().time()
-                response = await llm.bind_tools(tools).bind(max_tokens=budget).ainvoke(prompt_messages)
-                model_label = "medium-default-fallback"
-                fallback_chain.append({
-                    "model": "medium-default-fallback",
-                    "status": "success",
-                    "reason": "fallback_generic_cloud_error",
-                    "duration_ms": max(0, int((asyncio.get_running_loop().time() - fb_start) * 1000)),
-                })
-        elif route == "complex-vision":
-            logger.warning("[complex] Vision model failed (%s), falling back to medium-default", e)
-            fallback_chain.append({
-                "model": "medium-vision",
-                "status": "failed",
-                "reason": str(e)[:120],
-                "duration_ms": max(0, int((asyncio.get_running_loop().time() - (loop_start_time or asyncio.get_running_loop().time())) * 1000)) if loop_start_time else 0,
-            })
+                    "duration_ms": max(
+                        0,
+                        int(
+                            (
+                                asyncio.get_running_loop().time()
+                                - (loop_start_time or asyncio.get_running_loop().time())
+                            )
+                            * 1000
+                        ),
+                    )
+                    if loop_start_time
+                    else 0,
+                }
+            )
             llm = await get_medium_llm("default")
             prompt_messages = with_system_for_local_server(system, trimmed_messages)
-            budget = _cap_budget_to_context(prompt_messages, state.get("token_budget") or int(config.get("complex.default_token_budget")))
+            budget = _cap_budget_to_context(
+                prompt_messages,
+                state.get("token_budget")
+                or int(config.get("complex.default_token_budget")),
+            )
             fb_start = asyncio.get_running_loop().time()
-            response = await llm.bind_tools(tools).bind(max_tokens=budget).ainvoke(prompt_messages)
+            response = (
+                await llm.bind_tools(tools)
+                .bind(max_tokens=budget)
+                .ainvoke(prompt_messages)
+            )
             model_label = "medium-default-fallback"
-            fallback_chain.append({
-                "model": "medium-default-fallback",
-                "status": "success",
-                "reason": "fallback_vision_failed",
-                "duration_ms": max(0, int((asyncio.get_running_loop().time() - fb_start) * 1000)),
-            })
+            fallback_chain.append(
+                {
+                    "model": "medium-default-fallback",
+                    "status": "success",
+                    "reason": "fallback_vision_failed",
+                    "duration_ms": max(
+                        0, int((asyncio.get_running_loop().time() - fb_start) * 1000)
+                    ),
+                }
+            )
         elif route == "complex-longctx":
             # Try cloud first, then medium-default
             try:
                 loop_start_time = asyncio.get_running_loop().time()
                 llm = await get_cloud_llm()
-                budget = _cap_budget_to_context([system, *trimmed_messages], state.get("token_budget") or int(config.get("complex.default_token_budget")))
-                response = await llm.bind_tools(tools).bind(max_tokens=budget).ainvoke([system, *trimmed_messages])
+                budget = _cap_budget_to_context(
+                    [system, *trimmed_messages],
+                    state.get("token_budget")
+                    or int(config.get("complex.default_token_budget")),
+                )
+                response = (
+                    await llm.bind_tools(tools)
+                    .bind(max_tokens=budget)
+                    .ainvoke([system, *trimmed_messages])
+                )
                 model_label = "large-cloud-fallback"
-                fallback_chain.append({
-                    "model": "large-cloud-fallback",
-                    "status": "success",
-                    "reason": "longctx_cloud_escalation",
-                    "duration_ms": max(0, int((asyncio.get_running_loop().time() - loop_start_time) * 1000)),
-                })
+                fallback_chain.append(
+                    {
+                        "model": "large-cloud-fallback",
+                        "status": "success",
+                        "reason": "longctx_cloud_escalation",
+                        "duration_ms": max(
+                            0,
+                            int(
+                                (asyncio.get_running_loop().time() - loop_start_time)
+                                * 1000
+                            ),
+                        ),
+                    }
+                )
             except Exception:
-                fallback_chain.append({
-                    "model": "medium-longctx",
-                    "status": "failed",
-                    "reason": "longctx_local_unavailable_cloud_failed",
-                    "duration_ms": max(0, int((asyncio.get_running_loop().time() - (loop_start_time or asyncio.get_running_loop().time())) * 1000)) if loop_start_time else 0,
-                })
+                fallback_chain.append(
+                    {
+                        "model": "medium-longctx",
+                        "status": "failed",
+                        "reason": "longctx_local_unavailable_cloud_failed",
+                        "duration_ms": max(
+                            0,
+                            int(
+                                (
+                                    asyncio.get_running_loop().time()
+                                    - (
+                                        loop_start_time
+                                        or asyncio.get_running_loop().time()
+                                    )
+                                )
+                                * 1000
+                            ),
+                        )
+                        if loop_start_time
+                        else 0,
+                    }
+                )
                 llm = await get_medium_llm("default")
                 prompt_messages = with_system_for_local_server(system, trimmed_messages)
-                budget = _cap_budget_to_context(prompt_messages, state.get("token_budget") or int(config.get("complex.default_token_budget")))
+                budget = _cap_budget_to_context(
+                    prompt_messages,
+                    state.get("token_budget")
+                    or int(config.get("complex.default_token_budget")),
+                )
                 fb_start = asyncio.get_running_loop().time()
-                response = await llm.bind_tools(tools).bind(max_tokens=budget).ainvoke(prompt_messages)
+                response = (
+                    await llm.bind_tools(tools)
+                    .bind(max_tokens=budget)
+                    .ainvoke(prompt_messages)
+                )
                 model_label = "medium-default-fallback"
-                fallback_chain.append({
-                    "model": "medium-default-fallback",
-                    "status": "success",
-                    "reason": "fallback_last_resort",
-                    "duration_ms": max(0, int((asyncio.get_running_loop().time() - fb_start) * 1000)),
-                })
+                fallback_chain.append(
+                    {
+                        "model": "medium-default-fallback",
+                        "status": "success",
+                        "reason": "fallback_last_resort",
+                        "duration_ms": max(
+                            0,
+                            int((asyncio.get_running_loop().time() - fb_start) * 1000),
+                        ),
+                    }
+                )
         else:
             # medium-default failure — produce a graceful error instead of crashing the graph
-            logger.error("[complex] Medium-default model failed with no fallback available: %s", e)
-            fallback_chain.append({
-                "model": route,
-                "status": "failed",
-                "reason": str(e)[:120],
-                "duration_ms": max(0, int((asyncio.get_running_loop().time() - (loop_start_time or asyncio.get_running_loop().time())) * 1000)) if loop_start_time else 0,
-            })
+            logger.error(
+                "[complex] Medium-default model failed with no fallback available: %s",
+                e,
+            )
+            fallback_chain.append(
+                {
+                    "model": route,
+                    "status": "failed",
+                    "reason": str(e)[:120],
+                    "duration_ms": max(
+                        0,
+                        int(
+                            (
+                                asyncio.get_running_loop().time()
+                                - (loop_start_time or asyncio.get_running_loop().time())
+                            )
+                            * 1000
+                        ),
+                    )
+                    if loop_start_time
+                    else 0,
+                }
+            )
             return AgentState(  # type: ignore[call-arg]
                 messages=[
                     AIMessage(
                         content="I encountered an error while processing your request. "
-                                "The language model is currently unavailable. "
-                                "Please check that LM Studio is running and try again."
+                        "The language model is currently unavailable. "
+                        "Please check that LM Studio is running and try again."
                     )
                 ],
                 fallback_chain=fallback_chain,
@@ -918,22 +1165,24 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     if anon_mapping and route == "complex-cloud":
         if response.content:
             response = AIMessage(content=deanonymize(response.content, anon_mapping))
-        if hasattr(response, 'tool_calls') and response.tool_calls:
+        if hasattr(response, "tool_calls") and response.tool_calls:
             for tc in response.tool_calls:
-                if tc.get('args'):
-                    args_str = json.dumps(tc['args'])
+                if tc.get("args"):
+                    args_str = json.dumps(tc["args"])
                     args_str = deanonymize(args_str, anon_mapping)
-                    tc['args'] = json.loads(args_str)
+                    tc["args"] = json.loads(args_str)
 
     # ── 9.5: Cloud token usage tracking ──────────────────────────────────
     if route == "complex-cloud" and "fallback" not in model_label:
-        usage = getattr(response, 'response_metadata', {}).get('token_usage', {})
+        usage = getattr(response, "response_metadata", {}).get("token_usage", {})
         if not usage:
-            usage = getattr(response, 'usage_metadata', {})
+            usage = getattr(response, "usage_metadata", {})
         if usage:
             api_tokens = {
-                "prompt_tokens": usage.get("input_tokens") or usage.get("prompt_tokens", 0),
-                "completion_tokens": usage.get("output_tokens") or usage.get("completion_tokens", 0),
+                "prompt_tokens": usage.get("input_tokens")
+                or usage.get("prompt_tokens", 0),
+                "completion_tokens": usage.get("output_tokens")
+                or usage.get("completion_tokens", 0),
             }
 
     has_tool_calls = bool(getattr(response, "tool_calls", None))
@@ -962,11 +1211,18 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                 second_prompt = with_system_for_local_server(
                     system, thread_messages + [nudge]
                 )
-                recapped = _cap_budget_to_context(second_prompt, state.get("token_budget") or int(config.get("complex.default_token_budget")))
+                recapped = _cap_budget_to_context(
+                    second_prompt,
+                    state.get("token_budget")
+                    or int(config.get("complex.default_token_budget")),
+                )
                 llm_recapped = llm.bind_tools(tools).bind(max_tokens=recapped)
                 response = await llm_recapped.ainvoke(second_prompt)
                 has_tool_calls = bool(getattr(response, "tool_calls", None))
-                if not has_tool_calls and not str(getattr(response, "content", "") or "").strip():
+                if (
+                    not has_tool_calls
+                    and not str(getattr(response, "content", "") or "").strip()
+                ):
                     response = _fallback_for_blank_response(
                         thread_messages + [nudge], web_search_enabled=web_on
                     )
@@ -982,14 +1238,18 @@ async def complex_llm_node(state: AgentState) -> AgentState:
 
     # ── Cutoff detection: auto-continue if LLM hit token budget ────────────
     _cutoff_round = state.get("_cutoff_round", 0)
-    
+
     meta = getattr(response, "response_metadata", {})
     finish_reason = meta.get("finish_reason")
     completion_tokens = meta.get("token_usage", {}).get("completion_tokens", 0)
-    
-    is_length_cutoff = (
-        finish_reason in ("length", "max_tokens")
-        or (completion_tokens > 256 and completion_tokens >= (state.get("token_budget") or int(config.get("complex.default_token_budget"))) - 15)
+
+    is_length_cutoff = finish_reason in ("length", "max_tokens") or (
+        completion_tokens > 256
+        and completion_tokens
+        >= (
+            state.get("token_budget") or int(config.get("complex.default_token_budget"))
+        )
+        - 15
     )
 
     if (
@@ -998,8 +1258,13 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         and response
         and is_length_cutoff
     ):
-        logger.info("[complex] Response cut off (finish_reason=%s, tokens=%d), auto-continuing round %d/%d",
-                     finish_reason, completion_tokens, _cutoff_round + 1, MAX_CUTOFF_RETRIES)
+        logger.info(
+            "[complex] Response cut off (finish_reason=%s, tokens=%d), auto-continuing round %d/%d",
+            finish_reason,
+            completion_tokens,
+            _cutoff_round + 1,
+            MAX_CUTOFF_RETRIES,
+        )
         return {
             "messages": out_messages,
             "model_used": model_label,
@@ -1063,10 +1328,19 @@ async def complex_tool_action_node(state: AgentState) -> AgentState:
     truncated_delta = []
     for msg in delta:
         if isinstance(msg, ToolMessage):
-            content = msg.content if isinstance(msg.content, str) else str(msg.content or "")
+            content = (
+                msg.content if isinstance(msg.content, str) else str(msg.content or "")
+            )
             if len(content) > _MAX_TOOL_OUTPUT_CHARS:
-                truncated = content[:_MAX_TOOL_OUTPUT_CHARS] + "\n\n[... output truncated for context window. Use read_workspace_file for full content.]"
-                msg = ToolMessage(content=truncated, tool_call_id=msg.tool_call_id, name=getattr(msg, 'name', None))
+                truncated = (
+                    content[:_MAX_TOOL_OUTPUT_CHARS]
+                    + "\n\n[... output truncated for context window. Use read_workspace_file for full content.]"
+                )
+                msg = ToolMessage(
+                    content=truncated,
+                    tool_call_id=msg.tool_call_id,
+                    name=getattr(msg, "name", None),
+                )
         truncated_delta.append(msg)
     delta = truncated_delta
 
@@ -1077,9 +1351,13 @@ async def complex_tool_action_node(state: AgentState) -> AgentState:
     error_nudge = []
     for msg in delta:
         if isinstance(msg, ToolMessage):
-            content = msg.content if isinstance(msg.content, str) else str(msg.content or "")
-            tool_name = getattr(msg, 'name', '') or ''
-            if "Error" in content and ("Field required" in content or "No code provided" in content):
+            content = (
+                msg.content if isinstance(msg.content, str) else str(msg.content or "")
+            )
+            tool_name = getattr(msg, "name", "") or ""
+            if "Error" in content and (
+                "Field required" in content or "No code provided" in content
+            ):
                 error_nudge.append(
                     HumanMessage(
                         content=(
@@ -1096,13 +1374,14 @@ async def complex_tool_action_node(state: AgentState) -> AgentState:
                         content=(
                             "[Internal reminder] notebook_run could not find the file. "
                             "Files are in the workspace directory. The variable WORKSPACE_DIR is pre-defined. "
-                            "Use: pd.read_csv(f\"{WORKSPACE_DIR}/filename.csv\") — retry with the corrected path."
+                            'Use: pd.read_csv(f"{WORKSPACE_DIR}/filename.csv") — retry with the corrected path.'
                         )
                     )
                 )
                 break
             elif "ModuleNotFoundError" in content and tool_name == "notebook_run":
                 import re as _re
+
                 mod_match = _re.search(r"No module named '([^']+)'", content)
                 mod_name = mod_match.group(1) if mod_match else "unknown"
                 error_nudge.append(
@@ -1116,8 +1395,12 @@ async def complex_tool_action_node(state: AgentState) -> AgentState:
                     )
                 )
                 break
-            elif "Error" in content and tool_name == "notebook_run" and "Traceback" in content:
-                lines = content.strip().split('\n')
+            elif (
+                "Error" in content
+                and tool_name == "notebook_run"
+                and "Traceback" in content
+            ):
+                lines = content.strip().split("\n")
                 error_line = lines[-1] if lines else "Unknown error"
                 error_nudge.append(
                     HumanMessage(

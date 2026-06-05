@@ -41,14 +41,15 @@ class _FakeAgent:
 @pytest.fixture()
 def client(tmp_path):
     from src.api.server import app
+
     fake_agent = _FakeAgent()
     tmp_profile = tmp_path / "user_profile.json"
     tmp_profile.write_text(json.dumps(_DEFAULTS), encoding="utf-8")
-    with patch("src.memory.user_profile._PROFILE_PATH", tmp_profile), patch(
-        "src.api.server.init_agent", autospec=True
-    ) as init_agent_mock, patch(
-        "src.api.server.start_watcher", autospec=True
-    ) as watcher_mock:
+    with (
+        patch("src.memory.user_profile._PROFILE_PATH", tmp_profile),
+        patch("src.api.server.init_agent", autospec=True) as init_agent_mock,
+        patch("src.api.server.start_watcher", autospec=True) as watcher_mock,
+    ):
         init_agent_mock.return_value = fake_agent
         watcher_mock.return_value = _DummyWatcher()
         with TestClient(app, raise_server_exceptions=True) as c:
@@ -71,7 +72,11 @@ def test_websocket_uses_updated_model_key_after_profile_post(client):
     assert resp.status_code == 200
 
     with client.websocket_connect("/ws/chat/test-model-update") as ws:
-        ws.send_text(json.dumps({"message": "hello", "mode": "tools_on", "web_search_enabled": False}))
+        ws.send_text(
+            json.dumps(
+                {"message": "hello", "mode": "tools_on", "web_search_enabled": False}
+            )
+        )
         events = _collect_ws_events(ws)
 
     model_info_events = [e for e in events if e.get("type") == "model_info"]
@@ -86,10 +91,20 @@ def test_websocket_run_does_not_emit_legacy_model_key_after_update(client):
     assert resp.status_code == 200
 
     with client.websocket_connect("/ws/chat/test-model-no-stale") as ws:
-        ws.send_text(json.dumps({"message": "hello again", "mode": "tools_on", "web_search_enabled": False}))
+        ws.send_text(
+            json.dumps(
+                {
+                    "message": "hello again",
+                    "mode": "tools_on",
+                    "web_search_enabled": False,
+                }
+            )
+        )
         events = _collect_ws_events(ws)
 
-    model_info_models = [e.get("model") for e in events if e.get("type") == "model_info"]
+    model_info_models = [
+        e.get("model") for e in events if e.get("type") == "model_info"
+    ]
     assert model_info_models, f"No model_info events found in {events}"
     assert legacy not in model_info_models
     assert new_model in model_info_models

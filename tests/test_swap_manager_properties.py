@@ -32,20 +32,25 @@ variant_st = st.sampled_from(VALID_VARIANTS)
 
 # Generate arbitrary non-empty model key strings for custom profiles
 model_key_st = st.text(
-    alphabet=st.characters(whitelist_categories=("L", "N"), whitelist_characters="-_./"),
+    alphabet=st.characters(
+        whitelist_categories=("L", "N"), whitelist_characters="-_./"
+    ),
     min_size=1,
     max_size=60,
 ).filter(lambda s: s.strip())
 
 # Generate a medium_models dict with arbitrary model keys per variant
-custom_medium_models_st = st.fixed_dictionaries({
-    "default": model_key_st,
-    "vision": model_key_st,
-    "longctx": model_key_st,
-})
+custom_medium_models_st = st.fixed_dictionaries(
+    {
+        "default": model_key_st,
+        "vision": model_key_st,
+        "longctx": model_key_st,
+    }
+)
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────
+
 
 def _make_models_response(loaded_key: str) -> dict:
     """Fake GET /api/v1/models response with *loaded_key* loaded."""
@@ -92,6 +97,7 @@ def _mock_client(target_key: str) -> AsyncMock:
 
 # ── Property 9: Swap Manager Variant-to-Key Mapping ─────────────────────
 
+
 class TestVariantToKeyMapping:
     """
     Property 9: For any valid variant name ("default", "vision", "longctx"),
@@ -110,15 +116,14 @@ class TestVariantToKeyMapping:
         sm = SwapManager()
         sm._client = _mock_client(expected_key)
 
-        with patch("src.agent.swap_manager.get_profile", return_value=profile), \
-             patch("src.agent.swap_manager.asyncio.sleep", new_callable=AsyncMock):
+        with (
+            patch("src.agent.swap_manager.get_profile", return_value=profile),
+            patch("src.agent.swap_manager.asyncio.sleep", new_callable=AsyncMock),
+        ):
             await sm.swap_model(variant)
 
         # Verify the POST /api/v1/models/load was called with the right key
-        load_calls = [
-            c for c in sm._client.post.call_args_list
-            if "load" in str(c)
-        ]
+        load_calls = [c for c in sm._client.post.call_args_list if "load" in str(c)]
         assert len(load_calls) == 1
         assert load_calls[0].kwargs.get("json", {}).get("model") == expected_key
 
@@ -133,14 +138,13 @@ class TestVariantToKeyMapping:
         sm = SwapManager()
         sm._client = _mock_client(expected_key)
 
-        with patch("src.agent.swap_manager.get_profile", return_value=profile), \
-             patch("src.agent.swap_manager.asyncio.sleep", new_callable=AsyncMock):
+        with (
+            patch("src.agent.swap_manager.get_profile", return_value=profile),
+            patch("src.agent.swap_manager.asyncio.sleep", new_callable=AsyncMock),
+        ):
             await sm.swap_model(variant)
 
-        load_calls = [
-            c for c in sm._client.post.call_args_list
-            if "load" in str(c)
-        ]
+        load_calls = [c for c in sm._client.post.call_args_list if "load" in str(c)]
         assert len(load_calls) == 1
         assert load_calls[0].kwargs.get("json", {}).get("model") == expected_key
 
@@ -155,8 +159,10 @@ class TestVariantToKeyMapping:
         sm = SwapManager()
         sm._client = _mock_client(target_key)
 
-        with patch("src.agent.swap_manager.get_profile", return_value=profile), \
-             patch("src.agent.swap_manager.asyncio.sleep", new_callable=AsyncMock):
+        with (
+            patch("src.agent.swap_manager.get_profile", return_value=profile),
+            patch("src.agent.swap_manager.asyncio.sleep", new_callable=AsyncMock),
+        ):
             await sm.swap_model(variant)
 
         assert sm.get_current_variant() == variant
@@ -169,7 +175,9 @@ class TestVariantToKeyMapping:
     )
     @settings(max_examples=100)
     @pytest.mark.anyio
-    async def test_invalid_variant_raises_model_swap_error(self, variant, invalid_variant):
+    async def test_invalid_variant_raises_model_swap_error(
+        self, variant, invalid_variant
+    ):
         """Variants not in medium_models raise ModelSwapError."""
         profile = {"medium_models": DEFAULT_MEDIUM_MODELS}
 
@@ -190,14 +198,13 @@ class TestVariantToKeyMapping:
         sm = SwapManager()
         sm._client = _mock_client(expected_key)
 
-        with patch("src.agent.swap_manager.get_profile", return_value=profile), \
-             patch("src.agent.swap_manager.asyncio.sleep", new_callable=AsyncMock):
+        with (
+            patch("src.agent.swap_manager.get_profile", return_value=profile),
+            patch("src.agent.swap_manager.asyncio.sleep", new_callable=AsyncMock),
+        ):
             await sm.swap_model(variant)
 
-        load_calls = [
-            c for c in sm._client.post.call_args_list
-            if "load" in str(c)
-        ]
+        load_calls = [c for c in sm._client.post.call_args_list if "load" in str(c)]
         sent_key = load_calls[0].kwargs.get("json", {}).get("model")
         # The key must be the exact value from the profile, not transformed
         assert sent_key == expected_key

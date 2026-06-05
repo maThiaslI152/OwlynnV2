@@ -33,9 +33,7 @@ from typing import Any, Callable
 
 from src.config.audit_log import (
     audit_event,
-    audit_context,
     set_node,
-    set_route,
     set_model,
 )
 
@@ -45,6 +43,7 @@ logger = logging.getLogger(__name__)
 # ══════════════════════════════════════════════════════════════════════════════
 # @log_node — wraps LangGraph node functions (sync or async)
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def log_node(node_name: str):
     """Decorator that logs entry, exit, and duration for a LangGraph node.
@@ -77,7 +76,8 @@ def log_node(node_name: str):
                 result = await func(*args, **kwargs)
                 elapsed = (time.monotonic() - started) * 1000
                 audit_event(
-                    "agent.lifecycle", "node_exit",
+                    "agent.lifecycle",
+                    "node_exit",
                     level=logging.DEBUG,
                     duration_ms=round(elapsed, 2),
                 )
@@ -85,7 +85,8 @@ def log_node(node_name: str):
             except Exception:
                 elapsed = (time.monotonic() - started) * 1000
                 audit_event(
-                    "agent.lifecycle", "node_error",
+                    "agent.lifecycle",
+                    "node_error",
                     level=logging.ERROR,
                     duration_ms=round(elapsed, 2),
                 )
@@ -100,7 +101,8 @@ def log_node(node_name: str):
                 result = func(*args, **kwargs)
                 elapsed = (time.monotonic() - started) * 1000
                 audit_event(
-                    "agent.lifecycle", "node_exit",
+                    "agent.lifecycle",
+                    "node_exit",
                     level=logging.DEBUG,
                     duration_ms=round(elapsed, 2),
                 )
@@ -108,7 +110,8 @@ def log_node(node_name: str):
             except Exception:
                 elapsed = (time.monotonic() - started) * 1000
                 audit_event(
-                    "agent.lifecycle", "node_error",
+                    "agent.lifecycle",
+                    "node_error",
                     level=logging.ERROR,
                     duration_ms=round(elapsed, 2),
                 )
@@ -122,6 +125,7 @@ def log_node(node_name: str):
 # ══════════════════════════════════════════════════════════════════════════════
 # log_model_attempt — log a single entry in a model fallback chain
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def log_model_attempt(
     model: str,
@@ -146,7 +150,8 @@ def log_model_attempt(
     """
     level = logging.INFO if status == "success" else logging.WARNING
     audit_event(
-        "agent.model", "model_attempt",
+        "agent.model",
+        "model_attempt",
         level=level,
         model=model,
         status=status,
@@ -160,6 +165,7 @@ def log_model_attempt(
 # ══════════════════════════════════════════════════════════════════════════════
 # log_hitl_event — log a human-in-the-loop decision
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def log_hitl_event(
     etype: str,
@@ -197,6 +203,7 @@ def log_hitl_event(
 # ══════════════════════════════════════════════════════════════════════════════
 # ASGI middleware — log HTTP requests
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 class AuditLogMiddleware:
     """Raw ASGI middleware that logs HTTP requests (skips WebSocket upgrade).
@@ -236,7 +243,8 @@ class AuditLogMiddleware:
         finally:
             elapsed = (time.monotonic() - started) * 1000
             audit_event(
-                "api.ws", "http_request",
+                "api.ws",
+                "http_request",
                 level=logging.DEBUG,
                 method=method,
                 path=path,

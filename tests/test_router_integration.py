@@ -23,9 +23,15 @@ from src.tools.skills import SkillDefinition, MatchResult
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
-def _make_skill(name: str, triggers: list[str], description: str = "",
-                file: str = "", category: str = "general",
-                tools_used: list[str] | None = None) -> SkillDefinition:
+
+def _make_skill(
+    name: str,
+    triggers: list[str],
+    description: str = "",
+    file: str = "",
+    category: str = "general",
+    tools_used: list[str] | None = None,
+) -> SkillDefinition:
     return SkillDefinition(
         file=file or f"{name.lower().replace(' ', '_')}.md",
         name=name,
@@ -59,13 +65,17 @@ def _make_mock_llm(content: str) -> MagicMock:
 # Test 1: HITL fires on low confidence + ambiguous skill match
 # ═════════════════════════════════════════════════════════════════════════
 
+
 @pytest.mark.anyio
 @patch("src.agent.nodes.router.interrupt")
 @patch("src.agent.nodes.router.SkillMatcher")
 @patch("src.agent.nodes.router.get_small_llm", new_callable=AsyncMock)
 @patch("langgraph.config.get_config")
 async def test_router_skill_hitl_round_trip(
-    mock_get_config, mock_get_llm, MockSkillMatcher, mock_interrupt,
+    mock_get_config,
+    mock_get_llm,
+    MockSkillMatcher,
+    mock_interrupt,
 ):
     """
     When LLM confidence is below routing_confidence_threshold (0.6) AND
@@ -77,12 +87,20 @@ async def test_router_skill_hitl_round_trip(
     mock_get_llm.return_value = _make_mock_llm(
         '{"routing":"complex","confidence":0.45,"toolbox":"all"}'
     )
-    mock_interrupt.return_value = {"toolbox": ["web_search"], "route": "complex-default"}
+    mock_interrupt.return_value = {
+        "toolbox": ["web_search"],
+        "route": "complex-default",
+    }
 
-    research_skill = _make_skill("Research Assistant", ["research"], "Source-backed research",
-                                  category="research")
-    viz_skill = _make_skill("Data Visualization", ["chart", "graph"], "Create charts",
-                             category="data")
+    research_skill = _make_skill(
+        "Research Assistant",
+        ["research"],
+        "Source-backed research",
+        category="research",
+    )
+    viz_skill = _make_skill(
+        "Data Visualization", ["chart", "graph"], "Create charts", category="data"
+    )
 
     mock_matcher = MockSkillMatcher.return_value
     mock_matcher.match_with_confidence.return_value = MatchResult(
@@ -120,13 +138,17 @@ async def test_router_skill_hitl_round_trip(
 # Test 2: HITL resume sets correct toolbox from chosen skill
 # ═════════════════════════════════════════════════════════════════════════
 
+
 @pytest.mark.anyio
 @patch("src.agent.nodes.router.interrupt")
 @patch("src.agent.nodes.router.SkillMatcher")
 @patch("src.agent.nodes.router.get_small_llm", new_callable=AsyncMock)
 @patch("langgraph.config.get_config")
 async def test_router_skill_hitl_resume(
-    mock_get_config, mock_get_llm, MockSkillMatcher, mock_interrupt,
+    mock_get_config,
+    mock_get_llm,
+    MockSkillMatcher,
+    mock_interrupt,
 ):
     """
     When HITL fires and the user picks a skill choice, the router must set
@@ -144,8 +166,12 @@ async def test_router_skill_hitl_resume(
         "skill_name": "research_assistant.md",
     }
 
-    research_skill = _make_skill("Research Assistant", ["research"], "Source-backed research",
-                                  category="research")
+    research_skill = _make_skill(
+        "Research Assistant",
+        ["research"],
+        "Source-backed research",
+        category="research",
+    )
     mock_matcher = MockSkillMatcher.return_value
     mock_matcher.match_with_confidence.return_value = MatchResult(
         is_ambiguous=True,
@@ -171,13 +197,17 @@ async def test_router_skill_hitl_resume(
 # Test 3: Confident LLM + ambiguous skill → HITL still fires (Gap 2 fix)
 # ═════════════════════════════════════════════════════════════════════════
 
+
 @pytest.mark.anyio
 @patch("src.agent.nodes.router.interrupt")
 @patch("src.agent.nodes.router.SkillMatcher")
 @patch("src.agent.nodes.router.get_small_llm", new_callable=AsyncMock)
 @patch("langgraph.config.get_config")
 async def test_router_confident_ambiguous_skill_hitl(
-    mock_get_config, mock_get_llm, MockSkillMatcher, mock_interrupt,
+    mock_get_config,
+    mock_get_llm,
+    MockSkillMatcher,
+    mock_interrupt,
 ):
     """
     Even when the LLM is confident (above routing_confidence_threshold),
@@ -189,12 +219,17 @@ async def test_router_confident_ambiguous_skill_hitl(
     mock_get_llm.return_value = _make_mock_llm(
         '{"routing":"complex","confidence":0.85,"toolbox":"data_viz"}'  # HIGH confidence
     )
-    mock_interrupt.return_value = {"toolbox": ["web_search"], "route": "complex-default"}
+    mock_interrupt.return_value = {
+        "toolbox": ["web_search"],
+        "route": "complex-default",
+    }
 
-    research_skill = _make_skill("Research Assistant", ["research"], "Research",
-                                  category="research")
-    writing_skill = _make_skill("Writer", ["write", "draft"], "Draft content",
-                                 category="writing")
+    research_skill = _make_skill(
+        "Research Assistant", ["research"], "Research", category="research"
+    )
+    writing_skill = _make_skill(
+        "Writer", ["write", "draft"], "Draft content", category="writing"
+    )
 
     mock_matcher = MockSkillMatcher.return_value
     mock_matcher.match_with_confidence.return_value = MatchResult(
@@ -221,13 +256,17 @@ async def test_router_confident_ambiguous_skill_hitl(
 # Test 4: Confident LLM + aligned strong skill → NO HITL (Gap 2 fix)
 # ═════════════════════════════════════════════════════════════════════════
 
+
 @pytest.mark.anyio
 @patch("src.agent.nodes.router.interrupt")
 @patch("src.agent.nodes.router.SkillMatcher")
 @patch("src.agent.nodes.router.get_small_llm", new_callable=AsyncMock)
 @patch("langgraph.config.get_config")
 async def test_router_confident_aligned_skill_no_hitl(
-    mock_get_config, mock_get_llm, MockSkillMatcher, mock_interrupt,
+    mock_get_config,
+    mock_get_llm,
+    MockSkillMatcher,
+    mock_interrupt,
 ):
     """
     When the LLM is confident AND the skill match is strong and unambiguous,
@@ -241,8 +280,12 @@ async def test_router_confident_aligned_skill_no_hitl(
     )
     # interrupt should never be called — we don't set a return value
 
-    research_skill = _make_skill("Research Assistant", ["research"], "Source-backed research",
-                                  category="research")
+    research_skill = _make_skill(
+        "Research Assistant",
+        ["research"],
+        "Source-backed research",
+        category="research",
+    )
 
     mock_matcher = MockSkillMatcher.return_value
     mock_matcher.match_with_confidence.return_value = MatchResult(
@@ -263,7 +306,9 @@ async def test_router_confident_aligned_skill_no_hitl(
     assert result["router_clarification_used"] is False
 
     skill_info = result.get("skill_matched")
-    assert skill_info is not None, "skill_matched must be set when skill match is strong"
+    assert skill_info is not None, (
+        "skill_matched must be set when skill match is strong"
+    )
     assert skill_info["name"] == "Research Assistant"
     assert skill_info["score"] == 0.91
     assert isinstance(skill_info["toolbox"], list)

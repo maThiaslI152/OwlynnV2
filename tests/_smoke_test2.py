@@ -1,4 +1,5 @@
 """Smoke test v2: wait for project items to appear."""
+
 import asyncio
 import os
 import httpx
@@ -16,7 +17,9 @@ async def smoke_test():
 
     suffix = uuid.uuid4().hex[:8]
     async with httpx.AsyncClient(timeout=10) as c:
-        r = await c.post(f"{APP_BASE_URL}/api/projects", json={"name": f"SmokeTest {suffix}"})
+        r = await c.post(
+            f"{APP_BASE_URL}/api/projects", json={"name": f"SmokeTest {suffix}"}
+        )
         assert r.status_code == 200
         project = r.json()
         print(f"[OK] Created project {project['id']} ({project['name']})")
@@ -29,14 +32,18 @@ async def smoke_test():
             page = await browser.new_page()
 
             ws_urls = []
+
             def on_ws(ws):
                 ws_urls.append(ws.url)
+
             page.on("websocket", on_ws)
 
             await page.goto(APP_BASE_URL, wait_until="load")
-            await page.locator(".connection-label").filter(
-                has_text="connected"
-            ).wait_for(state="visible", timeout=30000)
+            await (
+                page.locator(".connection-label")
+                .filter(has_text="connected")
+                .wait_for(state="visible", timeout=30000)
+            )
             print("[OK] Connected")
 
             if ws_urls:
@@ -50,7 +57,9 @@ async def smoke_test():
             for attempt in range(10):
                 items = await page.locator(".workspace-project-item").all()
                 if len(items) > 0:
-                    print(f"[OK] Found {len(items)} workspace project items after ~{attempt*2}s")
+                    print(
+                        f"[OK] Found {len(items)} workspace project items after ~{attempt * 2}s"
+                    )
                     for item in items:
                         text = (await item.inner_text()).strip()
                         print(f"  - {text[:50]}")
@@ -62,7 +71,9 @@ async def smoke_test():
                 # Show relevant parts
                 if "workspace-project-list" in content:
                     idx = content.index("workspace-project-list")
-                    print(f"HTML around workspace-project-list: {content[idx:idx+500]}")
+                    print(
+                        f"HTML around workspace-project-list: {content[idx : idx + 500]}"
+                    )
                 print("---")
                 # Also check all project-related text
                 projects_in_page = await page.locator("[class*='project']").all()
@@ -88,6 +99,7 @@ async def smoke_test():
 
     except Exception as e:
         import traceback
+
         traceback.print_exc()
     finally:
         async with httpx.AsyncClient(timeout=10) as c:

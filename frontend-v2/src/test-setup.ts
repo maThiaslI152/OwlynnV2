@@ -91,3 +91,18 @@ if (!globalThis.navigator?.clipboard) {
     configurable: true,
   })
 }
+
+// -- global fetch mock for vitest --
+if (!globalThis.fetch) {
+  // @ts-expect-error - mock fetch implementation
+  globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({}),
+      text: async () => '',
+      blob: async () => new Blob(),
+      headers: new Headers(),
+    } as unknown as Response
+  }
+}

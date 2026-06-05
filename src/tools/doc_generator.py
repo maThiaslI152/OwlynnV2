@@ -35,7 +35,6 @@ def create_docx(filename: str, content: str, title: str = "") -> str:
     """
     try:
         from docx import Document
-        from docx.shared import Pt
     except ImportError:
         return "Error: python-docx not installed. Run: pip install python-docx"
 
@@ -55,7 +54,11 @@ def create_docx(filename: str, content: str, title: str = "") -> str:
             doc.add_heading(stripped[2:], level=1)
         elif stripped.startswith("- ") or stripped.startswith("* "):
             doc.add_paragraph(stripped[2:], style="List Bullet")
-        elif stripped.startswith("1. ") or stripped.startswith("2. ") or stripped.startswith("3. "):
+        elif (
+            stripped.startswith("1. ")
+            or stripped.startswith("2. ")
+            or stripped.startswith("3. ")
+        ):
             doc.add_paragraph(stripped[3:], style="List Number")
         else:
             doc.add_paragraph(stripped)
@@ -136,7 +139,6 @@ def create_pptx(filename: str, slides_content: str, title: str = "") -> str:
     """
     try:
         from pptx import Presentation
-        from pptx.util import Inches, Pt
     except ImportError:
         return "Error: python-pptx not installed. Run: pip install python-pptx"
 
@@ -148,7 +150,7 @@ def create_pptx(filename: str, slides_content: str, title: str = "") -> str:
 
     raw_slides = slides_content.split("---")
     for raw in raw_slides:
-        lines = [l.strip() for l in raw.strip().split("\n") if l.strip()]
+        lines = [line.strip() for line in raw.strip().split("\n") if line.strip()]
         if not lines:
             continue
 
@@ -211,7 +213,9 @@ def create_pdf(filename: str, content: str, title: str = "") -> str:
             page.insert_text((72, y), stripped[2:], fontsize=14, fontname="helv")
             y += 22
         else:
-            page.insert_text((72, y), stripped if stripped else " ", fontsize=10, fontname="helv")
+            page.insert_text(
+                (72, y), stripped if stripped else " ", fontsize=10, fontname="helv"
+            )
             y += 14
 
     if not filename.endswith(".pdf"):

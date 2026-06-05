@@ -69,6 +69,7 @@ Run solo on {context}.
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 def _write_skill(skills_dir: Path, filename: str, content: str) -> None:
     (skills_dir / filename).write_text(content, encoding="utf-8")
 
@@ -103,6 +104,7 @@ def populated_dir(skills_dir: Path) -> Path:
 # ===========================================================================
 # list_skills tests (edge cases beyond test_list_skills.py)
 # ===========================================================================
+
 
 class TestListSkillsEdgeCases:
     """Edge cases for list_skills not covered in test_list_skills.py."""
@@ -139,28 +141,35 @@ class TestListSkillsEdgeCases:
 # invoke_skill tests
 # ===========================================================================
 
+
 class TestInvokeSkillValid:
     """invoke_skill with valid skill name and params. Req 7.1, 7.2"""
 
     def test_basic_invocation_no_params(self, populated_dir):
-        result = invoke_skill.invoke({"skill_name": "General Helper", "context": "world"})
+        result = invoke_skill.invoke(
+            {"skill_name": "General Helper", "context": "world"}
+        )
         assert result.startswith("[Skill: General Helper]")
         assert "Hello world" in result
 
     def test_invocation_with_valid_json_params(self, populated_dir):
-        result = invoke_skill.invoke({
-            "skill_name": "Research Deep",
-            "context": "AI trends",
-            "params": '{"depth": "deep"}',
-        })
+        result = invoke_skill.invoke(
+            {
+                "skill_name": "Research Deep",
+                "context": "AI trends",
+                "params": '{"depth": "deep"}',
+            }
+        )
         assert "[Skill: Research Deep]" in result
         assert "Research AI trends at deep level" in result
 
     def test_default_param_applied_when_omitted(self, populated_dir):
-        result = invoke_skill.invoke({
-            "skill_name": "Research Deep",
-            "context": "AI trends",
-        })
+        result = invoke_skill.invoke(
+            {
+                "skill_name": "Research Deep",
+                "context": "AI trends",
+            }
+        )
         assert "Research AI trends at standard level" in result
 
     def test_empty_context(self, populated_dir):
@@ -173,19 +182,23 @@ class TestInvokeSkillInvalidJSON:
     """invoke_skill with invalid JSON params. Req 7.3"""
 
     def test_malformed_json_returns_error(self, populated_dir):
-        result = invoke_skill.invoke({
-            "skill_name": "Research Deep",
-            "context": "test",
-            "params": "{not valid json}",
-        })
+        result = invoke_skill.invoke(
+            {
+                "skill_name": "Research Deep",
+                "context": "test",
+                "params": "{not valid json}",
+            }
+        )
         assert "Invalid params JSON" in result
 
     def test_non_json_string_returns_error(self, populated_dir):
-        result = invoke_skill.invoke({
-            "skill_name": "Research Deep",
-            "context": "test",
-            "params": "just a string",
-        })
+        result = invoke_skill.invoke(
+            {
+                "skill_name": "Research Deep",
+                "context": "test",
+                "params": "just a string",
+            }
+        )
         assert "Invalid params JSON" in result
 
 
@@ -207,10 +220,12 @@ params:
 Run in {mode} mode on {context}.
 """
         _write_skill(skills_dir, "strict.md", skill_with_required)
-        result = invoke_skill.invoke({
-            "skill_name": "Strict Skill",
-            "context": "data",
-        })
+        result = invoke_skill.invoke(
+            {
+                "skill_name": "Strict Skill",
+                "context": "data",
+            }
+        )
         assert "Parameter error" in result
         assert "mode" in result
 
@@ -236,19 +251,23 @@ class TestInvokeSkillContextInjection:
     """invoke_skill context injection replaces placeholders. Req 7.1"""
 
     def test_context_placeholder_replaced(self, populated_dir):
-        result = invoke_skill.invoke({
-            "skill_name": "General Helper",
-            "context": "my special context",
-        })
+        result = invoke_skill.invoke(
+            {
+                "skill_name": "General Helper",
+                "context": "my special context",
+            }
+        )
         assert "my special context" in result
         assert "{context}" not in result
 
     def test_param_placeholder_replaced(self, populated_dir):
-        result = invoke_skill.invoke({
-            "skill_name": "Research Deep",
-            "context": "topic",
-            "params": '{"depth": "quick"}',
-        })
+        result = invoke_skill.invoke(
+            {
+                "skill_name": "Research Deep",
+                "context": "topic",
+                "params": '{"depth": "quick"}',
+            }
+        )
         assert "quick" in result
         assert "{depth}" not in result
 
@@ -257,22 +276,27 @@ class TestInvokeSkillContextInjection:
 # run_skill_chain tests
 # ===========================================================================
 
+
 class TestRunSkillChainValid:
     """run_skill_chain with valid chains. Req 8.1, 8.2"""
 
     def test_single_step_chain(self, populated_dir):
-        result = run_skill_chain.invoke({
-            "steps": "General Helper",
-            "context": "world",
-        })
+        result = run_skill_chain.invoke(
+            {
+                "steps": "General Helper",
+                "context": "world",
+            }
+        )
         assert "[Skill Chain: 1 steps]" in result
         assert "Hello world" in result
 
     def test_two_step_chain(self, populated_dir):
-        result = run_skill_chain.invoke({
-            "steps": "General Helper, Research Deep",
-            "context": "AI",
-        })
+        result = run_skill_chain.invoke(
+            {
+                "steps": "General Helper, Research Deep",
+                "context": "AI",
+            }
+        )
         assert "[Skill Chain: 2 steps]" in result
         assert "Step 1: General Helper" in result
         assert "Step 2: Research Deep" in result
@@ -280,10 +304,12 @@ class TestRunSkillChainValid:
         assert "Research AI" in result
 
     def test_chain_continuation_context_in_second_step(self, populated_dir):
-        result = run_skill_chain.invoke({
-            "steps": "General Helper, Research Deep",
-            "context": "data",
-        })
+        result = run_skill_chain.invoke(
+            {
+                "steps": "General Helper, Research Deep",
+                "context": "data",
+            }
+        )
         assert "[Chain Step 2/2" in result
         assert "Previous: General Helper" in result
 
@@ -292,18 +318,22 @@ class TestRunSkillChainInvalidSkill:
     """run_skill_chain with invalid skill names. Req 8.3"""
 
     def test_nonexistent_skill_returns_error(self, populated_dir):
-        result = run_skill_chain.invoke({
-            "steps": "Nonexistent Skill",
-            "context": "test",
-        })
+        result = run_skill_chain.invoke(
+            {
+                "steps": "Nonexistent Skill",
+                "context": "test",
+            }
+        )
         assert "Chain error" in result
         assert "Skill not found" in result
 
     def test_non_chain_compatible_returns_error(self, populated_dir):
-        result = run_skill_chain.invoke({
-            "steps": "Solo Runner",
-            "context": "test",
-        })
+        result = run_skill_chain.invoke(
+            {
+                "steps": "Solo Runner",
+                "context": "test",
+            }
+        )
         assert "Chain error" in result
         assert "not chain-compatible" in result
 

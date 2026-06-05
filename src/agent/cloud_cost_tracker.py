@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 # Cloud model pricing per 1M tokens (USD) — sourced from centralized config
 from src.config.config_loader import config
+
 _PRICE_INPUT_PER_1M = float(config.get("models.cloud.pricing.input_per_1m_usd", 0.14))
 _PRICE_OUTPUT_PER_1M = float(config.get("models.cloud.pricing.output_per_1m_usd", 0.28))
 

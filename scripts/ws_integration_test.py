@@ -26,15 +26,16 @@ Please:
 
 Be thorough and provide concrete data points where possible."""
 
+
 async def main():
     print(f"[TEST] Connecting to {WS_URL}...")
-    
+
     events_log = []
     start_time = time.monotonic()
-    
+
     async with websockets.connect(WS_URL) as ws:
         print("[TEST] Connected. Sending prompt...")
-        
+
         # Send the test prompt
         payload = {
             "message": TEST_PROMPT,
@@ -46,7 +47,7 @@ async def main():
         }
         await ws.send(json.dumps(payload))
         print(f"[TEST] Prompt sent ({len(TEST_PROMPT)} chars). Waiting for events...")
-        
+
         done = False
         event_count = 0
         tool_calls_seen = set()
@@ -54,16 +55,16 @@ async def main():
         status_changes = []
         model_info = []
         router_info = None
-        
+
         while not done:
             try:
                 raw = await asyncio.wait_for(ws.recv(), timeout=120.0)
                 event = json.loads(raw)
                 event_count += 1
                 events_log.append(event)
-                
+
                 etype = event.get("type", "unknown")
-                
+
                 # Track interesting events
                 if etype == "status":
                     status = event.get("content", "")
@@ -73,33 +74,41 @@ async def main():
                         # Give a few seconds for final events to arrive
                         await asyncio.sleep(2)
                         done = True
-                        
+
                 elif etype == "chunk":
                     content = event.get("content", "")
                     if content:
-                        print(f"  [CHUNK] {content[:120]}{'...' if len(content) > 120 else ''}")
-                        
+                        print(
+                            f"  [CHUNK] {content[:120]}{'...' if len(content) > 120 else ''}"
+                        )
+
                 elif etype == "tool_execution":
                     tool_name = event.get("tool_name", "unknown")
                     status_t = event.get("status", "unknown")
                     tool_calls_seen.add(tool_name)
                     print(f"  [TOOL] {tool_name} → {status_t}")
-                    
+
                 elif etype == "interrupt":
                     interrupts = event.get("interrupts", [])
                     for i in interrupts:
-                        itype = i.get("type", "unknown") if isinstance(i, dict) else str(i)
+                        itype = (
+                            i.get("type", "unknown") if isinstance(i, dict) else str(i)
+                        )
                         hitl_interrupts.append(itype)
-                    print(f"  [HITL INTERRUPT] {[i.get('type','?') if isinstance(i,dict) else str(i) for i in interrupts]}")
-                    
+                    print(
+                        f"  [HITL INTERRUPT] {[i.get('type', '?') if isinstance(i, dict) else str(i) for i in interrupts]}"
+                    )
+
                 elif etype == "model_info":
                     model_info.append(event)
-                    print(f"  [MODEL] {event.get('model','?')} swap={event.get('swapping',False)}")
-                    
+                    print(
+                        f"  [MODEL] {event.get('model', '?')} swap={event.get('swapping', False)}"
+                    )
+
                 elif etype == "router_info":
                     router_info = event.get("metadata", {})
                     print(f"  [ROUTER] {json.dumps(router_info, indent=2)[:300]}")
-                    
+
                 elif etype == "assistant.message":
                     msg = event.get("message", {})
                     content = msg.get("content", "")
@@ -107,27 +116,29 @@ async def main():
                     tc = msg.get("tool_calls", [])
                     if tc:
                         tool_calls_seen.update(t.get("name", "?") for t in tc)
-                    print(f"  [MSG] model={model} tools={[t.get('name','?') for t in tc]} content={content[:100]}...")
-                    
+                    print(
+                        f"  [MSG] model={model} tools={[t.get('name', '?') for t in tc]} content={content[:100]}..."
+                    )
+
                 elif etype == "memory_updated":
-                    print(f"  [MEMORY] Updated")
-                    
+                    print("  [MEMORY] Updated")
+
                 elif etype == "error":
                     print(f"  [ERROR] {event.get('content', '')}")
-                    
+
             except asyncio.TimeoutError:
                 print("[TEST] Timeout waiting for events — assuming done.")
                 done = True
             except websockets.exceptions.ConnectionClosed:
                 print("[TEST] WebSocket connection closed.")
                 done = True
-    
+
     elapsed = time.monotonic() - start_time
-    
+
     # Summary
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print(f"INTEGRATION TEST SUMMARY — {THREAD_ID}")
-    print("="*70)
+    print("=" * 70)
     print(f"Duration: {elapsed:.1f}s")
     print(f"Total events: {event_count}")
     print(f"Status changes: {status_changes}")
@@ -138,16 +149,18 @@ async def main():
     if model_info:
         models_used = set(e.get("model", "?") for e in model_info)
         print(f"Models used: {models_used}")
-    
+
     # Check for key expected behaviors
     checks = []
     checks.append(("Router emitted info", router_info is not None))
     checks.append(("Tools were called", len(tool_calls_seen) > 0))
     checks.append(("Web search tool used", "web_search" in tool_calls_seen))
-    checks.append(("File write tool used", any("write" in t.lower() for t in tool_calls_seen)))
+    checks.append(
+        ("File write tool used", any("write" in t.lower() for t in tool_calls_seen))
+    )
     checks.append(("Multiple tool types", len(tool_calls_seen) >= 2))
     checks.append(("Status reached idle", "idle" in status_changes))
-    
+
     print("\nChecks:")
     all_pass = True
     for desc, result in checks:
@@ -155,14 +168,15 @@ async def main():
         if not result:
             all_pass = False
         print(f"  [{status}] {desc}")
-    
+
     # Save events log
     log_path = "/tmp/integration_test_events.json"
     with open(log_path, "w") as f:
         json.dump(events_log, f, indent=2, default=str)
     print(f"\nFull event log saved to {log_path}")
-    
+
     return 0 if all_pass else 1
+
 
 if __name__ == "__main__":
     sys.exit(asyncio.run(main()))

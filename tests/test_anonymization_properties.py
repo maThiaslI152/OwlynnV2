@@ -44,50 +44,59 @@ custom_term_st = st.text(
     max_size=30,
 ).filter(lambda s: s.strip() and len(s.strip()) > 1)
 
-email_st = st.from_regex(
-    r"[a-z][a-z0-9]{1,8}@[a-z]{2,6}\.[a-z]{2,4}", fullmatch=True
-)
+email_st = st.from_regex(r"[a-z][a-z0-9]{1,8}@[a-z]{2,6}\.[a-z]{2,4}", fullmatch=True)
 
-ip_st = st.tuples(
-    st.integers(1, 254),
-    st.integers(0, 255),
-    st.integers(0, 255),
-    st.integers(1, 254),
-).map(lambda t: f"{t[0]}.{t[1]}.{t[2]}.{t[3]}").filter(
-    lambda ip: ip not in ("0.0.0.0", "255.255.255.255")
+ip_st = (
+    st.tuples(
+        st.integers(1, 254),
+        st.integers(0, 255),
+        st.integers(0, 255),
+        st.integers(1, 254),
+    )
+    .map(lambda t: f"{t[0]}.{t[1]}.{t[2]}.{t[3]}")
+    .filter(lambda ip: ip not in ("0.0.0.0", "255.255.255.255"))
 )
 
 phone_st = st.from_regex(r"\+1-555-\d{3}-\d{4}", fullmatch=True)
 
-path_st = st.sampled_from([
-    "/Users/alice/projects/app",
-    "/home/bob/.config/tool",
-    "~/Documents/notes.txt",
-    "/Users/dev/code/test.py",
-    "/home/user/data/file.csv",
-])
+path_st = st.sampled_from(
+    [
+        "/Users/alice/projects/app",
+        "/home/bob/.config/tool",
+        "~/Documents/notes.txt",
+        "/Users/dev/code/test.py",
+        "/home/user/data/file.csv",
+    ]
+)
 
-api_key_st = st.sampled_from([
-    "sk-abcdefghijklmnopqrstuvwxyz1234",
-    "key-abcdefghijklmnopqrstuvwxyz1234",
-    "token-abcdefghijklmnopqrstuvwxyz1234",
-    "Bearer eyJhbGciOiJIUzI1NiJ9.test",
-])
+api_key_st = st.sampled_from(
+    [
+        "sk-abcdefghijklmnopqrstuvwxyz1234",
+        "key-abcdefghijklmnopqrstuvwxyz1234",
+        "token-abcdefghijklmnopqrstuvwxyz1234",
+        "Bearer eyJhbGciOiJIUzI1NiJ9.test",
+    ]
+)
 
-localhost_url_st = st.sampled_from([
-    "http://localhost:8080",
-    "http://127.0.0.1:3000",
-    "http://localhost:6379",
-    "http://127.0.0.1:1234",
-])
+localhost_url_st = st.sampled_from(
+    [
+        "http://localhost:8080",
+        "http://127.0.0.1:3000",
+        "http://localhost:6379",
+        "http://127.0.0.1:1234",
+    ]
+)
 
-context_st = st.fixed_dictionaries({
-    "name": name_st,
-    "custom_sensitive_terms": st.lists(custom_term_st, min_size=0, max_size=3),
-})
+context_st = st.fixed_dictionaries(
+    {
+        "name": name_st,
+        "custom_sensitive_terms": st.lists(custom_term_st, min_size=0, max_size=3),
+    }
+)
 
 
 # ── Property 1: Anonymization Round-Trip ─────────────────────────────────
+
 
 class TestAnonymizationRoundTrip:
     """
@@ -184,6 +193,7 @@ class TestAnonymizationRoundTrip:
 
 # ── Property 14: Sensitive Pattern Detection Coverage ────────────────────
 
+
 class TestSensitivePatternDetection:
     """
     Property 14: For any text containing an email, phone, path, API key,
@@ -208,9 +218,7 @@ class TestSensitivePatternDetection:
         """Any non-excluded IP address is detected and replaced."""
         text = f"Connect to {ip} for access"
         anon, mapping = anonymize(text)
-        assert any("IP" in ph for ph in mapping), (
-            f"IP {ip!r} not detected in: {anon!r}"
-        )
+        assert any("IP" in ph for ph in mapping), f"IP {ip!r} not detected in: {anon!r}"
         assert ip not in anon
 
     @given(phone=phone_st)
@@ -284,7 +292,9 @@ class TestSensitivePatternDetection:
 
     @given(
         name=st.text(
-            alphabet=st.characters(whitelist_categories=("L",), whitelist_characters=""),
+            alphabet=st.characters(
+                whitelist_categories=("L",), whitelist_characters=""
+            ),
             min_size=2,
             max_size=12,
         ).filter(lambda s: s.isascii() and s.isalpha() and len(s) >= 2),
@@ -315,7 +325,11 @@ class TestSensitivePatternDetection:
         """When text contains multiple categories, all are detected."""
         text = f"Email {email}, IP {ip}, call {phone}, file {path}"
         anon, mapping = anonymize(text)
-        categories_found = {PLACEHOLDER_RE.match(ph).group(1) for ph in mapping if PLACEHOLDER_RE.match(ph)}
+        categories_found = {
+            PLACEHOLDER_RE.match(ph).group(1)
+            for ph in mapping
+            if PLACEHOLDER_RE.match(ph)
+        }
         assert "EMAIL" in categories_found, f"EMAIL missing from {categories_found}"
         assert "IP" in categories_found, f"IP missing from {categories_found}"
         # PHONE detection may overlap with IP digits in some edge cases,

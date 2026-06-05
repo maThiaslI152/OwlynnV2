@@ -4,15 +4,16 @@ import os
 SCRIPT_PATH = "/Users/tim/AntigravityProject/Owlynn/frontend/script.js"
 HTML_PATH = "/Users/tim/AntigravityProject/Owlynn/frontend/index.html"
 
+
 def main():
     if not os.path.exists(SCRIPT_PATH) or not os.path.exists(HTML_PATH):
         print("Files not found.")
         return
 
-    with open(SCRIPT_PATH, 'r') as f:
+    with open(SCRIPT_PATH, "r") as f:
         script_content = f.read()
 
-    with open(HTML_PATH, 'r') as f:
+    with open(HTML_PATH, "r") as f:
         html_content = f.read()
 
     # Find IDs in script.js
@@ -30,7 +31,7 @@ def main():
         # Safer: look for id="id" or id='id'
         pattern1 = f'id="{element_id}"'
         pattern2 = f"id='{element_id}'"
-        
+
         if pattern1 in html_content or pattern2 in html_content:
             found_count += 1
         else:
@@ -40,6 +41,7 @@ def main():
     print(f"\nMissing IDs ({len(missing)}):")
     for m in missing:
         print(f" - {m}")
+
 
 if __name__ == "__main__":
     main()

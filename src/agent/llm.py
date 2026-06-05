@@ -13,11 +13,14 @@ are sourced from the centralized config (src/config/defaults.yaml).
 
 import asyncio
 import logging
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from langchain_openai import ChatOpenAI
 
-from src.config.config_loader import config, get_model_config
+if TYPE_CHECKING:
+    from src.agent.swap_manager import SwapManager
+
+from src.config.config_loader import get_model_config
 from src.config.settings import DEEPSEEK_API_KEY, M4_MAC_OPTIMIZATION
 from src.memory.user_profile import get_profile
 
@@ -66,24 +69,40 @@ class LLMPool:
                     if cls._small_llm is None:
                         model_cfg = get_model_config("small")
                         extra_body = dict(model_cfg.get("extra_body") or {})
-                        extra_body["max_output_tokens"] = model_cfg.get("max_output_tokens", 512)
+                        extra_body["max_output_tokens"] = model_cfg.get(
+                            "max_output_tokens", 512
+                        )
                         cls._small_llm = ChatOpenAI(
                             model=model_cfg.get("model_name", "liquid/lfm2.5-1.2b"),
                             api_key="sk-local-no-key-needed",
-                            base_url=model_cfg.get("base_url", "http://127.0.0.1:1234/v1"),
+                            base_url=model_cfg.get(
+                                "base_url", "http://127.0.0.1:1234/v1"
+                            ),
                             temperature=model_cfg.get("temperature", 0.2),
                             max_tokens=model_cfg.get("max_tokens"),
                             extra_body=extra_body,
-                            request_timeout=model_cfg.get("request_timeout") or model_cfg.get("timeout", 10),
+                            request_timeout=model_cfg.get("request_timeout")
+                            or model_cfg.get("timeout", 10),
                         )
-                        audit_info("agent.model", "pool_instance_created", slot="small",
-                                   model=model_cfg.get("model_name"))
+                        audit_info(
+                            "agent.model",
+                            "pool_instance_created",
+                            slot="small",
+                            model=model_cfg.get("model_name"),
+                        )
             except Exception:
                 model_cfg = get_model_config("small")
                 extra_body = dict(model_cfg.get("extra_body") or {})
-                extra_body["max_output_tokens"] = model_cfg.get("max_output_tokens", 512)
-                audit_info("agent.model", "pool_instance_created", slot="small",
-                           model=model_cfg.get("model_name"), source="fallback")
+                extra_body["max_output_tokens"] = model_cfg.get(
+                    "max_output_tokens", 512
+                )
+                audit_info(
+                    "agent.model",
+                    "pool_instance_created",
+                    slot="small",
+                    model=model_cfg.get("model_name"),
+                    source="fallback",
+                )
                 return ChatOpenAI(
                     model=model_cfg.get("model_name", "liquid/lfm2.5-1.2b"),
                     api_key="sk-local-no-key-needed",
@@ -91,7 +110,8 @@ class LLMPool:
                     temperature=model_cfg.get("temperature", 0.2),
                     max_tokens=model_cfg.get("max_tokens"),
                     extra_body=extra_body,
-                    request_timeout=model_cfg.get("request_timeout") or model_cfg.get("timeout", 10),
+                    request_timeout=model_cfg.get("request_timeout")
+                    or model_cfg.get("timeout", 10),
                 )
         else:
             audit_debug("agent.model", "pool_cache_hit", slot="small")
@@ -124,12 +144,15 @@ class LLMPool:
         async with cls._lock:
             # Double-check after acquiring lock
             if cls._current_medium_variant == variant and cls._medium_llm is not None:
-                audit_debug("agent.model", "pool_cache_hit", slot="medium", variant=variant)
+                audit_debug(
+                    "agent.model", "pool_cache_hit", slot="medium", variant=variant
+                )
                 return cls._medium_llm
 
             # Lazy-init swap manager
             if cls._swap_manager is None:
                 from src.agent.swap_manager import SwapManager
+
                 cls._swap_manager = SwapManager()
 
             await cls._swap_manager.swap_model(variant)
@@ -140,17 +163,25 @@ class LLMPool:
             extra_body["max_output_tokens"] = model_cfg.get("max_output_tokens", 4096)
 
             cls._medium_llm = ChatOpenAI(
-                model=model_cfg.get("model_name", "gemma-4-e4b-uncensored-hauhaucs-aggressive"),
+                model=model_cfg.get(
+                    "model_name", "gemma-4-e4b-uncensored-hauhaucs-aggressive"
+                ),
                 api_key="sk-local-no-key-needed",
                 base_url=model_cfg.get("base_url", "http://127.0.0.1:1234/v1"),
                 temperature=model_cfg.get("temperature", 0.4),
                 max_tokens=model_cfg.get("max_tokens"),
                 extra_body=extra_body,
-                request_timeout=model_cfg.get("request_timeout") or model_cfg.get("timeout", 120),
+                request_timeout=model_cfg.get("request_timeout")
+                or model_cfg.get("timeout", 120),
             )
             cls._current_medium_variant = variant
-            audit_info("agent.model", "pool_instance_created", slot="medium",
-                       variant=variant, model=model_cfg.get("model_name"))
+            audit_info(
+                "agent.model",
+                "pool_instance_created",
+                slot="medium",
+                variant=variant,
+                model=model_cfg.get("model_name"),
+            )
 
         return cls._medium_llm
 
@@ -181,6 +212,7 @@ class LLMPool:
                 return cls._cloud_llm
 
             from src.config.secret_store import resolve_deepseek_api_key
+
             api_key = resolve_deepseek_api_key()
             if not api_key:
                 audit_warn("agent.model", "pool_no_api_key", slot="cloud")
@@ -207,8 +239,12 @@ class LLMPool:
                 temperature=model_cfg.get("temperature", 0.4),
                 request_timeout=timeout,
             )
-            audit_info("agent.model", "pool_instance_created", slot="cloud",
-                       model=model_cfg.get("model_name"))
+            audit_info(
+                "agent.model",
+                "pool_instance_created",
+                slot="cloud",
+                model=model_cfg.get("model_name"),
+            )
 
         return cls._cloud_llm
 
@@ -248,6 +284,7 @@ class LLMPool:
 
 
 # ── module-level convenience wrappers (unchanged API) ────────────────────
+
 
 async def get_small_llm() -> ChatOpenAI:
     """Get small LLM instance (pooled for efficiency)."""

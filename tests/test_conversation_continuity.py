@@ -136,36 +136,44 @@ class TestModelUsedProvenance:
         turn_records = []
 
         # Turn 1: medium-default
-        turn_records.append({
-            "turn": 1,
-            "model_used": "medium-default",
-            "user_msg": "What is Python?",
-            "ai_msg": "Python is a programming language.",
-        })
+        turn_records.append(
+            {
+                "turn": 1,
+                "model_used": "medium-default",
+                "user_msg": "What is Python?",
+                "ai_msg": "Python is a programming language.",
+            }
+        )
 
         # Turn 2: medium-vision
-        turn_records.append({
-            "turn": 2,
-            "model_used": "medium-vision",
-            "user_msg": "Describe this image.",
-            "ai_msg": "The image shows a sunset.",
-        })
+        turn_records.append(
+            {
+                "turn": 2,
+                "model_used": "medium-vision",
+                "user_msg": "Describe this image.",
+                "ai_msg": "The image shows a sunset.",
+            }
+        )
 
         # Turn 3: large-cloud
-        turn_records.append({
-            "turn": 3,
-            "model_used": "large-cloud",
-            "user_msg": "Prove this theorem.",
-            "ai_msg": "By induction...",
-        })
+        turn_records.append(
+            {
+                "turn": 3,
+                "model_used": "large-cloud",
+                "user_msg": "Prove this theorem.",
+                "ai_msg": "By induction...",
+            }
+        )
 
         # Turn 4: medium-default again
-        turn_records.append({
-            "turn": 4,
-            "model_used": "medium-default",
-            "user_msg": "Summarize our conversation.",
-            "ai_msg": "We discussed Python, an image, and a theorem.",
-        })
+        turn_records.append(
+            {
+                "turn": 4,
+                "model_used": "medium-default",
+                "user_msg": "Summarize our conversation.",
+                "ai_msg": "We discussed Python, an image, and a theorem.",
+            }
+        )
 
         # Verify provenance is preserved
         assert turn_records[0]["model_used"] == "medium-default"

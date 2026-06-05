@@ -72,8 +72,10 @@ async def test_get_medium_llm_triggers_swap_on_variant_mismatch():
     LLMPool._swap_manager = mock_swap
     LLMPool._current_medium_variant = "default"
 
-    with patch("src.agent.llm.get_profile", return_value=PROFILE), \
-         patch("src.agent.llm.ChatOpenAI") as MockChat:
+    with (
+        patch("src.agent.llm.get_profile", return_value=PROFILE),
+        patch("src.agent.llm.ChatOpenAI") as MockChat,
+    ):
         MockChat.return_value = MagicMock()
         result = await LLMPool.get_medium_llm("vision")
 
@@ -87,8 +89,10 @@ async def test_get_medium_llm_variant_tracking():
     mock_swap = AsyncMock()
     LLMPool._swap_manager = mock_swap
 
-    with patch("src.agent.llm.get_profile", return_value=PROFILE), \
-         patch("src.agent.llm.ChatOpenAI") as MockChat:
+    with (
+        patch("src.agent.llm.get_profile", return_value=PROFILE),
+        patch("src.agent.llm.ChatOpenAI") as MockChat,
+    ):
         MockChat.return_value = MagicMock()
 
         await LLMPool.get_medium_llm("default")
@@ -104,8 +108,10 @@ async def test_get_medium_llm_variant_tracking():
 @pytest.mark.anyio
 async def test_get_cloud_llm_raises_without_api_key():
     """CloudUnavailableError when no API key is configured."""
-    with patch("src.config.secret_store.resolve_deepseek_api_key", return_value=""), \
-         patch("src.agent.llm.get_profile", return_value=PROFILE):
+    with (
+        patch("src.config.secret_store.resolve_deepseek_api_key", return_value=""),
+        patch("src.agent.llm.get_profile", return_value=PROFILE),
+    ):
         with pytest.raises(CloudUnavailableError):
             await LLMPool.get_cloud_llm()
 
@@ -115,9 +121,13 @@ async def test_get_cloud_llm_uses_env_var_first():
     """Env var takes priority over profile key."""
     profile_with_key = {**PROFILE, "deepseek_api_key": "profile-key"}
 
-    with patch("src.config.secret_store.resolve_deepseek_api_key", return_value="env-key"), \
-         patch("src.agent.llm.get_profile", return_value=profile_with_key), \
-         patch("src.agent.llm.ChatOpenAI") as MockChat:
+    with (
+        patch(
+            "src.config.secret_store.resolve_deepseek_api_key", return_value="env-key"
+        ),
+        patch("src.agent.llm.get_profile", return_value=profile_with_key),
+        patch("src.agent.llm.ChatOpenAI") as MockChat,
+    ):
         MockChat.return_value = MagicMock()
         await LLMPool.get_cloud_llm()
 
@@ -131,9 +141,14 @@ async def test_get_cloud_llm_falls_back_to_profile_key():
     """Profile key used when env var is empty."""
     profile_with_key = {**PROFILE, "deepseek_api_key": "profile-key"}
 
-    with patch("src.config.secret_store.resolve_deepseek_api_key", return_value="profile-key"), \
-         patch("src.agent.llm.get_profile", return_value=profile_with_key), \
-         patch("src.agent.llm.ChatOpenAI") as MockChat:
+    with (
+        patch(
+            "src.config.secret_store.resolve_deepseek_api_key",
+            return_value="profile-key",
+        ),
+        patch("src.agent.llm.get_profile", return_value=profile_with_key),
+        patch("src.agent.llm.ChatOpenAI") as MockChat,
+    ):
         MockChat.return_value = MagicMock()
         await LLMPool.get_cloud_llm()
 
@@ -144,9 +159,13 @@ async def test_get_cloud_llm_falls_back_to_profile_key():
 @pytest.mark.anyio
 async def test_get_cloud_llm_config():
     """Cloud LLM has streaming=True, max_tokens=8192, request_timeout."""
-    with patch("src.config.secret_store.resolve_deepseek_api_key", return_value="test-key"), \
-         patch("src.agent.llm.get_profile", return_value=PROFILE), \
-         patch("src.agent.llm.ChatOpenAI") as MockChat:
+    with (
+        patch(
+            "src.config.secret_store.resolve_deepseek_api_key", return_value="test-key"
+        ),
+        patch("src.agent.llm.get_profile", return_value=PROFILE),
+        patch("src.agent.llm.ChatOpenAI") as MockChat,
+    ):
         MockChat.return_value = MagicMock()
         await LLMPool.get_cloud_llm()
 
@@ -163,8 +182,10 @@ async def test_get_large_llm_is_alias():
     mock_swap = AsyncMock()
     LLMPool._swap_manager = mock_swap
 
-    with patch("src.agent.llm.get_profile", return_value=PROFILE), \
-         patch("src.agent.llm.ChatOpenAI") as MockChat:
+    with (
+        patch("src.agent.llm.get_profile", return_value=PROFILE),
+        patch("src.agent.llm.ChatOpenAI") as MockChat,
+    ):
         MockChat.return_value = MagicMock()
         result = await LLMPool.get_large_llm()
 

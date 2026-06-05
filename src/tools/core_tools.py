@@ -29,7 +29,7 @@ def get_safe_workspace_path(filename: str) -> tuple[str, str | None]:
     """Resolve a path inside the active project workspace."""
     filename = filename.lstrip("/")
     if filename.startswith("workspace/"):
-        filename = filename[len("workspace/"):]
+        filename = filename[len("workspace/") :]
     if filename.startswith("projects/"):
         workspace_root = BASE_WORKSPACE_DIR
     else:
@@ -56,7 +56,11 @@ def read_workspace_file(filename: str) -> str:
             # Only match files that START with the requested name (prefix match)
             # to avoid accidentally opening unrelated files like "test_results_confidential.csv"
             # when the user asked for "test".
-            matches = [f for f in os.listdir(search_dir) if f.startswith(fn) or fn.startswith(f)]
+            matches = [
+                f
+                for f in os.listdir(search_dir)
+                if f.startswith(fn) or fn.startswith(f)
+            ]
             if len(matches) == 1:
                 filepath = os.path.join(search_dir, matches[0])
             elif matches:
@@ -73,37 +77,39 @@ def read_workspace_file(filename: str) -> str:
 
     try:
         if os.path.exists(cached_txt):
-            with open(cached_txt, 'r', encoding='utf-8') as f:
+            with open(cached_txt, "r", encoding="utf-8") as f:
                 content = f.read()
         elif os.path.exists(cached_md):
-            with open(cached_md, 'r', encoding='utf-8') as f:
+            with open(cached_md, "r", encoding="utf-8") as f:
                 content = f.read()
         elif filepath.lower().endswith(".pdf"):
             import fitz
+
             doc = fitz.open(filepath)
             content = "".join(page.get_text() + "\n\n" for page in doc)
             doc.close()
             if not content.strip():
                 return "This PDF has no extractable text layer."
         else:
-            with open(filepath, 'r', encoding='utf-8') as f:
+            with open(filepath, "r", encoding="utf-8") as f:
                 content = f.read()
 
         # Smart truncation for large files — keep enough for the model to
         # understand the structure, then tell it to use notebook_run for full data.
         from src.config.config_loader import config
+
         _MAX_READ_CHARS = int(config.get("tool_output.max_read_chars", 20000))
         if len(content) > _MAX_READ_CHARS:
             ext = os.path.splitext(filepath)[1].lower()
-            if ext in {'.csv', '.tsv'}:
+            if ext in {".csv", ".tsv"}:
                 # For tabular data: show header + first rows + summary
-                lines = content.split('\n')
-                header_and_sample = '\n'.join(lines[:25])
+                lines = content.split("\n")
+                header_and_sample = "\n".join(lines[:25])
                 content = (
                     f"{header_and_sample}\n\n"
                     f"[... {len(lines)} total rows. Showing first 25. "
                     f"Use notebook_run with pandas to analyze the full dataset at: "
-                    f"pd.read_csv(f\"{{WORKSPACE_DIR}}/{os.path.basename(filepath)}\")]"
+                    f'pd.read_csv(f"{{WORKSPACE_DIR}}/{os.path.basename(filepath)}")]'
                 )
             else:
                 content = (
@@ -125,7 +131,7 @@ def write_workspace_file(filename: str, content: str) -> str:
         return err
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     try:
-        with open(filepath, 'w', encoding='utf-8') as f:
+        with open(filepath, "w", encoding="utf-8") as f:
             f.write(content)
         return f"✅ Written to {filename}"
     except Exception as e:
@@ -133,7 +139,9 @@ def write_workspace_file(filename: str, content: str) -> str:
 
 
 @tool
-def edit_workspace_file(filename: str, search_pattern: str, replacement_text: str) -> str:
+def edit_workspace_file(
+    filename: str, search_pattern: str, replacement_text: str
+) -> str:
     """
     Search-and-replace in a workspace file. The search_pattern must match exactly.
 
@@ -148,13 +156,13 @@ def edit_workspace_file(filename: str, search_pattern: str, replacement_text: st
     if not os.path.exists(filepath):
         return f"Error: File '{filename}' not found."
     try:
-        with open(filepath, 'r', encoding='utf-8') as f:
+        with open(filepath, "r", encoding="utf-8") as f:
             content = f.read()
         if search_pattern not in content:
             return f"Error: Pattern not found in {filename}."
         count = content.count(search_pattern)
         new_content = content.replace(search_pattern, replacement_text, 1)
-        with open(filepath, 'w', encoding='utf-8') as f:
+        with open(filepath, "w", encoding="utf-8") as f:
             f.write(new_content)
         suffix = f" ({count} occurrences found, replaced first)" if count > 1 else ""
         return f"✅ Updated {filename}{suffix}"
@@ -171,7 +179,7 @@ def list_workspace_files(directory: str = ".") -> str:
     if not os.path.exists(target_dir):
         return f"Error: Directory '{directory}' not found."
     try:
-        files = sorted(f for f in os.listdir(target_dir) if not f.startswith('.'))
+        files = sorted(f for f in os.listdir(target_dir) if not f.startswith("."))
         if not files:
             return "Directory is empty."
         lines = []
@@ -223,9 +231,9 @@ def recall_memories(query: str) -> str:
 def recall_all_memories(query: str = "", project_id: str = "") -> str:
     """
     Searches ALL long-term memory (including Mem0/Qdrant vector memory) for facts about the user.
-    
+
     Use this when recall_memories returns nothing or you need deeper semantic search.
-    
+
     Args:
         query: Optional search text. If empty, returns recent memories.
         project_id: Optional project ID to scope search (e.g. "my-project"). Leave empty for global.
@@ -234,21 +242,32 @@ def recall_all_memories(query: str = "", project_id: str = "") -> str:
         from ..memory.long_term import memory as mem0_memory
     except Exception:
         return "Error: Mem0 memory not available."
-    
+
     if mem0_memory is None:
         return "Mem0/Qdrant vector memory is not initialized."
-    
+
     try:
         from .workspace_context import _active_project_id
+
         active_pid = project_id or _active_project_id.get()
-        user_id = f"project:{active_pid}" if active_pid and active_pid != "default" else "owner"
+        user_id = (
+            f"project:{active_pid}"
+            if active_pid and active_pid != "default"
+            else "owner"
+        )
         search_query = query if query else " "
-        results_dict = mem0_memory.search(search_query, filters={"user_id": user_id}, limit=20)
-        results = results_dict.get("results", []) if isinstance(results_dict, dict) else results_dict
-        
+        results_dict = mem0_memory.search(
+            search_query, filters={"user_id": user_id}, limit=20
+        )
+        results = (
+            results_dict.get("results", [])
+            if isinstance(results_dict, dict)
+            else results_dict
+        )
+
         if not results:
             return "No long-term memories found in vector store."
-        
+
         lines = [f"Long-term memories from '{user_id}':"]
         for item in results:
             if isinstance(item, dict):
@@ -264,10 +283,10 @@ def recall_all_memories(query: str = "", project_id: str = "") -> str:
 def forget_memory(memory_hashes: str) -> str:
     """
     Deletes specific long-term memories by their IDs (hashes).
-    
+
     Use recall_all_memories first to find the memory ID you want to delete.
     If you want to forget a specific fact, call this with the ID hash.
-    
+
     Args:
         memory_hashes: Comma-separated list of memory IDs to delete (e.g. "abc123,def456").
     """
@@ -275,14 +294,14 @@ def forget_memory(memory_hashes: str) -> str:
         from ..memory.long_term import memory as mem0_memory
     except Exception:
         return "Error: Mem0 memory not available."
-    
+
     if mem0_memory is None:
         return "Mem0/Qdrant vector memory is not initialized."
-    
+
     ids = [h.strip() for h in memory_hashes.split(",") if h.strip()]
     if not ids:
         return "No valid memory IDs provided."
-    
+
     deleted = 0
     errors = []
     for memory_id in ids:
@@ -291,7 +310,7 @@ def forget_memory(memory_hashes: str) -> str:
             deleted += 1
         except Exception as e:
             errors.append(f"{memory_id}: {e}")
-    
+
     result = f"Deleted {deleted}/{len(ids)} memories."
     if errors:
         result += f" Errors: {'; '.join(errors)}"

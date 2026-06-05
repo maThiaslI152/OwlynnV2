@@ -21,17 +21,25 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 # Strategies
 # ---------------------------------------------------------------------------
 
+
 def redis_url_strategy():
     """Generate valid Redis URL formats: redis://host:port"""
-    hosts = st.sampled_from([
-        "localhost", "127.0.0.1", "redis", "redis-server",
-        "my-redis.example.com", "10.0.0.1", "192.168.1.100",
-    ])
-    ports = st.integers(min_value=1, max_value=65535)
-    dbs = st.one_of(st.just(""), st.integers(min_value=0, max_value=15).map(lambda d: f"/{d}"))
-    return st.tuples(hosts, ports, dbs).map(
-        lambda t: f"redis://{t[0]}:{t[1]}{t[2]}"
+    hosts = st.sampled_from(
+        [
+            "localhost",
+            "127.0.0.1",
+            "redis",
+            "redis-server",
+            "my-redis.example.com",
+            "10.0.0.1",
+            "192.168.1.100",
+        ]
     )
+    ports = st.integers(min_value=1, max_value=65535)
+    dbs = st.one_of(
+        st.just(""), st.integers(min_value=0, max_value=15).map(lambda d: f"/{d}")
+    )
+    return st.tuples(hosts, ports, dbs).map(lambda t: f"redis://{t[0]}:{t[1]}{t[2]}")
 
 
 def _make_mock_checkpointer(uid: int):
@@ -55,6 +63,7 @@ def _make_mock_checkpointer(uid: int):
 # **Validates: Requirements 1.1, 1.2, 1.3**
 # ---------------------------------------------------------------------------
 
+
 class TestExplorationBugCondition:
     """PBT Exploration: Demonstrate the original bug via counterexample."""
 
@@ -64,7 +73,9 @@ class TestExplorationBugCondition:
         suppress_health_check=[HealthCheck.function_scoped_fixture],
         deadline=None,
     )
-    @pytest.mark.skip(reason="Pre-existing: intentionally fails — AsyncRedisSaver constructor kwarg changed from url= to redis_url=")
+    @pytest.mark.skip(
+        reason="Pre-existing: intentionally fails — AsyncRedisSaver constructor kwarg changed from url= to redis_url="
+    )
     def test_original_buggy_import_paths_fail(self, redis_url: str):
         """
         Simulate the ORIGINAL (pre-fix) import logic:
@@ -84,6 +95,7 @@ class TestExplorationBugCondition:
         # Attempt 1: the legacy standalone module (original buggy path)
         try:
             from langgraph_checkpoint_redis import AsyncRedisSaver as LegacySaver
+
             # Original code used url= kwarg (also buggy)
             _checkpointer = LegacySaver(url=redis_url)
             success = True
@@ -96,6 +108,7 @@ class TestExplorationBugCondition:
         if not success:
             try:
                 from langgraph.checkpoint.redis import AsyncRedisSaver
+
                 # Use the BUGGY constructor kwarg `url=` (should be `redis_url=`)
                 _checkpointer = AsyncRedisSaver(url=redis_url)
                 success = True
@@ -117,6 +130,7 @@ class TestExplorationBugCondition:
 # **Validates: Requirements 2.1, 2.2**
 # ---------------------------------------------------------------------------
 
+
 class TestFixRedisCheckpointer:
     """PBT Fix: Verify the fixed init_agent() uses Redis for any valid URL."""
 
@@ -126,7 +140,9 @@ class TestFixRedisCheckpointer:
         suppress_health_check=[HealthCheck.function_scoped_fixture],
         deadline=None,
     )
-    @pytest.mark.skip(reason="Pre-existing: AsyncRedisSaver.__init__() no longer accepts url= kwarg")
+    @pytest.mark.skip(
+        reason="Pre-existing: AsyncRedisSaver.__init__() no longer accepts url= kwarg"
+    )
     @pytest.mark.asyncio
     async def test_init_agent_creates_redis_checkpointer(self, redis_url: str):
         """
@@ -169,6 +185,7 @@ class TestFixRedisCheckpointer:
 #
 # **Validates: Requirements 3.1, 3.2**
 # ---------------------------------------------------------------------------
+
 
 class TestPreservationCheckpointerPassthrough:
     """PBT Preservation: Explicit checkpointer passthrough is preserved."""

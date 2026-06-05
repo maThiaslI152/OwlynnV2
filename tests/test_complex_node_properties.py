@@ -23,8 +23,19 @@ from src.agent.state import AgentState
 
 # ── Valid domains ────────────────────────────────────────────────────────
 
-VALID_ROUTES = {"simple", "complex-default", "complex-vision", "complex-longctx", "complex-cloud"}
-COMPLEX_ROUTES = {"complex-default", "complex-vision", "complex-longctx", "complex-cloud"}
+VALID_ROUTES = {
+    "simple",
+    "complex-default",
+    "complex-vision",
+    "complex-longctx",
+    "complex-cloud",
+}
+COMPLEX_ROUTES = {
+    "complex-default",
+    "complex-vision",
+    "complex-longctx",
+    "complex-cloud",
+}
 
 ROUTE_TO_MODEL = {
     "complex-default": "medium-default",
@@ -41,12 +52,17 @@ LOCAL_ROUTES = {"complex-default", "complex-vision", "complex-longctx"}
 route_st = st.sampled_from(sorted(COMPLEX_ROUTES))
 local_route_st = st.sampled_from(sorted(LOCAL_ROUTES))
 bool_st = st.booleans()
-user_text_st = st.text(min_size=1, max_size=200, alphabet=st.characters(
-    whitelist_categories=("L", "N", "P", "Z"),
-))
+user_text_st = st.text(
+    min_size=1,
+    max_size=200,
+    alphabet=st.characters(
+        whitelist_categories=("L", "N", "P", "Z"),
+    ),
+)
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────
+
 
 def _make_state(route: str, text: str = "Hello", anon_enabled: bool = True) -> dict:
     """Build a minimal AgentState dict for complex_llm_node."""
@@ -94,7 +110,9 @@ def _make_mock_llm():
     return mock_llm
 
 
-async def _passthrough_cloud_retry(bound_llm, prompt_messages, *, fallback_chain, model_label, route):
+async def _passthrough_cloud_retry(
+    bound_llm, prompt_messages, *, fallback_chain, model_label, route
+):
     """Bypass circuit breaker / cost tracker — just call ainvoke directly."""
     return await bound_llm.ainvoke(prompt_messages)
 
@@ -113,17 +131,33 @@ class TestModelProvenanceMatchesRoute:
     @given(route=route_st, text=user_text_st)
     @settings(max_examples=100, deadline=10000)
     @pytest.mark.asyncio
-    async def test_model_used_matches_route_for_all_complex_routes(self, route: str, text: str):
+    async def test_model_used_matches_route_for_all_complex_routes(
+        self, route: str, text: str
+    ):
         """model_used always corresponds to the route when no errors occur."""
         state = _make_state(route, text)
         mock_llm = _make_mock_llm()
         profile = _mock_profile()
 
-        with patch("src.agent.nodes.complex.get_medium_llm", new_callable=AsyncMock, return_value=mock_llm), \
-             patch("src.agent.nodes.complex.get_cloud_llm", new_callable=AsyncMock, return_value=mock_llm), \
-             patch("src.agent.nodes.complex.get_profile", return_value=profile), \
-             patch("src.agent.nodes.complex._invoke_with_cloud_retry", side_effect=_passthrough_cloud_retry):
+        with (
+            patch(
+                "src.agent.nodes.complex.get_medium_llm",
+                new_callable=AsyncMock,
+                return_value=mock_llm,
+            ),
+            patch(
+                "src.agent.nodes.complex.get_cloud_llm",
+                new_callable=AsyncMock,
+                return_value=mock_llm,
+            ),
+            patch("src.agent.nodes.complex.get_profile", return_value=profile),
+            patch(
+                "src.agent.nodes.complex._invoke_with_cloud_retry",
+                side_effect=_passthrough_cloud_retry,
+            ),
+        ):
             from src.agent.nodes.complex import complex_llm_node
+
             result = await complex_llm_node(state)
 
         expected_label = ROUTE_TO_MODEL[route]
@@ -141,10 +175,21 @@ class TestModelProvenanceMatchesRoute:
         mock_llm = _make_mock_llm()
         profile = _mock_profile()
 
-        with patch("src.agent.nodes.complex.get_medium_llm", new_callable=AsyncMock, return_value=mock_llm), \
-             patch("src.agent.nodes.complex.get_cloud_llm", new_callable=AsyncMock, return_value=mock_llm), \
-             patch("src.agent.nodes.complex.get_profile", return_value=profile):
+        with (
+            patch(
+                "src.agent.nodes.complex.get_medium_llm",
+                new_callable=AsyncMock,
+                return_value=mock_llm,
+            ),
+            patch(
+                "src.agent.nodes.complex.get_cloud_llm",
+                new_callable=AsyncMock,
+                return_value=mock_llm,
+            ),
+            patch("src.agent.nodes.complex.get_profile", return_value=profile),
+        ):
             from src.agent.nodes.complex import complex_llm_node
+
             result = await complex_llm_node(state)
 
         assert "cloud" not in result["model_used"], (
@@ -159,11 +204,25 @@ class TestModelProvenanceMatchesRoute:
         mock_llm = _make_mock_llm()
         profile = _mock_profile()
 
-        with patch("src.agent.nodes.complex.get_medium_llm", new_callable=AsyncMock, return_value=mock_llm), \
-             patch("src.agent.nodes.complex.get_cloud_llm", new_callable=AsyncMock, return_value=mock_llm), \
-             patch("src.agent.nodes.complex.get_profile", return_value=profile), \
-             patch("src.agent.nodes.complex._invoke_with_cloud_retry", side_effect=_passthrough_cloud_retry):
+        with (
+            patch(
+                "src.agent.nodes.complex.get_medium_llm",
+                new_callable=AsyncMock,
+                return_value=mock_llm,
+            ),
+            patch(
+                "src.agent.nodes.complex.get_cloud_llm",
+                new_callable=AsyncMock,
+                return_value=mock_llm,
+            ),
+            patch("src.agent.nodes.complex.get_profile", return_value=profile),
+            patch(
+                "src.agent.nodes.complex._invoke_with_cloud_retry",
+                side_effect=_passthrough_cloud_retry,
+            ),
+        ):
             from src.agent.nodes.complex import complex_llm_node
+
             result = await complex_llm_node(state)
 
         assert result["model_used"] == "large-cloud"
@@ -175,10 +234,21 @@ class TestModelProvenanceMatchesRoute:
         mock_llm = _make_mock_llm()
         profile = _mock_profile()
 
-        with patch("src.agent.nodes.complex.get_medium_llm", new_callable=AsyncMock, return_value=mock_llm), \
-             patch("src.agent.nodes.complex.get_cloud_llm", new_callable=AsyncMock, return_value=mock_llm), \
-             patch("src.agent.nodes.complex.get_profile", return_value=profile):
+        with (
+            patch(
+                "src.agent.nodes.complex.get_medium_llm",
+                new_callable=AsyncMock,
+                return_value=mock_llm,
+            ),
+            patch(
+                "src.agent.nodes.complex.get_cloud_llm",
+                new_callable=AsyncMock,
+                return_value=mock_llm,
+            ),
+            patch("src.agent.nodes.complex.get_profile", return_value=profile),
+        ):
             from src.agent.nodes.complex import complex_llm_node
+
             result = await complex_llm_node(state)
 
         assert result["model_used"] == "medium-default"
@@ -190,10 +260,21 @@ class TestModelProvenanceMatchesRoute:
         mock_llm = _make_mock_llm()
         profile = _mock_profile()
 
-        with patch("src.agent.nodes.complex.get_medium_llm", new_callable=AsyncMock, return_value=mock_llm), \
-             patch("src.agent.nodes.complex.get_cloud_llm", new_callable=AsyncMock, return_value=mock_llm), \
-             patch("src.agent.nodes.complex.get_profile", return_value=profile):
+        with (
+            patch(
+                "src.agent.nodes.complex.get_medium_llm",
+                new_callable=AsyncMock,
+                return_value=mock_llm,
+            ),
+            patch(
+                "src.agent.nodes.complex.get_cloud_llm",
+                new_callable=AsyncMock,
+                return_value=mock_llm,
+            ),
+            patch("src.agent.nodes.complex.get_profile", return_value=profile),
+        ):
             from src.agent.nodes.complex import complex_llm_node
+
             result = await complex_llm_node(state)
 
         assert result["model_used"] == "medium-vision"
@@ -205,14 +286,24 @@ class TestModelProvenanceMatchesRoute:
         mock_llm = _make_mock_llm()
         profile = _mock_profile()
 
-        with patch("src.agent.nodes.complex.get_medium_llm", new_callable=AsyncMock, return_value=mock_llm), \
-             patch("src.agent.nodes.complex.get_cloud_llm", new_callable=AsyncMock, return_value=mock_llm), \
-             patch("src.agent.nodes.complex.get_profile", return_value=profile):
+        with (
+            patch(
+                "src.agent.nodes.complex.get_medium_llm",
+                new_callable=AsyncMock,
+                return_value=mock_llm,
+            ),
+            patch(
+                "src.agent.nodes.complex.get_cloud_llm",
+                new_callable=AsyncMock,
+                return_value=mock_llm,
+            ),
+            patch("src.agent.nodes.complex.get_profile", return_value=profile),
+        ):
             from src.agent.nodes.complex import complex_llm_node
+
             result = await complex_llm_node(state)
 
         assert result["model_used"] == "medium-longctx"
-
 
     @given(route=route_st)
     @settings(max_examples=100, deadline=10000)
@@ -233,11 +324,19 @@ class TestModelProvenanceMatchesRoute:
 
         async def _cloud_side_effect():
             from src.agent.llm import CloudUnavailableError
+
             raise CloudUnavailableError("No key")
 
-        with patch("src.agent.nodes.complex.get_medium_llm", side_effect=_medium_side_effect), \
-             patch("src.agent.nodes.complex.get_cloud_llm", side_effect=_cloud_side_effect), \
-             patch("src.agent.nodes.complex.get_profile", return_value=profile):
+        with (
+            patch(
+                "src.agent.nodes.complex.get_medium_llm",
+                side_effect=_medium_side_effect,
+            ),
+            patch(
+                "src.agent.nodes.complex.get_cloud_llm", side_effect=_cloud_side_effect
+            ),
+            patch("src.agent.nodes.complex.get_profile", return_value=profile),
+        ):
             from src.agent.nodes.complex import complex_llm_node
 
             if route == "complex-default":
@@ -261,11 +360,25 @@ class TestModelProvenanceMatchesRoute:
         mock_llm = _make_mock_llm()
         profile = _mock_profile()
 
-        with patch("src.agent.nodes.complex.get_medium_llm", new_callable=AsyncMock, return_value=mock_llm), \
-             patch("src.agent.nodes.complex.get_cloud_llm", new_callable=AsyncMock, return_value=mock_llm), \
-             patch("src.agent.nodes.complex.get_profile", return_value=profile), \
-             patch("src.agent.nodes.complex._invoke_with_cloud_retry", side_effect=_passthrough_cloud_retry):
+        with (
+            patch(
+                "src.agent.nodes.complex.get_medium_llm",
+                new_callable=AsyncMock,
+                return_value=mock_llm,
+            ),
+            patch(
+                "src.agent.nodes.complex.get_cloud_llm",
+                new_callable=AsyncMock,
+                return_value=mock_llm,
+            ),
+            patch("src.agent.nodes.complex.get_profile", return_value=profile),
+            patch(
+                "src.agent.nodes.complex._invoke_with_cloud_retry",
+                side_effect=_passthrough_cloud_retry,
+            ),
+        ):
             from src.agent.nodes.complex import complex_llm_node
+
             result = await complex_llm_node(state)
 
         assert isinstance(result["model_used"], str)
@@ -287,24 +400,40 @@ class TestCloudOnlyAnonymization:
     @given(route=local_route_st, anon_enabled=bool_st, text=user_text_st)
     @settings(max_examples=100, deadline=10000)
     @pytest.mark.asyncio
-    async def test_local_routes_never_anonymize(self, route: str, anon_enabled: bool, text: str):
+    async def test_local_routes_never_anonymize(
+        self, route: str, anon_enabled: bool, text: str
+    ):
         """Local routes must never call anonymize, regardless of toggle."""
         state = _make_state(route, text)
         mock_llm = _make_mock_llm()
         profile = _mock_profile(anon_enabled)
 
-        with patch("src.agent.nodes.complex.get_medium_llm", new_callable=AsyncMock, return_value=mock_llm), \
-             patch("src.agent.nodes.complex.get_cloud_llm", new_callable=AsyncMock, return_value=mock_llm), \
-             patch("src.agent.nodes.complex.get_profile", return_value=profile), \
-             patch("src.agent.nodes.complex.anonymize", wraps=None) as mock_anon:
+        with (
+            patch(
+                "src.agent.nodes.complex.get_medium_llm",
+                new_callable=AsyncMock,
+                return_value=mock_llm,
+            ),
+            patch(
+                "src.agent.nodes.complex.get_cloud_llm",
+                new_callable=AsyncMock,
+                return_value=mock_llm,
+            ),
+            patch("src.agent.nodes.complex.get_profile", return_value=profile),
+            patch("src.agent.nodes.complex.anonymize", wraps=None) as mock_anon,
+        ):
             # Use a side_effect that tracks calls but returns passthrough
             mock_anon.side_effect = lambda text, ctx=None: (text, {})
             from src.agent.nodes.complex import complex_llm_node
+
             result = await complex_llm_node(state)
 
-        mock_anon.assert_not_called(), (
-            f"Local route {route!r} with anon_enabled={anon_enabled} "
-            f"should not invoke anonymize"
+        (
+            mock_anon.assert_not_called(),
+            (
+                f"Local route {route!r} with anon_enabled={anon_enabled} "
+                f"should not invoke anonymize"
+            ),
         )
 
     @given(text=user_text_st)
@@ -316,13 +445,27 @@ class TestCloudOnlyAnonymization:
         mock_llm = _make_mock_llm()
         profile = _mock_profile(anon_enabled=True)
 
-        with patch("src.agent.nodes.complex.get_medium_llm", new_callable=AsyncMock, return_value=mock_llm), \
-             patch("src.agent.nodes.complex.get_cloud_llm", new_callable=AsyncMock, return_value=mock_llm), \
-             patch("src.agent.nodes.complex.get_profile", return_value=profile), \
-             patch("src.agent.nodes.complex._invoke_with_cloud_retry", side_effect=_passthrough_cloud_retry), \
-             patch("src.agent.nodes.complex.anonymize") as mock_anon:
+        with (
+            patch(
+                "src.agent.nodes.complex.get_medium_llm",
+                new_callable=AsyncMock,
+                return_value=mock_llm,
+            ),
+            patch(
+                "src.agent.nodes.complex.get_cloud_llm",
+                new_callable=AsyncMock,
+                return_value=mock_llm,
+            ),
+            patch("src.agent.nodes.complex.get_profile", return_value=profile),
+            patch(
+                "src.agent.nodes.complex._invoke_with_cloud_retry",
+                side_effect=_passthrough_cloud_retry,
+            ),
+            patch("src.agent.nodes.complex.anonymize") as mock_anon,
+        ):
             mock_anon.return_value = (text, {})
             from src.agent.nodes.complex import complex_llm_node
+
             result = await complex_llm_node(state)
 
         assert mock_anon.call_count > 0, (
@@ -338,17 +481,32 @@ class TestCloudOnlyAnonymization:
         mock_llm = _make_mock_llm()
         profile = _mock_profile(anon_enabled=False)
 
-        with patch("src.agent.nodes.complex.get_medium_llm", new_callable=AsyncMock, return_value=mock_llm), \
-             patch("src.agent.nodes.complex.get_cloud_llm", new_callable=AsyncMock, return_value=mock_llm), \
-             patch("src.agent.nodes.complex.get_profile", return_value=profile), \
-             patch("src.agent.nodes.complex._invoke_with_cloud_retry", side_effect=_passthrough_cloud_retry), \
-             patch("src.agent.nodes.complex.anonymize") as mock_anon:
+        with (
+            patch(
+                "src.agent.nodes.complex.get_medium_llm",
+                new_callable=AsyncMock,
+                return_value=mock_llm,
+            ),
+            patch(
+                "src.agent.nodes.complex.get_cloud_llm",
+                new_callable=AsyncMock,
+                return_value=mock_llm,
+            ),
+            patch("src.agent.nodes.complex.get_profile", return_value=profile),
+            patch(
+                "src.agent.nodes.complex._invoke_with_cloud_retry",
+                side_effect=_passthrough_cloud_retry,
+            ),
+            patch("src.agent.nodes.complex.anonymize") as mock_anon,
+        ):
             mock_anon.return_value = (text, {})
             from src.agent.nodes.complex import complex_llm_node
+
             result = await complex_llm_node(state)
 
-        mock_anon.assert_not_called(), (
-            "Cloud route with anonymization disabled must not call anonymize"
+        (
+            mock_anon.assert_not_called(),
+            ("Cloud route with anonymization disabled must not call anonymize"),
         )
 
     @given(
@@ -357,22 +515,38 @@ class TestCloudOnlyAnonymization:
     )
     @settings(max_examples=100, deadline=10000)
     @pytest.mark.asyncio
-    async def test_anonymize_iff_cloud_and_enabled(self, route: str, anon_enabled: bool):
+    async def test_anonymize_iff_cloud_and_enabled(
+        self, route: str, anon_enabled: bool
+    ):
         """Anonymize is called iff route is complex-cloud AND anon_enabled is True."""
         state = _make_state(route, "Test message with [email]")
         mock_llm = _make_mock_llm()
         profile = _mock_profile(anon_enabled)
 
-        with patch("src.agent.nodes.complex.get_medium_llm", new_callable=AsyncMock, return_value=mock_llm), \
-             patch("src.agent.nodes.complex.get_cloud_llm", new_callable=AsyncMock, return_value=mock_llm), \
-             patch("src.agent.nodes.complex.get_profile", return_value=profile), \
-             patch("src.agent.nodes.complex._invoke_with_cloud_retry", side_effect=_passthrough_cloud_retry), \
-             patch("src.agent.nodes.complex.anonymize") as mock_anon:
+        with (
+            patch(
+                "src.agent.nodes.complex.get_medium_llm",
+                new_callable=AsyncMock,
+                return_value=mock_llm,
+            ),
+            patch(
+                "src.agent.nodes.complex.get_cloud_llm",
+                new_callable=AsyncMock,
+                return_value=mock_llm,
+            ),
+            patch("src.agent.nodes.complex.get_profile", return_value=profile),
+            patch(
+                "src.agent.nodes.complex._invoke_with_cloud_retry",
+                side_effect=_passthrough_cloud_retry,
+            ),
+            patch("src.agent.nodes.complex.anonymize") as mock_anon,
+        ):
             mock_anon.return_value = ("anonymized", {"[EMAIL_1]": "[email]"})
             from src.agent.nodes.complex import complex_llm_node
+
             result = await complex_llm_node(state)
 
-        should_anonymize = (route == "complex-cloud" and anon_enabled)
+        should_anonymize = route == "complex-cloud" and anon_enabled
         was_called = mock_anon.call_count > 0
 
         assert was_called == should_anonymize, (
@@ -393,11 +567,18 @@ class TestCloudOnlyAnonymization:
         async def _cloud_raises():
             raise CloudUnavailableError("No API key configured")
 
-        with patch("src.agent.nodes.complex.get_medium_llm", new_callable=AsyncMock, return_value=mock_llm), \
-             patch("src.agent.nodes.complex.get_cloud_llm", side_effect=_cloud_raises), \
-             patch("src.agent.nodes.complex.get_profile", return_value=profile), \
-             patch("src.agent.nodes.complex.deanonymize") as mock_deanon:
+        with (
+            patch(
+                "src.agent.nodes.complex.get_medium_llm",
+                new_callable=AsyncMock,
+                return_value=mock_llm,
+            ),
+            patch("src.agent.nodes.complex.get_cloud_llm", side_effect=_cloud_raises),
+            patch("src.agent.nodes.complex.get_profile", return_value=profile),
+            patch("src.agent.nodes.complex.deanonymize") as mock_deanon,
+        ):
             from src.agent.nodes.complex import complex_llm_node
+
             result = await complex_llm_node(state)
 
         # Fallback occurred — deanonymize should not be called

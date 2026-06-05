@@ -66,7 +66,13 @@ class TestGraphStructure:
         """All expected nodes should be present in the graph."""
         builder = build_graph()
         expected = {
-            "memory_inject", "auto_summarize", "router", "simple",
-            "complex_llm", "security_proxy", "tool_action", "memory_write",
+            "memory_inject",
+            "auto_summarize",
+            "router",
+            "simple",
+            "complex_llm",
+            "security_proxy",
+            "tool_action",
+            "memory_write",
         }
         assert expected.issubset(set(builder.nodes.keys()))

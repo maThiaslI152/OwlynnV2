@@ -26,18 +26,27 @@ from src.config.config_loader import config as _app_config
 try:
     from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.metrics.pairwise import cosine_similarity
+
     _HAS_SKLEARN = True
 except ImportError:
     _HAS_SKLEARN = False
 
 SKILLS_DIR = PROJECT_ROOT / "skills"
 
-ALLOWED_CATEGORIES = {"research", "writing", "productivity", "data", "communication", "general"}
+ALLOWED_CATEGORIES = {
+    "research",
+    "writing",
+    "productivity",
+    "data",
+    "communication",
+    "general",
+}
 
 
 @dataclass
 class SkillParam:
     """A single named parameter declared by a skill."""
+
     name: str
     description: str
     required: bool = True
@@ -47,6 +56,7 @@ class SkillParam:
 @dataclass
 class SkillDefinition:
     """Structured representation of a parsed skill template."""
+
     file: str
     name: str
     triggers: list[str]
@@ -85,6 +95,7 @@ class MatchResult:
         ambiguity_reason: Human-readable description of why the match is ambiguous.
         best_score: The combined score of the top match (0.0-1.0).
     """
+
     is_ambiguous: bool
     top_match: Optional[SkillDefinition] = None
     candidate_skills: list[tuple[SkillDefinition, float]] = field(default_factory=list)
@@ -161,7 +172,9 @@ def _parse_front_matter(text: str) -> tuple[dict, str]:
             val = val.strip("'\"").lower() not in ("false", "no", "0")
         else:
             # Strip surrounding quotes from plain string values
-            if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
+            if (val.startswith('"') and val.endswith('"')) or (
+                val.startswith("'") and val.endswith("'")
+            ):
                 val = val[1:-1]
         meta[key] = val
         i += 1
@@ -187,12 +200,14 @@ def _parse_skill_file(text: str, filename: str) -> SkillDefinition:
                     required = req_raw.lower() not in ("false", "no", "0")
                 else:
                     required = bool(req_raw)
-                params.append(SkillParam(
-                    name=entry.get("name", ""),
-                    description=entry.get("description", ""),
-                    required=required,
-                    default=entry.get("default"),
-                ))
+                params.append(
+                    SkillParam(
+                        name=entry.get("name", ""),
+                        description=entry.get("description", ""),
+                        required=required,
+                        default=entry.get("default"),
+                    )
+                )
 
     # Normalise tools_used to a list
     tools_used = meta.get("tools_used", [])
@@ -344,7 +359,9 @@ class SkillMatcher:
         combined.sort(key=lambda x: x[1], reverse=True)
         return combined[:top_k]
 
-    def match_best(self, query: str, threshold: float = 0.3) -> Optional[SkillDefinition]:
+    def match_best(
+        self, query: str, threshold: float = 0.3
+    ) -> Optional[SkillDefinition]:
         """Return the single best match above *threshold*, or ``None``."""
         results = self.match(query, top_k=1)
         if results and results[0][1] >= threshold:
@@ -352,7 +369,9 @@ class SkillMatcher:
         return None
 
     # ── Thresholds for ambiguity detection ──────────────────────────────
-    LOW_CONFIDENCE_THRESHOLD = float(_app_config.get("routing.skill.low_confidence_threshold", 0.5))
+    LOW_CONFIDENCE_THRESHOLD = float(
+        _app_config.get("routing.skill.low_confidence_threshold", 0.5)
+    )
     TIE_MARGIN = float(_app_config.get("routing.skill.tie_margin", 0.15))
     TIE_MIN_TOP_SCORE = float(_app_config.get("routing.skill.tie_min_top_score", 0.3))
     VAGUE_WORD_COUNT = int(_app_config.get("routing.skill.vague_word_count", 3))
@@ -360,14 +379,51 @@ class SkillMatcher:
     # Weak intent-signalling keywords — if none of these appear, the
     # query is likely too vague to match skills confidently.
     _INTENT_KEYWORDS: set[str] = {
-        "research", "investigate", "analyze", "explain", "summarize",
-        "write", "create", "build", "generate", "refactor", "review",
-        "check", "audit", "visualize", "chart", "graph", "plot",
-        "email", "draft", "compose", "report", "briefing",
-        "brainstorm", "suggest", "idea", "plan", "todo", "task",
-        "code", "document", "data", "compare", "rewrite", "translate",
-        "scan", "search", "look", "find", "meeting", "note",
-        "presentation", "slide", "check", "verify", "fact",
+        "research",
+        "investigate",
+        "analyze",
+        "explain",
+        "summarize",
+        "write",
+        "create",
+        "build",
+        "generate",
+        "refactor",
+        "review",
+        "check",
+        "audit",
+        "visualize",
+        "chart",
+        "graph",
+        "plot",
+        "email",
+        "draft",
+        "compose",
+        "report",
+        "briefing",
+        "brainstorm",
+        "suggest",
+        "idea",
+        "plan",
+        "todo",
+        "task",
+        "code",
+        "document",
+        "data",
+        "compare",
+        "rewrite",
+        "translate",
+        "scan",
+        "search",
+        "look",
+        "find",
+        "meeting",
+        "note",
+        "presentation",
+        "slide",
+        "check",
+        "verify",
+        "fact",
     }
 
     def match_with_confidence(self, query: str, top_k: int = 5) -> MatchResult:
@@ -394,12 +450,8 @@ class SkillMatcher:
         # ── Signal C: vague query detection ──────────────────────────
         words = query.strip().split()
         query_lower = query.lower()
-        has_intent_keywords = any(
-            kw in query_lower for kw in self._INTENT_KEYWORDS
-        )
-        vague_query = (
-            len(words) < self.VAGUE_WORD_COUNT and not has_intent_keywords
-        )
+        has_intent_keywords = any(kw in query_lower for kw in self._INTENT_KEYWORDS)
+        vague_query = len(words) < self.VAGUE_WORD_COUNT and not has_intent_keywords
 
         if not results:
             # No skills matched at all
@@ -438,11 +490,12 @@ class SkillMatcher:
         reasons: list[str] = []
         if low_confidence:
             reasons.append(
-                f"Best match '{best[0].name}' has low confidence "
-                f"({best_score:.0%})"
+                f"Best match '{best[0].name}' has low confidence ({best_score:.0%})"
             )
         if multi_tie:
-            tied_names = [r[0].name for r in results if (best_score - r[1]) <= self.TIE_MARGIN]
+            tied_names = [
+                r[0].name for r in results if (best_score - r[1]) <= self.TIE_MARGIN
+            ]
             reasons.append(
                 f"Multiple skills are close matches: {', '.join(tied_names[:3])}"
             )
@@ -522,9 +575,7 @@ class SkillMatcher:
             return
 
         self._skill_names = [s.file for s in skills]
-        corpus = [
-            f"{s.name} {s.description} {' '.join(s.triggers)}" for s in skills
-        ]
+        corpus = [f"{s.name} {s.description} {' '.join(s.triggers)}" for s in skills]
 
         self._vectorizer = TfidfVectorizer()
         self._tfidf_matrix = self._vectorizer.fit_transform(corpus)
@@ -599,6 +650,7 @@ _default_injector = ContextInjector()
 @dataclass
 class ChainStep:
     """A single step in a skill chain."""
+
     skill_name: str
     params: dict[str, str] = field(default_factory=dict)
     context_override: Optional[str] = None
@@ -607,6 +659,7 @@ class ChainStep:
 @dataclass
 class ChainResult:
     """Result of building a skill chain pipeline."""
+
     steps: list[str]  # rendered prompts per step
     instructions: str  # overall chain instructions for the LLM
 
@@ -635,9 +688,7 @@ class ChainPipeline:
                 or any skill is not chain-compatible.
         """
         if len(steps) > self.MAX_CHAIN_LENGTH:
-            raise ValueError(
-                f"Chain too long: {len(steps)} > {self.MAX_CHAIN_LENGTH}"
-            )
+            raise ValueError(f"Chain too long: {len(steps)} > {self.MAX_CHAIN_LENGTH}")
 
         # Normalize string steps to ChainStep objects
         normalized: list[ChainStep] = []
@@ -702,9 +753,7 @@ class ChainPipeline:
         """
         errors: list[str] = []
         if len(steps) > self.MAX_CHAIN_LENGTH:
-            errors.append(
-                f"Chain too long: {len(steps)} > {self.MAX_CHAIN_LENGTH}"
-            )
+            errors.append(f"Chain too long: {len(steps)} > {self.MAX_CHAIN_LENGTH}")
         for name in steps:
             skill = self._loader.get_by_name(name)
             if skill is None:
@@ -755,7 +804,9 @@ def find_matching_skill(user_text: str) -> Optional[dict]:
     )
     lower = user_text.lower()
     for skill in _default_loader.load_all():
-        triggers = skill.triggers if isinstance(skill.triggers, list) else [skill.triggers]
+        triggers = (
+            skill.triggers if isinstance(skill.triggers, list) else [skill.triggers]
+        )
         for t in triggers:
             if t.lower() in lower:
                 return {

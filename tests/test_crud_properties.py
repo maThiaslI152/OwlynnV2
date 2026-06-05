@@ -27,7 +27,7 @@ import os
 import sys
 import time
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from hypothesis import given, settings
 from hypothesis.strategies import text, uuids
@@ -143,7 +143,9 @@ def test_chat_dedup(name, chat_name, chat_id):
         chat_info = {"id": chat_id, "name": chat_name, "created_at": time.time()}
 
         pm.add_chat_to_project(pid, chat_info)
-        pm.add_chat_to_project(pid, {"id": chat_id, "name": "duplicate", "created_at": 0})
+        pm.add_chat_to_project(
+            pid, {"id": chat_id, "name": "duplicate", "created_at": 0}
+        )
 
         fetched = pm.get_project(pid)
         matching = [c for c in fetched["chats"] if c["id"] == chat_id]
@@ -155,7 +157,9 @@ def test_chat_dedup(name, chat_name, chat_id):
 # --- Property 6: Chat Rename Isolation ---
 # Validates: Requirements 5.1, 5.2, 5.4, 8.8
 @settings(max_examples=100)
-@given(name=project_names, chat_name=chat_names, new_chat_name=chat_names, chat_id=chat_ids)
+@given(
+    name=project_names, chat_name=chat_names, new_chat_name=chat_names, chat_id=chat_ids
+)
 def test_chat_rename_isolation(name, chat_name, new_chat_name, chat_id):
     pm = ProjectManager()
     try:
@@ -213,7 +217,9 @@ def test_nonexistent_operations_safe(name, chat_name, chat_id):
         # Operations on non-existent project ID should not raise
         pm.update_project(fake_pid, name="x")
         pm.delete_project(fake_pid)
-        pm.add_chat_to_project(fake_pid, {"id": chat_id, "name": chat_name, "created_at": 0})
+        pm.add_chat_to_project(
+            fake_pid, {"id": chat_id, "name": chat_name, "created_at": 0}
+        )
         pm.update_chat_in_project(fake_pid, chat_id, name="x")
         pm.delete_chat_from_project(fake_pid, chat_id)
 
@@ -223,7 +229,7 @@ def test_nonexistent_operations_safe(name, chat_name, chat_id):
         pm.update_chat_in_project(pid, fake_cid, name="x")
         pm.delete_chat_from_project(pid, fake_cid)
     finally:
-        if 'pid' in locals():
+        if "pid" in locals():
             pm.delete_project(pid)
 
 
@@ -232,7 +238,9 @@ def test_nonexistent_operations_safe(name, chat_name, chat_id):
 _op_add = st.tuples(st.just("add"), chat_ids, chat_names)
 _op_rename = st.tuples(st.just("rename"), chat_ids, chat_names)
 _op_delete = st.tuples(st.just("delete"), chat_ids, st.just(""))
-op_sequences = st.lists(st.one_of(_op_add, _op_rename, _op_delete), min_size=20, max_size=50)
+op_sequences = st.lists(
+    st.one_of(_op_add, _op_rename, _op_delete), min_size=20, max_size=50
+)
 
 
 @settings(max_examples=40)
@@ -245,7 +253,9 @@ def test_interleaved_operation_sequence_preserves_invariants(name, ops):
     try:
         for op, chat_id, chat_name in ops:
             if op == "add":
-                pm.add_chat_to_project(pid, {"id": chat_id, "name": chat_name, "created_at": time.time()})
+                pm.add_chat_to_project(
+                    pid, {"id": chat_id, "name": chat_name, "created_at": time.time()}
+                )
                 expected_ids.add(chat_id)
             elif op == "rename":
                 pm.update_chat_in_project(pid, chat_id, name=chat_name)

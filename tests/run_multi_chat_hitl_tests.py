@@ -20,20 +20,23 @@ from pathlib import Path
 import httpx
 
 APP_BASE_URL = os.getenv("APP_BASE_URL", "http://127.0.0.1:8000")
-AUDIT_LOG_PATH = Path(
-    os.getenv("OWLYNN_AUDIT_LOG_DIR", str(Path.home() / ".owlynn" / "logs"))
-) / "audit.jsonl"
+AUDIT_LOG_PATH = (
+    Path(os.getenv("OWLYNN_AUDIT_LOG_DIR", str(Path.home() / ".owlynn" / "logs")))
+    / "audit.jsonl"
+)
 
 passed = 0
 failed = 0
 
+
 def test(name):
     """Decorator-like wrapper for async test functions."""
+
     def decorator(func):
         global passed, failed
-        print(f"\n{'='*60}", flush=True)
+        print(f"\n{'=' * 60}", flush=True)
         print(f"  TEST: {name}", flush=True)
-        print(f"{'='*60}", flush=True)
+        print(f"{'=' * 60}", flush=True)
         try:
             asyncio.run(func())
             print(f"  ✅ PASS: {name}", flush=True)
@@ -42,12 +45,15 @@ def test(name):
             print(f"  ❌ FAIL: {name}", flush=True)
             print(f"     {e}", flush=True)
             import traceback
+
             traceback.print_exc()
             failed += 1
+
     return decorator
 
 
 # ── Helpers ──────────────────────────────────────────────────────────
+
 
 async def _is_server_ready():
     try:
@@ -79,6 +85,7 @@ async def _fetch_history(thread_id: str) -> list[dict]:
 
 async def _launch_browser():
     from playwright.async_api import async_playwright
+
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         try:
@@ -88,9 +95,11 @@ async def _launch_browser():
 
 
 async def _assert_connected(page):
-    await page.locator(".connection-label").filter(
-        has_text="connected"
-    ).wait_for(state="visible", timeout=30000)
+    await (
+        page.locator(".connection-label")
+        .filter(has_text="connected")
+        .wait_for(state="visible", timeout=30000)
+    )
 
 
 async def _switch_project(page, name: str):
@@ -101,10 +110,10 @@ async def _switch_project(page, name: str):
 
 async def _send_msg(page, text, timeout_ms=300000) -> str:
     """Send message, wait for any response, return assistant text (or empty).
-    
+
     Waits for: new .message-assistant, any .tool-activity-card, or .hitl-prompt-card.
     """
-    import time
+
     check_interval = 2
     deadline = time.time() + timeout_ms / 1000
     tb = page.get_by_role("textbox")
@@ -113,7 +122,9 @@ async def _send_msg(page, text, timeout_ms=300000) -> str:
 
     # Count before
     msg_before = await page.locator(".message-assistant").count()
-    tool_before = await page.locator("[class*='tool-activity'],[class*='tool-card']").count()
+    tool_before = await page.locator(
+        "[class*='tool-activity'],[class*='tool-card']"
+    ).count()
     hitl_before = await page.locator(".hitl-prompt-card").count()
 
     await page.locator(".composer-send").click()
@@ -122,7 +133,9 @@ async def _send_msg(page, text, timeout_ms=300000) -> str:
     # Poll until something changes
     while time.time() < deadline:
         msg_now = await page.locator(".message-assistant").count()
-        tool_now = await page.locator("[class*='tool-activity'],[class*='tool-card']").count()
+        tool_now = await page.locator(
+            "[class*='tool-activity'],[class*='tool-card']"
+        ).count()
         hitl_now = await page.locator(".hitl-prompt-card").count()
         if msg_now > msg_before or tool_now > tool_before or hitl_now > hitl_before:
             break
@@ -166,7 +179,9 @@ async def _audit_entries(thread_id: str, channel: str | None = None) -> list[dic
 
 
 async def _trigger_sensitive_tool(page) -> bool:
-    r = await _send_msg(page, "Create a file named test_hitl.txt with content 'HITL test'")
+    r = await _send_msg(
+        page, "Create a file named test_hitl.txt with content 'HITL test'"
+    )
     card = page.locator(".hitl-prompt-card.hitl-pending").first
     try:
         await card.wait_for(state="visible", timeout=45000)
@@ -229,6 +244,7 @@ TOPICS = [
 
 # ── Test: Medium Conversation (AC-1) ─────────────────────────────────
 
+
 async def run_test_1():
     if not await _is_server_ready():
         raise RuntimeError(f"Server not ready at {APP_BASE_URL}")
@@ -247,14 +263,17 @@ async def run_test_1():
 
             for i, topic in enumerate(TOPICS):
                 resp = await _send_msg(page, topic)
-                assert resp, f"Turn {i+1}: empty response"
-                assert len(resp) > 5, f"Turn {i+1}: too short: {resp[:100]}"
+                assert resp, f"Turn {i + 1}: empty response"
+                assert len(resp) > 5, f"Turn {i + 1}: too short: {resp[:100]}"
 
-            last = await _send_msg(page, "What is the name of our project and its main purpose?")
+            last = await _send_msg(
+                page, "What is the name of our project and its main purpose?"
+            )
             assert last, "Summary empty"
             assert re.search(
                 r"echo[- ]?metrics|Echo[- ]?Metrics|the project|monitoring|dashboard|pipeline",
-                last, re.IGNORECASE,
+                last,
+                re.IGNORECASE,
             ), f"Context coherence fail: {last[:300]}"
 
             tid = (await page.locator("code").first.inner_text()).strip()
@@ -268,9 +287,10 @@ async def run_test_1():
 
 # ── Test: Memory Isolation (AC-2, AC-6) ─────────────────────────────
 
+
 async def run_test_2():
     if not await _is_server_ready():
-        raise RuntimeError(f"Server not ready")
+        raise RuntimeError("Server not ready")
 
     suffix = uuid.uuid4().hex[:8]
     proj_a = await _create_project(f"MemA {suffix}")
@@ -285,14 +305,16 @@ async def run_test_2():
 
             await _switch_project(page, proj_a["name"])
             for i in range(5):
-                await _send_msg(page, f"Turn {i+1}: Remember {sentinel}. What's {i+2} squared?")
+                await _send_msg(
+                    page, f"Turn {i + 1}: Remember {sentinel}. What's {i + 2} squared?"
+                )
 
             tid_a = (await page.locator("code").first.inner_text()).strip()
             hist_a = await _fetch_history(tid_a)
             assert len(hist_a) >= 5
 
             await _switch_project(page, proj_b["name"])
-            await _send_msg(page, f"Hello from B")
+            await _send_msg(page, "Hello from B")
             tid_b = (await page.locator("code").first.inner_text()).strip()
             hist_b = await _fetch_history(tid_b)
             await _assert_no_cross_ref(hist_b, sentinel, "Chat B")
@@ -309,9 +331,10 @@ async def run_test_2():
 
 # ── Test: Tool-call HITL (AC-3, AC-5) ───────────────────────────────
 
+
 async def run_test_3():
     if not await _is_server_ready():
-        raise RuntimeError(f"Server not ready")
+        raise RuntimeError("Server not ready")
 
     suffix = uuid.uuid4().hex[:8]
     proj_a = await _create_project(f"ToolA {suffix}")
@@ -355,9 +378,10 @@ async def run_test_3():
 
 # ── Test: Prompt-based HITL (AC-4, AC-5) ────────────────────────────
 
+
 async def run_test_4():
     if not await _is_server_ready():
-        raise RuntimeError(f"Server not ready")
+        raise RuntimeError("Server not ready")
 
     suffix = uuid.uuid4().hex[:8]
     proj_a = await _create_project(f"ScopeA {suffix}")
@@ -377,8 +401,9 @@ async def run_test_4():
 
             submit_btn = page.locator(".hitl-btn-approve").first
             submit_text = await submit_btn.inner_text()
-            assert "submit" in submit_text.lower() or "choice" in submit_text.lower(), \
+            assert "submit" in submit_text.lower() or "choice" in submit_text.lower(), (
                 f"Expected scope button: {submit_text}"
+            )
 
             await _select_first_choice(page)
             follow = await _send_msg(page, "Let's proceed with that option.")
@@ -418,21 +443,22 @@ if __name__ == "__main__":
     ]
 
     for name, func in tests:
-        print(f"\n{'='*60}", flush=True)
+        print(f"\n{'=' * 60}", flush=True)
         print(f"  TEST: {name}", flush=True)
-        print(f"{'='*60}", flush=True)
+        print(f"{'=' * 60}", flush=True)
         try:
             asyncio.run(func())
-            print(f"  ✅ PASS", flush=True)
+            print("  ✅ PASS", flush=True)
             passed += 1
         except Exception as e:
             print(f"  ❌ FAIL: {e}", flush=True)
             import traceback
+
             traceback.print_exc()
             failed += 1
             break  # stop on first failure
 
-    print(f"\n{'='*60}", flush=True)
+    print(f"\n{'=' * 60}", flush=True)
     print(f"  RESULTS: {passed} passed, {failed} failed", flush=True)
-    print(f"{'='*60}", flush=True)
+    print(f"{'=' * 60}", flush=True)
     sys.exit(1 if failed > 0 else 0)

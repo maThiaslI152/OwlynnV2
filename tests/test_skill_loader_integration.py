@@ -114,11 +114,15 @@ class TestListSkillsUsesLoader:
 
 class TestInvokeSkillUsesLoader:
     def test_invokes_by_name(self):
-        result = invoke_skill.invoke({"skill_name": "Research Assistant", "context": "AI trends"})
+        result = invoke_skill.invoke(
+            {"skill_name": "Research Assistant", "context": "AI trends"}
+        )
         assert "[Skill: Research Assistant]" in result
 
     def test_case_insensitive_lookup(self):
-        result = invoke_skill.invoke({"skill_name": "research assistant", "context": "test"})
+        result = invoke_skill.invoke(
+            {"skill_name": "research assistant", "context": "test"}
+        )
         assert "[Skill: Research Assistant]" in result
 
     def test_not_found_lists_available(self):
@@ -127,5 +131,7 @@ class TestInvokeSkillUsesLoader:
         assert "Available:" in result
 
     def test_context_injection(self):
-        result = invoke_skill.invoke({"skill_name": "Research Assistant", "context": "quantum computing"})
+        result = invoke_skill.invoke(
+            {"skill_name": "Research Assistant", "context": "quantum computing"}
+        )
         assert "quantum computing" in result

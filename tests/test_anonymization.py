@@ -12,6 +12,7 @@ from src.agent.anonymization import anonymize, deanonymize
 
 # ── Edge cases ──────────────────────────────────────────────────────────────
 
+
 class TestEdgeCases:
     def test_empty_text(self):
         result, mapping = anonymize("")
@@ -39,6 +40,7 @@ class TestEdgeCases:
 
 # ── Round-trip property ─────────────────────────────────────────────────────
 
+
 class TestRoundTrip:
     def test_round_trip_email(self):
         text = "Contact me at alice@example.com for details."
@@ -65,6 +67,7 @@ class TestRoundTrip:
 
 # ── Placeholder format ──────────────────────────────────────────────────────
 
+
 class TestPlaceholderFormat:
     _PLACEHOLDER_RE = re.compile(r"\[([A-Z_]+)_(\d+)\]")
 
@@ -83,6 +86,7 @@ class TestPlaceholderFormat:
 
 
 # ── Deterministic duplicates ────────────────────────────────────────────────
+
 
 class TestDeterministicDuplicates:
     def test_same_email_same_placeholder(self):
@@ -104,6 +108,7 @@ class TestDeterministicDuplicates:
 
 
 # ── Pattern detection categories ────────────────────────────────────────────
+
 
 class TestPatternDetection:
     def test_detect_email(self):
@@ -191,6 +196,7 @@ class TestPatternDetection:
 
 # ── Deanonymize edge cases ──────────────────────────────────────────────────
 
+
 class TestDeanonymize:
     def test_unknown_placeholder_left_unchanged(self):
         text = "Hello [NAME_99], your [UNKNOWN_1] is ready."
@@ -208,6 +214,7 @@ class TestDeanonymize:
 
 
 # ── Overlap handling ────────────────────────────────────────────────────────
+
 
 class TestOverlapHandling:
     def test_email_not_split_by_name(self):

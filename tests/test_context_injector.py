@@ -68,7 +68,14 @@ class TestInjectParams:
     def test_replaces_param_placeholder(self, injector):
         skill = _make_skill(
             prompt="Chart type: {chart_type}",
-            params=[SkillParam(name="chart_type", description="Type of chart", required=False, default="bar")],
+            params=[
+                SkillParam(
+                    name="chart_type",
+                    description="Type of chart",
+                    required=False,
+                    default="bar",
+                )
+            ],
         )
         result = injector.inject(skill, "", params={"chart_type": "pie"})
         assert result == "Chart type: pie"
@@ -76,7 +83,14 @@ class TestInjectParams:
     def test_applies_default_for_missing_optional_param(self, injector):
         skill = _make_skill(
             prompt="Depth: {depth}",
-            params=[SkillParam(name="depth", description="Research depth", required=False, default="standard")],
+            params=[
+                SkillParam(
+                    name="depth",
+                    description="Research depth",
+                    required=False,
+                    default="standard",
+                )
+            ],
         )
         result = injector.inject(skill, "")
         assert result == "Depth: standard"
@@ -89,7 +103,9 @@ class TestInjectParams:
                 SkillParam(name="tone", description="Writing tone", required=True),
             ],
         )
-        result = injector.inject(skill, "text", params={"style": "formal", "tone": "friendly"})
+        result = injector.inject(
+            skill, "text", params={"style": "formal", "tone": "friendly"}
+        )
         assert result == "text with formal and friendly"
 
 
@@ -98,28 +114,48 @@ class TestValidateParams:
 
     def test_raises_for_missing_required_param(self, injector):
         skill = _make_skill(
-            params=[SkillParam(name="depth", description="Research depth", required=True)],
+            params=[
+                SkillParam(name="depth", description="Research depth", required=True)
+            ],
         )
         with pytest.raises(ValueError, match="depth"):
             injector._validate_params(skill, {})
 
     def test_error_message_includes_param_name(self, injector):
         skill = _make_skill(
-            params=[SkillParam(name="my_param", description="Important param", required=True)],
+            params=[
+                SkillParam(
+                    name="my_param", description="Important param", required=True
+                )
+            ],
         )
         with pytest.raises(ValueError, match="my_param"):
             injector._validate_params(skill, {})
 
     def test_applies_defaults_for_optional_params(self, injector):
         skill = _make_skill(
-            params=[SkillParam(name="depth", description="Depth", required=False, default="standard")],
+            params=[
+                SkillParam(
+                    name="depth",
+                    description="Depth",
+                    required=False,
+                    default="standard",
+                )
+            ],
         )
         result = injector._validate_params(skill, {})
         assert result == {"depth": "standard"}
 
     def test_provided_params_override_defaults(self, injector):
         skill = _make_skill(
-            params=[SkillParam(name="depth", description="Depth", required=False, default="standard")],
+            params=[
+                SkillParam(
+                    name="depth",
+                    description="Depth",
+                    required=False,
+                    default="standard",
+                )
+            ],
         )
         result = injector._validate_params(skill, {"depth": "deep"})
         assert result == {"depth": "deep"}
@@ -128,7 +164,9 @@ class TestValidateParams:
         skill = _make_skill(
             params=[
                 SkillParam(name="a", description="A", required=True),
-                SkillParam(name="b", description="B", required=False, default="default_b"),
+                SkillParam(
+                    name="b", description="B", required=False, default="default_b"
+                ),
             ],
         )
         result = injector._validate_params(skill, {"a": "val_a"})
@@ -162,7 +200,9 @@ class TestApplyChainContext:
         }
         result = injector._apply_chain_context("prompt", chain_state)
         assert "[Chain Step 3/4 — Previous: Step A, Step B]" in result
-        assert "Use the output from the previous step(s) as input for this step." in result
+        assert (
+            "Use the output from the previous step(s) as input for this step." in result
+        )
 
     def test_chain_header_with_single_previous(self, injector):
         chain_state = {
@@ -207,13 +247,22 @@ class TestInjectWithChainState:
     def test_full_inject_with_params_and_chain(self, injector):
         skill = _make_skill(
             prompt="Research {context} at {depth} level",
-            params=[SkillParam(name="depth", description="Depth", required=False, default="standard")],
+            params=[
+                SkillParam(
+                    name="depth",
+                    description="Depth",
+                    required=False,
+                    default="standard",
+                )
+            ],
         )
         chain_state = {
             "current_step": 2,
             "step_count": 3,
             "previous_steps": ["Scanner"],
         }
-        result = injector.inject(skill, "AI trends", params={"depth": "deep"}, chain_state=chain_state)
+        result = injector.inject(
+            skill, "AI trends", params={"depth": "deep"}, chain_state=chain_state
+        )
         assert "[Chain Step 2/3" in result
         assert "Research AI trends at deep level" in result

@@ -42,5 +42,7 @@ def test_prose_tool_stall_detects_read_workspace():
 
 
 def test_prose_tool_stall_respects_substantive_answer():
-    m = AIMessage(content="Here is a long " + ("paragraph " * 80) + " with no tool names.")
+    m = AIMessage(
+        content="Here is a long " + ("paragraph " * 80) + " with no tool names."
+    )
     assert _looks_like_prose_tool_stall(m) is False

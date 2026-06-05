@@ -1,15 +1,10 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+
 router = APIRouter()
 
 import json
 import asyncio
 import os
-import re
-import time
-import uuid
-import traceback
-import base64
-from io import BytesIO
 
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from langgraph.types import Command
@@ -23,18 +18,14 @@ from src.api.shared import (
     serialize_message,
     build_message_content,
     _stringify_lc_message_content,
-    logger
+    logger,
 )
 
-from src.memory.user_profile import get_profile, update_profile
-from src.memory.persona import get_persona
 from src.memory.project import project_manager
-from src.config.settings import WORKSPACE_DIR, get_project_workspace, normalize_project_id
+from src.agent.nodes.router import generate_chat_title_router_llm
+from src.config.settings import get_project_workspace, normalize_project_id
 from src.tools.workspace_context import set_active_project_for_run, reset_active_project
-from src.config.audit_log import set_thread_id, audit_info, audit_debug
-from src.config.config_loader import config
-
-
+from src.config.audit_log import set_thread_id, audit_info
 
 
 def serialize_interrupt_item(item):
@@ -47,19 +38,29 @@ def serialize_interrupt_item(item):
 
         if interrupt_type == "security_approval_required":
             sensitive_calls = value.get("sensitive_tool_calls") or []
-            primary_call = sensitive_calls[0] if isinstance(sensitive_calls, list) and sensitive_calls else {}
+            primary_call = (
+                sensitive_calls[0]
+                if isinstance(sensitive_calls, list) and sensitive_calls
+                else {}
+            )
             tool_name = str(primary_call.get("name", "unknown"))
             tool_args = _stringify_tool_input(primary_call.get("args"))
             enriched = dict(value)
-            enriched["risk_label"] = str(primary_call.get("risk_label") or "sensitive_tool_execution")
-            enriched["risk_confidence"] = float(primary_call.get("risk_confidence", 0.95))
+            enriched["risk_label"] = str(
+                primary_call.get("risk_label") or "sensitive_tool_execution"
+            )
+            enriched["risk_confidence"] = float(
+                primary_call.get("risk_confidence", 0.95)
+            )
             if primary_call.get("risk_rationale"):
                 enriched["risk_rationale"] = str(primary_call.get("risk_rationale"))
             if primary_call.get("remediation_hint"):
                 enriched["remediation_hint"] = str(primary_call.get("remediation_hint"))
             enriched["tool_name"] = tool_name
             enriched["tool_args"] = tool_args
-            enriched["sensitive_count"] = len(sensitive_calls) if isinstance(sensitive_calls, list) else 0
+            enriched["sensitive_count"] = (
+                len(sensitive_calls) if isinstance(sensitive_calls, list) else 0
+            )
             return enriched
 
         if interrupt_type == "plan_review_required":
@@ -81,8 +82,6 @@ def serialize_interrupt_item(item):
     return str(value)
 
 
-
-
 def _stringify_tool_input(value) -> str | None:
     """Convert tool args payload into a compact UI-safe string."""
     if value is None:
@@ -93,8 +92,6 @@ def _stringify_tool_input(value) -> str | None:
         return json.dumps(value, ensure_ascii=False)
     except Exception:
         return str(value)
-
-
 
 
 def _tool_status_from_content(content: str) -> str:
@@ -112,8 +109,6 @@ def _tool_status_from_content(content: str) -> str:
         "command not found",
     )
     return "error" if any(h in lowered for h in error_hints) else "success"
-
-
 
 
 def _tool_risk_metadata(tool_name: str, tool_input: str | None) -> dict | None:
@@ -143,17 +138,16 @@ def _tool_risk_metadata(tool_name: str, tool_input: str | None) -> dict | None:
     return None
 
 
-
-
 class GraphSession:
     """Manages the graph execution for a specific thread in a background task."""
+
     def __init__(self, thread_id, agent, sessions_registry):
         self.thread_id = thread_id
         self.agent = agent
         self.sessions_registry = sessions_registry
-        self.listeners = set() # asyncio.Queues
+        self.listeners = set()  # asyncio.Queues
         self.task = None
-        self.event_buffer = [] # Store all events for the current turn
+        self.event_buffer = []  # Store all events for the current turn
         self.is_running = False
         self.last_project_id = "default"
 
@@ -180,11 +174,12 @@ class GraphSession:
                 self.last_project_id = normalize_project_id(pid)
         self.event_buffer = []
         self.is_running = True
-        self.task = asyncio.create_task(self._execute(input_data, config, correlation_id))
+        self.task = asyncio.create_task(
+            self._execute(input_data, config, correlation_id)
+        )
 
     async def _execute(self, input_data, config, correlation_id=None):
         # Propagate thread_id into audit context for this graph run
-        from src.config.audit_log import set_thread_id
         set_thread_id(self.thread_id)
 
         token = set_active_project_for_run(self.last_project_id)
@@ -195,7 +190,9 @@ class GraphSession:
             for q in list(self.listeners):
                 await q.put((start_msg, correlation_id))
 
-            async for event in self.agent.astream_events(input_data, config=config, version="v2"):
+            async for event in self.agent.astream_events(
+                input_data, config=config, version="v2"
+            ):
                 self.event_buffer.append((event, correlation_id))
                 if len(self.event_buffer) > 2000:
                     self.event_buffer.pop(0)
@@ -211,6 +208,7 @@ class GraphSession:
             raise
         except Exception as e:
             import traceback
+
             traceback.print_exc()
             err_msg = {"type": "error", "content": f"Graph Execution Error: {str(e)}"}
             self.event_buffer.append((err_msg, correlation_id))
@@ -221,26 +219,27 @@ class GraphSession:
             self.is_running = False
             # Final status update
             done_msg = {"type": "status", "content": "idle"}
-            logger.debug("GraphSession._execute for thread %s FINISHED. Putting done_msg.", self.thread_id)
+            logger.debug(
+                "GraphSession._execute for thread %s FINISHED. Putting done_msg.",
+                self.thread_id,
+            )
             self.event_buffer.append((done_msg, correlation_id))
             for q in list(self.listeners):
                 q.put_nowait((done_msg, correlation_id))
-            
+
             # If no one is listening anymore, remove from registry
             if not self.listeners and self.thread_id in self.sessions_registry:
                 del self.sessions_registry[self.thread_id]
 
 
-
-
 @router.websocket("/ws/chat/{thread_id}")
 async def websocket_endpoint(websocket: WebSocket, thread_id: str):
     await websocket.accept()
-    connected_websockets.add(websocket) # Track connection
-    
+    connected_websockets.add(websocket)  # Track connection
+
     config = {"configurable": {"thread_id": thread_id}}
     agent = websocket.app.state.agent
-    
+
     if not agent:
         await websocket.close(code=1008, reason="Agent not initialized")
         return
@@ -259,32 +258,39 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
         q = await session.add_listener()
         pending_tool_calls: dict[str, dict] = {}
         running_tool_calls: dict[str, dict] = {}
-        _stream_echo_buffer = ""  # Accumulates streaming text to detect system instruction echo
+        _stream_echo_buffer = (
+            ""  # Accumulates streaming text to detect system instruction echo
+        )
         try:
             while True:
                 item = await q.get()
-                if item is None: # Sentinel
+                if item is None:  # Sentinel
                     break
-                event, correlation_id = item if isinstance(item, tuple) else (item, None)
-                
+                event, correlation_id = (
+                    item if isinstance(item, tuple) else (item, None)
+                )
+
                 async def _send_ws(payload):
                     if correlation_id and isinstance(payload, dict):
                         payload["correlation_id"] = correlation_id
                     await websocket.send_json(payload)
-            
+
                 # Handle standard LangGraph events vs our custom wrapped events
                 if isinstance(event, dict) and "event" in event:
                     kind = event.get("event")
                     metadata = event.get("metadata", {})
                     node = metadata.get("langgraph_node")
-                
+
                     # Debug print
                     if kind in ["on_chain_start", "on_chain_end"]:
                         logger.debug("Event=%s | Node=%s", kind, node)
                     elif kind == "on_chat_model_stream":
                         logger.debug("Stream | Node=%s", node)
 
-                    if kind == "on_chain_start" and (node in {"tool_action", "tools"} or metadata.get("langgraph_step") == "tools"):
+                    if kind == "on_chain_start" and (
+                        node in {"tool_action", "tools"}
+                        or metadata.get("langgraph_step") == "tools"
+                    ):
                         for tool_call_id, tc in list(pending_tool_calls.items()):
                             tool_name = str(tc.get("tool_name") or "unknown_tool")
                             tool_input = tc.get("tool_input")
@@ -300,7 +306,9 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                     "tool_name": tool_name,
                                     "tool_call_id": tool_call_id or None,
                                     "input": tool_input,
-                                    **(_tool_risk_metadata(tool_name, tool_input) or {}),
+                                    **(
+                                        _tool_risk_metadata(tool_name, tool_input) or {}
+                                    ),
                                 }
                             )
                         pending_tool_calls.clear()
@@ -308,17 +316,27 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                     elif kind == "on_chain_stream":
                         chunk = event.get("data", {}).get("chunk")
                         if isinstance(chunk, dict) and "__interrupt__" in chunk:
-                            interrupts = [serialize_interrupt_item(i) for i in chunk.get("__interrupt__", [])]
+                            interrupts = [
+                                serialize_interrupt_item(i)
+                                for i in chunk.get("__interrupt__", [])
+                            ]
                             pending_tool_calls.clear()
-                            await _send_ws({"type": "interrupt", "interrupts": interrupts})
+                            await _send_ws(
+                                {"type": "interrupt", "interrupts": interrupts}
+                            )
 
-                    elif kind == "on_chat_model_stream" and node in ["simple", "complex_llm"]:
+                    elif kind == "on_chat_model_stream" and node in [
+                        "simple",
+                        "complex_llm",
+                    ]:
                         chunk = event["data"]["chunk"]
                         if chunk.content:
                             # Stream deltas may be str or list[content_block]; stringify like finalize path.
                             text = _stringify_lc_message_content(chunk.content)
                             # Skip empty chunks and internal reminders
-                            if not text or text.strip().startswith("[Internal reminder"):
+                            if not text or text.strip().startswith(
+                                "[Internal reminder"
+                            ):
                                 continue
                             # Suppress system instruction echo in streaming chunks.
                             # Some models (Gemma) regurgitate the folded system prompt as output.
@@ -328,16 +346,22 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                 # Still inside the system echo block — keep buffering but don't send
                                 if "[SYSTEM INSTRUCTIONS END]" in _stream_echo_buffer:
                                     # End marker found — extract everything after the end marker
-                                    idx = _stream_echo_buffer.find("[SYSTEM INSTRUCTIONS END]")
-                                    after = _stream_echo_buffer[idx + len("[SYSTEM INSTRUCTIONS END]"):].lstrip()
+                                    idx = _stream_echo_buffer.find(
+                                        "[SYSTEM INSTRUCTIONS END]"
+                                    )
+                                    after = _stream_echo_buffer[
+                                        idx + len("[SYSTEM INSTRUCTIONS END]") :
+                                    ].lstrip()
                                     _stream_echo_buffer = ""  # Reset buffer
                                     if after:
-                                        await _send_ws({"type": "chunk", "content": after})
+                                        await _send_ws(
+                                            {"type": "chunk", "content": after}
+                                        )
                                 # else: still buffering, don't send yet
                             else:
                                 # Past the echo block or never started — send normally
                                 await _send_ws({"type": "chunk", "content": text})
-                        
+
                     elif kind == "on_chain_end":
                         output = event["data"].get("output")
 
@@ -350,15 +374,24 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
 
                         # Emit memory_updated when memory_write node completes with invalidation
                         if node == "memory_write":
-                            if isinstance(output, dict) and output.get("memory_invalidated"):
-                                await _send_ws({
-                                    "type": "memory_updated",
-                                    "thread_id": thread_id,
-                                })
+                            if isinstance(output, dict) and output.get(
+                                "memory_invalidated"
+                            ):
+                                await _send_ws(
+                                    {
+                                        "type": "memory_updated",
+                                        "thread_id": thread_id,
+                                    }
+                                )
 
                         if isinstance(output, dict) and "__interrupt__" in output:
-                            interrupts = [serialize_interrupt_item(i) for i in output.get("__interrupt__", [])]
-                            await _send_ws({"type": "interrupt", "interrupts": interrupts})
+                            interrupts = [
+                                serialize_interrupt_item(i)
+                                for i in output.get("__interrupt__", [])
+                            ]
+                            await _send_ws(
+                                {"type": "interrupt", "interrupts": interrupts}
+                            )
 
                         # Emit router_info event when router node completes
                         if node == "router":
@@ -371,8 +404,12 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                 if isinstance(inner, dict):
                                     router_metadata = inner.get("router_metadata")
                             if not router_metadata:
-                                logger.debug("[ws] router on_chain_end: output type=%s, has_router_metadata=%s",
-                                    type(output).__name__, isinstance(output, dict) and "router_metadata" in output)
+                                logger.debug(
+                                    "[ws] router on_chain_end: output type=%s, has_router_metadata=%s",
+                                    type(output).__name__,
+                                    isinstance(output, dict)
+                                    and "router_metadata" in output,
+                                )
                             if router_metadata and isinstance(router_metadata, dict):
                                 safe_metadata = {}
                                 for k, v in router_metadata.items():
@@ -380,7 +417,10 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                         json.dumps({k: v})
                                         safe_metadata[k] = v
                                     except (TypeError, ValueError):
-                                        logger.warning("[ws] Skipping non-serializable router_metadata field: %s", k)
+                                        logger.warning(
+                                            "[ws] Skipping non-serializable router_metadata field: %s",
+                                            k,
+                                        )
                                 if safe_metadata:
                                     # Derive a model name from the route for the frontend
                                     route = safe_metadata.get("route", "")
@@ -391,11 +431,13 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                         model = f"medium-{variant}"
                                     else:
                                         model = "unknown"
-                                    await _send_ws({
-                                        "type": "router_info",
-                                        "metadata": safe_metadata,
-                                        "model": model,
-                                    })
+                                    await _send_ws(
+                                        {
+                                            "type": "router_info",
+                                            "metadata": safe_metadata,
+                                            "model": model,
+                                        }
+                                    )
 
                         if node in ["simple", "complex_llm"]:
                             if isinstance(output, dict) and "messages" in output:
@@ -422,43 +464,82 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                         "model": _node_model_used,
                                         "swapping": False,
                                     }
-                                    if _node_fallback_chain and isinstance(_node_fallback_chain, list):
-                                        model_info_payload["fallback_chain"] = _node_fallback_chain
+                                    if _node_fallback_chain and isinstance(
+                                        _node_fallback_chain, list
+                                    ):
+                                        model_info_payload["fallback_chain"] = (
+                                            _node_fallback_chain
+                                        )
                                     # Include cloud brief telemetry if present
                                     if output.get("cloud_brief_tokens_est"):
-                                        model_info_payload["cloud_brief_tokens_est"] = output["cloud_brief_tokens_est"]
-                                    if output.get("anonymization_placeholders_count") is not None:
-                                        model_info_payload["anonymization_placeholders_count"] = output["anonymization_placeholders_count"]
+                                        model_info_payload["cloud_brief_tokens_est"] = (
+                                            output["cloud_brief_tokens_est"]
+                                        )
+                                    if (
+                                        output.get("anonymization_placeholders_count")
+                                        is not None
+                                    ):
+                                        model_info_payload[
+                                            "anonymization_placeholders_count"
+                                        ] = output["anonymization_placeholders_count"]
                                     await _send_ws(model_info_payload)
-                                elif _node_fallback_chain and isinstance(_node_fallback_chain, list):
+                                elif _node_fallback_chain and isinstance(
+                                    _node_fallback_chain, list
+                                ):
                                     # No model_used but fallback chain exists (e.g. tools_off fallback)
-                                    await _send_ws({
-                                        "type": "model_info",
-                                        "model": "unknown",
-                                        "swapping": False,
-                                        "fallback_chain": _node_fallback_chain,
-                                    })
+                                    await _send_ws(
+                                        {
+                                            "type": "model_info",
+                                            "model": "unknown",
+                                            "swapping": False,
+                                            "fallback_chain": _node_fallback_chain,
+                                        }
+                                    )
 
                                 # Accumulate cloud token usage into session totals
-                                if _node_token_usage and isinstance(_node_token_usage, dict):
-                                    _session_usage["prompt_tokens"] += int(_node_token_usage.get("prompt_tokens", 0))
-                                    _session_usage["completion_tokens"] += int(_node_token_usage.get("completion_tokens", 0))
-                                    _session_usage["total_tokens"] = _session_usage["prompt_tokens"] + _session_usage["completion_tokens"]
+                                if _node_token_usage and isinstance(
+                                    _node_token_usage, dict
+                                ):
+                                    _session_usage["prompt_tokens"] += int(
+                                        _node_token_usage.get("prompt_tokens", 0)
+                                    )
+                                    _session_usage["completion_tokens"] += int(
+                                        _node_token_usage.get("completion_tokens", 0)
+                                    )
+                                    _session_usage["total_tokens"] = (
+                                        _session_usage["prompt_tokens"]
+                                        + _session_usage["completion_tokens"]
+                                    )
 
                                 if tc_list:
                                     # Include reasoning / pre-tool text in the same payload (serialize_message flattens content).
                                     # Skip internal reminders leaking through tool-call AIMessages.
-                                    if text_for_ui and not text_for_ui.startswith("[Internal reminder"):
+                                    if text_for_ui and not text_for_ui.startswith(
+                                        "[Internal reminder"
+                                    ):
                                         aw_msg = serialize_message(msg)
                                         if _node_model_used:
                                             aw_msg["model_used"] = _node_model_used
                                         if _node_token_usage:
                                             aw_msg["token_usage"] = _node_token_usage
-                                        await _send_ws({"type": "assistant.message", "message": aw_msg})
+                                        await _send_ws(
+                                            {
+                                                "type": "assistant.message",
+                                                "message": aw_msg,
+                                            }
+                                        )
                                     for tc in tc_list:
-                                        tool_call_id = str(tc.get("id") or tc.get("tool_call_id") or f"pending-{len(pending_tool_calls)+1}")
-                                        tool_name = str(tc.get("name") or "unknown_tool")
-                                        tool_input = _stringify_tool_input(tc.get("args"))
+                                        tool_call_id = str(
+                                            tc.get("id")
+                                            or tc.get("tool_call_id")
+                                            or f"pending-{len(pending_tool_calls) + 1}"
+                                        )
+                                        tool_name = str(
+                                            tc.get("name") or "unknown_tool"
+                                        )
+                                        tool_input = _stringify_tool_input(
+                                            tc.get("args")
+                                        )
                                         pending_tool_calls[tool_call_id] = {
                                             "tool_name": tool_name,
                                             "tool_input": tool_input,
@@ -471,38 +552,85 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                         final_msg["model_used"] = _node_model_used
                                     if _node_token_usage:
                                         final_msg["token_usage"] = _node_token_usage
-                                    await _send_ws({"type": "assistant.message", "message": final_msg})
+                                    await _send_ws(
+                                        {
+                                            "type": "assistant.message",
+                                            "message": final_msg,
+                                        }
+                                    )
                                 elif not tc_list:
                                     # text_for_ui is empty (e.g. _clean_response stripped system echo leaving nothing).
                                     # Fallback: extract raw content after system markers from the uncut message.
                                     raw_content = str(getattr(msg, "content", "") or "")
                                     if "[SYSTEM INSTRUCTIONS END]" in raw_content:
-                                        idx = raw_content.find("[SYSTEM INSTRUCTIONS END]") + len("[SYSTEM INSTRUCTIONS END]")
+                                        idx = raw_content.find(
+                                            "[SYSTEM INSTRUCTIONS END]"
+                                        ) + len("[SYSTEM INSTRUCTIONS END]")
                                         after = raw_content[idx:].strip()
                                         if after:
-                                            fallback_msg = {"type": msg.type, "content": after}
+                                            fallback_msg = {
+                                                "type": msg.type,
+                                                "content": after,
+                                            }
                                             if _node_model_used:
-                                                fallback_msg["model_used"] = _node_model_used
-                                            await _send_ws({"type": "assistant.message", "message": fallback_msg})
-                        elif node is None or node not in {"simple", "complex_llm", "tool_action", "tools", "auto_summarize", "memory_write", "router"}:
+                                                fallback_msg["model_used"] = (
+                                                    _node_model_used
+                                                )
+                                            await _send_ws(
+                                                {
+                                                    "type": "assistant.message",
+                                                    "message": fallback_msg,
+                                                }
+                                            )
+                        elif node is None or node not in {
+                            "simple",
+                            "complex_llm",
+                            "tool_action",
+                            "tools",
+                            "auto_summarize",
+                            "memory_write",
+                            "router",
+                        }:
                             # Catch-all: root-level or unknown node with AIMessage content
                             if isinstance(output, dict) and "messages" in output:
                                 msgs_ = output.get("messages") or []
                                 if msgs_ and isinstance(msgs_[0], AIMessage):
                                     raw = str(msgs_[0].content or "").strip()
                                     if raw and not raw.startswith("[Internal reminder"):
-                                        await _send_ws({"type": "assistant.message", "message": serialize_message(msgs_[0])})
-                        elif node in {"tool_action", "tools"} or metadata.get("langgraph_step") == "tools":
+                                        await _send_ws(
+                                            {
+                                                "type": "assistant.message",
+                                                "message": serialize_message(msgs_[0]),
+                                            }
+                                        )
+                        elif (
+                            node in {"tool_action", "tools"}
+                            or metadata.get("langgraph_step") == "tools"
+                        ):
                             if isinstance(output, dict) and "messages" in output:
                                 for msg in output["messages"]:
                                     if isinstance(msg, ToolMessage):
-                                        tool_call_id = str(getattr(msg, "tool_call_id", "") or "")
-                                        stored = running_tool_calls.pop(tool_call_id, None) if tool_call_id else None
-                                        tool_name = str(getattr(msg, "name", "") or (stored or {}).get("tool_name") or "unknown_tool")
+                                        tool_call_id = str(
+                                            getattr(msg, "tool_call_id", "") or ""
+                                        )
+                                        stored = (
+                                            running_tool_calls.pop(tool_call_id, None)
+                                            if tool_call_id
+                                            else None
+                                        )
+                                        tool_name = str(
+                                            getattr(msg, "name", "")
+                                            or (stored or {}).get("tool_name")
+                                            or "unknown_tool"
+                                        )
                                         started_at = (stored or {}).get("started_at")
                                         duration = None
                                         if started_at is not None:
-                                            duration = max(0.0, asyncio.get_running_loop().time() - float(started_at))
+                                            duration = max(
+                                                0.0,
+                                                asyncio.get_running_loop().time()
+                                                - float(started_at),
+                                            )
                                         content = str(getattr(msg, "content", "") or "")
                                         status = _tool_status_from_content(content)
                                         await _send_ws(
@@ -511,17 +639,30 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                                 "status": status,
                                                 "tool_name": tool_name,
                                                 "tool_call_id": tool_call_id or None,
-                                                "output": content if status == "success" else None,
-                                                "error": content if status == "error" else None,
+                                                "output": content
+                                                if status == "success"
+                                                else None,
+                                                "error": content
+                                                if status == "error"
+                                                else None,
                                                 "duration": duration,
                                             }
                                         )
                                     else:
                                         # Skip internal assistant reminders and empty messages.
-                                        content = str(getattr(msg, "content", "") or "").strip()
-                                        if not content or content.startswith("[Internal reminder"):
+                                        content = str(
+                                            getattr(msg, "content", "") or ""
+                                        ).strip()
+                                        if not content or content.startswith(
+                                            "[Internal reminder"
+                                        ):
                                             continue
-                                        await _send_ws({"type": "assistant.message", "message": serialize_message(msg)})
+                                        await _send_ws(
+                                            {
+                                                "type": "assistant.message",
+                                                "message": serialize_message(msg),
+                                            }
+                                        )
                 else:
                     # Our custom events (status, error, etc)
                     logger.debug("Custom Event: %s", event)
@@ -535,8 +676,6 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
             session.remove_listener(q)
             if not session.is_active() and thread_id in sessions:
                 del sessions[thread_id]
-
-
 
     # Start the event forwarder task
     forwarder_task = asyncio.create_task(forward_events())
@@ -564,7 +703,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                 await session.start_run(
                     Command(resume={"approved": approved}),
                     config=config,
-                    correlation_id=payload.get("correlation_id")
+                    correlation_id=payload.get("correlation_id"),
                 )
                 continue
 
@@ -573,7 +712,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                 await session.start_run(
                     Command(resume={"answer": answer}),
                     config=config,
-                    correlation_id=payload.get("correlation_id")
+                    correlation_id=payload.get("correlation_id"),
                 )
                 continue
 
@@ -583,7 +722,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                 await session.start_run(
                     Command(resume={"approved": approved, "feedback": feedback}),
                     config=config,
-                    correlation_id=payload.get("correlation_id")
+                    correlation_id=payload.get("correlation_id"),
                 )
                 continue
 
@@ -607,21 +746,24 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
             # Save uploaded files into the agent workspace so tools can read them
             for f in files:
                 if f.get("type") == "workspace_ref":
-                    continue # Skip saving workspace references they already exist on disk
+                    continue  # Skip saving workspace references they already exist on disk
                 name = f.get("name")
                 data_b64 = f.get("data")
                 if name and data_b64:
                     try:
                         import base64
                         import urllib.parse
+
                         raw_bytes = base64.b64decode(data_b64)
-                        
+
                         safe_name = urllib.parse.unquote(name).lstrip("/")
                         filepath = os.path.abspath(os.path.join(base_dir, safe_name))
                         if not filepath.startswith(os.path.abspath(base_dir)):
-                             logger.warning("Access denied for file %s (outside workspace)", name)
-                             continue
-                             
+                            logger.warning(
+                                "Access denied for file %s (outside workspace)", name
+                            )
+                            continue
+
                         with open(filepath, "wb") as file_out:
                             file_out.write(raw_bytes)
                         logger.info("Saved file to %s", filepath)
@@ -633,17 +775,28 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                 chat_id = thread_id
                 file_names = [f.get("name", "") for f in files if f.get("name")]
                 try:
-                    title = await generate_chat_title_router_llm(user_input[:1000], file_names=file_names)
+                    title = await generate_chat_title_router_llm(
+                        user_input[:1000], file_names=file_names
+                    )
                 except Exception:
                     title = ""
                 # Register chat in project manager (idempotent — dedups by chat_id)
                 import time as time_module
-                project_manager.add_chat_to_project(project_id, {
-                    "id": chat_id,
-                    "name": title or "New Chat",
-                    "created_at": time_module.time(),
-                })
-                logger.info("Registered chat %s in project %s (title=%s)", chat_id, project_id, title or "New Chat")
+
+                project_manager.add_chat_to_project(
+                    project_id,
+                    {
+                        "id": chat_id,
+                        "name": title or "New Chat",
+                        "created_at": time_module.time(),
+                    },
+                )
+                logger.info(
+                    "Registered chat %s in project %s (title=%s)",
+                    chat_id,
+                    project_id,
+                    title or "New Chat",
+                )
 
             message_content = await build_message_content(user_input, files)
             if not message_content:
@@ -669,9 +822,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
         audit_info("api.ws", "ws_disconnected", thread_id=thread_id)
     finally:
         # We don't cancel the session task here! It continues in background.
-        connected_websockets.discard(websocket) # Remove from active list
+        connected_websockets.discard(websocket)  # Remove from active list
         # But we should stop the forwarder.
         forwarder_task.cancel()
         # The forwarder cleanup will check if it should delete the session.
-
-

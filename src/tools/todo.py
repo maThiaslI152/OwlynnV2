@@ -5,7 +5,6 @@ Mirrors Cowork's Todo tool for tracking work items across sessions.
 
 import json
 import time
-from pathlib import Path
 from langchain_core.tools import tool
 from src.config.settings import DATA_DIR
 
@@ -21,7 +20,9 @@ def _load_todos() -> list[dict]:
 
 def _save_todos(todos: list[dict]):
     _TODO_PATH.parent.mkdir(parents=True, exist_ok=True)
-    _TODO_PATH.write_text(json.dumps(todos, ensure_ascii=False, indent=2), encoding="utf-8")
+    _TODO_PATH.write_text(
+        json.dumps(todos, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
 
 def _next_id(todos: list[dict]) -> int:

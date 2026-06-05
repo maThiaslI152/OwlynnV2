@@ -71,7 +71,9 @@ pinned_message_st = st.builds(
 )
 
 user_fact_message_st = st.builds(
-    lambda content: HumanMessage(content=content, additional_kwargs={"user_fact": True}),
+    lambda content: HumanMessage(
+        content=content, additional_kwargs={"user_fact": True}
+    ),
     content=content_st,
 )
 
@@ -96,6 +98,7 @@ num_turns_st = st.integers(min_value=12, max_value=20)
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────
+
 
 def _make_turns(n: int) -> list[BaseMessage]:
     """Create n human/AI turn pairs (regular, non-protected messages)."""
@@ -125,6 +128,7 @@ def _build_message_list(
 # ═════════════════════════════════════════════════════════════════════════
 # Property 11: Auto-summarize preserves protected messages
 # ═════════════════════════════════════════════════════════════════════════
+
 
 class TestProtectedMessagePreservation:
     """
@@ -216,9 +220,7 @@ class TestProtectedMessagePreservation:
         messages = _build_message_list(num_turns, protected_msgs)
 
         # Record original content for comparison
-        original_contents = [
-            (type(m).__name__, m.content) for m in protected_msgs
-        ]
+        original_contents = [(type(m).__name__, m.content) for m in protected_msgs]
 
         active_tokens = int((_SUMMARIZE_THRESHOLD + 0.05) * context_window)
 

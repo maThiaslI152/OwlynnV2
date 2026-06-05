@@ -25,6 +25,7 @@ def isolated_profile(tmp_path):
 @pytest.fixture()
 def client():
     from src.api.server import app
+
     with TestClient(app, raise_server_exceptions=True) as c:
         yield c
 
@@ -44,17 +45,26 @@ class TestUnifiedSettings:
     def test_contains_llm_config_fields(self, client):
         data = client.get("/api/unified-settings").json()
         for field in [
-            "small_llm_base_url", "small_llm_model_name",
-            "llm_base_url", "llm_model_name", "medium_models",
-            "cloud_llm_base_url", "cloud_llm_model_name",
+            "small_llm_base_url",
+            "small_llm_model_name",
+            "llm_base_url",
+            "llm_model_name",
+            "medium_models",
+            "cloud_llm_base_url",
+            "cloud_llm_model_name",
         ]:
             assert field in data, f"Missing LLM config field: {field}"
 
     def test_contains_inference_params(self, client):
         data = client.get("/api/unified-settings").json()
         for field in [
-            "temperature", "top_p", "max_tokens", "top_k",
-            "streaming_enabled", "show_thinking", "show_tool_execution",
+            "temperature",
+            "top_p",
+            "max_tokens",
+            "top_k",
+            "streaming_enabled",
+            "show_thinking",
+            "show_tool_execution",
             "lm_studio_fold_system",
         ]:
             assert field in data, f"Missing inference param: {field}"
@@ -62,9 +72,13 @@ class TestUnifiedSettings:
     def test_contains_routing_cloud_fields(self, client):
         data = client.get("/api/unified-settings").json()
         for field in [
-            "cloud_escalation_enabled", "cloud_anonymization_enabled",
-            "router_hitl_enabled", "router_clarification_threshold",
-            "custom_sensitive_terms", "redis_url", "execution_policy",
+            "cloud_escalation_enabled",
+            "cloud_anonymization_enabled",
+            "router_hitl_enabled",
+            "router_clarification_threshold",
+            "custom_sensitive_terms",
+            "redis_url",
+            "execution_policy",
         ]:
             assert field in data, f"Missing routing/cloud field: {field}"
 
@@ -100,6 +114,7 @@ class TestUnifiedSettings:
 
     def test_error_returns_error_dict(self):
         from src.api.server import app
+
         with patch("src.api.server.get_profile", side_effect=RuntimeError("boom")):
             with TestClient(app, raise_server_exceptions=False) as c:
                 data = c.get("/api/unified-settings").json()
@@ -123,18 +138,24 @@ class TestProfileUpdateRuntimeBehavior:
 
     def test_post_profile_clears_llm_pool_for_runtime_fields(self, client):
         with patch("src.api.server.LLMPool.clear") as clear_mock:
-            resp = client.post("/api/profile", json={"llm_base_url": "http://127.0.0.1:9999/v1"})
+            resp = client.post(
+                "/api/profile", json={"llm_base_url": "http://127.0.0.1:9999/v1"}
+            )
             assert resp.status_code == 200
             clear_mock.assert_called_once()
 
     def test_post_profile_sensitive_update_resets_cached_llm_instances(self, client):
         from src.agent.llm import LLMPool
+
         old_small = LLMPool._small_llm
         old_medium = LLMPool._medium_llm
         try:
             LLMPool._small_llm = object()
             LLMPool._medium_llm = object()
-            resp = client.post("/api/profile", json={"small_llm_model_name": "gemma-4-e2b-heretic-uncensored-mlx"})
+            resp = client.post(
+                "/api/profile",
+                json={"small_llm_model_name": "gemma-4-e2b-heretic-uncensored-mlx"},
+            )
             assert resp.status_code == 200
             assert LLMPool._small_llm is None
             assert LLMPool._medium_llm is None
@@ -142,7 +163,9 @@ class TestProfileUpdateRuntimeBehavior:
             LLMPool._small_llm = old_small
             LLMPool._medium_llm = old_medium
 
-    def test_post_profile_does_not_clear_llm_pool_for_non_sensitive_fields(self, client):
+    def test_post_profile_does_not_clear_llm_pool_for_non_sensitive_fields(
+        self, client
+    ):
         with patch("src.api.server.LLMPool.clear") as clear_mock:
             resp = client.post("/api/profile", json={"name": "Test User"})
             assert resp.status_code == 200

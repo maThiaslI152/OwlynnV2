@@ -54,6 +54,7 @@ async def test_workspace_attachment_forces_complex():
 
 # ── Toolbox selection tests ──────────────────────────────────────────────
 
+
 @pytest.mark.anyio
 async def test_web_query_includes_web_search_toolbox():
     """Web-related queries should include web_search in selected_toolboxes."""
@@ -80,6 +81,7 @@ async def test_selected_toolboxes_always_present():
 
 # ── Vision detection tests ───────────────────────────────────────────────
 
+
 @pytest.mark.anyio
 async def test_image_attachment_routes_to_vision():
     """Image attachments should route to complex-vision."""
@@ -89,8 +91,14 @@ async def test_image_attachment_routes_to_vision():
         "messages": [
             HumanMessage(
                 content=[
-                    {"type": "text", "text": "Describe all objects visible in the uploaded image"},
-                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc123"}},
+                    {
+                        "type": "text",
+                        "text": "Describe all objects visible in the uploaded image",
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/png;base64,abc123"},
+                    },
                 ]
             )
         ],
@@ -99,15 +107,22 @@ async def test_image_attachment_routes_to_vision():
     # Mock the small LLM to classify as complex
     mock_llm = MagicMock()
     mock_llm.bind.return_value = mock_llm
-    mock_llm.ainvoke = AsyncMock(return_value=MagicMock(
-        content='{"routing":"complex","confidence":0.9,"toolbox":"all"}'
-    ))
-    with patch("src.agent.nodes.router.get_small_llm", new_callable=AsyncMock, return_value=mock_llm):
+    mock_llm.ainvoke = AsyncMock(
+        return_value=MagicMock(
+            content='{"routing":"complex","confidence":0.9,"toolbox":"all"}'
+        )
+    )
+    with patch(
+        "src.agent.nodes.router.get_small_llm",
+        new_callable=AsyncMock,
+        return_value=mock_llm,
+    ):
         out = await router_node(state)
     assert out["route"] == "complex-vision"
 
 
 # ── Cloud escalation tests ──────────────────────────────────────────────
+
 
 @pytest.mark.anyio
 async def test_frontier_quality_request_routes_cloud():
@@ -115,17 +130,29 @@ async def test_frontier_quality_request_routes_cloud():
     from unittest.mock import patch, AsyncMock
 
     state: AgentState = {
-        "messages": [HumanMessage(content="Solve and prove the convergence of a complex differential equation")],
+        "messages": [
+            HumanMessage(
+                content="Solve and prove the convergence of a complex differential equation"
+            )
+        ],
         "web_search_enabled": True,
     }
     # Mock the small LLM to classify as complex
     mock_llm = MagicMock()
     mock_llm.bind.return_value = mock_llm
-    mock_llm.ainvoke = AsyncMock(return_value=MagicMock(
-        content='{"routing":"complex","confidence":0.9,"toolbox":"all"}'
-    ))
-    with patch("src.agent.nodes.router.get_small_llm", new_callable=AsyncMock, return_value=mock_llm), \
-         patch("src.agent.nodes.router._check_cloud_available", return_value=True):
+    mock_llm.ainvoke = AsyncMock(
+        return_value=MagicMock(
+            content='{"routing":"complex","confidence":0.9,"toolbox":"all"}'
+        )
+    )
+    with (
+        patch(
+            "src.agent.nodes.router.get_small_llm",
+            new_callable=AsyncMock,
+            return_value=mock_llm,
+        ),
+        patch("src.agent.nodes.router._check_cloud_available", return_value=True),
+    ):
         out = await router_node(state)
     assert out["route"] == "complex-cloud"
 
@@ -136,8 +163,21 @@ async def test_tool_history_forces_complex_even_when_classifier_says_simple():
     state: AgentState = {
         "messages": [
             HumanMessage(content="read my workspace file and summarize"),
-            AIMessage(content="", tool_calls=[{"name": "read_workspace_file", "args": {"filename": "notes.md"}, "id": "call_1"}]),
-            ToolMessage(content="file contents...", tool_call_id="call_1", name="read_workspace_file"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "name": "read_workspace_file",
+                        "args": {"filename": "notes.md"},
+                        "id": "call_1",
+                    }
+                ],
+            ),
+            ToolMessage(
+                content="file contents...",
+                tool_call_id="call_1",
+                name="read_workspace_file",
+            ),
             HumanMessage(content="continue and finish this"),
         ],
         "web_search_enabled": True,
@@ -158,9 +198,15 @@ async def test_long_context_boundary_routes_longctx_not_default():
 
     mock_llm = MagicMock()
     mock_llm.bind.return_value = mock_llm
-    mock_llm.ainvoke = AsyncMock(return_value=MagicMock(
-        content='{"routing":"complex","confidence":0.95,"toolbox":"all"}'
-    ))
-    with patch("src.agent.nodes.router.get_small_llm", new_callable=AsyncMock, return_value=mock_llm):
+    mock_llm.ainvoke = AsyncMock(
+        return_value=MagicMock(
+            content='{"routing":"complex","confidence":0.95,"toolbox":"all"}'
+        )
+    )
+    with patch(
+        "src.agent.nodes.router.get_small_llm",
+        new_callable=AsyncMock,
+        return_value=mock_llm,
+    ):
         out = await router_node(state)
     assert out["route"] in ("complex-longctx", "complex-cloud")

@@ -16,7 +16,6 @@ from src.agent.response_styles import style_instruction_for_prompt
 from src.agent.lm_studio_compat import with_system_for_local_server
 from src.agent.state import AgentState
 
-from src.config.audit_log import audit_info
 from src.config.log_middleware import log_node
 
 logger = logging.getLogger(__name__)
@@ -42,7 +41,9 @@ def _clean_response(text: str) -> str:
     # Remove <｜end▁of▁thinking｜> blocks (Qwen3.5 alternate format)
     out = re.sub(r"<thinking>.*?</thinking>", "", out, flags=re.DOTALL).strip()
     # Strip "Thinking Process:" sections — Qwen3.5 sometimes embeds these even with enable_thinking=false
-    out = re.sub(r"Thinking Process:.*?(?=\n\n[^\d]|\Z)", "", out, flags=re.DOTALL).strip()
+    out = re.sub(
+        r"Thinking Process:.*?(?=\n\n[^\d]|\Z)", "", out, flags=re.DOTALL
+    ).strip()
     # Strip self-descriptive preambles (model echoing system prompt folded into user message)
     out = re.sub(
         r"^\[SYSTEM INSTRUCTIONS BEGIN\].*?\[SYSTEM INSTRUCTIONS END\]\s*",
@@ -57,7 +58,7 @@ def _clean_response(text: str) -> str:
         out,
     )
     if persona_echo:
-        out = out[persona_echo.end():].strip()
+        out = out[persona_echo.end() :].strip()
     # Remove numbered reasoning steps (e.g. "1. **Analyze**...")
     lines = out.split("\n")
     kept: list[str] = []
@@ -85,6 +86,7 @@ async def simple_node(state: AgentState) -> AgentState:
     """Fast-path node: short answers without tools."""
     style_hint = style_instruction_for_prompt(state.get("response_style"))
     from datetime import date
+
     # Inject condensed memory context (topics/interests only, no past context) for personalization
     memory_ctx = state.get("memory_context") or ""
     memory_hint = ""
@@ -100,13 +102,15 @@ async def simple_node(state: AgentState) -> AgentState:
         persona_prefix = persona_desc
     else:
         persona_prefix = "You are Owlynn, a helpful assistant."
-        
-    system = SystemMessage(content=SIMPLE_PROMPT.format(
-        persona_prefix=persona_prefix,
-        current_date=date.today().strftime('%B %d, %Y'),
-        style_hint=style_hint,
-        memory_hint=memory_hint,
-    ))
+
+    system = SystemMessage(
+        content=SIMPLE_PROMPT.format(
+            persona_prefix=persona_prefix,
+            current_date=date.today().strftime("%B %d, %Y"),
+            style_hint=style_hint,
+            memory_hint=memory_hint,
+        )
+    )
     messages = list(state.get("messages") or [])
     prompt = with_system_for_local_server(system, messages)
 
@@ -119,31 +123,48 @@ async def simple_node(state: AgentState) -> AgentState:
         response = await llm.bind(temperature=0.4, max_tokens=budget).ainvoke(prompt)
         content = _clean_response(response.content or "")
         model = "small-local"
-        fallback_chain.append({
-            "model": "small-local",
-            "status": "success",
-            "reason": "simple_route",
-            "duration_ms": max(0, int((asyncio.get_running_loop().time() - start_ts) * 1000)),
-        })
+        fallback_chain.append(
+            {
+                "model": "small-local",
+                "status": "success",
+                "reason": "simple_route",
+                "duration_ms": max(
+                    0, int((asyncio.get_running_loop().time() - start_ts) * 1000)
+                ),
+            }
+        )
     except Exception as e:
-        logger.warning("[simple] Small model failed (%s), falling back to medium-default", e)
-        fallback_chain.append({
-            "model": "small-local",
-            "status": "failed",
-            "reason": str(e)[:120],
-            "duration_ms": 0,
-        })
+        logger.warning(
+            "[simple] Small model failed (%s), falling back to medium-default", e
+        )
+        fallback_chain.append(
+            {
+                "model": "small-local",
+                "status": "failed",
+                "reason": str(e)[:120],
+                "duration_ms": 0,
+            }
+        )
         from src.agent.llm import get_medium_llm
+
         fb_start = asyncio.get_running_loop().time()
         llm = await get_medium_llm("default")
         response = await llm.bind(temperature=0.4, max_tokens=budget).ainvoke(prompt)
         content = _clean_response(response.content or "")
         model = "medium-default-fallback"
-        fallback_chain.append({
-            "model": "medium-default-fallback",
-            "status": "success",
-            "reason": "fallback_simple_failed",
-            "duration_ms": max(0, int((asyncio.get_running_loop().time() - fb_start) * 1000)),
-        })
+        fallback_chain.append(
+            {
+                "model": "medium-default-fallback",
+                "status": "success",
+                "reason": "fallback_simple_failed",
+                "duration_ms": max(
+                    0, int((asyncio.get_running_loop().time() - fb_start) * 1000)
+                ),
+            }
+        )
 
-    return {"messages": [AIMessage(content=content)], "model_used": model, "fallback_chain": fallback_chain}
+    return {
+        "messages": [AIMessage(content=content)],
+        "model_used": model,
+        "fallback_chain": fallback_chain,
+    }

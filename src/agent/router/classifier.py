@@ -53,6 +53,7 @@ Reply with exactly one JSON object (no markdown, no extra text):
 
 # ── Default classification (safe fallback) ───────────────────────────────
 
+
 def _default_classification() -> RouteClassification:
     """Return safe default classification on any failure."""
     return RouteClassification(
@@ -64,6 +65,7 @@ def _default_classification() -> RouteClassification:
 
 
 # ── Parse helper (exposed for testability) ───────────────────────────────
+
 
 def parse_classification(content: str) -> RouteClassification:
     """Parse a JSON string into a RouteClassification.
@@ -104,6 +106,7 @@ def parse_classification(content: str) -> RouteClassification:
 
 # ── RouteClassifier ──────────────────────────────────────────────────────
 
+
 class RouteClassifier:
     """Classifies user tasks using the Small LLM."""
 
@@ -129,6 +132,7 @@ class RouteClassifier:
         try:
             if small_llm is None:
                 from src.agent.llm import get_small_llm
+
                 small_llm = await get_small_llm()
 
             prompt = _CLASSIFY_PROMPT.format(
@@ -145,9 +149,12 @@ class RouteClassifier:
                 user_input=json.dumps(user_text[:_MAX_INPUT_CHARS]),
             )
 
-            router_llm = small_llm.bind(temperature=0.05, max_tokens=int(config.get("router_llm.max_tokens")))
+            router_llm = small_llm.bind(
+                temperature=0.05, max_tokens=int(config.get("router_llm.max_tokens"))
+            )
 
             from langchain_core.messages import HumanMessage
+
             response = await router_llm.ainvoke([HumanMessage(content=prompt)])
 
             return parse_classification(response.content)

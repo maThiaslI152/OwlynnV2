@@ -17,6 +17,7 @@ from src.tools.skills import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_skill(
     name: str = "Test Skill",
     prompt: str = "Do {context}",
@@ -57,6 +58,7 @@ class FakeLoader:
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def research_skill():
     return _make_skill(name="Research Assistant", prompt="Research {context}")
@@ -69,7 +71,9 @@ def presentation_skill():
 
 @pytest.fixture
 def non_chainable_skill():
-    return _make_skill(name="Solo Skill", prompt="Solo {context}", chain_compatible=False)
+    return _make_skill(
+        name="Solo Skill", prompt="Solo {context}", chain_compatible=False
+    )
 
 
 @pytest.fixture
@@ -77,13 +81,19 @@ def param_skill():
     return _make_skill(
         name="Param Skill",
         prompt="Do {context} at {depth}",
-        params=[SkillParam(name="depth", description="Depth", required=False, default="standard")],
+        params=[
+            SkillParam(
+                name="depth", description="Depth", required=False, default="standard"
+            )
+        ],
     )
 
 
 @pytest.fixture
 def loader(research_skill, presentation_skill, non_chainable_skill, param_skill):
-    return FakeLoader([research_skill, presentation_skill, non_chainable_skill, param_skill])
+    return FakeLoader(
+        [research_skill, presentation_skill, non_chainable_skill, param_skill]
+    )
 
 
 @pytest.fixture
@@ -99,6 +109,7 @@ def pipeline(loader, injector):
 # ---------------------------------------------------------------------------
 # ChainStep dataclass tests
 # ---------------------------------------------------------------------------
+
 
 class TestChainStep:
     def test_defaults(self):
@@ -121,6 +132,7 @@ class TestChainStep:
 # ChainResult dataclass tests
 # ---------------------------------------------------------------------------
 
+
 class TestChainResult:
     def test_fields(self):
         result = ChainResult(steps=["prompt1", "prompt2"], instructions="do stuff")
@@ -131,6 +143,7 @@ class TestChainResult:
 # ---------------------------------------------------------------------------
 # ChainPipeline.build tests
 # ---------------------------------------------------------------------------
+
 
 class TestChainPipelineBuild:
     def test_single_step_string(self, pipeline):
@@ -161,7 +174,9 @@ class TestChainPipelineBuild:
         assert "[Skill Chain: 2 steps]" in result.instructions
         assert "Step 1: Research Assistant" in result.instructions
         assert "Step 2: Presentation Builder" in result.instructions
-        assert "Complete each step fully before moving to the next." in result.instructions
+        assert (
+            "Complete each step fully before moving to the next." in result.instructions
+        )
 
     def test_string_steps_normalized_to_chainstep(self, pipeline):
         result = pipeline.build(["Research Assistant"], context="test")
@@ -178,7 +193,9 @@ class TestChainPipelineBuild:
     def test_context_override_per_step(self, pipeline):
         steps = [
             ChainStep(skill_name="Research Assistant"),
-            ChainStep(skill_name="Presentation Builder", context_override="custom topic"),
+            ChainStep(
+                skill_name="Presentation Builder", context_override="custom topic"
+            ),
         ]
         result = pipeline.build(steps, context="original")
         assert "Research original" in result.steps[0]
@@ -202,7 +219,13 @@ class TestChainPipelineBuild:
         loader._skills["skill b"] = _make_skill(name="Skill B", prompt="B {context}")
         loader._skills["skill c"] = _make_skill(name="Skill C", prompt="C {context}")
         result = pipeline.build(
-            ["Research Assistant", "Presentation Builder", "Skill A", "Skill B", "Skill C"],
+            [
+                "Research Assistant",
+                "Presentation Builder",
+                "Skill A",
+                "Skill B",
+                "Skill C",
+            ],
             context="test",
         )
         assert len(result.steps) == 5
@@ -214,12 +237,16 @@ class TestChainPipelineBuild:
         )
         # Step 2 should have chain header with previous step info
         assert "[Chain Step 2/2 — Previous: Research Assistant]" in result.steps[1]
-        assert "Use the output from the previous step(s) as input for this step." in result.steps[1]
+        assert (
+            "Use the output from the previous step(s) as input for this step."
+            in result.steps[1]
+        )
 
 
 # ---------------------------------------------------------------------------
 # ChainPipeline.build error cases
 # ---------------------------------------------------------------------------
+
 
 class TestChainPipelineBuildErrors:
     def test_raises_if_chain_exceeds_max_length(self, pipeline):
@@ -257,6 +284,7 @@ class TestChainPipelineBuildErrors:
 # ---------------------------------------------------------------------------
 # ChainPipeline.validate_chain tests
 # ---------------------------------------------------------------------------
+
 
 class TestValidateChain:
     def test_valid_chain_returns_empty(self, pipeline):

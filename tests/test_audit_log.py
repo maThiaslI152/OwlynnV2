@@ -10,6 +10,7 @@ Covers:
 - log_model_attempt and log_hitl_event helpers
 - Sanitization of values
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -115,8 +116,13 @@ class TestAuditEvent:
         assert len(entries) == 1
 
     def test_extra_data_included(self, captured_audit):
-        audit_event("agent.tool", "tool_start", level=logging.INFO,
-                     tool="write_file", tool_call_id="call_xyz")
+        audit_event(
+            "agent.tool",
+            "tool_start",
+            level=logging.INFO,
+            tool="write_file",
+            tool_call_id="call_xyz",
+        )
         entries = captured_audit()
         assert len(entries) == 1
         e = entries[0]
@@ -289,7 +295,9 @@ class TestLogNodeDecorator:
 
 class TestLogModelAttempt:
     def test_success(self, captured_audit):
-        log_model_attempt("large-cloud", "success", duration_ms=150, reason="initial_route")
+        log_model_attempt(
+            "large-cloud", "success", duration_ms=150, reason="initial_route"
+        )
         entries = captured_audit()
         assert entries[0]["channel"] == "agent.model"
         assert entries[0]["event"] == "model_attempt"
@@ -307,28 +315,39 @@ class TestLogModelAttempt:
 
 class TestLogHitlEvent:
     def test_tool_classified(self, captured_audit):
-        log_hitl_event("tool_classified", tool="write_workspace_file", decision="sensitive")
+        log_hitl_event(
+            "tool_classified", tool="write_workspace_file", decision="sensitive"
+        )
         entries = captured_audit()
         assert entries[0]["channel"] == "agent.hitl"
         assert entries[0]["event"] == "tool_classified"
         assert entries[0]["tool"] == "write_workspace_file"
 
     def test_hitl_approved(self, captured_audit):
-        log_hitl_event("hitl_approved", decision="approved",
-                        tools=["write_file"], sensitive_count=1)
+        log_hitl_event(
+            "hitl_approved",
+            decision="approved",
+            tools=["write_file"],
+            sensitive_count=1,
+        )
         entries = captured_audit()
         assert entries[0]["event"] == "hitl_approved"
         assert entries[0]["tools"] == ["write_file"]
 
     def test_hitl_denied(self, captured_audit):
-        log_hitl_event("hitl_denied", decision="denied",
-                        tools=["delete_file"], total_denied=1)
+        log_hitl_event(
+            "hitl_denied", decision="denied", tools=["delete_file"], total_denied=1
+        )
         entries = captured_audit()
         assert entries[0]["event"] == "hitl_denied"
 
     def test_plan_reviewed(self, captured_audit):
-        log_hitl_event("plan_reviewed", decision="approved",
-                        tools=["write_file"], pitfalls=["risk1"])
+        log_hitl_event(
+            "plan_reviewed",
+            decision="approved",
+            tools=["write_file"],
+            pitfalls=["risk1"],
+        )
         entries = captured_audit()
         assert entries[0]["event"] == "plan_reviewed"
 

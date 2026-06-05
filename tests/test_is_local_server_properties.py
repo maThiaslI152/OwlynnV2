@@ -14,7 +14,7 @@ from src.agent.lm_studio_compat import is_local_server
 
 # URL-safe characters that are NOT "localhost" or "127.0.0.1" substrings
 _safe_chars = st.sampled_from(
-    list("abcdefghjkmnpqruvwxyz" "ABCDEFGHJKMNPQRUVWXYZ" "3456789" "-_/:.@")
+    list("abcdefghjkmnpqruvwxyzABCDEFGHJKMNPQRUVWXYZ3456789-_/:.@")
 )
 
 # Short strings that cannot accidentally contain "localhost" or "127.0.0.1"
@@ -27,6 +27,7 @@ _port = st.integers(min_value=1, max_value=65535)
 
 
 # ── Property 6: is_local_server Classification ──────────────────────────
+
 
 class TestIsLocalServerProperty:
     """
@@ -59,13 +60,17 @@ class TestIsLocalServerProperty:
     @settings(max_examples=200)
     def test_cloud_endpoints_return_false(self, data):
         """Known cloud API endpoints are never classified as local."""
-        endpoint = data.draw(st.sampled_from([
-            "https://api.deepseek.com/v1",
-            "https://api.openai.com/v1",
-            "https://api.anthropic.com/v1",
-            "https://generativelanguage.googleapis.com/v1",
-            "https://models.inference.ai.azure.com",
-        ]))
+        endpoint = data.draw(
+            st.sampled_from(
+                [
+                    "https://api.deepseek.com/v1",
+                    "https://api.openai.com/v1",
+                    "https://api.anthropic.com/v1",
+                    "https://generativelanguage.googleapis.com/v1",
+                    "https://models.inference.ai.azure.com",
+                ]
+            )
+        )
         assert is_local_server(endpoint) is False
 
     @given(url=st.text(min_size=0, max_size=100))

@@ -1,6 +1,8 @@
 """Tests for the skills system."""
+
 import sys
 from unittest.mock import MagicMock
+
 sys.modules["mem0"] = MagicMock()
 
 import pytest
@@ -66,7 +68,9 @@ def test_list_skills_tool():
 
 
 def test_invoke_skill_found():
-    result = invoke_skill.invoke({"skill_name": "Research Assistant", "context": "AI trends"})
+    result = invoke_skill.invoke(
+        {"skill_name": "Research Assistant", "context": "AI trends"}
+    )
     assert "[Skill: Research Assistant]" in result
     assert "web_search" in result or "search" in result.lower()
 

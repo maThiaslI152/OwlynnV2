@@ -32,12 +32,12 @@ from src.agent.tool_sets import (
 
 # ── Mirror of frontend CATEGORY_TOOLBOX_MAP (tool-dock.js) ───────────────
 CATEGORY_TOOLBOX_MAP: dict[str, list[str]] = {
-    "cybersec":    ["web_search", "file_ops"],
-    "writing":     ["data_viz", "productivity"],
-    "research":    ["web_search", "memory"],
+    "cybersec": ["web_search", "file_ops"],
+    "writing": ["data_viz", "productivity"],
+    "research": ["web_search", "memory"],
     "development": ["file_ops", "data_viz", "productivity"],
-    "data":        ["data_viz", "file_ops"],
-    "general":     ["all"],
+    "data": ["data_viz", "file_ops"],
+    "general": ["all"],
 }
 
 VALID_CATEGORIES = list(CATEGORY_TOOLBOX_MAP.keys())
@@ -71,6 +71,7 @@ null_category_st = st.sampled_from([None, "", "general"])
 
 
 # ── Property 14: Category-to-toolbox resolution ─────────────────────────
+
 
 class TestCategoryToolboxResolutionProperty:
     """

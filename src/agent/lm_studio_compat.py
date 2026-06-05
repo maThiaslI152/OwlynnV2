@@ -53,18 +53,21 @@ def fold_system_into_first_user(
                     new_c = c
             elif isinstance(c, list):
                 if sys_txt:
-                    new_c: list = [
-                        {"type": "text", "text": f"[SYSTEM INSTRUCTIONS BEGIN]\n{sys_txt}\n[SYSTEM INSTRUCTIONS END]\n\n"}
+                    new_c_list = [
+                        {
+                            "type": "text",
+                            "text": f"[SYSTEM INSTRUCTIONS BEGIN]\n{sys_txt}\n[SYSTEM INSTRUCTIONS END]\n\n",
+                        }
                     ]
                 else:
-                    new_c: list = []
+                    new_c_list = []
                 for block in c:
-                    new_c.append(block)
+                    new_c_list.append(block)
+                out.append(HumanMessage(content=new_c_list))
+                continue
             else:
                 if sys_txt:
-                    new_c = (
-                        f"[SYSTEM INSTRUCTIONS BEGIN]\n{sys_txt}\n[SYSTEM INSTRUCTIONS END]\n\n{c}"
-                    )
+                    new_c = f"[SYSTEM INSTRUCTIONS BEGIN]\n{sys_txt}\n[SYSTEM INSTRUCTIONS END]\n\n{c}"
                 else:
                     new_c = f"{c}"
             out.append(HumanMessage(content=new_c))

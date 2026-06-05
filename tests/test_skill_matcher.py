@@ -7,7 +7,9 @@ from unittest.mock import MagicMock
 from src.tools.skills import SkillDefinition, SkillLoader, SkillMatcher, MatchResult
 
 
-def _make_skill(name: str, triggers: list[str], description: str = "", file: str = "") -> SkillDefinition:
+def _make_skill(
+    name: str, triggers: list[str], description: str = "", file: str = ""
+) -> SkillDefinition:
     """Helper to create a minimal SkillDefinition for testing."""
     return SkillDefinition(
         file=file or f"{name.lower().replace(' ', '_')}.md",
@@ -23,9 +25,19 @@ def mock_loader():
     """Create a mock SkillLoader with a few test skills."""
     loader = MagicMock(spec=SkillLoader)
     skills = [
-        _make_skill("Research Assistant", ["research", "investigate"], "Source-backed research"),
-        _make_skill("Data Visualization", ["chart", "graph", "plot", "visualize"], "Create charts and graphs"),
-        _make_skill("Email Drafter", ["email", "draft email", "compose email"], "Draft professional emails"),
+        _make_skill(
+            "Research Assistant", ["research", "investigate"], "Source-backed research"
+        ),
+        _make_skill(
+            "Data Visualization",
+            ["chart", "graph", "plot", "visualize"],
+            "Create charts and graphs",
+        ),
+        _make_skill(
+            "Email Drafter",
+            ["email", "draft email", "compose email"],
+            "Draft professional emails",
+        ),
     ]
     loader.load_all.return_value = skills
     return loader
@@ -229,7 +241,10 @@ class TestMatchWithConfidence:
             close = (scores[0] - scores[1]) <= 0.15
             if close:
                 assert result.is_ambiguous is True
-                assert "Multiple skills" in result.ambiguity_reason or "close" in result.ambiguity_reason.lower()
+                assert (
+                    "Multiple skills" in result.ambiguity_reason
+                    or "close" in result.ambiguity_reason.lower()
+                )
 
     def test_candidate_skills_respects_top_k(self):
         """candidate_skills length does not exceed the requested top_k."""

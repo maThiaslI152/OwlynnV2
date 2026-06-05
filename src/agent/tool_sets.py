@@ -85,12 +85,28 @@ COMPLEX_TOOLS_NO_WEB: list = [
 # ─── Dynamic Tool Loading: Toolbox Registry ─────────────────────────────
 TOOLBOX_REGISTRY: dict[str, list] = {
     "web_search": [web_search, fetch_webpage],
-    "file_ops": [read_workspace_file, write_workspace_file, edit_workspace_file,
-                 list_workspace_files, delete_workspace_file],
-    "data_viz": [create_docx, create_xlsx, create_pptx, create_pdf,
-                 notebook_run, notebook_reset],
+    "file_ops": [
+        read_workspace_file,
+        write_workspace_file,
+        edit_workspace_file,
+        list_workspace_files,
+        delete_workspace_file,
+    ],
+    "data_viz": [
+        create_docx,
+        create_xlsx,
+        create_pptx,
+        create_pdf,
+        notebook_run,
+        notebook_reset,
+    ],
     "productivity": [todo_add, todo_list, todo_complete, list_skills, invoke_skill],
-    "memory": [recall_memories, recall_all_memories, forget_memory, search_workspace_docs],
+    "memory": [
+        recall_memories,
+        recall_all_memories,
+        forget_memory,
+        search_workspace_docs,
+    ],
 }
 
 ALWAYS_INCLUDED_TOOLS: list = [ask_user]
@@ -105,7 +121,9 @@ def resolve_tools(toolbox_names: list[str], web_search_enabled: bool = True) -> 
     - ask_user is always included regardless of selection
     """
     if not toolbox_names or "all" in toolbox_names:
-        base = list(COMPLEX_TOOLS_WITH_WEB if web_search_enabled else COMPLEX_TOOLS_NO_WEB)
+        base = list(
+            COMPLEX_TOOLS_WITH_WEB if web_search_enabled else COMPLEX_TOOLS_NO_WEB
+        )
         # Ensure ask_user is present
         for t in ALWAYS_INCLUDED_TOOLS:
             if t not in base:

@@ -21,6 +21,7 @@ _DEFAULT_REPORT_PATH = _REPORT_DIR / "benchmark_report.json"
 @dataclass
 class BenchmarkEntry:
     """A single benchmark result entry."""
+
     name: str
     category: str  # router | simple | complex | memory | pool
     warmup_iters: int = 2

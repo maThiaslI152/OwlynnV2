@@ -40,6 +40,7 @@ RELEVANCE_FLOOR = float(config.get("memory.decay.relevance_floor", 0.05))
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
+
 def _time_decay(last_active_iso: str, half_life_days: float) -> float:
     """Exponential decay based on time since last activity. Returns 0.0–1.0."""
     try:
@@ -62,7 +63,9 @@ def _write_json(path: Path, data) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
     try:
-        tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        tmp.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
         tmp.replace(path)
     except OSError as exc:
         logger.error("Failed to write %s: %s", path, exc)
@@ -71,6 +74,7 @@ def _write_json(path: Path, data) -> None:
 
 
 # ── Topic & Interest Extraction ─────────────────────────────────────────────
+
 
 class TopicExtractor:
     """Extract topics and interests from conversations."""
@@ -154,6 +158,7 @@ class TopicExtractor:
 
 # ── Conversation Summarization ───────────────────────────────────────────────
 
+
 class ConversationSummary:
     @staticmethod
     def create_summary(messages: List[Dict], user_name: str = "User") -> Dict:
@@ -171,7 +176,9 @@ class ConversationSummary:
             "topics": topics,
             "interests": interests,
             "key_questions": user_msgs[:3],
-            "summary_text": ConversationSummary._generate_text_summary(user_msgs, ai_msgs),
+            "summary_text": ConversationSummary._generate_text_summary(
+                user_msgs, ai_msgs
+            ),
         }
 
     @staticmethod
@@ -187,9 +194,12 @@ class ConversationSummary:
 
 # ── Memory Enrichment ────────────────────────────────────────────────────────
 
+
 class MemoryEnricher:
     @staticmethod
-    def enrich_memory(fact: str, topics: Dict[str, List[str]], interests: Dict[str, bool]) -> Dict:
+    def enrich_memory(
+        fact: str, topics: Dict[str, List[str]], interests: Dict[str, bool]
+    ) -> Dict:
         return {
             "fact": fact,
             "created_at": datetime.now().isoformat(),
@@ -209,6 +219,7 @@ class MemoryEnricher:
 
 
 # ── Topic & Interest Tracking ────────────────────────────────────────────────
+
 
 def load_topics() -> Dict[str, List[Dict]]:
     return _read_json(TOPICS_PATH, {})
@@ -230,18 +241,32 @@ def track_topic(category: str, topic: str, strength: float = 1.0) -> None:
         existing["occurrences"] += 1
         existing["last_mentioned"] = now
         existing["strength"] = min(existing["strength"] + 0.1, 5.0)
-        audit_debug("memory.topics", "topic_updated", topic=topic, category=category,
-                     occurrence=existing["occurrences"], strength=round(existing["strength"], 2))
+        audit_debug(
+            "memory.topics",
+            "topic_updated",
+            topic=topic,
+            category=category,
+            occurrence=existing["occurrences"],
+            strength=round(existing["strength"], 2),
+        )
     else:
-        topics[category].append({
-            "name": topic,
-            "occurrences": 1,
-            "first_mentioned": now,
-            "last_mentioned": now,
-            "strength": strength,
-        })
-        audit_info("memory.topics", "topic_extracted", topic=topic, category=category,
-                    occurrence=1, decay_score=1.0)
+        topics[category].append(
+            {
+                "name": topic,
+                "occurrences": 1,
+                "first_mentioned": now,
+                "last_mentioned": now,
+                "strength": strength,
+            }
+        )
+        audit_info(
+            "memory.topics",
+            "topic_extracted",
+            topic=topic,
+            category=category,
+            occurrence=1,
+            decay_score=1.0,
+        )
     save_topics(topics)
 
 
@@ -266,18 +291,27 @@ def update_interests(extracted_interests: Dict[str, bool]) -> None:
                 "last_observed": now,
                 "strength": 1.0,
             }
-            audit_debug("memory.topics", "interest_extracted", interest=interest, count=1)
+            audit_debug(
+                "memory.topics", "interest_extracted", interest=interest, count=1
+            )
         else:
             interests[interest]["count"] += 1
             interests[interest]["last_observed"] = now
-            interests[interest]["strength"] = min(interests[interest]["strength"] + 0.2, 5.0)
-            audit_debug("memory.topics", "interest_updated", interest=interest,
-                         count=interests[interest]["count"],
-                         decay_score=round(interests[interest]["strength"], 2))
+            interests[interest]["strength"] = min(
+                interests[interest]["strength"] + 0.2, 5.0
+            )
+            audit_debug(
+                "memory.topics",
+                "interest_updated",
+                interest=interest,
+                count=interests[interest]["count"],
+                decay_score=round(interests[interest]["strength"], 2),
+            )
     save_interests(interests)
 
 
 # ── Conversation Tracking ────────────────────────────────────────────────────
+
 
 def load_conversations_history(limit: Optional[int] = None) -> List[Dict]:
     data = _read_json(CONVERSATIONS_PATH, [])
@@ -306,13 +340,17 @@ def record_conversation(messages: List[Dict], session_id: str = None) -> Dict:
             track_topic(category, item)
     update_interests(summary.get("interests", {}))
 
-    audit_info("memory.topics", "conversation_recorded",
-                session_id=summary["session_id"],
-                message_count=summary.get("message_count", 0))
+    audit_info(
+        "memory.topics",
+        "conversation_recorded",
+        session_id=summary["session_id"],
+        message_count=summary.get("message_count", 0),
+    )
     return summary
 
 
 # ── Dynamic Memory Retrieval (with time decay) ──────────────────────────────
+
 
 def _score_topic(topic: dict) -> float:
     base_strength = topic.get("strength", 1.0)
@@ -374,8 +412,13 @@ def get_fading_topics(limit: int = 3) -> List[Tuple[str, str, int]]:
                 last_dt = datetime.fromisoformat(topic.get("last_mentioned", ""))
             except (ValueError, TypeError):
                 continue
-            if cutoff_old <= last_dt < cutoff_recent and topic.get("occurrences", 0) >= 3:
-                fading.append((category, topic["name"], (datetime.now() - last_dt).days))
+            if (
+                cutoff_old <= last_dt < cutoff_recent
+                and topic.get("occurrences", 0) >= 3
+            ):
+                fading.append(
+                    (category, topic["name"], (datetime.now() - last_dt).days)
+                )
     fading.sort(key=lambda x: x[2])
     return fading[:limit]
 
@@ -444,6 +487,7 @@ def get_recent_conversation_summary(days: int = 7) -> str:
 
 
 # ── Context Builder ──────────────────────────────────────────────────────────
+
 
 def get_memory_context_for_prompt() -> str:
     """Build comprehensive, time-aware memory context for system prompt injection."""

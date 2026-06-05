@@ -19,10 +19,14 @@ sys.modules["mem0"] = MagicMock()
 import pytest
 from langchain_core.messages import AIMessage
 
-from src.agent.nodes.complex import _looks_like_prose_tool_stall, COMPLEX_TOOL_GUIDANCE_WEB
+from src.agent.nodes.complex import (
+    _looks_like_prose_tool_stall,
+    COMPLEX_TOOL_GUIDANCE_WEB,
+)
 
 
 # ── Test 1: Bug condition — long prose with workspace files should be detected as stall ──
+
 
 def test_long_prose_with_workspace_files_detected_as_stall():
     """
@@ -42,7 +46,9 @@ def test_long_prose_with_workspace_files_detected_as_stall():
         "preferences and I'll get started right away on the analysis. "
         "There are many different approaches we could take depending on your needs."
     )
-    assert len(long_prose) >= 500, f"Test prose must be >= 500 chars, got {len(long_prose)}"
+    assert len(long_prose) >= 500, (
+        f"Test prose must be >= 500 chars, got {len(long_prose)}"
+    )
 
     response = AIMessage(content=long_prose)
     # Current _looks_like_prose_tool_stall only accepts (response) — no workspace_files_present.
@@ -53,6 +59,7 @@ def test_long_prose_with_workspace_files_detected_as_stall():
 
 
 # ── Test 2: Bug condition — long prose returns False on current code ──
+
 
 def test_long_prose_returns_false_on_current_code():
     """
@@ -72,7 +79,9 @@ def test_long_prose_returns_false_on_current_code():
         "preferences and I'll get started right away on the analysis. "
         "There are many different approaches we could take depending on your needs."
     )
-    assert len(long_prose) >= 500, f"Test prose must be >= 500 chars, got {len(long_prose)}"
+    assert len(long_prose) >= 500, (
+        f"Test prose must be >= 500 chars, got {len(long_prose)}"
+    )
 
     response = AIMessage(content=long_prose)
     result = _looks_like_prose_tool_stall(response)
@@ -81,6 +90,7 @@ def test_long_prose_returns_false_on_current_code():
 
 
 # ── Test 3: Tool guidance gap — no explicit read_workspace_file instruction ──
+
 
 def test_tool_guidance_missing_explicit_read_workspace_file_instruction():
     """
@@ -96,6 +106,7 @@ def test_tool_guidance_missing_explicit_read_workspace_file_instruction():
 
 
 # ── Test 4: Tool guidance gap — no explicit create_pdf instruction ──
+
 
 def test_tool_guidance_missing_explicit_create_pdf_instruction():
     """
@@ -123,6 +134,7 @@ def test_tool_guidance_missing_explicit_create_pdf_instruction():
 
 # ── Test 5: Preservation — tool-call responses always return False ──
 
+
 def test_tool_call_responses_return_false():
     """
     **Validates: Requirements 3.1**
@@ -134,7 +146,13 @@ def test_tool_call_responses_return_false():
     # Short content with tool_calls
     short_with_tools = AIMessage(
         content="Let me read that file for you.",
-        tool_calls=[{"name": "read_workspace_file", "args": {"filename": "grades.csv"}, "id": "tc1"}],
+        tool_calls=[
+            {
+                "name": "read_workspace_file",
+                "args": {"filename": "grades.csv"},
+                "id": "tc1",
+            }
+        ],
     )
     assert _looks_like_prose_tool_stall(short_with_tools) is False
 
@@ -148,6 +166,7 @@ def test_tool_call_responses_return_false():
 
 
 # ── Test 6: Preservation — short prose (<420 chars) returns True ──
+
 
 def test_short_prose_returns_true():
     """
@@ -164,6 +183,7 @@ def test_short_prose_returns_true():
 
 
 # ── Test 7: Preservation — long prose (>=420 chars) without files returns False ──
+
 
 def test_long_prose_without_files_returns_false():
     """
@@ -185,13 +205,16 @@ def test_long_prose_without_files_returns_false():
         "Finally, we could run some basic statistical tests to validate any "
         "hypotheses about the data. Which approach interests you most?"
     )
-    assert len(long_prose) >= 420, f"Test prose must be >= 420 chars, got {len(long_prose)}"
+    assert len(long_prose) >= 420, (
+        f"Test prose must be >= 420 chars, got {len(long_prose)}"
+    )
 
     response = AIMessage(content=long_prose)
     assert _looks_like_prose_tool_stall(response) is False
 
 
 # ── Test 8: Preservation — response mentioning read_workspace_file returns True ──
+
 
 def test_response_mentioning_read_workspace_file_returns_true():
     """
@@ -216,6 +239,7 @@ def test_response_mentioning_read_workspace_file_returns_true():
 
 
 # ── Test 9: Preservation — empty response returns True ──
+
 
 def test_empty_response_returns_true():
     """

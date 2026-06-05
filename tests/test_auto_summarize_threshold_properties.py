@@ -53,6 +53,7 @@ above_fraction_st = st.floats(
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
+
 def _make_turns(n: int) -> list:
     """Create n human/AI turn pairs."""
     msgs = []
@@ -70,6 +71,7 @@ _ENOUGH_TURNS = 15
 # ═════════════════════════════════════════════════════════════════════════
 # Property 10: Auto-summarize trigger threshold
 # ═════════════════════════════════════════════════════════════════════════
+
 
 class TestAutoSummarizeTriggerThreshold:
     """

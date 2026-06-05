@@ -47,7 +47,9 @@ async def _launch_browser_or_skip(async_playwright):
 
 
 async def _assert_connection_healthy(page) -> None:
-    await page.locator(".status", has_text="error").wait_for(state="hidden", timeout=5000)
+    await page.locator(".status", has_text="error").wait_for(
+        state="hidden", timeout=5000
+    )
     await page.locator(".status", has_text="connected").wait_for(
         state="visible",
         timeout=5000,
@@ -69,6 +71,7 @@ def test_browser_deterministic_multi_switch_runtime_flow():
     - backend/frontend app reachable at APP_BASE_URL
     - Playwright python package + browser runtime installed
     """
+
     async def _run() -> None:
         base_url = _base_url()
         if not await _is_server_ready(base_url):
@@ -78,7 +81,11 @@ def test_browser_deterministic_multi_switch_runtime_flow():
         async_playwright = pw_async.async_playwright
 
         suffix = uuid.uuid4().hex[:8]
-        names = [f"E2E Sweep A {suffix}", f"E2E Sweep B {suffix}", f"E2E Sweep C {suffix}"]
+        names = [
+            f"E2E Sweep A {suffix}",
+            f"E2E Sweep B {suffix}",
+            f"E2E Sweep C {suffix}",
+        ]
         id_by_name = await _create_projects(base_url, names)
 
         async for browser in _launch_browser_or_skip(async_playwright):
@@ -90,7 +97,9 @@ def test_browser_deterministic_multi_switch_runtime_flow():
             route = [names[2], names[1], names[0], names[2]]
             for project_name in route:
                 await page.get_by_role("button", name=project_name).first.click()
-                await page.get_by_text(f"Active project: {id_by_name[project_name]}").wait_for(
+                await page.get_by_text(
+                    f"Active project: {id_by_name[project_name]}"
+                ).wait_for(
                     state="visible",
                     timeout=5000,
                 )
@@ -131,7 +140,11 @@ def test_browser_long_rapid_multi_switch_stability():
         async_playwright = pw_async.async_playwright
 
         suffix = uuid.uuid4().hex[:8]
-        names = [f"E2E Rapid A {suffix}", f"E2E Rapid B {suffix}", f"E2E Rapid C {suffix}"]
+        names = [
+            f"E2E Rapid A {suffix}",
+            f"E2E Rapid B {suffix}",
+            f"E2E Rapid C {suffix}",
+        ]
         id_by_name = await _create_projects(base_url, names)
 
         async for browser in _launch_browser_or_skip(async_playwright):
@@ -143,7 +156,9 @@ def test_browser_long_rapid_multi_switch_stability():
             route = base_route * 3
             for project_name in route:
                 await page.get_by_role("button", name=project_name).first.click()
-                await page.get_by_text(f"Active project: {id_by_name[project_name]}").wait_for(
+                await page.get_by_text(
+                    f"Active project: {id_by_name[project_name]}"
+                ).wait_for(
                     state="visible",
                     timeout=5000,
                 )
@@ -190,11 +205,21 @@ def test_browser_multi_switch_soak_stability():
             await page.goto(base_url, wait_until="networkidle")
             await _assert_connection_healthy(page)
 
-            base_route = [names[2], names[1], names[0], names[2], names[0], names[1], names[2]]
+            base_route = [
+                names[2],
+                names[1],
+                names[0],
+                names[2],
+                names[0],
+                names[1],
+                names[2],
+            ]
             route = base_route * 6
             for idx, project_name in enumerate(route):
                 await page.get_by_role("button", name=project_name).first.click()
-                await page.get_by_text(f"Active project: {id_by_name[project_name]}").wait_for(
+                await page.get_by_text(
+                    f"Active project: {id_by_name[project_name]}"
+                ).wait_for(
                     state="visible",
                     timeout=5000,
                 )

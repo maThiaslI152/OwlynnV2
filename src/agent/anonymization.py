@@ -13,11 +13,14 @@ from typing import Optional
 # Detection patterns in priority order (longest match first)
 _PATTERNS: list[tuple[str, re.Pattern]] = [
     # 1. API keys/tokens — match before shorter patterns
-    ("API_KEY", re.compile(
-        r"(?:Bearer\s+[A-Za-z0-9\-._~+/]+=*"
-        r"|(?:sk|key|token|ghp|gho|glpat)-[A-Za-z0-9\-._]{20,}"
-        r"|[A-Za-z0-9]{32,}(?=\s|$|[\"'}),:]))"
-    )),
+    (
+        "API_KEY",
+        re.compile(
+            r"(?:Bearer\s+[A-Za-z0-9\-._~+/]+=*"
+            r"|(?:sk|key|token|ghp|gho|glpat)-[A-Za-z0-9\-._]{20,}"
+            r"|[A-Za-z0-9]{32,}(?=\s|$|[\"'}),:]))"
+        ),
+    ),
     # 2. Email addresses
     ("EMAIL", re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")),
     # 3. Localhost URLs with ports
@@ -25,16 +28,22 @@ _PATTERNS: list[tuple[str, re.Pattern]] = [
     # 4. File system paths
     ("PATH", re.compile(r"(?:/Users/\S+|/home/\S+|~/\S+|[A-Z]:\\\\?\S+)")),
     # 5. IP addresses (exclude 0.0.0.0 and 255.255.255.255)
-    ("IP", re.compile(
-        r"\b(?!0\.0\.0\.0\b)(?!255\.255\.255\.255\b)"
-        r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b"
-    )),
+    (
+        "IP",
+        re.compile(
+            r"\b(?!0\.0\.0\.0\b)(?!255\.255\.255\.255\b)"
+            r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b"
+        ),
+    ),
     # 6. Phone numbers (international formats)
-    ("PHONE", re.compile(
-        r"(?:\+\d{1,3}[\s\-]?)?"
-        r"(?:\(\d{1,4}\)[\s\-]?)?"
-        r"\d{2,4}[\s.\-]?\d{2,4}[\s.\-]?\d{2,4}"
-    )),
+    (
+        "PHONE",
+        re.compile(
+            r"(?:\+\d{1,3}[\s\-]?)?"
+            r"(?:\(\d{1,4}\)[\s\-]?)?"
+            r"\d{2,4}[\s.\-]?\d{2,4}[\s.\-]?\d{2,4}"
+        ),
+    ),
 ]
 
 
@@ -55,8 +64,8 @@ def anonymize(text: str, context: Optional[dict] = None) -> tuple[str, dict]:
         return ("", {})
 
     context = context or {}
-    mapping: dict[str, str] = {}   # placeholder → original
-    reverse: dict[str, str] = {}   # original → placeholder (for dedup)
+    mapping: dict[str, str] = {}  # placeholder → original
+    reverse: dict[str, str] = {}  # original → placeholder (for dedup)
     counters: dict[str, int] = {}  # category → next N
 
     def _get_placeholder(category: str, value: str) -> str:

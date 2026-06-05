@@ -167,8 +167,8 @@ class TestGetByName:
 
 class TestGetByCategory:
     def test_filters_by_category(self, loader: SkillLoader, skills_dir: Path):
-        _write_skill(skills_dir, "a.md", VALID_SKILL_MD)       # general
-        _write_skill(skills_dir, "b.md", VALID_SKILL_V2_MD)    # research
+        _write_skill(skills_dir, "a.md", VALID_SKILL_MD)  # general
+        _write_skill(skills_dir, "b.md", VALID_SKILL_V2_MD)  # research
         loader.load_all()
         general = loader.get_by_category("general")
         research = loader.get_by_category("research")

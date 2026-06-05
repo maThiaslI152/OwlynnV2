@@ -11,6 +11,7 @@ sys.modules["mem0"] = MagicMock()
 @pytest.fixture
 def tracker():
     from src.agent.cloud_cost_tracker import SessionCostTracker
+
     return SessionCostTracker()
 
 
@@ -78,6 +79,7 @@ class TestSessionCostTracker:
 
     def test_singleton(self):
         from src.agent.cloud_cost_tracker import get_cost_tracker, reset_cost_tracker
+
         reset_cost_tracker()
         t1 = get_cost_tracker()
         t2 = get_cost_tracker()

@@ -22,14 +22,18 @@ def ask_user(question: str, choices: str = "") -> str:
         question: The question to ask.
         choices: Optional comma-separated choices (1-3 max). Example: "PDF,Word,PowerPoint"
     """
-    raw_choices = [c.strip() for c in choices.split(",") if c.strip()][:3] if choices else []
+    raw_choices = (
+        [c.strip() for c in choices.split(",") if c.strip()][:3] if choices else []
+    )
     choice_list = [{"label": c, "allows_user_input": False} for c in raw_choices]
     choice_list.append({"label": "Type custom answer...", "allows_user_input": True})
-    response = interrupt({
-        "type": "ask_user",
-        "question": question,
-        "choices": choice_list,
-    })
+    response = interrupt(
+        {
+            "type": "ask_user",
+            "question": question,
+            "choices": choice_list,
+        }
+    )
     if isinstance(response, dict):
         return response.get("answer", str(response))
     return str(response)

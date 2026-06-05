@@ -1,4 +1,5 @@
 """Minimal smoke test to verify browser automation works."""
+
 import asyncio
 import os
 import httpx
@@ -17,7 +18,9 @@ async def smoke_test():
     # 2. Create a project
     suffix = uuid.uuid4().hex[:8]
     async with httpx.AsyncClient(timeout=10) as c:
-        r = await c.post(f"{APP_BASE_URL}/api/projects", json={"name": f"SmokeTest {suffix}"})
+        r = await c.post(
+            f"{APP_BASE_URL}/api/projects", json={"name": f"SmokeTest {suffix}"}
+        )
         assert r.status_code == 200
         project = r.json()
         print(f"[OK] Created project {project['id']} ({project['name']})")
@@ -48,9 +51,11 @@ async def smoke_test():
 
             # Wait for connection
             try:
-                await page.locator(".connection-label").filter(
-                    has_text="connected"
-                ).wait_for(state="visible", timeout=30000)
+                await (
+                    page.locator(".connection-label")
+                    .filter(has_text="connected")
+                    .wait_for(state="visible", timeout=30000)
+                )
                 print("[OK] Connection status: connected")
             except Exception as e:
                 print(f"[FAIL] Connection status not found: {e}")
@@ -78,6 +83,7 @@ async def smoke_test():
 
     except Exception as e:
         import traceback
+
         traceback.print_exc()
     finally:
         async with httpx.AsyncClient(timeout=10) as c:

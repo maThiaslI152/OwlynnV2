@@ -109,7 +109,10 @@ async def scope_clarify_node(state: AgentState) -> AgentState | Command:
     """
     route = state.get("route") or ""
     if not route.startswith("complex"):
-        logger.debug("[scope_clarify] Skipped — route does not require complex toolbox: %s", route)
+        logger.debug(
+            "[scope_clarify] Skipped — route does not require complex toolbox: %s",
+            route,
+        )
         return {}
 
     profile = get_profile()
@@ -124,6 +127,7 @@ async def scope_clarify_node(state: AgentState) -> AgentState | Command:
     messages = list(state.get("messages") or [])
     user_text = ""
     from langchain_core.messages import HumanMessage
+
     for msg in reversed(messages):
         if isinstance(msg, HumanMessage):
             user_text = str(msg.content or "")
@@ -137,8 +141,12 @@ async def scope_clarify_node(state: AgentState) -> AgentState | Command:
     if web_on is None:
         web_on = True
     if web_on and _looks_like_searchable_query(user_text):
-        logger.info("[scope_clarify] Informational query detected — routing to web search instead of HITL")
-        audit_info("agent.hitl", "scope_clarify_bypassed", reason="web_searchable_query")
+        logger.info(
+            "[scope_clarify] Informational query detected — routing to web search instead of HITL"
+        )
+        audit_info(
+            "agent.hitl", "scope_clarify_bypassed", reason="web_searchable_query"
+        )
         return {
             "web_search_suggested": True,
             "clarified_scope": {"_source": "auto_web_search"},
@@ -151,13 +159,27 @@ async def scope_clarify_node(state: AgentState) -> AgentState | Command:
         audit_info("agent.hitl", "scope_clarify_skipped", reason="heuristic_passed")
         return {}
 
-    logger.info("[scope_clarify] Heuristic flagged as underspecified: missing=%s", missing)
+    logger.info(
+        "[scope_clarify] Heuristic flagged as underspecified: missing=%s", missing
+    )
     audit_info("agent.hitl", "scope_clarify_triggered", missing_dimensions=missing)
 
     # ── Web search bypass for underspecified informational requests ──
-    if web_on and missing and all(dim not in ("language", "ui_surface", "feature_scope") for dim in missing):
-        logger.info("[scope_clarify] Underspecified informational request — routing to web search")
-        audit_info("agent.hitl", "scope_clarify_bypassed", reason="underspecified_informational")
+    if (
+        web_on
+        and missing
+        and all(
+            dim not in ("language", "ui_surface", "feature_scope") for dim in missing
+        )
+    ):
+        logger.info(
+            "[scope_clarify] Underspecified informational request — routing to web search"
+        )
+        audit_info(
+            "agent.hitl",
+            "scope_clarify_bypassed",
+            reason="underspecified_informational",
+        )
         return {
             "web_search_suggested": True,
             "clarified_scope": {"_source": "auto_web_search"},
@@ -172,6 +194,7 @@ async def scope_clarify_node(state: AgentState) -> AgentState | Command:
 
     try:
         from src.agent.llm import get_small_llm
+
         small_llm = await get_small_llm()
     except Exception as e:
         logger.warning("[scope_clarify] Small LLM unavailable: %s", e)
@@ -188,9 +211,13 @@ async def scope_clarify_node(state: AgentState) -> AgentState | Command:
             questions = (result.get("questions") or [])[:3]
             task_summary = result.get("task_summary", "")
             pitfalls = result.get("pitfalls_if_assumed", [])
-            logger.info("[scope_clarify] Small LLM generated %d questions", len(questions))
+            logger.info(
+                "[scope_clarify] Small LLM generated %d questions", len(questions)
+            )
         except Exception as e:
-            logger.warning("[scope_clarify] Small LLM question generation failed: %s", e)
+            logger.warning(
+                "[scope_clarify] Small LLM question generation failed: %s", e
+            )
 
     # ── Fallback: build generic questions from heuristic ───────────
     if not questions:
@@ -204,6 +231,7 @@ async def scope_clarify_node(state: AgentState) -> AgentState | Command:
 
     # ── Build interrupt payload ───────────────────────────────────
     from src.agent.hitl.context import build_hitl_context
+
     ctx = build_hitl_context(state)
 
     interrupt_payload = {
@@ -218,9 +246,12 @@ async def scope_clarify_node(state: AgentState) -> AgentState | Command:
 
     # ── Resume: parse answers ─────────────────────────────────────
     clarified_scope = _parse_clarification_response(decision, questions)
-    log_hitl_event("scope_clarified", decision="answered",
-                    dimensions=list(clarified_scope.keys()),
-                    question_count=len(questions))
+    log_hitl_event(
+        "scope_clarified",
+        decision="answered",
+        dimensions=list(clarified_scope.keys()),
+        question_count=len(questions),
+    )
     return {
         "clarified_scope": clarified_scope,
         "router_clarification_used": True,
@@ -258,7 +289,10 @@ def _parse_clarification_response(decision: Any, questions: list[dict]) -> dict:
                     scope[qid] = {"label": str(answer)}
         elif answers is not None:
             scope["_raw"] = str(answers)
-    elif isinstance(decision, str) and decision.strip().lower() in ("skip", "use your best judgment"):
+    elif isinstance(decision, str) and decision.strip().lower() in (
+        "skip",
+        "use your best judgment",
+    ):
         scope["skipped"] = True
     elif isinstance(decision, str):
         scope["_raw"] = decision
@@ -286,28 +320,32 @@ def _build_fallback_questions(missing: list[str], _user_text: str) -> list[dict]
 
     for dim in missing:
         if dim == "language":
-            questions.append({
-                "id": "language",
-                "question": "Which programming language or runtime should I use?",
-                "choices": [
-                    {"label": "Python"},
-                    {"label": "JavaScript / TypeScript"},
-                    {"label": "Rust"},
-                    {"label": "No preference — recommend one"},
-                ],
-                "allows_user_input": True,
-            })
+            questions.append(
+                {
+                    "id": "language",
+                    "question": "Which programming language or runtime should I use?",
+                    "choices": [
+                        {"label": "Python"},
+                        {"label": "JavaScript / TypeScript"},
+                        {"label": "Rust"},
+                        {"label": "No preference — recommend one"},
+                    ],
+                    "allows_user_input": True,
+                }
+            )
         elif dim == "ui_surface":
-            questions.append({
-                "id": "ui_surface",
-                "question": "What kind of interface should this have?",
-                "choices": [
-                    {"label": "Web GUI (browser)"},
-                    {"label": "Desktop GUI"},
-                    {"label": "CLI (command line)"},
-                    {"label": "TUI (terminal interface)"},
-                ],
-                "allows_user_input": True,
-            })
+            questions.append(
+                {
+                    "id": "ui_surface",
+                    "question": "What kind of interface should this have?",
+                    "choices": [
+                        {"label": "Web GUI (browser)"},
+                        {"label": "Desktop GUI"},
+                        {"label": "CLI (command line)"},
+                        {"label": "TUI (terminal interface)"},
+                    ],
+                    "allows_user_input": True,
+                }
+            )
 
     return questions[:3]

@@ -71,7 +71,9 @@ async def test_read_workspace_file_ainvoke_async_path(workspace_probe_file):
 
 @pytest.mark.llm
 @pytest.mark.anyio
-async def test_live_llm_can_bind_and_call_read_workspace(monkeypatch, workspace_probe_file):
+async def test_live_llm_can_bind_and_call_read_workspace(
+    monkeypatch, workspace_probe_file
+):
     """
     Calls the configured **large** LLM once with tools bound; expects a read_workspace_file tool call.
     Requires a reachable OpenAI-compatible server (see profile / env). Disabled unless RUN_LLM_INTEGRATION=1.
@@ -100,7 +102,9 @@ async def test_live_llm_can_bind_and_call_read_workspace(monkeypatch, workspace_
         bound = large.bind_tools(COMPLEX_TOOLS_NO_WEB)
         response = await bound.ainvoke(prompt)
         tcalls = getattr(response, "tool_calls", None) or []
-        assert tcalls, "Model should emit tool_calls for read_workspace_file; check local server tool support."
+        assert tcalls, (
+            "Model should emit tool_calls for read_workspace_file; check local server tool support."
+        )
         names = {str(tc.get("name", "")) for tc in tcalls}
         assert "read_workspace_file" in names
     finally:

@@ -39,10 +39,13 @@ class TestCleanResponsePersonaEcho:
         """Empty input returns empty string."""
         assert _clean_response("") == ""
 
-    @pytest.mark.parametrize("bad_input,expected_fragment", [
-        ("I am Owlynn. I can help you code. The answer is 42.", "42"),
-        ("You are Owlynn, a helpful coding assistant. Temperature is 72F.", "72F"),
-    ])
+    @pytest.mark.parametrize(
+        "bad_input,expected_fragment",
+        [
+            ("I am Owlynn. I can help you code. The answer is 42.", "42"),
+            ("You are Owlynn, a helpful coding assistant. Temperature is 72F.", "72F"),
+        ],
+    )
     def test_strips_various_persona_patterns(self, bad_input, expected_fragment):
         """Various persona echo patterns are stripped."""
         result = _clean_response(bad_input)
@@ -55,6 +58,7 @@ class TestSimplePromptStructure:
     def test_persona_not_first_token(self):
         """Persona must not be the first token in the prompt."""
         from src.agent.nodes.simple import SIMPLE_PROMPT
+
         assert not SIMPLE_PROMPT.strip().startswith("{persona_prefix}")
         assert "do NOT echo or describe" in SIMPLE_PROMPT
         assert "Never describe, repeat, or reference" in SIMPLE_PROMPT

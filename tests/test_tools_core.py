@@ -1,4 +1,5 @@
 """Tests for core workspace tools (no sandbox dependency)."""
+
 import sys
 import os
 import tempfile
@@ -22,12 +23,16 @@ from src.tools.core_tools import (
 def workspace(tmp_path, monkeypatch):
     """Create a temp workspace and patch the workspace root."""
     monkeypatch.setattr("src.tools.core_tools.BASE_WORKSPACE_DIR", str(tmp_path))
-    monkeypatch.setattr("src.tools.core_tools.tool_workspace_root", lambda: str(tmp_path))
+    monkeypatch.setattr(
+        "src.tools.core_tools.tool_workspace_root", lambda: str(tmp_path)
+    )
     return tmp_path
 
 
 def test_write_and_read(workspace):
-    result = write_workspace_file.invoke({"filename": "test.txt", "content": "hello world"})
+    result = write_workspace_file.invoke(
+        {"filename": "test.txt", "content": "hello world"}
+    )
     assert "Written" in result
     assert (workspace / "test.txt").exists()
 
@@ -37,22 +42,26 @@ def test_write_and_read(workspace):
 
 def test_edit_file(workspace):
     (workspace / "doc.txt").write_text("foo bar baz")
-    result = edit_workspace_file.invoke({
-        "filename": "doc.txt",
-        "search_pattern": "bar",
-        "replacement_text": "qux",
-    })
+    result = edit_workspace_file.invoke(
+        {
+            "filename": "doc.txt",
+            "search_pattern": "bar",
+            "replacement_text": "qux",
+        }
+    )
     assert "Updated" in result
     assert (workspace / "doc.txt").read_text() == "foo qux baz"
 
 
 def test_edit_pattern_not_found(workspace):
     (workspace / "doc.txt").write_text("hello")
-    result = edit_workspace_file.invoke({
-        "filename": "doc.txt",
-        "search_pattern": "missing",
-        "replacement_text": "x",
-    })
+    result = edit_workspace_file.invoke(
+        {
+            "filename": "doc.txt",
+            "search_pattern": "missing",
+            "replacement_text": "x",
+        }
+    )
     assert "not found" in result.lower() or "Pattern" in result
 
 

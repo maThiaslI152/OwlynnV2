@@ -113,6 +113,7 @@ _PROFILE_OVERRIDE_MAP: dict[str, str] = {
 # Core loader
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class ConfigLoader:
     """Layered configuration manager.
 
@@ -130,7 +131,9 @@ class ConfigLoader:
             return cls._defaults
 
         if not _DEFAULTS_PATH.exists():
-            logger.warning("defaults.yaml not found at %s, using empty config", _DEFAULTS_PATH)
+            logger.warning(
+                "defaults.yaml not found at %s, using empty config", _DEFAULTS_PATH
+            )
             cls._defaults = {}
             return cls._defaults
 
@@ -176,6 +179,7 @@ class ConfigLoader:
     def _apply_env_overrides(cls, data: dict) -> dict:
         """Apply environment variable overrides to the config dict."""
         import copy
+
         result = copy.deepcopy(data)
 
         for env_var, dotpath in _ENV_OVERRIDE_MAP.items():
@@ -213,7 +217,9 @@ class ConfigLoader:
                     for key, val in overrides.items():
                         dotpath = f"models.{tier}.{key}"
                         cls._set_dotpath(result, dotpath, val)
-                        logger.debug("standard override (non-M4): %s = %s", dotpath, val)
+                        logger.debug(
+                            "standard override (non-M4): %s = %s", dotpath, val
+                        )
 
         return result
 
@@ -221,10 +227,12 @@ class ConfigLoader:
     def _apply_profile_overrides(cls, data: dict) -> dict:
         """Apply user profile overrides (from data/user_profile.json)."""
         import copy
+
         result = copy.deepcopy(data)
 
         try:
             from src.memory.user_profile import get_profile
+
             profile = get_profile()
         except Exception:
             return result
@@ -238,7 +246,9 @@ class ConfigLoader:
                     if isinstance(existing_variants, dict):
                         for variant_key, model_name in val.items():
                             if variant_key in existing_variants:
-                                existing_variants[variant_key]["model_name"] = model_name
+                                existing_variants[variant_key]["model_name"] = (
+                                    model_name
+                                )
                         cls._set_dotpath(result, dotpath, existing_variants)
                     continue
 
@@ -295,6 +305,7 @@ config = ConfigLoader()
 # Typed accessor functions — backward compatible with existing patterns
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 def get_model_config(tier: str, variant: str = "default") -> dict[str, Any]:
     """Return the full model config dict for a given tier and variant.
 
@@ -306,7 +317,7 @@ def get_model_config(tier: str, variant: str = "default") -> dict[str, Any]:
     max_output_tokens, timeout, context_window, extra_body, etc.
     """
     if tier == "medium":
-        base = config.get(f"models.medium") or {}
+        base = config.get("models.medium") or {}
         variant_cfg = config.get(f"models.medium.variants.{variant}") or {}
         result = {**base, **variant_cfg}
         # Deep-merge extra_body: base values merged with variant-specific overrides
@@ -324,29 +335,51 @@ def get_m4_optimization() -> dict[str, Any]:
     return {
         "small_model": {
             "max_tokens": cfg.get("models", {}).get("small", {}).get("max_tokens", 512),
-            "context_length": cfg.get("models", {}).get("small", {}).get("context_window", 4096),
-            "temperature": cfg.get("models", {}).get("small", {}).get("temperature", 0.1),
+            "context_length": cfg.get("models", {})
+            .get("small", {})
+            .get("context_window", 4096),
+            "temperature": cfg.get("models", {})
+            .get("small", {})
+            .get("temperature", 0.1),
             "timeout": cfg.get("models", {}).get("small", {}).get("timeout", 10),
         },
         "medium_model": {
-            "max_tokens": cfg.get("models", {}).get("medium", {}).get("max_tokens", 4096),
-            "context_length": cfg.get("models", {}).get("medium", {}).get("variants", {}).get("default", {}).get("context_window", 16384),
-            "temperature": cfg.get("models", {}).get("medium", {}).get("temperature", 0.5),
+            "max_tokens": cfg.get("models", {})
+            .get("medium", {})
+            .get("max_tokens", 4096),
+            "context_length": cfg.get("models", {})
+            .get("medium", {})
+            .get("variants", {})
+            .get("default", {})
+            .get("context_window", 16384),
+            "temperature": cfg.get("models", {})
+            .get("medium", {})
+            .get("temperature", 0.5),
             "timeout": cfg.get("models", {}).get("medium", {}).get("timeout", 60),
             "cloud_timeout": cfg.get("models", {}).get("cloud", {}).get("timeout", 180),
         },
         "medium_models": {
-            "swap_timeout": cfg.get("models", {}).get("medium", {}).get("swap", {}).get("timeout", 120),
-            "poll_interval": cfg.get("models", {}).get("medium", {}).get("swap", {}).get("poll_interval", 2),
+            "swap_timeout": cfg.get("models", {})
+            .get("medium", {})
+            .get("swap", {})
+            .get("timeout", 120),
+            "poll_interval": cfg.get("models", {})
+            .get("medium", {})
+            .get("swap", {})
+            .get("poll_interval", 2),
         },
         "memory": {
             "max_facts": cfg.get("memory", {}).get("max_facts", 200),
             "search_window": cfg.get("memory", {}).get("search_window_m4", 100),
             "cache_ttl": cfg.get("memory", {}).get("cache", {}).get("ttl", 300),
-            "cache_cleanup": cfg.get("memory", {}).get("cache", {}).get("cleanup_interval", 600),
+            "cache_cleanup": cfg.get("memory", {})
+            .get("cache", {})
+            .get("cleanup_interval", 600),
         },
         "checkpoint": {
-            "memory_cleanup_interval": cfg.get("memory", {}).get("thread_cleanup_interval", 3600),
+            "memory_cleanup_interval": cfg.get("memory", {}).get(
+                "thread_cleanup_interval", 3600
+            ),
         },
         "routing": {
             "keyword_bypass": cfg.get("routing", {}).get("keyword_bypass", True),
@@ -365,49 +398,81 @@ def get_m4_optimization() -> dict[str, Any]:
 
 _REQUIRED_PATHS: list[str] = [
     # Server
-    "server.host", "server.port",
+    "server.host",
+    "server.port",
     # External services
-    "external_services.qdrant.host", "external_services.qdrant.port",
+    "external_services.qdrant.host",
+    "external_services.qdrant.port",
     "external_services.redis.url",
-    "external_services.lm_studio.base_url", "external_services.lm_studio.management_url",
+    "external_services.lm_studio.base_url",
+    "external_services.lm_studio.management_url",
     # Models — small
-    "models.small.base_url", "models.small.model_name", "models.small.temperature",
-    "models.small.max_tokens", "models.small.context_window", "models.small.timeout",
+    "models.small.base_url",
+    "models.small.model_name",
+    "models.small.temperature",
+    "models.small.max_tokens",
+    "models.small.context_window",
+    "models.small.timeout",
     # Models — medium
-    "models.medium.base_url", "models.medium.temperature",
-    "models.medium.max_tokens", "models.medium.timeout", "models.medium.request_timeout",
-    "models.medium.variants.default.model_name", "models.medium.variants.default.context_window",
-    "models.medium.variants.longctx.model_name", "models.medium.variants.longctx.context_window",
-    "models.medium.swap.timeout", "models.medium.swap.poll_interval",
+    "models.medium.base_url",
+    "models.medium.temperature",
+    "models.medium.max_tokens",
+    "models.medium.timeout",
+    "models.medium.request_timeout",
+    "models.medium.variants.default.model_name",
+    "models.medium.variants.default.context_window",
+    "models.medium.variants.longctx.model_name",
+    "models.medium.variants.longctx.context_window",
+    "models.medium.swap.timeout",
+    "models.medium.swap.poll_interval",
     # Models — cloud
-    "models.cloud.base_url", "models.cloud.model_name", "models.cloud.timeout",
+    "models.cloud.base_url",
+    "models.cloud.model_name",
+    "models.cloud.timeout",
     "models.cloud.context_window",
     # Models — embedding
-    "models.embedding.base_url", "models.embedding.model_name", "models.embedding.timeout",
+    "models.embedding.base_url",
+    "models.embedding.model_name",
+    "models.embedding.timeout",
     # Routing
-    "routing.confidence_threshold", "routing.swap_threshold",
-    "routing.max_input_chars", "routing.hitl_enabled",
-    "routing.budget_tiers", "routing.input_reserves", "routing.budget_max",
+    "routing.confidence_threshold",
+    "routing.swap_threshold",
+    "routing.max_input_chars",
+    "routing.hitl_enabled",
+    "routing.budget_tiers",
+    "routing.input_reserves",
+    "routing.budget_max",
     # Memory
-    "memory.max_facts", "memory.search_window", "memory.cache.ttl",
+    "memory.max_facts",
+    "memory.search_window",
+    "memory.cache.ttl",
     # Web
-    "web_search.timeout_seconds", "web_search.timeouts.aggregate",
-    "web_rag.enabled", "web_rag.top_k", "web_rag.chunk_chars",
+    "web_search.timeout_seconds",
+    "web_search.timeouts.aggregate",
+    "web_rag.enabled",
+    "web_rag.top_k",
+    "web_rag.chunk_chars",
     # Summarization
-    "summarization.threshold_ratio", "summarization.keep_recent_turns",
+    "summarization.threshold_ratio",
+    "summarization.keep_recent_turns",
     # Complex
-    "complex.min_output_tokens", "complex.max_cutoff_retries",
+    "complex.min_output_tokens",
+    "complex.max_cutoff_retries",
     "complex.default_token_budget",
     # Cloud infra
-    "cloud.circuit_breaker.failure_threshold", "cloud.circuit_breaker.cooldown_seconds",
+    "cloud.circuit_breaker.failure_threshold",
+    "cloud.circuit_breaker.cooldown_seconds",
     # Tool output
-    "tool_output.max_tool_output_chars", "tool_output.max_read_chars",
+    "tool_output.max_tool_output_chars",
+    "tool_output.max_read_chars",
     # Threading
     "threading.max_workers",
     # Router LLM
-    "router_llm.temperature", "router_llm.max_tokens",
+    "router_llm.temperature",
+    "router_llm.max_tokens",
     # Chat title
-    "chat_title.temperature", "chat_title.max_tokens",
+    "chat_title.temperature",
+    "chat_title.max_tokens",
 ]
 
 
@@ -428,11 +493,25 @@ def validate_config() -> dict[str, list[str]]:
 
     # Check top-level keys exist
     expected_sections = [
-        "server", "external_services", "models", "routing",
-        "memory", "web_search", "web_rag", "summarization",
-        "complex", "cloud", "tool_output", "file_indexing",
-        "pdf_rendering", "audit", "threading", "secret_store",
-        "file_decode", "chat_title", "router_llm",
+        "server",
+        "external_services",
+        "models",
+        "routing",
+        "memory",
+        "web_search",
+        "web_rag",
+        "summarization",
+        "complex",
+        "cloud",
+        "tool_output",
+        "file_indexing",
+        "pdf_rendering",
+        "audit",
+        "threading",
+        "secret_store",
+        "file_decode",
+        "chat_title",
+        "router_llm",
     ]
     cfg_keys = set(cfg.keys())
     for section in expected_sections:

@@ -42,7 +42,6 @@ import contextvars
 import json
 import logging
 import os
-import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
@@ -120,23 +119,25 @@ def audit_context(**ctx: Any):
 
 # ── Channel definitions ──────────────────────────────────────────────────────
 
-CHANNELS = frozenset({
-    "agent.lifecycle",
-    "agent.model",
-    "agent.hitl",
-    "agent.tool",
-    "agent.token",
-    "memory.inject",
-    "memory.write",
-    "memory.cache",
-    "memory.ltm",
-    "memory.stm",
-    "memory.summarize",
-    "memory.topics",
-    "api.ws",
-    "api.file",
-    "system",
-})
+CHANNELS = frozenset(
+    {
+        "agent.lifecycle",
+        "agent.model",
+        "agent.hitl",
+        "agent.tool",
+        "agent.token",
+        "memory.inject",
+        "memory.write",
+        "memory.cache",
+        "memory.ltm",
+        "memory.stm",
+        "memory.summarize",
+        "memory.topics",
+        "api.ws",
+        "api.file",
+        "system",
+    }
+)
 
 # Default per-channel levels (INFO = only important events; DEBUG = all events)
 _DEFAULT_CHANNEL_LEVELS: dict[str, int] = {
@@ -180,6 +181,7 @@ def _resolve_audit_dir() -> Path:
     # Default: try profile setting, fall back to ~/.owlynn/logs/
     try:
         from src.memory.user_profile import get_profile
+
         profile = get_profile()
         audit_dir_str = profile.get("audit_log_dir", "")
         if audit_dir_str:
@@ -291,7 +293,7 @@ def _channel_level(channel: str) -> int:
 
 
 # Chars to strip from log data values to keep JSON clean and compact
-_STRIP_CHARS = set('{}[]<>;"\'')
+_STRIP_CHARS = set("{}[]<>;\"'")
 _SANITIZE_MAX_LEN = int(_app_config.get("audit.sanitize_max_len", 500))
 
 
@@ -313,7 +315,9 @@ def _sanitize_value(value: Any) -> Any:
 # ── Public API ───────────────────────────────────────────────────────────────
 
 
-def audit_event(channel: str, event: str, level: int = logging.INFO, **data: Any) -> None:
+def audit_event(
+    channel: str, event: str, level: int = logging.INFO, **data: Any
+) -> None:
     """Emit a structured audit event.
 
     Parameters

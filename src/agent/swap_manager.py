@@ -32,7 +32,9 @@ class SwapManager:
 
     def __init__(self, base_url: str | None = None) -> None:
         if base_url is None:
-            base_url = config.get("external_services.lm_studio.management_url", "http://127.0.0.1:1234")
+            base_url = config.get(
+                "external_services.lm_studio.management_url", "http://127.0.0.1:1234"
+            )
         self._base_url = base_url.rstrip("/")
         self._client = httpx.AsyncClient()
         self._current_variant: Optional[str] = None
@@ -76,6 +78,7 @@ class SwapManager:
             within the configured timeout.
         """
         import time as _time
+
         swap_start = _time.monotonic()
 
         profile = get_profile()
@@ -84,8 +87,7 @@ class SwapManager:
         if not medium_models:
             variants_cfg = config.get("models.medium.variants") or {}
             medium_models = {
-                variant: v.get("model_name", "")
-                for variant, v in variants_cfg.items()
+                variant: v.get("model_name", "") for variant, v in variants_cfg.items()
             }
         model_key = medium_models.get(target_variant)
         if not model_key:
@@ -95,13 +97,21 @@ class SwapManager:
             )
 
         swap_cfg = M4_MAC_OPTIMIZATION.get("medium_models", {})
-        timeout: int = swap_cfg.get("swap_timeout") or int(config.get("models.medium.swap.timeout", 120))
-        poll_interval: int = swap_cfg.get("poll_interval") or int(config.get("models.medium.swap.poll_interval", 2))
+        timeout: int = swap_cfg.get("swap_timeout") or int(
+            config.get("models.medium.swap.timeout", 120)
+        )
+        poll_interval: int = swap_cfg.get("poll_interval") or int(
+            config.get("models.medium.swap.poll_interval", 2)
+        )
 
         prev_variant = self._current_variant
         if prev_variant:
-            audit_info("agent.model", "swap_begin",
-                        from_variant=prev_variant, to_variant=target_variant)
+            audit_info(
+                "agent.model",
+                "swap_begin",
+                from_variant=prev_variant,
+                to_variant=target_variant,
+            )
 
         # ── 1. Unload currently loaded M-tier instances ──────────────────
         await self._unload_current(medium_models)
@@ -116,12 +126,18 @@ class SwapManager:
             if resp.status_code not in (200, 201, 202):
                 logger.warning(
                     "Load request for %s returned %s: %s",
-                    model_key, resp.status_code, resp.text[:300],
+                    model_key,
+                    resp.status_code,
+                    resp.text[:300],
                 )
         except Exception as exc:
-            audit_warn("agent.model", "swap_load_failed",
-                        variant=target_variant, model=model_key,
-                        error=str(exc)[:120])
+            audit_warn(
+                "agent.model",
+                "swap_load_failed",
+                variant=target_variant,
+                model=model_key,
+                error=str(exc)[:120],
+            )
             raise ModelSwapError(
                 f"Load request failed for '{model_key}': {exc}"
             ) from exc
@@ -129,9 +145,13 @@ class SwapManager:
         # ── 3. Poll until target appears in loaded_instances ─────────────
         loaded = await self._poll_until_loaded(model_key, timeout, poll_interval)
         if not loaded:
-            audit_warn("agent.model", "swap_poll_timeout",
-                        variant=target_variant, model=model_key,
-                        timeout_seconds=timeout)
+            audit_warn(
+                "agent.model",
+                "swap_poll_timeout",
+                variant=target_variant,
+                model=model_key,
+                timeout_seconds=timeout,
+            )
             raise ModelSwapError(
                 f"Model '{model_key}' did not appear in loaded_instances "
                 f"within {timeout}s"
@@ -140,16 +160,21 @@ class SwapManager:
         self._current_variant = target_variant
         elapsed = round((_time.monotonic() - swap_start) * 1000, 2)
         logger.info("Swap complete → variant=%s  model=%s", target_variant, model_key)
-        audit_info("agent.model", "swap_complete",
-                    from_variant=prev_variant or "none",
-                    to_variant=target_variant, model=model_key,
-                    duration_ms=elapsed)
+        audit_info(
+            "agent.model",
+            "swap_complete",
+            from_variant=prev_variant or "none",
+            to_variant=target_variant,
+            model=model_key,
+            duration_ms=elapsed,
+        )
 
     # ── private helpers ──────────────────────────────────────────────────
 
     async def _unload_current(self, medium_models: dict) -> None:
         """Best-effort unload of every loaded M-tier model instance."""
         import time as _time
+
         api_timeout = int(config.get("models.medium.swap.api_timeout", 30))
         for variant_key in medium_models.values():
             instance_ids = await self.get_loaded_instance_ids(variant_key)
@@ -164,14 +189,24 @@ class SwapManager:
                     if resp.status_code not in (200, 204):
                         logger.warning(
                             "Unload instance %s returned %s: %s",
-                            inst_id, resp.status_code, resp.text[:200],
+                            inst_id,
+                            resp.status_code,
+                            resp.text[:200],
                         )
-                        audit_warn("agent.model", "swap_unload_failed",
-                                    instance_id=inst_id, status=resp.status_code)
+                        audit_warn(
+                            "agent.model",
+                            "swap_unload_failed",
+                            instance_id=inst_id,
+                            status=resp.status_code,
+                        )
                     else:
                         elapsed = round((_time.monotonic() - unload_start) * 1000, 2)
-                        audit_debug("agent.model", "swap_unloaded",
-                                     instance_id=inst_id, duration_ms=elapsed)
+                        audit_debug(
+                            "agent.model",
+                            "swap_unloaded",
+                            instance_id=inst_id,
+                            duration_ms=elapsed,
+                        )
                 except Exception as exc:
                     logger.warning("Unload failed for instance %s: %s", inst_id, exc)
 

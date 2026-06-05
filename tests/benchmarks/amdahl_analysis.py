@@ -62,12 +62,12 @@ ROUTE_MAP = {
 # - Medium: gemma-4-e4b-uncensored-hauhaucs-aggressive (4B Q4_K_M, ~50-150ms)
 # - Cloud:  DeepSeek API (~200-500ms)
 LLM_DELAYS_MS = {
-    "router": 15,        # Small LLM (ibm-grok4-1b) — routing prompt is short
-    "simple": 15,        # Small LLM (ibm-grok4-1b)
-    "complex-default": 80,   # Medium-default (gemma-4-e4b Q4_K_M)
-    "complex-vision": 120,   # Medium-vision
-    "complex-longctx": 150,   # Medium-longctx
-    "complex-cloud": 300,    # Cloud (DeepSeek API)
+    "router": 15,  # Small LLM (ibm-grok4-1b) — routing prompt is short
+    "simple": 15,  # Small LLM (ibm-grok4-1b)
+    "complex-default": 80,  # Medium-default (gemma-4-e4b Q4_K_M)
+    "complex-vision": 120,  # Medium-vision
+    "complex-longctx": 150,  # Medium-longctx
+    "complex-cloud": 300,  # Cloud (DeepSeek API)
 }
 
 
@@ -172,7 +172,9 @@ def analyze(report: dict) -> dict:
 def print_analysis(results: dict, report_path: str):
     """Print the Amdahl analysis in human-readable form."""
     print(f"\nReading report: {report_path}")
-    print(f"Generated at: {Path(report_path).read_text().split('generated_at')[1].split('\"')[2] if '\"generated_at\"' in Path(report_path).read_text() else 'unknown'}")
+    print(
+        f"Generated at: {Path(report_path).read_text().split('generated_at')[1].split('"')[2] if '"generated_at"' in Path(report_path).read_text() else 'unknown'}"
+    )
 
     print("\n" + "=" * 80)
     print("  Amdahl's Law Analysis — LLM Optimization Ceiling")
@@ -183,8 +185,10 @@ def print_analysis(results: dict, report_path: str):
         return
 
     # Header
-    print(f"\n  {'Route':<20s} {'LLM %':>7s} {'Non-LLM %':>10s} {'Max Speedup':>12s}  {'Notes'}")
-    print(f"  {'─'*20} {'─'*7} {'─'*10} {'─'*12}  {'─'*30}")
+    print(
+        f"\n  {'Route':<20s} {'LLM %':>7s} {'Non-LLM %':>10s} {'Max Speedup':>12s}  {'Notes'}"
+    )
+    print(f"  {'─' * 20} {'─' * 7} {'─' * 10} {'─' * 12}  {'─' * 30}")
 
     for route, data in sorted(results.items()):
         speedup = data["max_speedup"]
@@ -240,13 +244,23 @@ def print_analysis(results: dict, report_path: str):
         route, data = slowest_non_llm
         if data["non_llm_percent"] > 30:
             print(f"\n  Priority 1: Optimize non-LLM path on '{route}' route")
-            print(f"  ({data['non_llm_percent']:.0f}% of time is spent outside LLM calls)")
-            print(f"  → Profile memory_inject_node, system prompt formatting, response post-processing")
+            print(
+                f"  ({data['non_llm_percent']:.0f}% of time is spent outside LLM calls)"
+            )
+            print(
+                "  → Profile memory_inject_node, system prompt formatting, response post-processing"
+            )
 
-    for route, data in sorted(results.items(), key=lambda x: x[1]["max_speedup"], reverse=True):
+    for route, data in sorted(
+        results.items(), key=lambda x: x[1]["max_speedup"], reverse=True
+    ):
         if data["max_speedup"] > 5:
-            print(f"\n  High-leverage: '{route}' route (max {data['max_speedup']}x from LLM optimization)")
-            print(f"  → Consider faster model, quantization, speculative decoding, or pipelining")
+            print(
+                f"\n  High-leverage: '{route}' route (max {data['max_speedup']}x from LLM optimization)"
+            )
+            print(
+                "  → Consider faster model, quantization, speculative decoding, or pipelining"
+            )
 
     print()
 
@@ -255,7 +269,9 @@ def main():
     report_path = Path(sys.argv[1]) if len(sys.argv) > 1 else None
     report = load_report(report_path)
     results = analyze(report)
-    print_analysis(results, str(report_path or Path(__file__).parent / "benchmark_report.json"))
+    print_analysis(
+        results, str(report_path or Path(__file__).parent / "benchmark_report.json")
+    )
 
 
 if __name__ == "__main__":

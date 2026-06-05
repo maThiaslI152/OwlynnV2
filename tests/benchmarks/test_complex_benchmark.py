@@ -44,17 +44,21 @@ def _clean():
 # Per-route latency
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 @pytest.mark.benchmark
 class TestComplexPerRouteLatency:
     """Measure complex_llm_node latency for each route variant."""
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("route,model_delay", [
-        ("complex-default", 80),
-        ("complex-vision", 120),
-        ("complex-longctx", 150),
-        ("complex-cloud", 300),
-    ])
+    @pytest.mark.parametrize(
+        "route,model_delay",
+        [
+            ("complex-default", 80),
+            ("complex-vision", 120),
+            ("complex-longctx", 150),
+            ("complex-cloud", 300),
+        ],
+    )
     async def test_complex_latency_per_route(self, route: str, model_delay: int):
         """p50/p95/p99 per route with realistic mock delays."""
         from src.agent.nodes.complex import complex_llm_node
@@ -67,12 +71,24 @@ class TestComplexPerRouteLatency:
         setup_benchmark_llms(medium=mock_llm, cloud=mock_llm)
         profile = ProfileBuilder().build()
 
-        state = make_complex_state(route=route, text="Write a Python function to sort a list of dictionaries by a key")
+        state = make_complex_state(
+            route=route,
+            text="Write a Python function to sort a list of dictionaries by a key",
+        )
 
-        with patch("src.agent.nodes.complex.get_profile", return_value=profile), \
-             patch("src.agent.nodes.complex.get_medium_llm", new_callable=AsyncMock, return_value=mock_llm), \
-             patch("src.agent.nodes.complex.get_cloud_llm", new_callable=AsyncMock, return_value=mock_llm):
-
+        with (
+            patch("src.agent.nodes.complex.get_profile", return_value=profile),
+            patch(
+                "src.agent.nodes.complex.get_medium_llm",
+                new_callable=AsyncMock,
+                return_value=mock_llm,
+            ),
+            patch(
+                "src.agent.nodes.complex.get_cloud_llm",
+                new_callable=AsyncMock,
+                return_value=mock_llm,
+            ),
+        ):
             # Warmup
             for _ in range(BENCH_WARMUP):
                 await complex_llm_node(state)
@@ -95,13 +111,14 @@ class TestComplexPerRouteLatency:
 
         # Assert p50 is within 2x of mock delay (allowing for CPU overhead)
         assert tracker.p50 * 1000 < model_delay * 3, (
-            f"Route {route} p50 {tracker.p50*1000:.1f}ms > {model_delay*3}ms threshold"
+            f"Route {route} p50 {tracker.p50 * 1000:.1f}ms > {model_delay * 3}ms threshold"
         )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Fallback chain coverage
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 @pytest.mark.benchmark
 class TestFallbackChainCoverage:
@@ -123,10 +140,15 @@ class TestFallbackChainCoverage:
 
         state = make_complex_state(route="complex-cloud")
 
-        with patch("src.agent.nodes.complex.get_medium_llm", new_callable=AsyncMock, return_value=mock_medium), \
-             patch("src.agent.nodes.complex.get_cloud_llm", side_effect=_cloud_raises), \
-             patch("src.agent.nodes.complex.get_profile", return_value=profile):
-
+        with (
+            patch(
+                "src.agent.nodes.complex.get_medium_llm",
+                new_callable=AsyncMock,
+                return_value=mock_medium,
+            ),
+            patch("src.agent.nodes.complex.get_cloud_llm", side_effect=_cloud_raises),
+            patch("src.agent.nodes.complex.get_profile", return_value=profile),
+        ):
             tracker = LatencyTracker()
             for _ in range(BENCH_ITERATIONS):
                 elapsed, result = await time_async_call(complex_llm_node, state)
@@ -163,10 +185,18 @@ class TestFallbackChainCoverage:
 
         state = make_complex_state(route="complex-vision")
 
-        with patch("src.agent.nodes.complex.get_medium_llm", side_effect=_medium_side_effect), \
-             patch("src.agent.nodes.complex.get_cloud_llm", new_callable=AsyncMock, return_value=mock_medium_default), \
-             patch("src.agent.nodes.complex.get_profile", return_value=profile):
-
+        with (
+            patch(
+                "src.agent.nodes.complex.get_medium_llm",
+                side_effect=_medium_side_effect,
+            ),
+            patch(
+                "src.agent.nodes.complex.get_cloud_llm",
+                new_callable=AsyncMock,
+                return_value=mock_medium_default,
+            ),
+            patch("src.agent.nodes.complex.get_profile", return_value=profile),
+        ):
             tracker = LatencyTracker()
             for _ in range(BENCH_ITERATIONS):
                 elapsed, result = await time_async_call(complex_llm_node, state)
@@ -189,7 +219,8 @@ class TestFallbackChainCoverage:
         from src.agent.nodes.complex import complex_llm_node
 
         mock_fail = MockDelayLLM(
-            delay_ms=0, response_content="",
+            delay_ms=0,
+            response_content="",
             fail_on_call=RuntimeError("LM Studio not running"),
         )
         setup_benchmark_llms(medium=mock_fail)
@@ -197,10 +228,19 @@ class TestFallbackChainCoverage:
 
         state = make_complex_state(route="complex-default")
 
-        with patch("src.agent.nodes.complex.get_medium_llm", new_callable=AsyncMock, return_value=mock_fail), \
-             patch("src.agent.nodes.complex.get_cloud_llm", new_callable=AsyncMock, return_value=mock_fail), \
-             patch("src.agent.nodes.complex.get_profile", return_value=profile):
-
+        with (
+            patch(
+                "src.agent.nodes.complex.get_medium_llm",
+                new_callable=AsyncMock,
+                return_value=mock_fail,
+            ),
+            patch(
+                "src.agent.nodes.complex.get_cloud_llm",
+                new_callable=AsyncMock,
+                return_value=mock_fail,
+            ),
+            patch("src.agent.nodes.complex.get_profile", return_value=profile),
+        ):
             tracker = LatencyTracker()
             for _ in range(BENCH_ITERATIONS):
                 elapsed, result = await time_async_call(complex_llm_node, state)
@@ -208,7 +248,10 @@ class TestFallbackChainCoverage:
                 # Should produce a graceful error message
                 msgs = result.get("messages", [])
                 assert len(msgs) > 0
-                assert "error" in msgs[0].content.lower() or "unavailable" in msgs[0].content.lower()
+                assert (
+                    "error" in msgs[0].content.lower()
+                    or "unavailable" in msgs[0].content.lower()
+                )
 
         entry = BenchmarkEntry(
             name="fallback_medium_default_graceful",
@@ -225,6 +268,7 @@ class TestFallbackChainCoverage:
 # Context trimming efficiency
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 @pytest.mark.benchmark
 class TestContextTrimEfficiency:
     """Measure _trim_tool_history token reduction."""
@@ -237,24 +281,39 @@ class TestContextTrimEfficiency:
         messages = [HumanMessage(content="Do something complex")]
         for i in range(20):
             messages.append(
-                AIMessage(content=f"Step {i}", tool_calls=[
-                    {"name": "read_workspace_file", "args": {"filename": f"file_{i}.py"}, "id": f"call_{i}"}
-                ])
+                AIMessage(
+                    content=f"Step {i}",
+                    tool_calls=[
+                        {
+                            "name": "read_workspace_file",
+                            "args": {"filename": f"file_{i}.py"},
+                            "id": f"call_{i}",
+                        }
+                    ],
+                )
             )
             messages.append(
-                ToolMessage(content=f"Contents of file_{i}.py", tool_call_id=f"call_{i}", name="read_workspace_file")
+                ToolMessage(
+                    content=f"Contents of file_{i}.py",
+                    tool_call_id=f"call_{i}",
+                    name="read_workspace_file",
+                )
             )
 
         original_count = len(messages)
         trimmed = _trim_tool_history(messages, max_tool_cycles=6)
 
-        assert len(trimmed) == original_count, "Trim preserves message count, compresses content only"
+        assert len(trimmed) == original_count, (
+            "Trim preserves message count, compresses content only"
+        )
         # Old tool messages should be compressed to summary strings
         old_tool_count = 0
         for i, msg in enumerate(trimmed):
             if isinstance(msg, ToolMessage) and "completed" in str(msg.content):
                 old_tool_count += 1
-        assert old_tool_count > 0, "Some old tool messages should be compressed to summaries"
+        assert old_tool_count > 0, (
+            "Some old tool messages should be compressed to summaries"
+        )
 
     def test_trim_preserves_recent_cycles(self):
         """Recent tool cycles are preserved, old ones compressed."""
@@ -263,12 +322,23 @@ class TestContextTrimEfficiency:
         messages = [HumanMessage(content="Task")]
         for i in range(10):
             messages.append(
-                AIMessage(content=f"Step {i}", tool_calls=[
-                    {"name": "web_search", "args": {"query": f"query_{i}"}, "id": f"call_{i}"}
-                ])
+                AIMessage(
+                    content=f"Step {i}",
+                    tool_calls=[
+                        {
+                            "name": "web_search",
+                            "args": {"query": f"query_{i}"},
+                            "id": f"call_{i}",
+                        }
+                    ],
+                )
             )
             messages.append(
-                ToolMessage(content=f"Results for query {i}", tool_call_id=f"call_{i}", name="web_search")
+                ToolMessage(
+                    content=f"Results for query {i}",
+                    tool_call_id=f"call_{i}",
+                    name="web_search",
+                )
             )
 
         trimmed = _trim_tool_history(messages, max_tool_cycles=3)
@@ -285,6 +355,7 @@ class TestContextTrimEfficiency:
 # ═══════════════════════════════════════════════════════════════════════════
 # Post-processing overhead
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 @pytest.mark.benchmark
 class TestPostProcessingOverhead:
@@ -314,7 +385,7 @@ class TestPostProcessingOverhead:
         record_entry(entry)
 
         assert tracker.p50 * 1000 < 5, (
-            f"Anonymize p50 {tracker.p50*1000:.1f}ms exceeds 5ms"
+            f"Anonymize p50 {tracker.p50 * 1000:.1f}ms exceeds 5ms"
         )
 
     def test_deanonymize_latency(self):
@@ -344,7 +415,7 @@ class TestPostProcessingOverhead:
         record_entry(entry)
 
         assert tracker.p50 * 1000 < 2, (
-            f"Deanonymize p50 {tracker.p50*1000:.1f}ms exceeds 2ms"
+            f"Deanonymize p50 {tracker.p50 * 1000:.1f}ms exceeds 2ms"
         )
 
     def test_think_tag_strip_latency(self):
@@ -374,13 +445,14 @@ class TestPostProcessingOverhead:
         record_entry(entry)
 
         assert tracker.p50 * 1000 < 1, (
-            f"Think tag strip p50 {tracker.p50*1000:.1f}ms exceeds 1ms"
+            f"Think tag strip p50 {tracker.p50 * 1000:.1f}ms exceeds 1ms"
         )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Tool action throughput
 # ═══════════════════════════════════════════════════════════════════════════
+
 
 @pytest.mark.benchmark
 class TestToolActionThroughput:
@@ -413,7 +485,7 @@ class TestToolActionThroughput:
 
         # Fast skip should be < 5ms p50
         assert tracker.p50 * 1000 < 5, (
-            f"Tool action noop p50 {tracker.p50*1000:.1f}ms exceeds 5ms"
+            f"Tool action noop p50 {tracker.p50 * 1000:.1f}ms exceeds 5ms"
         )
 
 
@@ -421,15 +493,19 @@ class TestToolActionThroughput:
 # End-to-end graph latency
 # ═══════════════════════════════════════════════════════════════════════════
 
+
 @pytest.mark.benchmark
 class TestGraphE2ELatency:
     """Measure full graph latency per route (with MemorySaver)."""
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("route,model_delay", [
-        ("complex-default", 60),
-        ("complex-cloud", 150),
-    ])
+    @pytest.mark.parametrize(
+        "route,model_delay",
+        [
+            ("complex-default", 60),
+            ("complex-cloud", 150),
+        ],
+    )
     async def test_graph_e2e_per_route(self, route: str, model_delay: int):
         """End-to-end graph invocation per route."""
         from langgraph.checkpoint.memory import MemorySaver
@@ -447,7 +523,9 @@ class TestGraphE2ELatency:
         graph = build_graph().compile(checkpointer=MemorySaver())
 
         input_state = {
-            "messages": [HumanMessage(content="Write a hello world function in Python")],
+            "messages": [
+                HumanMessage(content="Write a hello world function in Python")
+            ],
             "route": route,
             "mode": "tools_on",
             "web_search_enabled": True,
@@ -459,17 +537,43 @@ class TestGraphE2ELatency:
         }
         config = {"configurable": {"thread_id": f"e2e-bench-{route}"}}
 
-        with patch("src.agent.nodes.router.get_profile", return_value=profile), \
-             patch("src.agent.nodes.router._check_cloud_available", return_value=(route == "complex-cloud")), \
-             patch("src.agent.nodes.complex.get_profile", return_value=profile), \
-             patch("src.agent.nodes.complex.get_medium_llm", new_callable=AsyncMock, return_value=mock_llm), \
-             patch("src.agent.nodes.complex.get_cloud_llm", new_callable=AsyncMock, return_value=mock_llm), \
-             patch("src.agent.nodes.memory.get_profile", return_value=profile), \
-             patch("src.agent.nodes.memory.get_persona_by_id", return_value={"id": "default", "name": "Owlynn", "role": "General Workspace Assistant", "tone": "friendly", "instructions": "Help the user.", "allowed_toolboxes": ["all"]}), \
-             patch("src.memory.long_term.memory", MagicMock()), \
-             patch("src.agent.nodes.memory.get_memory_context_for_prompt", return_value="Mock"), \
-             patch("src.agent.nodes.memory.MemoryContextCache") as mock_cache, \
-             patch("src.agent.nodes.memory._should_save_memory", return_value=False):
+        with (
+            patch("src.agent.nodes.router.get_profile", return_value=profile),
+            patch(
+                "src.agent.nodes.router._check_cloud_available",
+                return_value=(route == "complex-cloud"),
+            ),
+            patch("src.agent.nodes.complex.get_profile", return_value=profile),
+            patch(
+                "src.agent.nodes.complex.get_medium_llm",
+                new_callable=AsyncMock,
+                return_value=mock_llm,
+            ),
+            patch(
+                "src.agent.nodes.complex.get_cloud_llm",
+                new_callable=AsyncMock,
+                return_value=mock_llm,
+            ),
+            patch("src.agent.nodes.memory.get_profile", return_value=profile),
+            patch(
+                "src.agent.nodes.memory.get_persona_by_id",
+                return_value={
+                    "id": "default",
+                    "name": "Owlynn",
+                    "role": "General Workspace Assistant",
+                    "tone": "friendly",
+                    "instructions": "Help the user.",
+                    "allowed_toolboxes": ["all"],
+                },
+            ),
+            patch("src.memory.long_term.memory", MagicMock()),
+            patch(
+                "src.agent.nodes.memory.get_memory_context_for_prompt",
+                return_value="Mock",
+            ),
+            patch("src.agent.nodes.memory.MemoryContextCache") as mock_cache,
+            patch("src.agent.nodes.memory._should_save_memory", return_value=False),
+        ):
             mock_cache.get.return_value = "cached context"
 
             # Warmup

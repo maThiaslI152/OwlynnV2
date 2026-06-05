@@ -54,6 +54,7 @@ conversation_st = st.lists(turn_st, min_size=1, max_size=10)
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
+
 def _build_state(**overrides) -> AgentState:
     """Create a minimal AgentState dict with defaults."""
     base: AgentState = {
@@ -103,19 +104,21 @@ def _simulate_conversation(turns):
             ],
         )
         state["model_used"] = model_used
-        provenance.append({
-            "model_used": model_used,
-            "user_content": user_content,
-            "ai_content": ai_content,
-        })
+        provenance.append(
+            {
+                "model_used": model_used,
+                "user_content": user_content,
+                "ai_content": ai_content,
+            }
+        )
 
     return state, provenance
-
 
 
 # ═════════════════════════════════════════════════════════════════════════
 # Property 12: Conversation Continuity Across Swaps
 # ═════════════════════════════════════════════════════════════════════════
+
 
 class TestConversationContinuityAcrossSwaps:
     """

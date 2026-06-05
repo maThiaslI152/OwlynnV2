@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 from src.config.log_middleware import log_hitl_event, log_node
 
-from src.agent.hitl.policy import is_information_retrieval, SAFE_TOOLS
+from src.agent.hitl.policy import is_information_retrieval
 from src.agent.hitl.context import enrich_interrupt
 
 SENSITIVE_TOOLS = {
@@ -34,8 +34,12 @@ SENSITIVE_PATTERN_RE = re.compile(
     re.IGNORECASE,
 )
 
-_DESTRUCTIVE_RE = re.compile(r"(?:\brm\s+-rf\b|\bdrop\b|\bdelete\b|\btruncate\b)", re.IGNORECASE)
-_NETWORK_RE = re.compile(r"(?:\bcurl\b|\bwget\b|\bhttp[s]?://\b|\bscp\b|\bssh\b)", re.IGNORECASE)
+_DESTRUCTIVE_RE = re.compile(
+    r"(?:\brm\s+-rf\b|\bdrop\b|\bdelete\b|\btruncate\b)", re.IGNORECASE
+)
+_NETWORK_RE = re.compile(
+    r"(?:\bcurl\b|\bwget\b|\bhttp[s]?://\b|\bscp\b|\bssh\b)", re.IGNORECASE
+)
 _PRIVILEGE_RE = re.compile(r"(?:\bsudo\b|\bchmod\b|\bchown\b)", re.IGNORECASE)
 
 _CATEGORY_REMEDIATION = {
@@ -51,13 +55,27 @@ def _normalize_approval(decision: Any) -> bool:
     if isinstance(decision, bool):
         return decision
     if isinstance(decision, str):
-        return decision.strip().lower() in {"approve", "approved", "allow", "yes", "y", "true"}
+        return decision.strip().lower() in {
+            "approve",
+            "approved",
+            "allow",
+            "yes",
+            "y",
+            "true",
+        }
     if isinstance(decision, dict):
         approved = decision.get("approved")
         if isinstance(approved, bool):
             return approved
         if isinstance(approved, str):
-            return approved.strip().lower() in {"approve", "approved", "allow", "yes", "y", "true"}
+            return approved.strip().lower() in {
+                "approve",
+                "approved",
+                "allow",
+                "yes",
+                "y",
+                "true",
+            }
     return False
 
 
@@ -74,12 +92,16 @@ def _is_sensitive_call(tool_name: str, args: Any) -> bool:
         return False
     if tool_name in SENSITIVE_TOOLS:
         return True
-    args_text = json.dumps(args, ensure_ascii=True) if not isinstance(args, str) else args
+    args_text = (
+        json.dumps(args, ensure_ascii=True) if not isinstance(args, str) else args
+    )
     return bool(SENSITIVE_PATTERN_RE.search(args_text))
 
 
 def _risk_meta_for_call(tool_name: str, args: Any) -> dict[str, Any]:
-    args_text = json.dumps(args, ensure_ascii=True) if not isinstance(args, str) else str(args)
+    args_text = (
+        json.dumps(args, ensure_ascii=True) if not isinstance(args, str) else str(args)
+    )
     hay = f"{tool_name} {args_text}"
 
     if _DESTRUCTIVE_RE.search(hay) or tool_name == "delete_workspace_file":
@@ -93,7 +115,9 @@ def _risk_meta_for_call(tool_name: str, args: Any) -> dict[str, Any]:
     elif _PRIVILEGE_RE.search(hay):
         category = "privilege_escalation"
         confidence = 0.92
-        rationale = "Policy detected elevated-permission command markers in tool arguments."
+        rationale = (
+            "Policy detected elevated-permission command markers in tool arguments."
+        )
     else:
         category = "sensitive_tool_execution"
         confidence = 0.8
@@ -174,9 +198,13 @@ async def security_proxy_node(state: AgentState) -> AgentState:
         }
 
     # ── Fast-path: all calls are information retrieval (no HITL needed) ──
-    if tool_calls and all(is_information_retrieval(str(c.get("name", ""))) for c in tool_calls):
+    if tool_calls and all(
+        is_information_retrieval(str(c.get("name", ""))) for c in tool_calls
+    ):
         tool_names = [str(c.get("name", "unknown")) for c in tool_calls]
-        logger.info("[security_proxy] All safe tools (%s) — auto-approving, no HITL", tool_names)
+        logger.info(
+            "[security_proxy] All safe tools (%s) — auto-approving, no HITL", tool_names
+        )
         for name in tool_names:
             log_hitl_event("tool_classified", tool=name, decision="safe_auto")
         return {
@@ -195,8 +223,12 @@ async def security_proxy_node(state: AgentState) -> AgentState:
             enriched = dict(call)
             enriched.update(_risk_meta_for_call(name, args))
             sensitive_calls.append(enriched)
-            log_hitl_event("tool_classified", tool=name, decision="sensitive",
-                           risk=enriched.get("risk_label", "unknown"))
+            log_hitl_event(
+                "tool_classified",
+                tool=name,
+                decision="sensitive",
+                risk=enriched.get("risk_label", "unknown"),
+            )
         else:
             safe_calls.append(call)
             log_hitl_event("tool_classified", tool=name, decision="safe")
@@ -217,14 +249,21 @@ async def security_proxy_node(state: AgentState) -> AgentState:
     else:
         # ── Dedup: skip second interrupt when plan_review already approved ────
         if state.get("plan_review_approved"):
-            logger.info("[security_proxy] Plan review already approved — skipping duplicate interrupt")
-            log_hitl_event("hitl_skipped", decision="plan_review_dedup",
-                            sensitive_count=len(sensitive_calls))
+            logger.info(
+                "[security_proxy] Plan review already approved — skipping duplicate interrupt"
+            )
+            log_hitl_event(
+                "hitl_skipped",
+                decision="plan_review_dedup",
+                sensitive_count=len(sensitive_calls),
+            )
             return {
                 "execution_approved": True,
                 "security_decision": "approved",
                 "security_reason": "Plan review approved; security proxy skipped duplicate interrupt.",
-                "pending_tool_names": [str(c.get("name", "unknown")) for c in tool_calls],
+                "pending_tool_names": [
+                    str(c.get("name", "unknown")) for c in tool_calls
+                ],
             }
 
         enriched_payload = enrich_interrupt(
@@ -234,9 +273,16 @@ async def security_proxy_node(state: AgentState) -> AgentState:
                 "reason": _build_reason(sensitive_calls),
                 "sensitive_tool_calls": sensitive_calls,
                 "safe_tool_calls": safe_calls,
-                "risk_categories": sorted({str(c.get("risk_category", "sensitive_tool_execution")) for c in sensitive_calls}),
+                "risk_categories": sorted(
+                    {
+                        str(c.get("risk_category", "sensitive_tool_execution"))
+                        for c in sensitive_calls
+                    }
+                ),
                 "instruction": "Approve or deny this action.",
-                "tool_args": sensitive_calls[0].get("args", {}) if sensitive_calls else {},
+                "tool_args": sensitive_calls[0].get("args", {})
+                if sensitive_calls
+                else {},
             },
             state,
         )
@@ -245,8 +291,12 @@ async def security_proxy_node(state: AgentState) -> AgentState:
 
     if approved:
         approved_tools = [str(c.get("name", "unknown")) for c in tool_calls]
-        log_hitl_event("hitl_approved", decision="approved",
-                        tools=approved_tools, sensitive_count=len(sensitive_calls))
+        log_hitl_event(
+            "hitl_approved",
+            decision="approved",
+            tools=approved_tools,
+            sensitive_count=len(sensitive_calls),
+        )
         return {
             "execution_approved": True,
             "security_decision": "approved",
@@ -258,8 +308,12 @@ async def security_proxy_node(state: AgentState) -> AgentState:
     prior_denied = state.get("denied_tools") or []
     all_denied = prior_denied + denied_tool_names
 
-    log_hitl_event("hitl_denied", decision="denied",
-                    tools=denied_tool_names, total_denied=len(all_denied))
+    log_hitl_event(
+        "hitl_denied",
+        decision="denied",
+        tools=denied_tool_names,
+        total_denied=len(all_denied),
+    )
 
     denied_message = AIMessage(
         content=(
