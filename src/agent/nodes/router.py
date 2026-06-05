@@ -220,7 +220,8 @@ def parse_routing(content: str) -> tuple[str, float, list[str]]:
             if isinstance(toolbox, str):
                 toolbox = [toolbox]
             return decision, confidence, toolbox
-    except Exception:
+    except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         pass
     return "complex", 0.5, ["all"]
 
@@ -877,7 +878,8 @@ async def router_node(state: AgentState) -> AgentState:
                     refined = clarification["user_input"].strip()
                     try:
                         re_match = matcher.match_with_confidence(refined, top_k=5)
-                    except Exception:
+                    except Exception as e:
+                        import logging; logging.debug("Silent error suppressed: %s", e)
                         re_match = MatchResult(
                             is_ambiguous=True, candidate_skills=[], ambiguity_reason=""
                         )
@@ -1275,7 +1277,8 @@ def _parse_title_json(content: str) -> str:
         parsed = json.loads(match.group(0))
         title = str(parsed.get("title", "")).strip()
         return title
-    except Exception:
+    except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return ""
 
 

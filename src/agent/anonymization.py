@@ -18,6 +18,7 @@ _PATTERNS: list[tuple[str, re.Pattern]] = [
         re.compile(
             r"(?:Bearer\s+[A-Za-z0-9\-._~+/]+=*"
             r"|(?:sk|key|token|ghp|gho|glpat)-[A-Za-z0-9\-._]{20,}"
+            r"|AKIA[A-Z0-9]{16}"
             r"|[A-Za-z0-9]{32,}(?=\s|$|[\"'}),:]))"
         ),
     ),
@@ -25,14 +26,16 @@ _PATTERNS: list[tuple[str, re.Pattern]] = [
     ("EMAIL", re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")),
     # 3. Localhost URLs with ports
     ("URL", re.compile(r"https?://(?:localhost|127\.0\.0\.1):\d+")),
-    # 4. File system paths
-    ("PATH", re.compile(r"(?:/Users/\S+|/home/\S+|~/\S+|[A-Z]:\\\\?\S+)")),
-    # 5. IP addresses (exclude 0.0.0.0 and 255.255.255.255)
+    # 4. File system paths (exclude trailing punctuation like commas or quotes)
+    ("PATH", re.compile(r"(?:/(?:Users|home|etc|var|opt|tmp)/\S+|~/\S+|[A-Z]:\\\\?\S+)(?<![.,!?;'\"])")),
+    # 5. IP addresses (IPv4 and IPv6)
     (
         "IP",
         re.compile(
-            r"\b(?!0\.0\.0\.0\b)(?!255\.255\.255\.255\b)"
-            r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b"
+            r"\b(?:(?!0\.0\.0\.0\b)(?!255\.255\.255\.255\b)\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}"
+            r"|(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}"
+            r"|(?:[0-9a-fA-F]{1,4}:){1,7}:"
+            r"|:(?::[0-9a-fA-F]{1,4}){1,7})\b"
         ),
     ),
     # 6. Phone numbers (international formats)

@@ -1,5 +1,5 @@
 import { useAppStore, type ExecutionPolicy, type SafeModeLevel } from '../state/useAppStore'
-import { tauriBridge } from '../lib/tauriBridge'
+import { electronBridge as tauriBridge } from '../lib/electronBridge'
 
 const SAFE_MODES: SafeModeLevel[] = ['normal', 'safe_readonly', 'safe_confirmed_exec', 'safe_isolated']
 

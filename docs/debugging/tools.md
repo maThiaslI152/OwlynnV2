@@ -255,9 +255,7 @@ The `scope_clarify` node runs between `router` and `complex_llm` for vague build
 ### Procedure 3: Wrong Toolbox Selected
 
 1. Check `router_info` WS event for the route and task category:
-   - `complex-default` for general tasks
-   - `complex-vision` for image tasks
-   - `complex-longctx` for long context
+   - `complex-default` for general tasks, image tasks, and long context tasks
    - `complex-cloud` for cloud escalation
 
 2. The router selects toolbox categories based on task type:

@@ -1,0 +1,7 @@
+{
+  "change": "cloud-routing-upgrade",
+  "specs_path": "specs/active/cloud-routing-upgrade",
+  "docs_changelog": "docs/changes/cloud-routing-upgrade/CHANGELOG.md",
+  "cursor_plan_uri": null,
+  "updated_at": "2026-06-05T22:49:50+07:00"
+}

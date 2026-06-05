@@ -67,7 +67,8 @@ def read_workspace_file(filename: str) -> str:
                 return f"Error: File '{filename}' not found. Did you mean one of: {', '.join(sorted(matches)[:5])}?"
             else:
                 return f"Error: File '{filename}' not found."
-        except Exception:
+        except Exception as e:
+            import logging; logging.debug("Silent error suppressed: %s", e)
             return f"Error: File '{filename}' not found."
 
     processed_dir = os.path.join(BASE_WORKSPACE_DIR, ".processed")
@@ -120,6 +121,7 @@ def read_workspace_file(filename: str) -> str:
 
         return content
     except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return f"Error reading file {filename}: {e}"
 
 
@@ -135,6 +137,7 @@ def write_workspace_file(filename: str, content: str) -> str:
             f.write(content)
         return f"✅ Written to {filename}"
     except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return f"Error writing file: {e}"
 
 
@@ -167,6 +170,7 @@ def edit_workspace_file(
         suffix = f" ({count} occurrences found, replaced first)" if count > 1 else ""
         return f"✅ Updated {filename}{suffix}"
     except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return f"Error editing file: {e}"
 
 
@@ -192,6 +196,7 @@ def list_workspace_files(directory: str = ".") -> str:
                 lines.append(f"📄 {f} ({size:,} bytes)")
         return "\n".join(lines)
     except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return f"Error listing files: {e}"
 
 
@@ -207,6 +212,7 @@ def delete_workspace_file(filename: str) -> str:
         os.remove(filepath)
         return f"✅ Deleted {filename}"
     except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return f"Error deleting file: {e}"
 
 
@@ -240,7 +246,8 @@ def recall_all_memories(query: str = "", project_id: str = "") -> str:
     """
     try:
         from ..memory.long_term import memory as mem0_memory
-    except Exception:
+    except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return "Error: Mem0 memory not available."
 
     if mem0_memory is None:
@@ -276,6 +283,7 @@ def recall_all_memories(query: str = "", project_id: str = "") -> str:
                 lines.append(f"  [{memory_id}] {memory_text}")
         return "\n".join(lines)
     except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return f"Error searching vector memory: {e}"
 
 
@@ -292,7 +300,8 @@ def forget_memory(memory_hashes: str) -> str:
     """
     try:
         from ..memory.long_term import memory as mem0_memory
-    except Exception:
+    except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return "Error: Mem0 memory not available."
 
     if mem0_memory is None:
@@ -309,6 +318,7 @@ def forget_memory(memory_hashes: str) -> str:
             mem0_memory.delete(memory_id=memory_id)
             deleted += 1
         except Exception as e:
+            import logging; logging.debug("Silent error suppressed: %s", e)
             errors.append(f"{memory_id}: {e}")
 
     result = f"Deleted {deleted}/{len(ids)} memories."

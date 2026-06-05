@@ -90,7 +90,8 @@ def _stringify_tool_input(value) -> str | None:
         return value
     try:
         return json.dumps(value, ensure_ascii=False)
-    except Exception:
+    except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return str(value)
 
 
@@ -207,6 +208,7 @@ class GraphSession:
                 q.put_nowait((err_msg, correlation_id))
             raise
         except Exception as e:
+            import logging; logging.debug("Silent error suppressed: %s", e)
             import traceback
 
             traceback.print_exc()
@@ -778,7 +780,8 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                     title = await generate_chat_title_router_llm(
                         user_input[:1000], file_names=file_names
                     )
-                except Exception:
+                except Exception as e:
+                    import logging; logging.debug("Silent error suppressed: %s", e)
                     title = ""
                 # Register chat in project manager (idempotent — dedups by chat_id)
                 import time as time_module

@@ -1,5 +1,475 @@
 {
-  "generated_at": "2026-06-05T15:17:18",
-  "total_entries": 0,
-  "entries": []
+  "generated_at": "2026-06-05T23:40:48",
+  "total_entries": 34,
+  "entries": [
+    {
+      "name": "memory_inject_cache_hit",
+      "category": "memory",
+      "warmup_iters": 0,
+      "measured_iters": 50,
+      "concurrency": 1,
+      "p50_ms": 0.02,
+      "p95_ms": 0.03,
+      "p99_ms": 0.11,
+      "mean_ms": 0.03,
+      "throughput_ops_per_sec": 38122.02,
+      "metadata": {
+        "cache_hit": true
+      }
+    },
+    {
+      "name": "memory_inject_cold_cache",
+      "category": "memory",
+      "warmup_iters": 2,
+      "measured_iters": 50,
+      "concurrency": 1,
+      "p50_ms": 0.18,
+      "p95_ms": 0.32,
+      "p99_ms": 0.42,
+      "mean_ms": 0.19,
+      "throughput_ops_per_sec": 5321.96,
+      "metadata": {
+        "cache_hit": false
+      }
+    },
+    {
+      "name": "memory_write_baseline",
+      "category": "memory",
+      "warmup_iters": 2,
+      "measured_iters": 50,
+      "concurrency": 1,
+      "p50_ms": 0.13,
+      "p95_ms": 0.19,
+      "p99_ms": 0.53,
+      "mean_ms": 0.15,
+      "throughput_ops_per_sec": 6616.93,
+      "metadata": {}
+    },
+    {
+      "name": "memory_write_gate_skip",
+      "category": "memory",
+      "warmup_iters": 0,
+      "measured_iters": 50,
+      "concurrency": 1,
+      "p50_ms": 0.01,
+      "p95_ms": 0.02,
+      "p99_ms": 0.04,
+      "mean_ms": 0.01,
+      "throughput_ops_per_sec": 70917.36,
+      "metadata": {
+        "gate_rejected": true
+      }
+    },
+    {
+      "name": "pool_get_medium_c1",
+      "category": "pool",
+      "warmup_iters": 0,
+      "measured_iters": 5,
+      "concurrency": 1,
+      "p50_ms": 0.0,
+      "p95_ms": 0.0,
+      "p99_ms": 0.0,
+      "mean_ms": 0.0,
+      "throughput_ops_per_sec": 1364261.26,
+      "metadata": {}
+    },
+    {
+      "name": "pool_get_medium_c2",
+      "category": "pool",
+      "warmup_iters": 0,
+      "measured_iters": 10,
+      "concurrency": 2,
+      "p50_ms": 0.0,
+      "p95_ms": 0.0,
+      "p99_ms": 0.0,
+      "mean_ms": 0.0,
+      "throughput_ops_per_sec": 2161696.8,
+      "metadata": {}
+    },
+    {
+      "name": "pool_get_medium_c4",
+      "category": "pool",
+      "warmup_iters": 0,
+      "measured_iters": 20,
+      "concurrency": 4,
+      "p50_ms": 0.0,
+      "p95_ms": 0.0,
+      "p99_ms": 0.0,
+      "mean_ms": 0.0,
+      "throughput_ops_per_sec": 2297265.35,
+      "metadata": {}
+    },
+    {
+      "name": "pool_get_medium_c8",
+      "category": "pool",
+      "warmup_iters": 0,
+      "measured_iters": 40,
+      "concurrency": 8,
+      "p50_ms": 0.0,
+      "p95_ms": 0.0,
+      "p99_ms": 0.0,
+      "mean_ms": 0.0,
+      "throughput_ops_per_sec": 2608925.03,
+      "metadata": {}
+    },
+    {
+      "name": "pool_get_small_c1",
+      "category": "pool",
+      "warmup_iters": 0,
+      "measured_iters": 5,
+      "concurrency": 1,
+      "p50_ms": 0.0,
+      "p95_ms": 0.0,
+      "p99_ms": 0.0,
+      "mean_ms": 0.0,
+      "throughput_ops_per_sec": 705915.65,
+      "metadata": {}
+    },
+    {
+      "name": "pool_get_small_c2",
+      "category": "pool",
+      "warmup_iters": 0,
+      "measured_iters": 10,
+      "concurrency": 2,
+      "p50_ms": 0.0,
+      "p95_ms": 0.0,
+      "p99_ms": 0.0,
+      "mean_ms": 0.0,
+      "throughput_ops_per_sec": 1043728.12,
+      "metadata": {}
+    },
+    {
+      "name": "pool_get_small_c4",
+      "category": "pool",
+      "warmup_iters": 0,
+      "measured_iters": 20,
+      "concurrency": 4,
+      "p50_ms": 0.0,
+      "p95_ms": 0.0,
+      "p99_ms": 0.0,
+      "mean_ms": 0.0,
+      "throughput_ops_per_sec": 1111113.43,
+      "metadata": {}
+    },
+    {
+      "name": "pool_get_small_c8",
+      "category": "pool",
+      "warmup_iters": 0,
+      "measured_iters": 40,
+      "concurrency": 8,
+      "p50_ms": 0.0,
+      "p95_ms": 0.0,
+      "p99_ms": 0.0,
+      "mean_ms": 0.0,
+      "throughput_ops_per_sec": 1175156.95,
+      "metadata": {}
+    },
+    {
+      "name": "pool_medium_warm_same_variant",
+      "category": "pool",
+      "warmup_iters": 0,
+      "measured_iters": 50,
+      "concurrency": 1,
+      "p50_ms": 0.0,
+      "p95_ms": 0.0,
+      "p99_ms": 0.0,
+      "mean_ms": 0.0,
+      "throughput_ops_per_sec": 3342224.44,
+      "metadata": {}
+    },
+    {
+      "name": "pool_small_cold_vs_warm",
+      "category": "pool",
+      "warmup_iters": 0,
+      "measured_iters": 50,
+      "concurrency": 1,
+      "p50_ms": 0.0,
+      "p95_ms": 0.0,
+      "p99_ms": 0.0,
+      "mean_ms": 0.0,
+      "throughput_ops_per_sec": 1461774.41,
+      "metadata": {
+        "cold_ms": 0.0,
+        "warm_p50_ms": 0.0
+      }
+    },
+    {
+      "name": "router_batch_throughput",
+      "category": "router",
+      "warmup_iters": 2,
+      "measured_iters": 50,
+      "concurrency": 1,
+      "p50_ms": 16.98,
+      "p95_ms": 18.68,
+      "p99_ms": 19.19,
+      "mean_ms": 10.94,
+      "throughput_ops_per_sec": 91.37,
+      "metadata": {}
+    },
+    {
+      "name": "router_concurrency",
+      "category": "router",
+      "warmup_iters": 0,
+      "measured_iters": 10,
+      "concurrency": 1,
+      "p50_ms": 16.79,
+      "p95_ms": 18.29,
+      "p99_ms": 18.29,
+      "mean_ms": 10.72,
+      "throughput_ops_per_sec": 93.27,
+      "metadata": {}
+    },
+    {
+      "name": "router_concurrency",
+      "category": "router",
+      "warmup_iters": 0,
+      "measured_iters": 10,
+      "concurrency": 2,
+      "p50_ms": 16.85,
+      "p95_ms": 17.35,
+      "p99_ms": 17.35,
+      "mean_ms": 10.32,
+      "throughput_ops_per_sec": 96.91,
+      "metadata": {}
+    },
+    {
+      "name": "router_concurrency",
+      "category": "router",
+      "warmup_iters": 0,
+      "measured_iters": 12,
+      "concurrency": 4,
+      "p50_ms": 16.44,
+      "p95_ms": 18.64,
+      "p99_ms": 18.64,
+      "mean_ms": 9.94,
+      "throughput_ops_per_sec": 100.6,
+      "metadata": {}
+    },
+    {
+      "name": "router_concurrency",
+      "category": "router",
+      "warmup_iters": 0,
+      "measured_iters": 24,
+      "concurrency": 8,
+      "p50_ms": 15.94,
+      "p95_ms": 19.31,
+      "p99_ms": 19.4,
+      "mean_ms": 10.79,
+      "throughput_ops_per_sec": 92.69,
+      "metadata": {}
+    },
+    {
+      "name": "router_node (len=163)",
+      "category": "router",
+      "warmup_iters": 2,
+      "measured_iters": 50,
+      "concurrency": 1,
+      "p50_ms": 18.23,
+      "p95_ms": 19.55,
+      "p99_ms": 20.08,
+      "mean_ms": 18.03,
+      "throughput_ops_per_sec": 55.47,
+      "metadata": {
+        "input_len": 163
+      }
+    },
+    {
+      "name": "router_node (len=25)",
+      "category": "router",
+      "warmup_iters": 2,
+      "measured_iters": 50,
+      "concurrency": 1,
+      "p50_ms": 18.18,
+      "p95_ms": 19.49,
+      "p99_ms": 19.98,
+      "mean_ms": 18.09,
+      "throughput_ops_per_sec": 55.27,
+      "metadata": {
+        "input_len": 25
+      }
+    },
+    {
+      "name": "router_node (len=5)",
+      "category": "router",
+      "warmup_iters": 2,
+      "measured_iters": 50,
+      "concurrency": 1,
+      "p50_ms": 0.26,
+      "p95_ms": 0.34,
+      "p99_ms": 0.53,
+      "mean_ms": 0.28,
+      "throughput_ops_per_sec": 3586.96,
+      "metadata": {
+        "input_len": 5
+      }
+    },
+    {
+      "name": "simple_batch_throughput",
+      "category": "simple",
+      "warmup_iters": 2,
+      "measured_iters": 50,
+      "concurrency": 1,
+      "p50_ms": 16.32,
+      "p95_ms": 16.65,
+      "p99_ms": 16.74,
+      "mean_ms": 16.23,
+      "throughput_ops_per_sec": 61.62,
+      "metadata": {}
+    },
+    {
+      "name": "simple_concurrency",
+      "category": "simple",
+      "warmup_iters": 0,
+      "measured_iters": 5,
+      "concurrency": 1,
+      "p50_ms": 11.56,
+      "p95_ms": 11.59,
+      "p99_ms": 11.59,
+      "mean_ms": 11.39,
+      "throughput_ops_per_sec": 87.77,
+      "metadata": {}
+    },
+    {
+      "name": "simple_concurrency",
+      "category": "simple",
+      "warmup_iters": 0,
+      "measured_iters": 5,
+      "concurrency": 2,
+      "p50_ms": 11.11,
+      "p95_ms": 11.57,
+      "p99_ms": 11.57,
+      "mean_ms": 11.17,
+      "throughput_ops_per_sec": 89.52,
+      "metadata": {}
+    },
+    {
+      "name": "simple_concurrency",
+      "category": "simple",
+      "warmup_iters": 0,
+      "measured_iters": 10,
+      "concurrency": 4,
+      "p50_ms": 11.31,
+      "p95_ms": 11.52,
+      "p99_ms": 11.52,
+      "mean_ms": 11.24,
+      "throughput_ops_per_sec": 88.98,
+      "metadata": {}
+    },
+    {
+      "name": "simple_concurrency",
+      "category": "simple",
+      "warmup_iters": 0,
+      "measured_iters": 20,
+      "concurrency": 8,
+      "p50_ms": 10.94,
+      "p95_ms": 11.36,
+      "p99_ms": 11.36,
+      "mean_ms": 10.88,
+      "throughput_ops_per_sec": 91.88,
+      "metadata": {}
+    },
+    {
+      "name": "simple_fallback_latency",
+      "category": "simple",
+      "warmup_iters": 2,
+      "measured_iters": 50,
+      "concurrency": 1,
+      "p50_ms": 81.68,
+      "p95_ms": 82.16,
+      "p99_ms": 82.7,
+      "mean_ms": 81.59,
+      "throughput_ops_per_sec": 12.26,
+      "metadata": {
+        "fallback_triggered": true
+      }
+    },
+    {
+      "name": "simple_node_long",
+      "category": "simple",
+      "warmup_iters": 2,
+      "measured_iters": 50,
+      "concurrency": 1,
+      "p50_ms": 16.53,
+      "p95_ms": 16.7,
+      "p99_ms": 16.76,
+      "mean_ms": 16.39,
+      "throughput_ops_per_sec": 61.03,
+      "metadata": {
+        "input_len": 113
+      }
+    },
+    {
+      "name": "simple_node_medium",
+      "category": "simple",
+      "warmup_iters": 2,
+      "measured_iters": 50,
+      "concurrency": 1,
+      "p50_ms": 16.54,
+      "p95_ms": 16.66,
+      "p99_ms": 16.74,
+      "mean_ms": 16.41,
+      "throughput_ops_per_sec": 60.93,
+      "metadata": {
+        "input_len": 32
+      }
+    },
+    {
+      "name": "simple_node_short",
+      "category": "simple",
+      "warmup_iters": 2,
+      "measured_iters": 50,
+      "concurrency": 1,
+      "p50_ms": 16.34,
+      "p95_ms": 16.64,
+      "p99_ms": 16.64,
+      "mean_ms": 16.29,
+      "throughput_ops_per_sec": 61.4,
+      "metadata": {
+        "input_len": 5
+      }
+    },
+    {
+      "name": "skill_matcher_latency",
+      "category": "router",
+      "warmup_iters": 0,
+      "measured_iters": 50,
+      "concurrency": 1,
+      "p50_ms": 0.04,
+      "p95_ms": 0.06,
+      "p99_ms": 3.15,
+      "mean_ms": 0.11,
+      "throughput_ops_per_sec": 9325.6,
+      "metadata": {}
+    },
+    {
+      "name": "swap_manager_mock_roundtrip",
+      "category": "pool",
+      "warmup_iters": 0,
+      "measured_iters": 50,
+      "concurrency": 1,
+      "p50_ms": 602.9,
+      "p95_ms": 603.39,
+      "p99_ms": 603.43,
+      "mean_ms": 602.88,
+      "throughput_ops_per_sec": 1.66,
+      "metadata": {
+        "simulated_unload_ms": 50,
+        "simulated_load_ms": 50,
+        "simulated_poll_ms": 500
+      }
+    },
+    {
+      "name": "tool_action_noop",
+      "category": "complex",
+      "warmup_iters": 2,
+      "measured_iters": 50,
+      "concurrency": 1,
+      "p50_ms": 0.01,
+      "p95_ms": 0.01,
+      "p99_ms": 0.06,
+      "mean_ms": 0.01,
+      "throughput_ops_per_sec": 79888.04,
+      "metadata": {}
+    }
+  ]
 }

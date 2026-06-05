@@ -17,8 +17,7 @@ from typing import Optional, TYPE_CHECKING
 
 from langchain_openai import ChatOpenAI
 
-if TYPE_CHECKING:
-    from src.agent.swap_manager import SwapManager
+
 
 from src.config.config_loader import get_model_config
 from src.config.settings import DEEPSEEK_API_KEY, M4_MAC_OPTIMIZATION
@@ -39,8 +38,7 @@ class LLMPool:
     _small_llm: Optional[ChatOpenAI] = None
     _medium_llm: Optional[ChatOpenAI] = None
     _cloud_llm: Optional[ChatOpenAI] = None
-    _current_medium_variant: Optional[str] = None
-    _swap_manager: Optional["SwapManager"] = None  # noqa: F821 — forward ref
+
     _lock = asyncio.Lock()
 
     # Test override injection (bypasses LM Studio in tests)
@@ -90,7 +88,8 @@ class LLMPool:
                             slot="small",
                             model=model_cfg.get("model_name"),
                         )
-            except Exception:
+            except Exception as e:
+                import logging; logging.debug("Silent error suppressed: %s", e)
                 model_cfg = get_model_config("small")
                 extra_body = dict(model_cfg.get("extra_body") or {})
                 extra_body["max_output_tokens"] = model_cfg.get(
@@ -117,47 +116,26 @@ class LLMPool:
             audit_debug("agent.model", "pool_cache_hit", slot="small")
         return cls._small_llm
 
-    # ── medium (swappable local slot) ────────────────────────────────────
+    # ── medium (local default) ──────────────────────────────────────────
 
     @classmethod
     async def get_medium_llm(cls, variant: str = "default") -> ChatOpenAI:
-        """Get or create cached medium LLM instance, swapping if needed.
-
-        Parameters
-        ----------
-        variant:
-            ``"default"`` | ``"vision"`` | ``"longctx"``
-
-        Returns
-        -------
-        ChatOpenAI
-            A LangChain client pointing at the now-loaded LM Studio model.
+        """Get or create cached medium LLM instance.
+        Variants are ignored since complex-default natively handles all tasks.
         """
-        if variant in cls._test_overrides:
-            return cls._test_overrides[variant]
         if "medium" in cls._test_overrides:
             return cls._test_overrides["medium"]
-        if cls._current_medium_variant == variant and cls._medium_llm is not None:
-            audit_debug("agent.model", "pool_cache_hit", slot="medium", variant=variant)
+        if cls._medium_llm is not None:
+            audit_debug("agent.model", "pool_cache_hit", slot="medium")
             return cls._medium_llm
 
         async with cls._lock:
             # Double-check after acquiring lock
-            if cls._current_medium_variant == variant and cls._medium_llm is not None:
-                audit_debug(
-                    "agent.model", "pool_cache_hit", slot="medium", variant=variant
-                )
+            if cls._medium_llm is not None:
+                audit_debug("agent.model", "pool_cache_hit", slot="medium")
                 return cls._medium_llm
 
-            # Lazy-init swap manager
-            if cls._swap_manager is None:
-                from src.agent.swap_manager import SwapManager
-
-                cls._swap_manager = SwapManager()
-
-            await cls._swap_manager.swap_model(variant)
-
-            model_cfg = get_model_config("medium", variant)
+            model_cfg = get_model_config("medium", "default")
 
             extra_body = dict(model_cfg.get("extra_body") or {})
             extra_body["max_output_tokens"] = model_cfg.get("max_output_tokens", 4096)
@@ -174,12 +152,10 @@ class LLMPool:
                 request_timeout=model_cfg.get("request_timeout")
                 or model_cfg.get("timeout", 120),
             )
-            cls._current_medium_variant = variant
             audit_info(
                 "agent.model",
                 "pool_instance_created",
                 slot="medium",
-                variant=variant,
                 model=model_cfg.get("model_name"),
             )
 
@@ -230,14 +206,18 @@ class LLMPool:
                 or M4_MAC_OPTIMIZATION.get("medium_model", {}).get("cloud_timeout", 180)
             )
 
+            # Resolve extra_body (Thinking Mode, Effort, etc)
+            extra_body = dict(model_cfg.get("extra_body") or {})
+
             cls._cloud_llm = ChatOpenAI(
-                model=model_cfg.get("model_name", "deepseek-v4"),
+                model=model_cfg.get("model_name", "deepseek-v4-flash"),
                 api_key=api_key,
                 base_url=model_cfg.get("base_url", "https://api.deepseek.com/v1"),
                 streaming=True,
                 max_tokens=model_cfg.get("max_tokens"),
                 temperature=model_cfg.get("temperature", 0.4),
                 request_timeout=timeout,
+                extra_body=extra_body,
             )
             audit_info(
                 "agent.model",
@@ -263,7 +243,6 @@ class LLMPool:
         cls._small_llm = None
         cls._medium_llm = None
         cls._cloud_llm = None
-        cls._current_medium_variant = None
         cls._test_overrides = {}
 
     # ── private ──────────────────────────────────────────────────────────

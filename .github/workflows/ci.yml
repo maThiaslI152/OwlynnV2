@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  python-checks:
+    name: Python Lint & Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Lint with Ruff
+        run: |
+          python -m ruff check .
+          python -m ruff format --check .
+
+      - name: Type Check with Mypy
+        run: python -m mypy src/
+
+      - name: Run Pytest
+        run: python -m pytest -n auto -q -m "not network and not benchmark" --tb=short --cov=src --cov-report=xml
+
+  frontend-checks:
+    name: Frontend Lint & Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend-v2/package-lock.json
+
+      - name: Install Frontend Dependencies
+        working-directory: frontend-v2
+        run: npm ci
+
+      - name: Lint Frontend
+        working-directory: frontend-v2
+        run: npm run lint
+
+      - name: Test Frontend
+        working-directory: frontend-v2
+        run: npx vitest run
+
+  electron-build:
+    name: Electron Build Check (macOS)
+    runs-on: macos-latest
+    needs: frontend-checks
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend-v2/package-lock.json
+
+      - name: Install Frontend Dependencies
+        working-directory: frontend-v2
+        run: npm ci
+
+      - name: Build Electron App
+        working-directory: frontend-v2
+        run: npm run build

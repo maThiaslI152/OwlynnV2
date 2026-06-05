@@ -154,8 +154,8 @@ describe('SafeModePanel', () => {
   })
 
   it('sets operator note on tauri bridge failure', async () => {
-    vi.mock('../../lib/tauriBridge', () => ({
-      tauriBridge: {
+    vi.mock('../../lib/electronBridge', () => ({
+      electronBridge: {
         setSafeMode: vi.fn().mockResolvedValue({ ok: false, error: 'Bridge not available' }),
       },
     }))

@@ -778,7 +778,8 @@ class FileWatcherHandler(FileSystemEventHandler):
                             if text.strip():
                                 lines.append(f"\n## {name}\n")
                                 lines.append(text)
-                        except Exception:
+                        except Exception as e:
+                            import logging; logging.debug("Silent error suppressed: %s", e)
                             continue
             with open(output_path, "w", encoding="utf-8") as f:
                 f.write("\n".join(lines))

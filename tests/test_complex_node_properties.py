@@ -254,70 +254,8 @@ class TestModelProvenanceMatchesRoute:
         assert result["model_used"] == "medium-default"
 
     @pytest.mark.asyncio
-    async def test_vision_route_produces_medium_vision(self):
-        """complex-vision route must set model_used to medium-vision."""
-        state = _make_state("complex-vision")
-        mock_llm = _make_mock_llm()
-        profile = _mock_profile()
-
-        with (
-            patch(
-                "src.agent.nodes.complex.get_medium_llm",
-                new_callable=AsyncMock,
-                return_value=mock_llm,
-            ),
-            patch(
-                "src.agent.nodes.complex.get_cloud_llm",
-                new_callable=AsyncMock,
-                return_value=mock_llm,
-            ),
-            patch("src.agent.nodes.complex.get_profile", return_value=profile),
-        ):
-            from src.agent.nodes.complex import complex_llm_node
-
-            result = await complex_llm_node(state)
-
-        assert result["model_used"] == "medium-vision"
-
-    @pytest.mark.asyncio
-    async def test_longctx_route_produces_medium_longctx(self):
-        """complex-longctx route must set model_used to medium-longctx."""
-        state = _make_state("complex-longctx")
-        mock_llm = _make_mock_llm()
-        profile = _mock_profile()
-
-        with (
-            patch(
-                "src.agent.nodes.complex.get_medium_llm",
-                new_callable=AsyncMock,
-                return_value=mock_llm,
-            ),
-            patch(
-                "src.agent.nodes.complex.get_cloud_llm",
-                new_callable=AsyncMock,
-                return_value=mock_llm,
-            ),
-            patch("src.agent.nodes.complex.get_profile", return_value=profile),
-        ):
-            from src.agent.nodes.complex import complex_llm_node
-
-            result = await complex_llm_node(state)
-
-        assert result["model_used"] == "medium-longctx"
-
-    @given(route=route_st)
-    @settings(max_examples=100, deadline=10000)
-    @pytest.mark.asyncio
-    async def test_fallback_label_has_suffix_on_swap_error(self, route: str):
-        """When ModelSwapError occurs, model_used must contain '-fallback' suffix."""
-        from src.agent.swap_manager import ModelSwapError
-
-        state = _make_state(route)
-        mock_llm = _make_mock_llm()
-        profile = _mock_profile()
-
-        # First call raises, second (fallback) succeeds
-        async def _medium_side_effect(variant="default"):
+    async
+ def _medium_side_effect(variant="default"):
             if variant != "default":
                 raise ModelSwapError(f"Cannot swap to {variant}")
             return mock_llm

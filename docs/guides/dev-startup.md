@@ -7,7 +7,7 @@ owner: ai-agent
 
 # Dev Startup Guide — Getting Owlynn Running
 
-> **Purpose:** Authoritative startup reference for any developer or LLM agent picking up this project. Covers every prerequisite and step needed to go from `git clone` to a running app at `http://127.0.0.1:5173`.
+> **Purpose:** Authoritative startup reference for any developer or LLM agent picking up this project. Covers every prerequisite and step needed to go from `git clone` to a running app at `http://127.0.0.1:5173`. Safe Mode and Screen Assist require Electron IPC — unavailable in raw browser mode.
 
 This is the first document an LLM agent should read when asked "how do I start this app?" — it supersedes codebase scanning. Start here, then follow the numbered steps.
 
@@ -173,7 +173,7 @@ npm install
 npx tsc --noEmit
 ```
 
-The frontend is a React 19 + Vite app. **Browser-only dev mode** uses Vite's dev server on port `5173`. This is the current and only active development path.
+The frontend is a React 19 + Vite app. Running `npm run dev` uses Vite's dev server to launch the Electron Desktop app directly.
 
 ## Step 6: Launch Everything
 
@@ -208,6 +208,12 @@ python3 src/cli.py stream "Hello, what can you do?"
 ```
 
 ## Troubleshooting
+
+| Mode | Backend | Frontend | Electron | Best For |
+|------|---------|----------|----------|----------|
+| `./start.sh` | Yes | Vite HMR | No | Daily browser use |
+| Browser (manual) | Yes | Vite HMR | No | Dev, hot reload |
+| CLI | Yes | No | No | Scripting, API testing |
 
 | Symptom | Most Likely Cause | Fix |
 |---------|------------------|-----|
@@ -245,18 +251,18 @@ Browser (http://127.0.0.1:5173)
         └─► LangGraph checkpointing / session persistence
 ```
 
-## Tauri Desktop App (Paused)
+## Electron Desktop App
 
-> **Status: Paused as of 2026-06.** Tauri desktop app development is on hold. Browser-only development at `http://127.0.0.1:5173` is the current and only active mode.
->
-> Tauri code remains in `src-tauri/` and `frontend-v2/node_modules/@tauri-apps/` — it is intentionally kept intact for future resumption. To resume Tauri development:
->
-> ```bash
-> cd frontend-v2 && npm run build
-> cd /Users/tim/Works/OwlynnV2 && ./frontend-v2/node_modules/.bin/tauri dev
-> ```
->
-> See `.cursor/rules/run-user-test.mdc` for the browser-only agent launch skill.
+The application is distributed natively via Electron.
+During development, simply running `npm run dev` inside `frontend-v2` will launch the app in an Electron window with HMR.
+
+To build the macOS `.app` and `.dmg`:
+
+```bash
+cd frontend-v2 && npm run build
+```
+
+The output will be placed in `frontend-v2/dist/`.
 
 ## Related
 

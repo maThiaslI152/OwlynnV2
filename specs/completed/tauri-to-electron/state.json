@@ -1,0 +1,13 @@
+{
+  "change": "tauri-to-electron",
+  "phase": "implement",
+  "pending_review": "implement",
+  "updated_at": "2026-06-05T14:04:00Z",
+  "approvals": {
+    "requirements": true,
+    "design": true,
+    "tasks": true,
+    "implement": true,
+    "verify": true
+  }
+}

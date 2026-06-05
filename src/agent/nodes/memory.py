@@ -62,7 +62,8 @@ def _get_mem0_user_id(state: dict) -> str:
         name = (profile.get("name") or "").strip()
         if name and name.lower() != "user":
             return name
-    except Exception:
+    except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         pass
     return "owner"
 
@@ -213,7 +214,8 @@ async def memory_inject_node(state: AgentState) -> AgentState:
                     n = (p.get("name") or "").strip()
                     if n and n.lower() != "user":
                         global_uid = n
-                except Exception:
+                except Exception as e:
+                    import logging; logging.debug("Silent error suppressed: %s", e)
                     pass
                 global_dict = await asyncio.to_thread(
                     lambda: memory.search(
@@ -435,7 +437,8 @@ async def _is_semantically_similar(memory, new_text: str, user_id: str) -> bool:
                 # If the new text is a substring of existing or vice versa, skip
                 if existing and (existing in new_lower or new_lower in existing):
                     return True
-    except Exception:
+    except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         pass
     return False
 

@@ -3,7 +3,15 @@
 # Launches: containers → LM Studio (wait for user) → backend + frontend
 set -o pipefail
 cd "$(dirname "$0")"
-
+# Parse arguments
+DEBUG_MODE=0
+for arg in "$@"; do
+    if [ "$arg" == "--debug" ] || [ "$arg" == "-d" ]; then
+        DEBUG_MODE=1
+        export OWLYNN_DEBUG=1
+        export OWLYNN_AUDIT_LOG_ENABLED=1
+    fi
+done
 # Track background PIDs for Ctrl+C cleanup
 _PIDS=()
 _cleanup() {
@@ -82,9 +90,14 @@ lsof -ti:5173 2>/dev/null | xargs kill -9 2>/dev/null
 sleep 1
 
 # Start backend
-.venv/bin/python -m uvicorn src.api.server:app \
-    --host 127.0.0.1 --port 8000 \
-    --no-access-log &
+if [ "$DEBUG_MODE" == "1" ]; then
+    .venv/bin/python -m uvicorn src.api.server:app \
+        --host 127.0.0.1 --port 8000 &
+else
+    .venv/bin/python -m uvicorn src.api.server:app \
+        --host 127.0.0.1 --port 8000 \
+        --no-access-log &
+fi
 _PIDS+=("$!")
 for _ in $(seq 1 30); do
     curl -sf http://127.0.0.1:8000/api/health 2>/dev/null | grep -q ready && break

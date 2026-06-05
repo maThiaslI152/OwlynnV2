@@ -1,3 +1,4 @@
+import time
 """
 Benchmark: Memory node overhead — memory_inject and memory_write latency.
 
@@ -285,9 +286,9 @@ class TestContextFormatting:
 
         tracker = LatencyTracker()
         for _ in range(max(20, BENCH_ITERATIONS)):
-            start = asyncio.get_event_loop().time()
+            start = time.perf_counter()
             _ = format_memory_context(results, profile, enhanced)
-            elapsed = asyncio.get_event_loop().time() - start
+            elapsed = time.perf_counter() - start
             tracker.record(elapsed)
 
         entry = BenchmarkEntry(

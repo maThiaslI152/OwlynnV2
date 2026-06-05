@@ -15,7 +15,7 @@ import { ToolActivityCard } from './ToolActivityCard'
 import type { InterruptChoice } from '../state/useAppStore'
 import type { ConversationItem, ConversationToolActivity, ConversationHitlPrompt } from '../appEventHandlers'
 import { useAppStore } from '../state/useAppStore'
-import { tauriBridge } from '../lib/tauriBridge'
+import { electronBridge as tauriBridge } from '../lib/electronBridge'
 import type { ChatMessage } from '../types/protocol'
 
 interface ProjectChat {

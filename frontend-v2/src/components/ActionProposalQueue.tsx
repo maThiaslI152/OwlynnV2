@@ -1,4 +1,4 @@
-import { tauriBridge as defaultBridge } from '../lib/tauriBridge'
+import { electronBridge as defaultBridge } from '../lib/electronBridge'
 import { useAppStore } from '../state/useAppStore'
 import type { InterruptChoice } from '../state/useAppStore'
 

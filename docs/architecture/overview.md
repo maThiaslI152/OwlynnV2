@@ -41,11 +41,10 @@ Browser (http://127.0.0.1:5173)
 | **Memory** | `src/agent/nodes/memory.py` | Memory injection + write: STM, LTM (Mem0/Qdrant), personal context |
 | **Summarizer** | `src/agent/nodes/summarize.py` | Auto-compress older turns when context >85% of window |
 | **HITL** | `src/agent/hitl/` | Safety gates: scope_clarify, plan_review, security_proxy |
-| **LLM Pool** | `src/agent/llm.py` | Singleton pool: small + medium (swappable) + cloud instances |
-| **Swap Manager** | `src/agent/swap_manager.py` | LM Studio model hot-swap for medium variants |
+| **LLM Pool** | `src/agent/llm.py` | Singleton pool: small + medium + cloud instances |
 | **Tools** | `src/tools/` | Web search, file ops, notebook, skills, MCP |
 | **API** | `src/api/server.py` | FastAPI with REST + WebSocket + OpenAI-compatible endpoints |
-| **Frontend** | `frontend-v2/` | React 19 + Vite + Zustand + Playwright evals |
+| **Frontend** | `frontend-v2/` | React 19 + Vite + Zustand + Electron main process |
 
 ## Agent Flow
 

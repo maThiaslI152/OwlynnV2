@@ -17,8 +17,6 @@ VALID_ROUTES = frozenset(
     {
         "simple",
         "complex-default",
-        "complex-vision",
-        "complex-longctx",
         "complex-cloud",
     }
 )

@@ -1,3 +1,4 @@
+import time
 """
 Benchmark: Complex node per-route latency, fallback chain coverage,
 context trimming efficiency, post-processing overhead, tool action throughput,
@@ -54,8 +55,8 @@ class TestComplexPerRouteLatency:
         "route,model_delay",
         [
             ("complex-default", 80),
-            ("complex-vision", 120),
-            ("complex-longctx", 150),
+            ("complex-cloud", 120),
+            ("complex-cloud", 150),
             ("complex-cloud", 300),
         ],
     )
@@ -167,51 +168,6 @@ class TestFallbackChainCoverage:
         )
         record_entry(entry)
 
-    @pytest.mark.asyncio
-    async def test_medium_fallback_on_swap_error(self):
-        """Vision/longctx routes fall back to default on ModelSwapError."""
-        from src.agent.swap_manager import ModelSwapError
-        from src.agent.nodes.complex import complex_llm_node
-
-        mock_medium_default = make_mock_llm(delay_ms=50, content="Fallback response")
-
-        async def _medium_side_effect(variant="default"):
-            if variant != "default":
-                raise ModelSwapError(f"Cannot swap to {variant}")
-            return mock_medium_default
-
-        setup_benchmark_llms(medium=mock_medium_default)
-        profile = ProfileBuilder().build()
-
-        state = make_complex_state(route="complex-vision")
-
-        with (
-            patch(
-                "src.agent.nodes.complex.get_medium_llm",
-                side_effect=_medium_side_effect,
-            ),
-            patch(
-                "src.agent.nodes.complex.get_cloud_llm",
-                new_callable=AsyncMock,
-                return_value=mock_medium_default,
-            ),
-            patch("src.agent.nodes.complex.get_profile", return_value=profile),
-        ):
-            tracker = LatencyTracker()
-            for _ in range(BENCH_ITERATIONS):
-                elapsed, result = await time_async_call(complex_llm_node, state)
-                tracker.record(elapsed)
-                assert "fallback" in result["model_used"]
-
-        entry = BenchmarkEntry(
-            name="fallback_model_swap_error",
-            category="complex",
-            warmup_iters=0,
-            measured_iters=BENCH_ITERATIONS,
-            samples_ms=[s * 1000 for s in tracker.samples],
-            metadata={"fallback_type": "ModelSwapError"},
-        )
-        record_entry(entry)
 
     @pytest.mark.asyncio
     async def test_medium_default_graceful_error(self):
@@ -370,9 +326,9 @@ class TestPostProcessingOverhead:
 
         tracker = LatencyTracker()
         for _ in range(BENCH_ITERATIONS * 2):
-            start = asyncio.get_event_loop().time()
+            start = time.perf_counter()
             result, mapping = anonymize(text, context)
-            elapsed = asyncio.get_event_loop().time() - start
+            elapsed = time.perf_counter() - start
             tracker.record(elapsed)
 
         entry = BenchmarkEntry(
@@ -400,9 +356,9 @@ class TestPostProcessingOverhead:
             deanonymized = text
             for placeholder, original in mapping.items():
                 deanonymized = deanonymized.replace(placeholder, original)
-            start = asyncio.get_event_loop().time()
+            start = time.perf_counter()
             _ = deanonymize(deanonymized, mapping)
-            elapsed = asyncio.get_event_loop().time() - start
+            elapsed = time.perf_counter() - start
             tracker.record(elapsed)
 
         entry = BenchmarkEntry(
@@ -430,9 +386,9 @@ class TestPostProcessingOverhead:
 
         tracker = LatencyTracker()
         for _ in range(BENCH_ITERATIONS * 2):
-            start = asyncio.get_event_loop().time()
+            start = time.perf_counter()
             _ = _strip_thinking_tags(text)
-            elapsed = asyncio.get_event_loop().time() - start
+            elapsed = time.perf_counter() - start
             tracker.record(elapsed)
 
         entry = BenchmarkEntry(

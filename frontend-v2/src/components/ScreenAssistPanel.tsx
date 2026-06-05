@@ -1,5 +1,5 @@
 import { useAppStore } from '../state/useAppStore'
-import { tauriBridge as defaultBridge } from '../lib/tauriBridge'
+import { electronBridge as defaultBridge } from '../lib/electronBridge'
 
 interface ScreenAssistPanelProps {
   bridge?: {

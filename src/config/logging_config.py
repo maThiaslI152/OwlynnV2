@@ -34,6 +34,9 @@ def setup_logging(level: int = logging.INFO) -> None:
         Set to ``logging.DEBUG`` for verbose output during development.
     """
     # ── 1. Application-level stdout handler ────────────────────────────────
+    if os.environ.get("OWLYNN_DEBUG") == "1":
+        level = logging.DEBUG
+
     handler = logging.StreamHandler(sys.stdout)
     handler.setLevel(level)
     handler.setFormatter(
@@ -95,7 +98,8 @@ def _setup_audit_file_output() -> None:
         if isinstance(channel_levels_raw, dict) and channel_levels_raw:
             channel_levels = channel_levels_raw
         enabled = profile.get("audit_log_enabled", True)
-    except Exception:
+    except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         pass
     finally:
         configure_audit_log(channel_levels=channel_levels, enabled=enabled)

@@ -26,9 +26,7 @@ You are a task router. Classify the user's request into a route.
 
 Routes:
 - simple: greetings, thanks, trivial questions
-- complex-default: general coding, reasoning, multi-step tasks
-- complex-vision: tasks involving images or visual content
-- complex-longctx: long documents, large context tasks
+- complex-default: general coding, reasoning, multi-step tasks, and images
 - complex-cloud: frontier-quality reasoning, proofs, advanced math
 
 Current model variant loaded: {current_variant}
@@ -100,7 +98,8 @@ def parse_classification(content: str) -> RouteClassification:
             toolbox=toolbox,
             reasoning=reasoning,
         )
-    except Exception:
+    except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return _default_classification()
 
 

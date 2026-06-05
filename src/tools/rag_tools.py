@@ -25,7 +25,8 @@ def search_workspace_docs(query: str) -> str:
     """
     try:
         from src.memory.long_term import memory as mem0_memory
-    except Exception:
+    except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return "Error: Mem0 memory not available."
 
     if mem0_memory is None:

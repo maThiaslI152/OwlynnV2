@@ -9,7 +9,6 @@ from langgraph.prebuilt import ToolNode
 
 from src.agent.state import AgentState
 from src.agent.llm import get_medium_llm, get_cloud_llm, CloudUnavailableError
-from src.agent.swap_manager import ModelSwapError
 from src.agent.response_styles import style_instruction_for_prompt
 from src.agent.tool_sets import (
     COMPLEX_TOOLS_NO_WEB,
@@ -31,9 +30,6 @@ from src.config.log_middleware import log_model_attempt, log_node
 from src.config.config_loader import config
 
 # Context window for the local model (sourced from centralized config)
-_LARGE_CONTEXT_WINDOW = int(
-    config.get("models.medium.variants.default.context_window", 16384)
-)
 # Minimum output tokens — if less than this is available, we still try
 _MIN_OUTPUT_TOKENS = int(config.get("complex.min_output_tokens", 512))
 # Safety margin to avoid hitting the exact limit
@@ -115,13 +111,13 @@ def _estimate_message_tokens(messages: list) -> int:
     return int(total_chars / 3.5)
 
 
-def _cap_budget_to_context(prompt_messages: list, requested_budget: int) -> int:
+def _cap_budget_to_context(prompt_messages: list, requested_budget: int, max_context: int) -> int:
     """
     Given the assembled prompt and a requested output budget, cap it so that
     input + output doesn't exceed the context window.
     """
     input_tokens = _estimate_message_tokens(prompt_messages)
-    available = _LARGE_CONTEXT_WINDOW - input_tokens - _CONTEXT_SAFETY_MARGIN
+    available = max_context - input_tokens - _CONTEXT_SAFETY_MARGIN
     capped = max(min(requested_budget, available), _MIN_OUTPUT_TOKENS)
     return capped
 
@@ -136,10 +132,10 @@ _HARD_PROMPT_LIMIT_RATIO = (
 )
 
 
-def _needs_prompt_truncation(prompt_messages: list) -> bool:
+def _needs_prompt_truncation(prompt_messages: list, max_context: int) -> bool:
     """Check if the prompt exceeds the hard safety limit for the model context."""
     total = _estimate_message_tokens(prompt_messages)
-    limit = int(_LARGE_CONTEXT_WINDOW * _HARD_PROMPT_LIMIT_RATIO)
+    limit = int(max_context * _HARD_PROMPT_LIMIT_RATIO)
     return total > limit
 
 
@@ -375,6 +371,7 @@ async def _auto_read_workspace_bundle(paths: list[str]) -> str:
         try:
             body = await asyncio.to_thread(read_workspace_file.invoke, {"filename": p})
         except Exception as e:
+            import logging; logging.debug("Silent error suppressed: %s", e)
             body = f"[read_workspace_file error for {p!r}: {e}]"
         b = str(body)
         if len(b) > per_cap:
@@ -544,6 +541,10 @@ async def complex_llm_node(state: AgentState) -> AgentState:
 
     # ── 9.1: Route-based model selection ─────────────────────────────────
     route = state.get("route") or "complex-default"
+    if route == "complex-cloud":
+        max_context = int(config.get("models.cloud.context_window", 1048576))
+    else:
+        max_context = int(config.get("models.medium.context_window", 16384))
     model_label = "medium-default"
     anon_mapping = None
     api_tokens = None
@@ -676,17 +677,13 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             if route == "complex-cloud":
                 llm = await get_cloud_llm()
                 model_label = "large-cloud"
-            elif route == "complex-vision":
-                llm = await get_medium_llm("vision")
-                model_label = "medium-vision"
-            elif route == "complex-longctx":
-                llm = await get_medium_llm("longctx")
-                model_label = "medium-longctx"
+
+
             else:
                 llm = await get_medium_llm("default")
                 model_label = "medium-default"
             log_model_attempt(model_label, "success", reason="tools_off_direct")
-        except (ModelSwapError, CloudUnavailableError) as e:
+        except CloudUnavailableError as e:
             logger.warning(
                 "[complex] Model %s unavailable (%s), falling back to medium-default",
                 route,
@@ -701,7 +698,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
 
         budget = _cap_budget_to_context(
             prompt_messages,
-            state.get("token_budget")
+            state.get("token_budget", max_context)
             or int(config.get("complex.default_token_budget")),
         )
         response = await llm.bind(max_tokens=budget).ainvoke(prompt_messages)
@@ -760,7 +757,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             llm = await get_medium_llm("default")
             model_label = "medium-default"
             log_model_attempt("medium-default", "success", reason="initial_route")
-    except (ModelSwapError, CloudUnavailableError) as e:
+    except CloudUnavailableError as e:
         logger.warning(
             "[complex] Model %s unavailable (%s), falling back to medium-default",
             route,
@@ -795,7 +792,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
 
     budget = _cap_budget_to_context(
         prompt_messages,
-        state.get("token_budget") or int(config.get("complex.default_token_budget")),
+        state.get("token_budget", max_context) or int(config.get("complex.default_token_budget")),
     )
     bound_llm = llm.bind_tools(tools).bind(max_tokens=budget)
     audit_debug("agent.token", "budget_computed", token_budget=budget, route=route)
@@ -855,7 +852,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                     )
                     budget = _cap_budget_to_context(
                         prompt_messages,
-                        state.get("token_budget")
+                        state.get("token_budget", max_context)
                         or int(config.get("complex.default_token_budget", 4096)),
                     )
                     fb_start = asyncio.get_running_loop().time()
@@ -909,7 +906,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                 )
                 budget = _cap_budget_to_context(
                     prompt_messages,
-                    state.get("token_budget")
+                    state.get("token_budget", max_context)
                     or int(config.get("complex.default_token_budget")),
                 )
                 fb_start = asyncio.get_running_loop().time()
@@ -975,7 +972,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                 )
                 budget = _cap_budget_to_context(
                     prompt_messages,
-                    state.get("token_budget")
+                    state.get("token_budget", max_context)
                     or int(config.get("complex.default_token_budget")),
                 )
                 fb_start = asyncio.get_running_loop().time()
@@ -1023,7 +1020,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             prompt_messages = with_system_for_local_server(system, trimmed_messages)
             budget = _cap_budget_to_context(
                 prompt_messages,
-                state.get("token_budget")
+                state.get("token_budget", max_context)
                 or int(config.get("complex.default_token_budget")),
             )
             fb_start = asyncio.get_running_loop().time()
@@ -1050,7 +1047,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                 llm = await get_cloud_llm()
                 budget = _cap_budget_to_context(
                     [system, *trimmed_messages],
-                    state.get("token_budget")
+                    state.get("token_budget", max_context)
                     or int(config.get("complex.default_token_budget")),
                 )
                 response = (
@@ -1073,7 +1070,8 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                         ),
                     }
                 )
-            except Exception:
+            except Exception as e:
+                import logging; logging.debug("Silent error suppressed: %s", e)
                 fallback_chain.append(
                     {
                         "model": "medium-longctx",
@@ -1100,7 +1098,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                 prompt_messages = with_system_for_local_server(system, trimmed_messages)
                 budget = _cap_budget_to_context(
                     prompt_messages,
-                    state.get("token_budget")
+                    state.get("token_budget", max_context)
                     or int(config.get("complex.default_token_budget")),
                 )
                 fb_start = asyncio.get_running_loop().time()
@@ -1213,7 +1211,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                 )
                 recapped = _cap_budget_to_context(
                     second_prompt,
-                    state.get("token_budget")
+                    state.get("token_budget", max_context)
                     or int(config.get("complex.default_token_budget")),
                 )
                 llm_recapped = llm.bind_tools(tools).bind(max_tokens=recapped)

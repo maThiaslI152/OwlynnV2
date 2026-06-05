@@ -48,7 +48,8 @@ def url_fetch_blocked_reason(url: str) -> str | None:
 
     try:
         parsed = urlparse(raw)
-    except Exception:
+    except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return "Invalid URL"
 
     if parsed.scheme not in ("http", "https"):

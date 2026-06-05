@@ -116,7 +116,8 @@ def unwrap_redirect_search_url(url: str) -> str:
                 uddg = (parse_qs(p.query).get("uddg") or [""])[0]
                 if uddg:
                     return unquote(uddg)
-    except Exception:
+    except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         pass
     return raw
 
@@ -254,7 +255,8 @@ async def _web_search_curl_cffi(
         )
     try:
         from curl_cffi import requests as curl_requests  # type: ignore
-    except Exception:
+    except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return None, SearchAttempt(
             "tier1", "curl_cffi", "unavailable_dependency", "curl_cffi not installed"
         )
@@ -290,6 +292,7 @@ async def _web_search_curl_cffi(
         try:
             html = await asyncio.to_thread(_get, url)
         except Exception as e:
+            import logging; logging.debug("Silent error suppressed: %s", e)
             blocked_details.append(f"{source}: {str(e)[:80]}")
             continue
         if detect_bot_block(html):
@@ -660,7 +663,8 @@ async def _web_search_dynamic_playwright(
         )
     try:
         from playwright.async_api import async_playwright
-    except Exception:
+    except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return None, SearchAttempt(
             "tier3",
             "playwright_dynamic",
@@ -683,6 +687,7 @@ async def _web_search_dynamic_playwright(
             html = await page.content()
             await browser.close()
     except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return None, SearchAttempt(
             "tier3", "playwright_dynamic", "network_error", str(e)[:180]
         )
@@ -786,6 +791,7 @@ async def web_search(
                         SearchAttempt("tier0.5", "searxng", "empty", "No results")
                     )
                 except Exception as e:
+                    import logging; logging.debug("Silent error suppressed: %s", e)
                     attempts.append(
                         SearchAttempt("tier0.5", "searxng", "error", str(e)[:120])
                     )
@@ -814,6 +820,7 @@ async def web_search(
 
                     results = await asyncio.to_thread(_search)
                 except Exception as e:
+                    import logging; logging.debug("Silent error suppressed: %s", e)
                     attempts.append(
                         SearchAttempt("tier2", "ddgs", "network_error", str(e)[:180])
                     )
@@ -886,7 +893,8 @@ def _html_static_fallback_text(html: str) -> str:
 
     try:
         soup = BeautifulSoup(html, "lxml")
-    except Exception:
+    except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         soup = BeautifulSoup(html, "html.parser")
     chunks: list[str] = []
     title = soup.find("title")
@@ -917,7 +925,8 @@ def _html_to_plain_text(html: str) -> str:
 
     try:
         soup = BeautifulSoup(html, "lxml")
-    except Exception:
+    except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         soup = BeautifulSoup(html, "html.parser")
     for tag in soup(
         ["script", "style", "nav", "footer", "header", "aside", "iframe", "noscript"]
@@ -1024,6 +1033,7 @@ async def fetch_webpage(url: str, focus_query: str = "") -> str:
     except httpx.TimeoutException:
         return f"[fetch_webpage] Timed out fetching {url}"
     except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return f"[fetch_webpage] Error: {str(e)}"
 
 
@@ -1080,4 +1090,5 @@ async def fetch_webpage_dynamic(url: str, focus_query: str = "") -> str:
         return f"📄 [Dynamic] Content from {url}:\n\n{out}"
 
     except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return f"[fetch_webpage_dynamic] Error: {str(e)}"

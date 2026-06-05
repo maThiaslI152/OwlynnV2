@@ -1,8 +1,9 @@
 """
 Swap-aware route selector for the Multi-LLM Router.
 
-Makes the final routing decision, factoring in the currently-loaded model
-variant to avoid unnecessary swaps on VRAM-constrained hardware.
+Makes the final routing decision, stripping out obsolete variant swaps and downgrading
+cloud routes back to the local default if image inputs are detected (as DeepSeek V4 does
+not support vision, but Qwen does).
 """
 
 from __future__ import annotations
@@ -13,20 +14,6 @@ from src.agent.router.models import RouteClassification, TaskFeatures
 from src.config.config_loader import config
 
 logger = logging.getLogger(__name__)
-
-
-def _route_to_variant(route: str) -> str | None:
-    """Map a route string to the corresponding M-tier variant name.
-
-    Returns ``None`` for routes that don't map to an M-tier variant
-    (e.g. ``"simple"`` or ``"complex-cloud"``).
-    """
-    mapping = {
-        "complex-default": "default",
-        "complex-vision": "vision",
-        "complex-longctx": "longctx",
-    }
-    return mapping.get(route)
 
 
 def _check_cloud_available() -> bool:
@@ -44,16 +31,13 @@ def _check_cloud_available() -> bool:
             return False
         api_key = resolve_deepseek_api_key()
         return bool(api_key)
-    except Exception:
+    except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return False
 
 
 class RouteSelector:
-    """Swap-aware route selector.
-
-    Decides whether to keep the currently-loaded M-tier variant or swap
-    to the classified target, based on confidence and task compatibility.
-    """
+    """Swap-aware route selector."""
 
     def select(
         self,
@@ -62,23 +46,14 @@ class RouteSelector:
         current_variant: str | None,
         swap_threshold: float | None = None,
     ) -> tuple[str, list[str]]:
-        """Return ``(final_route, toolbox)`` with swap-avoidance logic.
-
-        Preconditions:
-        - ``classification.route`` is a valid route string
-        - ``classification.confidence`` in ``[0.0, 1.0]``
-        - ``current_variant`` is ``None``, ``"default"``, ``"vision"``, or ``"longctx"``
+        """Return ``(final_route, toolbox)``.
 
         Postconditions:
         - Returns ``(route, toolbox)`` where route is a valid route string
-        - ``"simple"`` and ``"complex-cloud"`` routes pass through unchanged
-        - If target variant matches current variant, classified route returned unchanged
-        - If confidence < swap_threshold and current variant can handle the task,
-          route maps to current variant (no swap triggered)
-        - If confidence >= swap_threshold, route matches classification.route
+        - ``"simple"`` and ``"complex-cloud"`` routes pass through
+        - If ``"complex-cloud"`` but task has images, downgrades to ``"complex-default"``
+        - All other complex routes map to ``"complex-default"``
         """
-        if swap_threshold is None:
-            swap_threshold = float(config.get("routing.swap_threshold", 0.7))
         target_route = classification.route
         toolbox = classification.toolbox
 
@@ -88,70 +63,11 @@ class RouteSelector:
 
         # Cloud route — separate infrastructure, no M-tier swap
         if target_route == "complex-cloud":
+            if features.has_images:
+                logger.warning("[selector] Cloud requested but task has images; downgrading to complex-default")
+                return "complex-default", toolbox
             return target_route, toolbox
 
-        target_variant = _route_to_variant(target_route)
-
-        # Target is already loaded — no swap needed
-        if target_variant == current_variant:
-            return target_route, toolbox
-
-        # Swap-avoidance: low confidence + current variant is viable
-        if classification.confidence < swap_threshold:
-            kept = self._try_keep_current(current_variant, features)
-            if kept is not None:
-                logger.info(
-                    "[selector] Swap avoided: confidence=%.2f < threshold=%.2f, "
-                    "keeping %s",
-                    classification.confidence,
-                    swap_threshold,
-                    kept,
-                )
-                return kept, toolbox
-
-        # High confidence or current variant can't handle it — proceed with swap
-        return target_route, toolbox
-
-    # ── Private helpers ──────────────────────────────────────────────
-
-    @staticmethod
-    def _try_keep_current(
-        current_variant: str | None,
-        features: TaskFeatures,
-    ) -> str | None:
-        """Return a route string if the current variant can handle the task.
-
-        Returns ``None`` if the current variant is not viable and a swap
-        should proceed.
-        """
-        if current_variant == "default":
-            # Default can handle non-vision tasks that fit its context window
-            if not features.has_images and features.context_ratio_default < 0.80:
-                return "complex-default"
-
-        elif current_variant == "longctx":
-            # Longctx can handle general (non-vision) tasks
-            if not features.has_images:
-                return "complex-longctx"
-
-        elif current_variant == "vision":
-            # Vision model is less general — only keep if task has visual elements
-            if features.vision_keywords_score > 0.3:
-                return "complex-vision"
-
-        return None
-
-    @staticmethod
-    def _downgrade_cloud_route(features: TaskFeatures) -> str:
-        """Downgrade a cloud route to a local variant.
-
-        If estimated input exceeds 80% of Medium_Default context, use longctx;
-        otherwise fall back to default.
-        """
-        if features.context_ratio_default > 0.80:
-            logger.warning(
-                "[selector] Cloud unavailable, downgrading to complex-longctx"
-            )
-            return "complex-longctx"
-        logger.warning("[selector] Cloud unavailable, downgrading to complex-default")
-        return "complex-default"
+        # All other complex routes map directly to complex-default
+        # (since we no longer use vision or longctx variants)
+        return "complex-default", toolbox

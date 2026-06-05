@@ -285,7 +285,7 @@ Sent after router node completes, before the first `chunk` event.
 
 | Field | Values |
 |-------|--------|
-| `route` | `"simple"`, `"complex-default"`, `"complex-cloud"`, `"complex-vision"`, `"complex-longctx"` |
+| `route` | `"simple"`, `"complex-default"`, `"complex-cloud"` |
 | `confidence` | [0.0, 1.0] |
 | `classification_source` | `"keyword_bypass"`, `"deterministic"`, `"llm_classifier"`, `"hitl"` |
 | `swap_decision` | `"kept"`, `"swapped"`, `"not_needed"` |

@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { listen } from '@tauri-apps/api/event'
+import { listen } from './lib/electronBridge'
 import { AppShell } from './components/AppShell'
 import { WsClient } from './lib/wsClient'
 import { useAppStore } from './state/useAppStore'
-import { tauriBridge } from './lib/tauriBridge'
+import { electronBridge as tauriBridge } from './lib/electronBridge'
 import {
   buildAutoApproveInterruptResponse,
   buildInterruptProposal,
@@ -394,7 +394,7 @@ function App() {
   // Listen for Tauri runtime events (TTS state, screen assist, etc.)
   useEffect(() => {
     let unlisten: (() => void) | undefined
-    void listen<TauriEventPayload>('owlynn://runtime-event', (event) => {
+    void listen<TauriEventPayload>('owlynn://runtime-event', (event: { payload: TauriEventPayload }) => {
       const payload = event.payload
       if (payload.type === 'voice.tts_state') {
         setTtsSpeaking(payload.speaking)
@@ -446,9 +446,9 @@ function App() {
         }
       } else if (payload.type === 'interrupt') {
         handleInterrupt(payload.interrupts)
-      }
-    }).then((fn) => {
-      unlisten = fn
+    }
+  }).then((fn: (() => void) | undefined) => {
+    unlisten = fn
     }).catch(() => {
       // Non-Tauri browser preview mode
     })

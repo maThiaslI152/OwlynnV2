@@ -11,12 +11,13 @@ owner: human
 
 ## Overview
 
-Project status tracker. Last updated: 2026-06-04 — Config centralization + Qwen3.5 model swap + 14 bugs fixed.
+Project status tracker. Last updated: 2026-06-05 — DeepSeek V4 integration, SwapManager removal, and security hardening.
 
 ## Recent Changes (2026-06-04)
 
 | Change | Impact | Commits |
 |--------|--------|---------|
+| **DeepSeek V4 Upgrade** | 1M Context window, extra_body config, SwapManager removal, Vision guardrail | pending |
 | **Config centralization** | ~100 settings → 1 file (`defaults.yaml`). Override chain: YAML → env → profile | `bb04b25` |
 | **Qwen3.5 model swap** | Router: qwen3.5-0.8b. Complex: qwen3.5-9b Q6_K. Author-tuned. | `dd69035` → `6367323` |
 | **14 bugs fixed** | HITL GraphInterrupt, keyword bypass, thinking budgets, request_timeout, startup race, context overflow | `2b907d2` → `acd9f8d` |
@@ -31,7 +32,7 @@ Project status tracker. Last updated: 2026-06-04 — Config centralization + Qwe
 |------|-------|---------|------|------------|
 | Router | `qwen3.5-0.8b` | 16384 | 0.2 | 1024 |
 | Complex | `qwen3.5-9b-uncensored-hauhaucs-aggressive@q6_k` | 16384 | 0.7 | 16384 |
-| Cloud | `deepseek-v4` | 131072 | 0.4 | 8192 |
+| Cloud | `deepseek-v4-flash` | 1048576 | 0.4 | 8192 |
 
 ## Evaluation Trajectory
 
@@ -99,7 +100,7 @@ frontend-v2/src/App.tsx        # Frontend runtime
 |------------|--------|
 | LangGraph flow (memory \u2192 route \u2192 complex \u2192 tool \u2192 memory) | Active |
 | Hybrid model routing (small/medium/cloud) | Active |
-| M-tier model swap logic | Active |
+| M-tier model swap logic | Removed (2026-06-05) |
 | Security proxy HITL approval | Active |
 | Backend API + WebSocket chat | Active |
 | Tauri frontend shell | Active |

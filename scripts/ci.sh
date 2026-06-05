@@ -131,11 +131,11 @@ if ! $PYTHON_ONLY; then
   fi
 
   if ! $QUICK; then
-    info "Building frontend…"
+    info "Building frontend & Electron app…"
     if (cd frontend-v2 && npm run build); then
-      pass "Frontend build succeeded"
+      pass "Frontend & Electron build succeeded"
     else
-      fail "Frontend build failed"; EXIT_CODE=1
+      fail "Frontend & Electron build failed"; EXIT_CODE=1
     fi
   else
     info "Skipping frontend build (--quick)"

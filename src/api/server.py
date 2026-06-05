@@ -122,7 +122,8 @@ async def lifespan(app: FastAPI):
         try:
             app.state.file_watcher.stop()
             app.state.file_watcher.join()
-        except Exception:
+        except Exception as e:
+            import logging; logging.debug("Silent error suppressed: %s", e)
             pass
 
     for session in app.state.sessions.values():
@@ -277,7 +278,8 @@ async def api_health():
         agent_ready = (
             hasattr(app, "state") and getattr(app.state, "agent", None) is not None
         )
-    except Exception:
+    except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         pass
 
     return {"status": "ok", "agent": "ready" if agent_ready else "initializing"}
@@ -354,6 +356,7 @@ async def api_get_memory_context():
             "memory_context": context,
         }
     except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return {"status": "error", "message": str(e)}
 
 
@@ -405,7 +408,8 @@ async def _auto_index_project_file(
         }:
             try:
                 text = file_bytes.decode("utf-8", errors="ignore")
-            except Exception:
+            except Exception as e:
+                import logging; logging.debug("Silent error suppressed: %s", e)
                 pass
 
         if text and len(text.strip()) > 50:

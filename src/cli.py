@@ -53,7 +53,8 @@ def query(prompt: str, project: str, approve_sensitive: bool):
                 click.echo(f"Error: Server returned status {response.status_code}")
                 try:
                     click.echo(response.json())
-                except Exception:
+                except Exception as e:
+                    import logging; logging.debug("Silent error suppressed: %s", e)
                     click.echo(response.text[:200])
                 sys.exit(1)
 
@@ -138,7 +139,8 @@ def status():
             click.echo("🟢 Owlynn Agent Server is running locally!")
             try:
                 click.echo(json.dumps(response.json(), indent=2))
-            except Exception:
+            except Exception as e:
+                import logging; logging.debug("Silent error suppressed: %s", e)
                 click.echo(f"Response: {response.text}")
         else:
             click.echo(f"🔴 Agent returned server status {response.status_code}")

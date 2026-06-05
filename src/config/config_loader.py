@@ -234,7 +234,8 @@ class ConfigLoader:
             from src.memory.user_profile import get_profile
 
             profile = get_profile()
-        except Exception:
+        except Exception as e:
+            import logging; logging.debug("Silent error suppressed: %s", e)
             return result
 
         for profile_key, dotpath in _PROFILE_OVERRIDE_MAP.items():

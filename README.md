@@ -11,7 +11,7 @@ auto_generated: false
 [![Frontend](https://img.shields.io/badge/frontend-React_19_%2B_Vite_8-61DAFB)](frontend-v2/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-A private, local-first AI productivity agent. Runs entirely on your machine with LangGraph orchestration, three-tier LLM routing, and a Tauri desktop frontend. Optimized for Apple Silicon (M4 Air 24GB).
+A private, local-first AI productivity agent. Runs entirely on your machine with LangGraph orchestration, three-tier LLM routing, and an Electron desktop frontend. Optimized for Apple Silicon (M4 Air 24GB).
 
 ## Goal
 
@@ -28,7 +28,7 @@ Owlynn is a desktop AI assistant that keeps data local. It uses a stateful cycli
 ```text
 src/api/server.py          # FastAPI entry point (REST + WebSocket)
 src/agent/graph.py          # LangGraph graph builder, init_agent()
-src-tauri/src/main.rs       # Tauri command/event runtime
+frontend-v2/electron/main.ts # Electron main process runtime
 frontend-v2/src/App.tsx     # React app shell, WebSocket lifecycle
 ./start.sh                  # Full stack launcher
 uvicorn src.api.server:app --host 127.0.0.1 --port 8000
@@ -62,7 +62,7 @@ The router uses the small LLM to classify requests into `simple` (greetings, qui
 | Layer | Technology |
 |-------|-----------|
 | Backend | `FastAPI` + `LangGraph` + Python 3.12+ |
-| Frontend | React 19 + TypeScript (Vite 8) + Zustand 5, browser-first (Tauri on hold) |
+| Frontend | React 19 + TypeScript (Vite 8) + Zustand 5, Electron desktop |
 | Small LLM | `ibm-grok4-ultrafast-coder-1b` (Q8_0, routing) |
 | Medium LLM | `gemma-4-e4b-uncensored-hauhaucs-aggressive` (Q4_K_M, reasoning + tool calling, swappable) |
 | Cloud LLM | `deepseek-chat` (DeepSeek API, optional escalation) |
@@ -71,7 +71,7 @@ The router uses the small LLM to classify requests into `simple` (greetings, qui
 | Checkpointing | Redis (falls back to in-memory `MemorySaver`) |
 | Search | Multi-tier: wttr.in / SearXNG (self-hosted) → curl_cffi / DDGS → Playwright |
 | Testing | `pytest` + `hypothesis` (backend), `vitest` + `@testing-library/react` (frontend) |
-| Desktop | Tauri v2.10 (Rust, macOS vibrancy) — on hold, browser is primary |
+| Desktop | Electron (macOS, Node IPC bridges) |
 
 ## Project Progress
 
@@ -107,7 +107,7 @@ Full status: [`docs/STATUS.md`](docs/STATUS.md) | Bug analysis: [`docs/BUG-ANALY
 
 ### Architectural Concerns
 
-- **Tauri IPC dependency**: SafeMode, ScreenAssist, TTS, and window sizing require Tauri — no browser fallbacks.
+- **Electron IPC dependency**: SafeMode, ScreenAssist, and window sizing require Electron IPC — no browser fallbacks.
 - **Silent error handling**: Multiple try/catch blocks swallow errors silently.
 - **Loading states without timeouts**: Memory and Orchestration panels can hang indefinitely.
 
@@ -165,10 +165,9 @@ frontend-v2/          React 19 + TypeScript frontend (active)
   │   └── lib/           tauriBridge, wsClient
   └── package.json
 
-src-tauri/            Tauri v2 desktop runtime
-  ├── src/main.rs       Tauri command/event runtime
-  ├── src/voice/mod.rs  TTS orchestration (macOS say command)
-  └── tauri.conf.json   Tauri v2 configuration
+frontend-v2/electron/    Electron Node.js runtime
+  ├── main.ts           Electron main process + IPC handlers
+  └── preload.ts        Context bridge exposition
 
 skills/              Reusable prompt templates (markdown)
 data/                User data (profile, memories, todos, topics)
@@ -208,8 +207,7 @@ All local models served via LM Studio on port 1234.
 - Python 3.12+ with `pip`/`uv`
 - LM Studio with models loaded on port 1234
 - Docker/Podman for Qdrant and SearXNG containers
-- Node.js 18+ for frontend tests
-- Rust & Cargo for Tauri desktop build
+- Node.js 18+ for frontend tests and Electron build
 
 ## Testing
 
@@ -259,7 +257,19 @@ MEDIUM_LLM_MODEL_NAME=gemma-4-e4b-uncensored-hauhaucs-aggressive
 Launches 3 stages:
 1. **Podman containers** — Qdrant (port 6333) + Redis (port 6379)
 2. **LM Studio** — prompts you to start the server on port 1234
-3. **Backend + Frontend** — uvicorn (port 8000) + Vite dev server (port 5173), opens browser
+3. **Backend + Frontend** — uvicorn (port 8000) + Vite dev server
+
+## Electron Desktop App
+
+The application is primarily distributed as an Electron `.app` for macOS.
+
+To build the desktop application locally:
+
+```bash
+cd frontend-v2 && npm run build
+```
+
+This will output the packaged `.app` and `.dmg` inside `frontend-v2/dist/`.
 
 Press `Ctrl+C` to stop all services.
 
@@ -273,7 +283,7 @@ source .venv/bin/activate && uvicorn src.api.server:app --host 127.0.0.1 --port 
 cd frontend-v2 && npx vite --host 127.0.0.1
 ```
 
-Open `http://127.0.0.1:5173`. Safe Mode and Screen Assist require Tauri IPC — unavailable in browser mode.
+Open `http://127.0.0.1:5173`. Safe Mode and Screen Assist require Electron IPC — unavailable in browser mode.
 
 ### CLI / Headless (Backend Only)
 
@@ -284,8 +294,8 @@ uvicorn src.api.server:app --host 127.0.0.1 --port 8000
 
 Backend at `http://127.0.0.1:8000`. Use REST API or WebSocket (`ws://127.0.0.1:8000/ws/chat/{thread_id}`). Full API reference in [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md).
 
-| Mode | Backend | Frontend | Tauri | Best For |
-|------|---------|----------|-------|----------|
+| Mode | Backend | Frontend | Electron | Best For |
+|------|---------|----------|----------|----------|
 | `./start.sh` | Yes | Vite HMR | No | Daily browser use |
 | Browser (manual) | Yes | Vite HMR | No | Dev, hot reload |
 | CLI | Yes | No | No | Scripting, API testing |

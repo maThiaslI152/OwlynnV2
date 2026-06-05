@@ -74,6 +74,7 @@ async def api_mem0_search(query: str = "", limit: int = 50, project_id: str = ""
                 )
         return {"status": "ok", "memories": memories, "count": len(memories)}
     except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return {"status": "error", "message": str(e), "memories": [], "count": 0}
 
 
@@ -97,6 +98,7 @@ async def api_mem0_count(project_id: str = ""):
         count = len(results) if isinstance(results, list) else 0
         return {"status": "ok", "count": count, "user_id": user_id}
     except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return {"status": "error", "message": str(e), "count": 0}
 
 
@@ -115,6 +117,7 @@ async def api_mem0_delete(body: dict):
         mem0_memory.delete(memory_id=memory_id)
         return {"status": "ok", "message": f"Deleted memory {memory_id}"}
     except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return {"status": "error", "message": str(e)}
 
 
@@ -135,6 +138,7 @@ async def api_mem0_clear(body: dict):
             else {"status": "error", "message": "user_id required"}
         )
     except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return {"status": "error", "message": str(e)}
 
 
@@ -147,4 +151,5 @@ async def api_mem0_reset():
         mem0_memory.reset()
         return {"status": "ok", "message": "All Mem0 memories reset"}
     except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return {"status": "error", "message": str(e)}

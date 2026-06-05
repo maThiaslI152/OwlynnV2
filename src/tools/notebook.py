@@ -129,7 +129,8 @@ def notebook_run(code: str) -> str:
             result = result[:max_output] + "\n... [output truncated]"
         return result
 
-    except Exception:
+    except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         tb = traceback.format_exc()
         return f"[Cell {cell_num}] Error:\n{tb}"
 

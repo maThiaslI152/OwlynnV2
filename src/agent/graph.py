@@ -324,6 +324,7 @@ async def _check_cloud_connectivity() -> dict:
                 result["key_valid"] = True
                 result["error"] = f"Unexpected response: HTTP {response.status_code}"
     except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         result["error"] = str(e)
 
     return result
@@ -333,7 +334,8 @@ async def init_agent(checkpointer=None):
     """Initializes the agent with Redis checkpointer (falls back to MemorySaver)."""
     try:
         await mcp_manager.initialize(str(MCP_CONFIG_PATH))
-    except Exception:
+    except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         pass
 
     # Reset cloud subsystems for fresh session

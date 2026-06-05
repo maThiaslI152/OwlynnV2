@@ -23,6 +23,7 @@ async def api_get_system_settings():
             "tone": persona.get("tone", "friendly"),
         }
     except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return {"error": str(e)}
 
 
@@ -38,6 +39,7 @@ async def api_update_system_settings(body: dict):
             update_persona_field("tone", body["tone"])
         return {"status": "ok", "message": "System settings saved"}
     except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return {"status": "error", "message": str(e)}
 
 
@@ -51,6 +53,7 @@ async def api_get_memory_settings():
             "long_term_enabled": profile.get("long_term_enabled", True),
         }
     except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return {"error": str(e)}
 
 
@@ -64,6 +67,7 @@ async def api_update_memory_settings(body: dict):
             update_profile("long_term_enabled", body["long_term_enabled"])
         return {"status": "ok", "message": "Memory settings saved"}
     except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return {"status": "error", "message": str(e)}
 
 
@@ -77,6 +81,7 @@ async def api_get_advanced_settings():
             for field, default in _ADVANCED_SETTINGS_DEFAULTS.items()
         }
     except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return {"error": str(e)}
 
 
@@ -129,6 +134,7 @@ async def api_get_unified_settings():
         unified["deepseek_api_key"] = "••••••••" if deepseek_key else ""
         return unified
     except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return {"error": str(e)}
 
 
@@ -168,6 +174,7 @@ async def api_update_unified_settings(body: dict):
                 updated.append(field)
         return {"status": "ok", "updated": updated}
     except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return {"status": "error", "message": str(e)}
 
 
@@ -180,4 +187,5 @@ async def api_update_advanced_settings(body: dict):
                 update_profile(field, body[field])
         return {"status": "ok", "message": "Advanced settings saved"}
     except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return {"status": "error", "message": str(e)}

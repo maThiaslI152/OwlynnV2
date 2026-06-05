@@ -98,7 +98,8 @@ def notify_file_processed(filepath_or_name, status="processed"):
                                             }
                                         )
                                         asyncio.run_coroutine_threadsafe(coro, loop)
-                                    except Exception:
+                                    except Exception as e:
+                                        import logging; logging.debug("Silent error suppressed: %s", e)
                                         pass
                             except Exception as e:
                                 logger.error(
@@ -116,7 +117,8 @@ def notify_file_processed(filepath_or_name, status="processed"):
                                             }
                                         )
                                         asyncio.run_coroutine_threadsafe(coro, loop)
-                                    except Exception:
+                                    except Exception as e:
+                                        import logging; logging.debug("Silent error suppressed: %s", e)
                                         pass
 
                         asyncio.run_coroutine_threadsafe(index_task(), loop)
@@ -236,7 +238,8 @@ def extract_text_file(name: str, mime: str, raw_bytes: bytes) -> str:
             return raw_bytes.decode("utf-8", errors="replace")[
                 : int(config.get("file_decode.max_chars", 8000))
             ]
-        except Exception:
+        except Exception as e:
+            import logging; logging.debug("Silent error suppressed: %s", e)
             return ""
     return ""
 
@@ -354,6 +357,7 @@ async def api_list_files(sub_path: str = "", project_id: str = "default"):
             )
         return sorted(files, key=lambda x: (x["type"] == "file", x["name"].lower()))
     except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return {"status": "error", "message": str(e)}
 
 
@@ -396,7 +400,8 @@ async def api_get_file(
         try:
             with open(filepath, "r", encoding="utf-8") as f:
                 return PlainTextResponse(f.read())
-        except Exception:
+        except Exception as e:
+            import logging; logging.debug("Silent error suppressed: %s", e)
             return PlainTextResponse("Could not read file as text.", status_code=400)
 
     return FileResponse(filepath)
@@ -440,6 +445,7 @@ async def api_delete_file(
         notify_file_processed(filename, status="deleted")
         return {"status": "ok", "message": f"Deleted {filename}"}
     except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return {"status": "error", "message": str(e)}
 
 
@@ -489,6 +495,7 @@ async def api_rename_file(filename: str, body: dict):
 
         return {"status": "ok", "message": f"Renamed to {new_name}"}
     except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return {"status": "error", "message": str(e)}
 
 
@@ -530,6 +537,7 @@ async def api_move_file(filename: str, body: dict):
         os.rename(old_path, new_path)
         return {"status": "ok", "message": f"Moved {filename} to {target_sub_path}"}
     except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return {"status": "error", "message": str(e)}
 
 
@@ -576,6 +584,7 @@ async def api_upload_file(
         )
         return {"status": "ok", "message": f"Uploaded {file.filename}"}
     except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         audit_info(
             "api.file",
             "file_upload_failed",
@@ -609,4 +618,5 @@ async def api_create_folder(body: dict):
         os.makedirs(target_dir, exist_ok=True)
         return {"status": "ok", "message": f"Created folder {name}"}
     except Exception as e:
+        import logging; logging.debug("Silent error suppressed: %s", e)
         return {"status": "error", "message": str(e)}
