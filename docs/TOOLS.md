@@ -47,6 +47,7 @@ src/api/routes/files.py            # Tool discovery (GET /api/tools)
 |------|-------------|
 | `web_search` | Search via SearXNG/DDG/Bing. Supports `focus_query` for reranking |
 | `fetch_webpage` | Fetch URL content. Embedding-ranked excerpts with `focus_query` |
+| `deep_research` | Exhaustive search and async concurrent crawling via Crawl4AI. Outputs `<web_context>`-sandboxed Markdown. Uses Web RAG if output exceeds length thresholds. |
 
 ### Toolbox: `file_ops`
 

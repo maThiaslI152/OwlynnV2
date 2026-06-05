@@ -15,7 +15,7 @@ from src.memory.user_profile import get_profile
 
 
 def lm_studio_fold_system_enabled() -> bool:
-    """Check if system-prompt folding is enabled (default: off for Gemma)."""
+    """Check if system-prompt folding is enabled (default: off for Qwen)."""
     return bool(get_profile().get("lm_studio_fold_system", False))
 
 

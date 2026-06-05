@@ -235,7 +235,7 @@ class ConfigLoader:
 
             profile = get_profile()
         except Exception as e:
-            import logging; logging.debug("Silent error suppressed: %s", e)
+            logger.warning("Error suppressed: %s", e)
             return result
 
         for profile_key, dotpath in _PROFILE_OVERRIDE_MAP.items():

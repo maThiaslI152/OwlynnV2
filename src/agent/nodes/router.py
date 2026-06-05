@@ -167,8 +167,8 @@ def estimate_token_budget(user_text: str, route: str) -> int:
 # ── Router prompt with toolbox classification ────────────────────────────
 ROUTER_PROMPT = """Classify in one shot. No reasoning, no preamble, no markdown.
 
-simple = greetings/thanks/small talk OR a direct question answerable without tools or heavy reasoning.
-complex = code/math/writing, multi-step work, OR needs live web/news/weather/prices. ANY mention of code, python, bugs, or review MUST be classified as complex.
+simple = greetings/thanks/small talk ONLY. If the user asks ANY factual question, trivia, or asks about a topic/event that might require research or internet access, MUST classify as complex.
+complex = code/math/writing, multi-step work, OR needs live web/news/weather/prices. ANY mention of code, python, bugs, review, OR factual questions MUST be classified as complex.
 
 Toolbox categories (pick one or more, or "all" if unsure):
 - web_search: web lookup, live data, current information, news, weather, prices
@@ -221,7 +221,7 @@ def parse_routing(content: str) -> tuple[str, float, list[str]]:
                 toolbox = [toolbox]
             return decision, confidence, toolbox
     except Exception as e:
-        import logging; logging.debug("Silent error suppressed: %s", e)
+        logger.warning("Error suppressed: %s", e)
         pass
     return "complex", 0.5, ["all"]
 
@@ -879,7 +879,7 @@ async def router_node(state: AgentState) -> AgentState:
                     try:
                         re_match = matcher.match_with_confidence(refined, top_k=5)
                     except Exception as e:
-                        import logging; logging.debug("Silent error suppressed: %s", e)
+                        logger.warning("Error suppressed: %s", e)
                         re_match = MatchResult(
                             is_ambiguous=True, candidate_skills=[], ambiguity_reason=""
                         )
@@ -1278,7 +1278,7 @@ def _parse_title_json(content: str) -> str:
         title = str(parsed.get("title", "")).strip()
         return title
     except Exception as e:
-        import logging; logging.debug("Silent error suppressed: %s", e)
+        logger.warning("Error suppressed: %s", e)
         return ""
 
 

@@ -121,7 +121,7 @@ class ProfileBuilder:
     llm_base_url: str = "http://127.0.0.1:1234/v1"
     medium_models: dict = field(
         default_factory=lambda: {
-            "default": "gemma-4-e4b-uncensored-hauhaucs-aggressive",
+            "default": "qwen2.5-3b-instruct",
             "vision": "zai-org/glm-4.6v-flash",
             "longctx": "lfm2-8b-a1b-gguf-q8_0",
         }

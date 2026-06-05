@@ -5,7 +5,7 @@ Focused on general productivity: web search, file management,
 document generation, task tracking, and skills.
 """
 
-from src.tools.web_tools import web_search, fetch_webpage
+from src.tools.web_tools import web_search, fetch_webpage, deep_research
 from src.tools.core_tools import (
     read_workspace_file,
     write_workspace_file,
@@ -26,6 +26,7 @@ COMPLEX_TOOLS_WITH_WEB: list = [
     # Web
     web_search,
     fetch_webpage,
+    deep_research,
     # File management
     read_workspace_file,
     write_workspace_file,
@@ -84,7 +85,7 @@ COMPLEX_TOOLS_NO_WEB: list = [
 
 # ─── Dynamic Tool Loading: Toolbox Registry ─────────────────────────────
 TOOLBOX_REGISTRY: dict[str, list] = {
-    "web_search": [web_search, fetch_webpage],
+    "web_search": [web_search, fetch_webpage, deep_research],
     "file_ops": [
         read_workspace_file,
         write_workspace_file,

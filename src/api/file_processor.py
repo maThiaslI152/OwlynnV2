@@ -779,7 +779,7 @@ class FileWatcherHandler(FileSystemEventHandler):
                                 lines.append(f"\n## {name}\n")
                                 lines.append(text)
                         except Exception as e:
-                            import logging; logging.debug("Silent error suppressed: %s", e)
+                            logger.warning("Error suppressed: %s", e)
                             continue
             with open(output_path, "w", encoding="utf-8") as f:
                 f.write("\n".join(lines))

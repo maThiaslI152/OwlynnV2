@@ -87,5 +87,5 @@ async def searxng_available() -> bool:
             resp = await client.get(f"{SEARXNG_URL}/healthz")
             return resp.status_code == 200
     except Exception as e:
-        import logging; logging.debug("Silent error suppressed: %s", e)
+        logger.warning("Error suppressed: %s", e)
         return False

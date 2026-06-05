@@ -124,12 +124,22 @@ Requirements: `playwright install chromium`
 
 ### Web RAG (Focus-Query Ranking)
 
-When `focus_query` is provided to `web_search` or `fetch_webpage`, results are reranked by embedding similarity via local LM Studio.
+When `focus_query` is provided to `web_search` or `fetch_webpage`, or when `deep_research` scrapes documents larger than the threshold, results are reranked by embedding similarity via local LM Studio.
 
 Flow:
 1. Text chunked (720 chars, 120 char overlap)
 2. Query and all chunks embedded via `POST http://127.0.0.1:1234/v1/embeddings`
 3. Top-K chunks (default 5) returned by cosine similarity as numbered "source pack"
+
+### `deep_research` Tool
+
+Performs exhaustive web research by combining the Tiered search pipeline with concurrent async scraping using `Crawl4AI`.
+
+Pipeline:
+1. Calls `web_search` to retrieve search URLs.
+2. Deduplicates and concurrently crawls the top URLs (asyncio + Crawl4AI).
+3. If the combined markdown size exceeds `WEB_RAG_MIN_CHARS_FOR_RANK`, the text is sent to the Web RAG pipeline for extraction.
+4. Outputs the final markdown inside strict `<web_context>...</web_context>` tags for prompt injection defense.
 
 ## Key Decisions
 

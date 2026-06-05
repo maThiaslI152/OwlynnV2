@@ -86,7 +86,7 @@ def create_docx():
         ("DOCX Parser", "python-docx", ">=1.0"),
         ("XLSX Parser", "pandas + openpyxl", ">=3.0"),
         ("Vector Store", "Qdrant via Mem0", ">=1.0"),
-        ("LLM Engine", "Gemma 4 E4B (LM Studio)", "Q4_K_M"),
+        ("LLM Engine", "Qwen 2.5 3B (LM Studio)", "Q4_K_M"),
     ]
     for comp, lib, ver in specs:
         row = table.add_row().cells

@@ -8,6 +8,8 @@ import ipaddress
 import socket
 from urllib.parse import urlparse
 
+import logging
+logger = logging.getLogger(__name__)
 _BLOCKED_HOSTNAMES = frozenset(
     {
         "localhost",
@@ -49,7 +51,7 @@ def url_fetch_blocked_reason(url: str) -> str | None:
     try:
         parsed = urlparse(raw)
     except Exception as e:
-        import logging; logging.debug("Silent error suppressed: %s", e)
+        logger.warning("Error suppressed: %s", e)
         return "Invalid URL"
 
     if parsed.scheme not in ("http", "https"):

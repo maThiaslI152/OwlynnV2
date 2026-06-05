@@ -117,7 +117,7 @@ def unwrap_redirect_search_url(url: str) -> str:
                 if uddg:
                     return unquote(uddg)
     except Exception as e:
-        import logging; logging.debug("Silent error suppressed: %s", e)
+        logger.warning("Error suppressed: %s", e)
         pass
     return raw
 
@@ -256,7 +256,7 @@ async def _web_search_curl_cffi(
     try:
         from curl_cffi import requests as curl_requests  # type: ignore
     except Exception as e:
-        import logging; logging.debug("Silent error suppressed: %s", e)
+        logger.warning("Error suppressed: %s", e)
         return None, SearchAttempt(
             "tier1", "curl_cffi", "unavailable_dependency", "curl_cffi not installed"
         )
@@ -292,7 +292,7 @@ async def _web_search_curl_cffi(
         try:
             html = await asyncio.to_thread(_get, url)
         except Exception as e:
-            import logging; logging.debug("Silent error suppressed: %s", e)
+            logger.warning("Error suppressed: %s", e)
             blocked_details.append(f"{source}: {str(e)[:80]}")
             continue
         if detect_bot_block(html):
@@ -664,7 +664,7 @@ async def _web_search_dynamic_playwright(
     try:
         from playwright.async_api import async_playwright
     except Exception as e:
-        import logging; logging.debug("Silent error suppressed: %s", e)
+        logger.warning("Error suppressed: %s", e)
         return None, SearchAttempt(
             "tier3",
             "playwright_dynamic",
@@ -687,7 +687,7 @@ async def _web_search_dynamic_playwright(
             html = await page.content()
             await browser.close()
     except Exception as e:
-        import logging; logging.debug("Silent error suppressed: %s", e)
+        logger.warning("Error suppressed: %s", e)
         return None, SearchAttempt(
             "tier3", "playwright_dynamic", "network_error", str(e)[:180]
         )
@@ -791,7 +791,7 @@ async def web_search(
                         SearchAttempt("tier0.5", "searxng", "empty", "No results")
                     )
                 except Exception as e:
-                    import logging; logging.debug("Silent error suppressed: %s", e)
+                    logger.warning("Error suppressed: %s", e)
                     attempts.append(
                         SearchAttempt("tier0.5", "searxng", "error", str(e)[:120])
                     )
@@ -820,7 +820,7 @@ async def web_search(
 
                     results = await asyncio.to_thread(_search)
                 except Exception as e:
-                    import logging; logging.debug("Silent error suppressed: %s", e)
+                    logger.warning("Error suppressed: %s", e)
                     attempts.append(
                         SearchAttempt("tier2", "ddgs", "network_error", str(e)[:180])
                     )
@@ -894,7 +894,7 @@ def _html_static_fallback_text(html: str) -> str:
     try:
         soup = BeautifulSoup(html, "lxml")
     except Exception as e:
-        import logging; logging.debug("Silent error suppressed: %s", e)
+        logger.warning("Error suppressed: %s", e)
         soup = BeautifulSoup(html, "html.parser")
     chunks: list[str] = []
     title = soup.find("title")
@@ -926,7 +926,7 @@ def _html_to_plain_text(html: str) -> str:
     try:
         soup = BeautifulSoup(html, "lxml")
     except Exception as e:
-        import logging; logging.debug("Silent error suppressed: %s", e)
+        logger.warning("Error suppressed: %s", e)
         soup = BeautifulSoup(html, "html.parser")
     for tag in soup(
         ["script", "style", "nav", "footer", "header", "aside", "iframe", "noscript"]
@@ -1033,7 +1033,7 @@ async def fetch_webpage(url: str, focus_query: str = "") -> str:
     except httpx.TimeoutException:
         return f"[fetch_webpage] Timed out fetching {url}"
     except Exception as e:
-        import logging; logging.debug("Silent error suppressed: %s", e)
+        logger.warning("Error suppressed: %s", e)
         return f"[fetch_webpage] Error: {str(e)}"
 
 
@@ -1090,5 +1090,98 @@ async def fetch_webpage_dynamic(url: str, focus_query: str = "") -> str:
         return f"📄 [Dynamic] Content from {url}:\n\n{out}"
 
     except Exception as e:
-        import logging; logging.debug("Silent error suppressed: %s", e)
+        logger.warning("Error suppressed: %s", e)
         return f"[fetch_webpage_dynamic] Error: {str(e)}"
+
+
+async def _crawl_urls(urls: list[str]) -> str:
+    """Helper to crawl multiple URLs concurrently and extract markdown."""
+    try:
+        from crawl4ai import AsyncWebCrawler
+    except ImportError:
+        return "[deep_research] Error: crawl4ai is not installed."
+
+    try:
+        async with AsyncWebCrawler() as crawler:
+            tasks = [crawler.arun(url=u) for u in urls]
+            results = await asyncio.gather(*tasks)
+
+            context = ""
+            for res in results:
+                if getattr(res, "markdown", None):
+                    context += f"\n\n=== Source: {res.url} ===\n{res.markdown}\n"
+            return context.strip()
+    except Exception as e:
+        logger.error(f"_crawl_urls error: {e}")
+        return f"[deep_research crawl error]: {e}"
+
+
+@tool
+async def deep_research(
+    query: str,
+    max_urls: int = 3,
+) -> str:
+    """
+    Perform a deep web research pass. This searches the web for the query,
+    then automatically crawls the top resulting pages to extract full markdown context
+    instead of just search snippets. Use this when you need deep, detailed information
+    from inside web pages.
+
+    Args:
+        query: The search query.
+        max_urls: Number of top results to crawl (default 3).
+    """
+    # 1. Run the existing tiered web search pipeline
+    try:
+        # We invoke the underlying python function of the tool
+        search_out = await web_search.ainvoke({"query": query})
+    except Exception as e:
+        return f"[deep_research search error]: {e}"
+
+    if not search_out or "[web_search] Unable to retrieve" in search_out:
+        return f"Search failed or yielded no results.\n\n{search_out}"
+
+    # 2. Extract URLs from the formatted markdown output
+    # web_search format: "   URL: https://..."
+    urls = re.findall(r"URL:\s+(https?://[^\s]+)", search_out)
+    
+    # Deduplicate and limit
+    seen = set()
+    unique_urls = []
+    for u in urls:
+        if u not in seen:
+            seen.add(u)
+            unique_urls.append(u)
+            if len(unique_urls) >= max_urls:
+                break
+
+    if not unique_urls:
+        return f"Could not extract any URLs from search results.\n\nSearch Snippets:\n{search_out}"
+
+    # 3. Crawl the top URLs
+    crawl_markdown = await _crawl_urls(unique_urls)
+
+    if not crawl_markdown or "Error:" in crawl_markdown:
+        return f"Search succeeded but deep crawl failed. Fallback to snippets:\n\n{search_out}\n\nCrawl error: {crawl_markdown}"
+
+    # 4. Context Reranking (Web RAG)
+    from src.config.config_loader import config
+    from src.tools.web_retrieval import rank_chunks_to_source_pack
+    
+    web_rag_enabled = str(config.get("web_search.web_rag.enabled", "true")).lower() == "true"
+    min_chars = int(config.get("web_search.web_rag.min_chars_for_rank", 1800))
+    
+    final_output = crawl_markdown
+    if web_rag_enabled and len(crawl_markdown) > min_chars:
+        # We pass the full crawled markdown to be chunked and ranked against the query
+        pack = await rank_chunks_to_source_pack(query, "Multiple Sources (deep_research)", crawl_markdown)
+        if pack:
+            final_output = pack
+            
+    # 5. Return combined deep context with Prompt Injection security tags
+    return f"""🔍 Deep Research Results for: "{query}"
+
+<web_context>
+{final_output}
+</web_context>"""
+

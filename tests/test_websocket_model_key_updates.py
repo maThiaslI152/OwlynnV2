@@ -67,7 +67,7 @@ def _collect_ws_events(ws, max_events=40):
 
 
 def test_websocket_uses_updated_model_key_after_profile_post(client):
-    new_model = "gemma-4-e2b-heretic-uncensored-mlx"
+    new_model = "qwen2.5-1.5b-instruct"
     resp = client.post("/api/profile", json={"small_llm_model_name": new_model})
     assert resp.status_code == 200
 
@@ -86,7 +86,7 @@ def test_websocket_uses_updated_model_key_after_profile_post(client):
 
 def test_websocket_run_does_not_emit_legacy_model_key_after_update(client):
     legacy = "liquid/lfm2.5-1.2b"
-    new_model = "gemma-4-e2b-heretic-uncensored-mlx"
+    new_model = "qwen2.5-1.5b-instruct"
     resp = client.post("/api/profile", json={"small_llm_model_name": new_model})
     assert resp.status_code == 200
 

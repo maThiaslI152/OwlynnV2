@@ -89,7 +89,7 @@ class LLMPool:
                             model=model_cfg.get("model_name"),
                         )
             except Exception as e:
-                import logging; logging.debug("Silent error suppressed: %s", e)
+                logger.warning("Error suppressed: %s", e)
                 model_cfg = get_model_config("small")
                 extra_body = dict(model_cfg.get("extra_body") or {})
                 extra_body["max_output_tokens"] = model_cfg.get(
@@ -142,7 +142,7 @@ class LLMPool:
 
             cls._medium_llm = ChatOpenAI(
                 model=model_cfg.get(
-                    "model_name", "gemma-4-e4b-uncensored-hauhaucs-aggressive"
+                    "model_name", "qwen2.5-3b-instruct"
                 ),
                 api_key="sk-local-no-key-needed",
                 base_url=model_cfg.get("base_url", "http://127.0.0.1:1234/v1"),

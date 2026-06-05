@@ -164,7 +164,7 @@ def show_menu():
     print()
     print("  Models under test:")
     print("    Small:  ibm-grok4-ultrafast-coder-1b (1B)")
-    print("    Medium: gemma-4-e4b-uncensored-hauhaucs-aggressive (4B Q4_K_M)")
+    print("    Medium: qwen2.5-3b-instruct (4B Q4_K_M)")
     print("    Cloud:  DeepSeek API")
     print()
     print("  Available benchmark suites:")

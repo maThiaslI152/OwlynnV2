@@ -187,7 +187,7 @@ def _resolve_audit_dir() -> Path:
         if audit_dir_str:
             return Path(audit_dir_str).expanduser().resolve()
     except Exception as e:
-        import logging; logging.debug("Silent error suppressed: %s", e)
+        logger.warning("Error suppressed: %s", e)
         pass
     return Path.home() / ".owlynn" / "logs"
 

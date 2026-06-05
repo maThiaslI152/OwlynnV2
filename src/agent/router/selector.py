@@ -32,7 +32,7 @@ def _check_cloud_available() -> bool:
         api_key = resolve_deepseek_api_key()
         return bool(api_key)
     except Exception as e:
-        import logging; logging.debug("Silent error suppressed: %s", e)
+        logger.warning("Error suppressed: %s", e)
         return False
 
 

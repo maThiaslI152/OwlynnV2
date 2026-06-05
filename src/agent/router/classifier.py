@@ -99,7 +99,7 @@ def parse_classification(content: str) -> RouteClassification:
             reasoning=reasoning,
         )
     except Exception as e:
-        import logging; logging.debug("Silent error suppressed: %s", e)
+        logger.warning("Error suppressed: %s", e)
         return _default_classification()
 
 

@@ -2,6 +2,8 @@ import logging
 import re
 from langchain_core.messages import AIMessage, ToolMessage
 
+import logging
+logger = logging.getLogger(__name__)
 logger = logging.getLogger("src.api")
 
 connected_websockets = set()
@@ -112,7 +114,7 @@ async def build_message_content(text: str, files: list):
         try:
             raw_bytes = base64.b64decode(data_b64)
         except Exception as e:
-            import logging; logging.debug("Silent error suppressed: %s", e)
+            logger.warning("Error suppressed: %s", e)
             continue
 
         if mime.startswith("image/"):

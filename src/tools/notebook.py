@@ -130,7 +130,7 @@ def notebook_run(code: str) -> str:
         return result
 
     except Exception as e:
-        import logging; logging.debug("Silent error suppressed: %s", e)
+        logger.warning("Error suppressed: %s", e)
         tb = traceback.format_exc()
         return f"[Cell {cell_num}] Error:\n{tb}"
 

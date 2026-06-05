@@ -24,6 +24,8 @@ import os
 import sys
 
 
+import logging
+logger = logging.getLogger(__name__)
 def setup_logging(level: int = logging.INFO) -> None:
     """Configure root logger, application handler, and audit subsystem.
 
@@ -99,7 +101,7 @@ def _setup_audit_file_output() -> None:
             channel_levels = channel_levels_raw
         enabled = profile.get("audit_log_enabled", True)
     except Exception as e:
-        import logging; logging.debug("Silent error suppressed: %s", e)
+        logger.warning("Error suppressed: %s", e)
         pass
     finally:
         configure_audit_log(channel_levels=channel_levels, enabled=enabled)

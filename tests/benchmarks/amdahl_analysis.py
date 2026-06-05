@@ -59,12 +59,12 @@ ROUTE_MAP = {
 # Default mock LLM delays used in benchmarks (ms) per route
 # These represent realistic LM Studio inference latencies on Mac M4 Air:
 # - Small:  ibm-grok4-ultrafast-coder-1b (1B, ~10-20ms)
-# - Medium: gemma-4-e4b-uncensored-hauhaucs-aggressive (4B Q4_K_M, ~50-150ms)
+# - Medium: qwen2.5-3b-instruct (4B Q4_K_M, ~50-150ms)
 # - Cloud:  DeepSeek API (~200-500ms)
 LLM_DELAYS_MS = {
     "router": 15,  # Small LLM (ibm-grok4-1b) — routing prompt is short
     "simple": 15,  # Small LLM (ibm-grok4-1b)
-    "complex-default": 80,  # Medium-default (gemma-4-e4b Q4_K_M)
+    "complex-default": 80,  # Medium-default (qwen2.5-3b Q4_K_M)
     "complex-vision": 120,  # Medium-vision
     "complex-longctx": 150,  # Medium-longctx
     "complex-cloud": 300,  # Cloud (DeepSeek API)

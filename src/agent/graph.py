@@ -324,7 +324,7 @@ async def _check_cloud_connectivity() -> dict:
                 result["key_valid"] = True
                 result["error"] = f"Unexpected response: HTTP {response.status_code}"
     except Exception as e:
-        import logging; logging.debug("Silent error suppressed: %s", e)
+        logger.warning("Error suppressed: %s", e)
         result["error"] = str(e)
 
     return result
@@ -335,7 +335,7 @@ async def init_agent(checkpointer=None):
     try:
         await mcp_manager.initialize(str(MCP_CONFIG_PATH))
     except Exception as e:
-        import logging; logging.debug("Silent error suppressed: %s", e)
+        logger.warning("Error suppressed: %s", e)
         pass
 
     # Reset cloud subsystems for fresh session

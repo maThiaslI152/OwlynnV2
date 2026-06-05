@@ -137,7 +137,7 @@ class MCPClientManager:
                     ]
                     return "\n".join(text_parts)
         except Exception as e:
-            import logging; logging.debug("Silent error suppressed: %s", e)
+            logger.warning("Error suppressed: %s", e)
             return f"Error executing MCP tool {tool_name} on {server_name}: {str(e)}"
 
     def get_tools(self) -> List[BaseTool]:

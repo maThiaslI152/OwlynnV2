@@ -25,7 +25,7 @@ async def api_update_profile(body: dict):
             update_profile(field, value)
             updated_fields.append(field)
         except Exception as exc:
-            import logging; logging.debug("Silent error suppressed: %s", exc)
+            logger.warning("Error suppressed: %s", exc)
             update_errors[field] = str(exc)
     needs_llm_clear = any(f in _LLM_SENSITIVE_FIELDS for f in updated_fields)
     if needs_llm_clear:

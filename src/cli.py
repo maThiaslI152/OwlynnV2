@@ -12,6 +12,8 @@ import json
 import click
 import httpx
 
+import logging
+logger = logging.getLogger(__name__)
 DEFAULT_URL = "http://127.0.0.1:8000"
 
 
@@ -36,7 +38,7 @@ def query(prompt: str, project: str, approve_sensitive: bool):
     url = f"{get_base_url()}/v1/chat/completions"
 
     payload = {
-        "model": "gemma-4",
+        "model": "qwen2.5-3b",
         "messages": [{"role": "user", "content": prompt}],
         "stream": False,
         "project_id": project,
@@ -54,7 +56,7 @@ def query(prompt: str, project: str, approve_sensitive: bool):
                 try:
                     click.echo(response.json())
                 except Exception as e:
-                    import logging; logging.debug("Silent error suppressed: %s", e)
+                    logger.warning("Error suppressed: %s", e)
                     click.echo(response.text[:200])
                 sys.exit(1)
 
@@ -86,7 +88,7 @@ def stream(prompt: str, project: str, approve_sensitive: bool):
     url = f"{get_base_url()}/v1/chat/completions"
 
     payload = {
-        "model": "gemma-4",
+        "model": "qwen2.5-3b",
         "messages": [{"role": "user", "content": prompt}],
         "stream": True,
         "project_id": project,
@@ -140,7 +142,7 @@ def status():
             try:
                 click.echo(json.dumps(response.json(), indent=2))
             except Exception as e:
-                import logging; logging.debug("Silent error suppressed: %s", e)
+                logger.warning("Error suppressed: %s", e)
                 click.echo(f"Response: {response.text}")
         else:
             click.echo(f"🔴 Agent returned server status {response.status_code}")

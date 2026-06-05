@@ -190,7 +190,7 @@ def verify_deepseek_api_key(api_key: str) -> tuple[bool, str]:
     except httpx.TimeoutException:
         return False, "Connection timed out — check network or API endpoint"
     except Exception as e:
-        import logging; logging.debug("Silent error suppressed: %s", e)
+        logger.warning("Error suppressed: %s", e)
         return False, str(e)
 
 

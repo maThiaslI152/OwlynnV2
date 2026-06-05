@@ -1,5 +1,7 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+import logging
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 import json
@@ -91,7 +93,7 @@ def _stringify_tool_input(value) -> str | None:
     try:
         return json.dumps(value, ensure_ascii=False)
     except Exception as e:
-        import logging; logging.debug("Silent error suppressed: %s", e)
+        logger.warning("Error suppressed: %s", e)
         return str(value)
 
 
@@ -208,7 +210,7 @@ class GraphSession:
                 q.put_nowait((err_msg, correlation_id))
             raise
         except Exception as e:
-            import logging; logging.debug("Silent error suppressed: %s", e)
+            logger.warning("Error suppressed: %s", e)
             import traceback
 
             traceback.print_exc()
@@ -341,7 +343,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                             ):
                                 continue
                             # Suppress system instruction echo in streaming chunks.
-                            # Some models (Gemma) regurgitate the folded system prompt as output.
+                            # Some models (Qwen) regurgitate the folded system prompt as output.
                             # Accumulate text until we've passed the echo block, then start sending.
                             _stream_echo_buffer += text
                             if "[SYSTEM INSTRUCTIONS BEGIN]" in _stream_echo_buffer:
@@ -781,7 +783,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                         user_input[:1000], file_names=file_names
                     )
                 except Exception as e:
-                    import logging; logging.debug("Silent error suppressed: %s", e)
+                    logger.warning("Error suppressed: %s", e)
                     title = ""
                 # Register chat in project manager (idempotent — dedups by chat_id)
                 import time as time_module

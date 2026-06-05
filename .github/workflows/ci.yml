@@ -66,6 +66,7 @@ jobs:
     name: Electron Build Check (macOS)
     runs-on: macos-latest
     needs: frontend-checks
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

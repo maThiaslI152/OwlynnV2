@@ -14,6 +14,11 @@ manifest:
   version: 3
   generated: "2026-06-04T15:00:00Z"
   files:
+    # ── New in v4 ──
+    - path: docs/changes/phase-2-architectural-upgrades/CHANGELOG.md
+      status: active
+      category: changelog
+      last_updated: 2026-06-06
     # ── New in v3 ──
     - path: docs/evaluations/local-frontier-eval-2026-06-04.md
       status: active

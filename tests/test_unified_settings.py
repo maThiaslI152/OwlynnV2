@@ -156,7 +156,7 @@ class TestProfileUpdateRuntimeBehavior:
             LLMPool._medium_llm = object()
             resp = client.post(
                 "/api/profile",
-                json={"small_llm_model_name": "gemma-4-e2b-heretic-uncensored-mlx"},
+                json={"small_llm_model_name": "qwen2.5-1.5b-instruct"},
             )
             assert resp.status_code == 200
             assert LLMPool._small_llm is None
