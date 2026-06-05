@@ -15,6 +15,14 @@ manifest:
   generated: "2026-06-04T15:00:00Z"
   files:
     # ── New in v3 ──
+    - path: docs/evaluations/local-frontier-eval-2026-06-04.md
+      status: active
+      category: evaluation
+      last_updated: 2026-06-04
+    - path: docs/standards/EVALUATION.md
+      status: active
+      category: standards
+      last_updated: 2026-06-04
     - path: docs/HITL.md
       status: active
       category: architecture
@@ -22,6 +30,10 @@ manifest:
     - path: docs/MEMORY.md
       status: active
       category: architecture
+      last_updated: 2026-06-04
+    - path: docs/changes/backend-stabilization/CHANGELOG.md
+      status: active
+      category: changelog
       last_updated: 2026-06-04
     - path: docs/changes/centralize-config/CHANGELOG.md
       status: active
@@ -80,22 +92,12 @@ manifest:
       status: active
       category: architecture
       last_updated: 2026-05-31
-    - path: docs/AI_AGENT_INDEX.md
-      status: active
-      category: reference
-      last_updated: 2026-05-31
-    - path: docs/AI_AGENT_PROJECT_GUIDE.md
-      status: active
-      category: guide
-      last_updated: 2026-05-31
+
     - path: docs/API_REFERENCE.md
       status: active
       category: reference
       last_updated: 2026-05-31
-    - path: docs/ARCHITECTURE_OVERVIEW.md
-      status: active
-      category: architecture
-      last_updated: 2026-05-31
+
     - path: docs/AUDIT_EXPORT_VERIFY_RUNBOOK.md
       status: active
       category: guide
@@ -132,10 +134,7 @@ manifest:
       status: active
       category: guide
       last_updated: 2026-05-31
-    - path: docs/HUMAN_PROJECT_GUIDE.md
-      status: active
-      category: guide
-      last_updated: 2026-05-31
+
     - path: docs/INDEX.md
       status: active
       category: reference
@@ -193,9 +192,13 @@ manifest:
       category: architecture
       last_updated: 2026-05-31
     - path: docs/architecture/overview.md
-      status: unknown
-      category: unknown
-      last_updated: unknown
+      status: active
+      category: architecture
+      last_updated: 2026-06-04
+    - path: docs/archive/ARCHITECTURE_OVERVIEW.md
+      status: archived
+      category: archive
+      last_updated: 2026-06-04
     - path: docs/archive/AGENT_RESUME_PLAYBOOK.md
       status: archived
       category: archive

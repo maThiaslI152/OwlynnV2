@@ -35,9 +35,9 @@ def get_safe_workspace_path(filename: str) -> tuple[str, str | None]:
     else:
         workspace_root = tool_workspace_root()
 
-    filepath = os.path.abspath(os.path.join(workspace_root, filename))
-    root_abs = os.path.abspath(workspace_root)
-    base_abs = os.path.abspath(BASE_WORKSPACE_DIR)
+    filepath = os.path.realpath(os.path.join(workspace_root, filename))
+    root_abs = os.path.realpath(workspace_root)
+    base_abs = os.path.realpath(BASE_WORKSPACE_DIR)
     if not filepath.startswith(root_abs) or not filepath.startswith(base_abs):
         return "", "Error: Access denied. Path is outside workspace."
     return filepath, None
@@ -239,7 +239,9 @@ def recall_all_memories(query: str = "", project_id: str = "") -> str:
         return "Mem0/Qdrant vector memory is not initialized."
     
     try:
-        user_id = f"project:{project_id}" if project_id else "owner"
+        from .workspace_context import _active_project_id
+        active_pid = project_id or _active_project_id.get()
+        user_id = f"project:{active_pid}" if active_pid and active_pid != "default" else "owner"
         search_query = query if query else " "
         results_dict = mem0_memory.search(search_query, filters={"user_id": user_id}, limit=20)
         results = results_dict.get("results", []) if isinstance(results_dict, dict) else results_dict

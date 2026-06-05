@@ -166,7 +166,10 @@ async def api_create_project(body: dict):
 
 @router.get("/api/projects/{project_id}")
 async def api_get_project(project_id: str):
-    return project_manager.get_project(project_id)
+    project = project_manager.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
 
 
 
@@ -174,7 +177,9 @@ async def api_get_project(project_id: str):
 async def api_add_project_chat(project_id: str, body: dict):
     # body: {id, name?}
     import time
-    chat_id = body["id"]
+    chat_id = body.get("id")
+    if not chat_id:
+        raise HTTPException(status_code=400, detail="Missing 'id' in body")
     name = body.get("name", "")
     # Generate a title from the first message if one was provided
     if not name and body.get("first_message"):
@@ -215,7 +220,8 @@ async def api_update_project_chat(project_id: str, chat_id: str, body: dict):
 async def api_delete_project(project_id: str):
     """Delete a project by its ID."""
     try:
-        success = project_manager.delete_project(project_id)
+        from src.memory.vector_lifecycle import VectorLifecycleManager
+        success = VectorLifecycleManager.delete_project_cascade(project_id)
         if success:
             return {"status": "ok"}
         else:
@@ -265,6 +271,8 @@ async def api_remove_project_knowledge(project_id: str, filename: str):
 @router.get("/api/history/{thread_id}")
 async def api_get_history(thread_id: str):
     """Retrieves full chat history for a specific thread."""
+    from src.api.server import app
+    from src.api.shared import serialize_message, logger
     try:
         agent = app.state.agent
         if not agent:
@@ -287,6 +295,9 @@ async def api_get_history(thread_id: str):
 
 @router.put("/api/projects/{project_id}")
 async def api_update_project(project_id: str, body: dict):
-    return project_manager.update_project(project_id, **body)
+    project = project_manager.update_project(project_id, **body)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
 
 

@@ -1,59 +1,14 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, File, UploadFile, HTTPException
+from fastapi.responses import FileResponse, PlainTextResponse
 router = APIRouter()
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, File, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from fastapi import Response
-from fastapi import HTTPException
-import json
-import asyncio
-import os
-import re
-from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
-from langgraph.types import Command
-from src.agent.graph import init_agent
-from src.agent.nodes.router import generate_chat_title_router_llm
-from src.agent.llm import LLMPool
-from src.memory.user_profile import get_profile, update_profile, VALID_FIELDS
-from src.memory.persona import get_persona, update_persona_field
-from src.memory.memory_manager import load_memories, save_memory, delete_memory
-from src.memory.long_term import memory as mem0_memory
-from src.memory.project import project_manager
-from src.memory.personal_assistant import (
-    get_relevant_topics,
-    get_user_interests_summary,
-    load_conversations_history,
-    get_memory_context_for_prompt,
-    track_topic,
-    update_interests,
-)
-from src.config.settings import WORKSPACE_DIR, get_project_workspace, normalize_project_id
-from src.api.file_processor import start_watcher
-from src.tools.workspace_context import reset_active_project, set_active_project_for_run
-from contextlib import asynccontextmanager
-import logging
-from src.config.audit_log import audit_info, audit_debug
-from src.config.config_loader import config
-from src.config.logging_config import setup_logging
-from src.agent.llm import LLMPool
-from langchain_core.messages import HumanMessage
-import asyncio as _asyncio
-from src.config.log_middleware import AuditLogMiddleware
-from src.agent.cloud_cost_tracker import get_cost_tracker
-from src.agent.graph import _check_cloud_connectivity
-from src.config.secret_store import verify_deepseek_api_key
-import os
-from src.hitl.fixtures import load_fixture
-import asyncio
-from src.config.audit_log import set_thread_id
-import traceback
-import base64
-from io import BytesIO
-import time
-import uuid
-import json
 
+import os
+import asyncio
+from src.api.shared import connected_websockets, logger
+from src.memory.project import project_manager
+from src.config.settings import WORKSPACE_DIR, get_project_workspace
+from src.config.audit_log import audit_info
+from src.config.config_loader import config
 
 def notify_file_processed(filepath_or_name, status="processed"):
     """Callback for FileWatcher background thread to broadcast over websockets and auto-index projects."""
@@ -108,54 +63,29 @@ def notify_file_processed(filepath_or_name, status="processed"):
                     if text and len(text.strip()) > 50:
                         async def index_task():
                             try:
-                                # Chunk the text: configurable chunk_size with overlap
-                                from src.config.config_loader import config as _app_cfg
-                                chunks = []
-                                chunk_size = int(_app_cfg.get("file_indexing.chunk_size", 1500))
-                                overlap = int(_app_cfg.get("file_indexing.overlap", 200))
-                                max_chunks = int(_app_cfg.get("file_indexing.max_chunks", 20))
-                                start = 0
-                                content_len = len(text)
-                                while start < content_len:
-                                    end = start + chunk_size
-                                    chunk = text[start:end].strip()
-                                    if chunk:
-                                        chunks.append(chunk)
-                                    start += chunk_size - overlap
+                                from src.memory.vector_lifecycle import VectorLifecycleManager
+                                await VectorLifecycleManager.index_processed_file(project_id, filename, text)
                                 
-                                # Index each chunk (up to max_chunks to prevent performance issues)
-                                for i, chunk_text in enumerate(chunks[:max_chunks]):
-                                    await project_manager.add_knowledge(
-                                        project_id,
-                                        f"{filename}#chunk{i}",
-                                        chunk_text
-                                    )
-                                logger.info("Auto-indexed %d chunks of %s into project %s knowledge base", len(chunks[:20]), filename, project_id)
+                                # Broadcast index success
+                                for ws in list(connected_websockets):
+                                    try:
+                                        coro = ws.send_json({"type": "file_status", "name": filename, "status": "indexed"})
+                                        asyncio.run_coroutine_threadsafe(coro, loop)
+                                    except Exception:
+                                        pass
                             except Exception as e:
                                 logger.error("Failed to auto-index file %s: %s", filepath, e)
+                                # Broadcast index failure
+                                for ws in list(connected_websockets):
+                                    try:
+                                        coro = ws.send_json({"type": "file_status", "name": filename, "status": "indexing_failed", "error": str(e)})
+                                        asyncio.run_coroutine_threadsafe(coro, loop)
+                                    except Exception:
+                                        pass
                                 
                         asyncio.run_coroutine_threadsafe(index_task(), loop)
         except Exception as e:
             logger.error("Error in watcher auto-indexing: %s", e)
-
-
-
-
-def extract_pdf_text(raw_bytes: bytes) -> str:
-    """Extract text from a PDF using PyMuPDF."""
-    try:
-        import fitz  # PyMuPDF
-        doc = fitz.open(stream=raw_bytes, filetype="pdf")
-        try:
-            pages_text = []
-            for page in doc:
-                pages_text.append(page.get_text())
-        finally:
-            doc.close()
-        return "\n\n".join(pages_text)
-    except Exception as e:
-        logger.error("PyMuPDF text extraction failed: %s", e)
-        return ""
 
 
 

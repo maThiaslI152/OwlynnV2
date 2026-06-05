@@ -44,6 +44,7 @@ _LONG_ANSWER_HINTS = {
     "explain", "write", "create", "implement", "build", "generate",
     "refactor", "analyze", "compare", "review", "summarize", "translate",
     "step by step", "in detail", "full code", "complete",
+    "visualize", "plot", "draw", "chart", "graph",
 }
 
 # Keywords that signal a short answer is fine
@@ -90,12 +91,8 @@ def estimate_token_budget(user_text: str, route: str) -> int:
     text_len = len(user_text)
     text_lower = user_text.lower()
 
-    # Start with tier-based estimate from input length
+    # Use full available budget for complex routes, relying on context cap safety
     budget = budget_max
-    for max_chars, tier_budget in _BUDGET_TIERS:
-        if text_len <= max_chars:
-            budget = min(tier_budget, budget_max)
-            break
 
     # Boost if the user is asking for something that needs a long answer
     if any(hint in text_lower for hint in _LONG_ANSWER_HINTS):
@@ -128,7 +125,7 @@ def estimate_token_budget(user_text: str, route: str) -> int:
 ROUTER_PROMPT = """Classify in one shot. No reasoning, no preamble, no markdown.
 
 simple = greetings/thanks/small talk OR a direct question answerable without tools or heavy reasoning.
-complex = code/math/writing, multi-step work, OR needs live web/news/weather/prices.
+complex = code/math/writing, multi-step work, OR needs live web/news/weather/prices. ANY mention of code, python, bugs, or review MUST be classified as complex.
 
 Toolbox categories (pick one or more, or "all" if unsure):
 - web_search: web lookup, live data, current information, news, weather, prices
@@ -330,7 +327,7 @@ async def router_node(state: AgentState) -> AgentState:
 
     if web_on and any(h in user_lower for h in _WEBISH_HINTS):
         logger.info("[router] Complex path — web/live-data intent (web_search enabled)")
-        route, toolbox = _resolve_complex_route(user_text, state, ["web_search"])
+        route, toolbox = _resolve_complex_route(user_text, state, ["all"])
         budget = estimate_token_budget(user_text, route)
         metadata = _build_router_metadata(
             route, confidence=0.9, reasoning="web_intent_detected",
@@ -349,6 +346,8 @@ async def router_node(state: AgentState) -> AgentState:
         "[file:" in user_lower
         or "uploaded to workspace" in user_lower
         or "workspace file" in user_lower
+        or "from the workspace" in user_lower
+        or "read the file" in user_lower
     ):
         logger.info("[router] Complex path — workspace / attachment context")
         route, toolbox = _resolve_complex_route(user_text, state, ["file_ops"])
@@ -389,14 +388,10 @@ async def router_node(state: AgentState) -> AgentState:
 
     # ── Deterministic complex-route bypasses ──────────────────────────
     # Code review / refactoring requests need the 9B model for depth.
-    _code_review_hints = (
-        "review this code", "code review", "review the code",
-        "check this code", "audit this code", "inspect this code",
-        "code quality", "improve this code", "refactor this",
-        "find bugs", "bug in this code", "fix this code",
-        "review this python", "review this function",
+    _code_review_pattern = re.compile(
+        r"(review|check|audit|inspect|improve|refactor|fix).*?(code|python|function|script|file|bug)", re.IGNORECASE
     )
-    if any(hint in user_lower for hint in _code_review_hints):
+    if _code_review_pattern.search(user_lower) or "find bugs" in user_lower:
         logger.info("[router] Complex path — code review detected")
         budget = estimate_token_budget(user_text, "complex-default")
         metadata = _build_router_metadata(
@@ -464,7 +459,7 @@ async def router_node(state: AgentState) -> AgentState:
     try:
         router_llm = small_llm.bind(
             temperature=float(config.get("router_llm.temperature", 0.05)),
-            max_tokens=int(config.get("router_llm.max_tokens", 512)),
+            max_tokens=int(config.get("router_llm.max_tokens")),
         )
         response = await router_llm.ainvoke(
             [HumanMessage(
@@ -910,7 +905,7 @@ async def generate_chat_title_router_llm(
 
         router_llm = small_llm.bind(
             temperature=float(config.get("chat_title.temperature", 0.2)),
-            max_tokens=int(config.get("chat_title.max_tokens", 64)),
+            max_tokens=int(config.get("chat_title.max_tokens")),
         )
         response = await router_llm.ainvoke(
             [HumanMessage(content=CHAT_TITLE_PROMPT.format(

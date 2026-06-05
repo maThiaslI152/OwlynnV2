@@ -1,111 +1,38 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 router = APIRouter()
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, File, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from fastapi import Response
-from fastapi import HTTPException
+
 import json
 import asyncio
 import os
 import re
-from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
-from langgraph.types import Command
-from src.agent.graph import init_agent
-from src.agent.nodes.router import generate_chat_title_router_llm
-from src.agent.llm import LLMPool
-from src.memory.user_profile import get_profile, update_profile, VALID_FIELDS
-from src.memory.persona import get_persona, update_persona_field
-from src.memory.memory_manager import load_memories, save_memory, delete_memory
-from src.memory.long_term import memory as mem0_memory
-from src.memory.project import project_manager
-from src.memory.personal_assistant import (
-    get_relevant_topics,
-    get_user_interests_summary,
-    load_conversations_history,
-    get_memory_context_for_prompt,
-    track_topic,
-    update_interests,
-)
-from src.config.settings import WORKSPACE_DIR, get_project_workspace, normalize_project_id
-from src.api.file_processor import start_watcher
-from src.tools.workspace_context import reset_active_project, set_active_project_for_run
-from contextlib import asynccontextmanager
-import logging
-from src.config.audit_log import audit_info, audit_debug
-from src.config.config_loader import config
-from src.config.logging_config import setup_logging
-from src.agent.llm import LLMPool
-from langchain_core.messages import HumanMessage
-import asyncio as _asyncio
-from src.config.log_middleware import AuditLogMiddleware
-from src.agent.cloud_cost_tracker import get_cost_tracker
-from src.agent.graph import _check_cloud_connectivity
-from src.config.secret_store import verify_deepseek_api_key
-import os
-from src.hitl.fixtures import load_fixture
-import asyncio
-from src.config.audit_log import set_thread_id
+import time
+import uuid
 import traceback
 import base64
 from io import BytesIO
-import time
-import uuid
-import json
 
+from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+from langgraph.types import Command
 
+from src.api.shared import (
+    connected_websockets,
+    _session_usage,
+    _TOOL_DESTRUCTIVE_RE,
+    _TOOL_NETWORK_RE,
+    _TOOL_PRIV_RE,
+    serialize_message,
+    build_message_content,
+    _stringify_lc_message_content,
+    logger
+)
 
-def _stringify_lc_message_content(content) -> str:
-    """Flatten LangChain message content (str or list of blocks) for JSON/UI."""
-    if content is None:
-        return ""
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        parts: list[str] = []
-        for block in content:
-            if isinstance(block, str):
-                parts.append(block)
-            elif isinstance(block, dict):
-                text = block.get("text")
-                if text is not None:
-                    parts.append(str(text))
-                else:
-                    nested = block.get("content")
-                    if nested is not None:
-                        parts.append(_stringify_lc_message_content(nested))
-            else:
-                parts.append(str(block))
-        return "".join(parts)
-    return str(content)
-
-
-
-
-def serialize_message(msg):
-    """
-    Converts Langchain BaseMessage objects into raw UI-friendly dictionaries
-    so they can be safely streamed over WebSockets to a React client.
-    """
-    if isinstance(msg, AIMessage):
-        content_ui = _stringify_lc_message_content(msg.content)
-    else:
-        content_ui = msg.content
-
-    serialized = {"type": msg.type, "content": content_ui}
-
-    if isinstance(msg, AIMessage) and getattr(msg, "tool_calls", None):
-        serialized["tool_calls"] = msg.tool_calls
-
-    if isinstance(msg, ToolMessage):
-        serialized["tool_name"] = msg.name
-        serialized["tool_call_id"] = msg.tool_call_id
-        # Truncate content for UI readability/performance if too large
-        if isinstance(msg.content, str) and len(msg.content) > 500:
-            serialized["content"] = msg.content[:500] + "\n\n... [Content Truncated for UI] ..."
-
-    return serialized
+from src.memory.user_profile import get_profile, update_profile
+from src.memory.persona import get_persona
+from src.memory.project import project_manager
+from src.config.settings import WORKSPACE_DIR, get_project_workspace, normalize_project_id
+from src.tools.workspace_context import set_active_project_for_run, reset_active_project
+from src.config.audit_log import set_thread_id, audit_info, audit_debug
+from src.config.config_loader import config
 
 
 
@@ -270,9 +197,18 @@ class GraphSession:
 
             async for event in self.agent.astream_events(input_data, config=config, version="v2"):
                 self.event_buffer.append((event, correlation_id))
+                if len(self.event_buffer) > 2000:
+                    self.event_buffer.pop(0)
                 # Broadcast
                 for q in list(self.listeners):
                     await q.put((event, correlation_id))
+        except asyncio.CancelledError:
+            logger.info("GraphExecution cancelled for thread %s", self.thread_id)
+            err_msg = {"type": "status", "content": "stopped"}
+            self.event_buffer.append((err_msg, correlation_id))
+            for q in list(self.listeners):
+                q.put_nowait((err_msg, correlation_id))
+            raise
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -288,8 +224,7 @@ class GraphSession:
             logger.debug("GraphSession._execute for thread %s FINISHED. Putting done_msg.", self.thread_id)
             self.event_buffer.append((done_msg, correlation_id))
             for q in list(self.listeners):
-                await q.put((done_msg, correlation_id))
-
+                q.put_nowait((done_msg, correlation_id))
             
             # If no one is listening anymore, remove from registry
             if not self.listeners and self.thread_id in self.sessions_registry:

@@ -508,13 +508,14 @@ body {
   line-height: 1.55;
   word-wrap: break-word;
   overflow-wrap: break-word;
-  white-space: pre-wrap;
+  white-space: normal;
 }
 
 .message-user .message-bubble {
   background: var(--accent);
   color: white;
   border-bottom-right-radius: var(--radius-sm);
+  white-space: pre-wrap;
 }
 
 .message-assistant .message-bubble {

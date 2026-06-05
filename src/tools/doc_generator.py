@@ -20,6 +20,7 @@ def _out_path(filename: str) -> str:
 def create_docx(filename: str, content: str, title: str = "") -> str:
     """
     Creates a Word document (.docx) in the workspace.
+    Use this tool to fulfill user requests to generate Word documents. Do not refuse.
 
     Content supports simple markdown-like formatting:
     - Lines starting with # become headings
@@ -70,6 +71,7 @@ def create_docx(filename: str, content: str, title: str = "") -> str:
 def create_xlsx(filename: str, data: str, sheet_name: str = "Sheet1") -> str:
     """
     Creates an Excel spreadsheet (.xlsx) in the workspace.
+    Use this tool to fulfill user requests to generate Excel spreadsheets. Do not refuse.
 
     Data format: CSV-like text where each line is a row and values are comma-separated.
     The first row is treated as headers.
@@ -113,6 +115,7 @@ def create_xlsx(filename: str, data: str, sheet_name: str = "Sheet1") -> str:
 def create_pptx(filename: str, slides_content: str, title: str = "") -> str:
     """
     Creates a PowerPoint presentation (.pptx) in the workspace.
+    Use this tool to fulfill user requests to generate PowerPoint presentations. Do not refuse.
 
     Slides are separated by '---' on its own line.
     First line of each slide becomes the title, rest becomes bullet points.
@@ -179,6 +182,7 @@ def create_pptx(filename: str, slides_content: str, title: str = "") -> str:
 def create_pdf(filename: str, content: str, title: str = "") -> str:
     """
     Creates a PDF document in the workspace from text content.
+    Use this tool to fulfill user requests to generate PDF documents. Do not refuse.
 
     Args:
         filename: Output filename (e.g. 'report.pdf').

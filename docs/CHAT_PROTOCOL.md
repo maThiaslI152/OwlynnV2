@@ -7,7 +7,7 @@ owner: human
 
 # Chat & Events Protocol
 
-> **Purpose:** Developer-facing JSON contract between the frontend WebSocket client (`frontend-v2`), the backend WebSocket handler (`src/api/server.py`), and the LangGraph execution stream forwarded to the browser.
+> **Purpose:** Developer-facing JSON contract between the frontend WebSocket client (`frontend-v2`), the backend WebSocket handler (`src/api/ws/handler.py`), and the LangGraph execution stream forwarded to the browser.
 
 ## Overview
 
@@ -16,7 +16,7 @@ Defines all client-to-server payloads and server-to-client event types. Keeping 
 ## Entry Points
 
 ```text
-src/api/server.py                  # websocket_endpoint(), serialize_message(), forward_events()
+src/api/ws/handler.py              # websocket_endpoint(), serialize_message(), forward_events()
 frontend-v2/src/lib/wsClient.ts     # WebSocket client send/receive
 frontend-v2/src/App.tsx             # Event handler wiring
 src/agent/nodes/simple.py           # Simple node streaming source
@@ -495,7 +495,7 @@ cd frontend-v2 && npx vitest run
 
 - [`docs/API_REFERENCE.md`](API_REFERENCE.md) — REST endpoint reference
 - [`docs/ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) — system architecture
-- [`src/api/server.py`](../src/api/server.py) — WebSocket handler implementation
+- [`src/api/ws/handler.py`](../src/api/ws/handler.py) — WebSocket handler implementation
 
 ## Last updated
 

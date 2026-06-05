@@ -72,7 +72,7 @@ class LLMPool:
                             api_key="sk-local-no-key-needed",
                             base_url=model_cfg.get("base_url", "http://127.0.0.1:1234/v1"),
                             temperature=model_cfg.get("temperature", 0.2),
-                            max_tokens=model_cfg.get("max_tokens", 512),
+                            max_tokens=model_cfg.get("max_tokens"),
                             extra_body=extra_body,
                             request_timeout=model_cfg.get("request_timeout") or model_cfg.get("timeout", 10),
                         )
@@ -89,7 +89,7 @@ class LLMPool:
                     api_key="sk-local-no-key-needed",
                     base_url=model_cfg.get("base_url", "http://127.0.0.1:1234/v1"),
                     temperature=model_cfg.get("temperature", 0.2),
-                    max_tokens=model_cfg.get("max_tokens", 512),
+                    max_tokens=model_cfg.get("max_tokens"),
                     extra_body=extra_body,
                     request_timeout=model_cfg.get("request_timeout") or model_cfg.get("timeout", 10),
                 )
@@ -144,7 +144,7 @@ class LLMPool:
                 api_key="sk-local-no-key-needed",
                 base_url=model_cfg.get("base_url", "http://127.0.0.1:1234/v1"),
                 temperature=model_cfg.get("temperature", 0.4),
-                max_tokens=model_cfg.get("max_tokens", 4096),
+                max_tokens=model_cfg.get("max_tokens"),
                 extra_body=extra_body,
                 request_timeout=model_cfg.get("request_timeout") or model_cfg.get("timeout", 120),
             )
@@ -203,7 +203,7 @@ class LLMPool:
                 api_key=api_key,
                 base_url=model_cfg.get("base_url", "https://api.deepseek.com/v1"),
                 streaming=True,
-                max_tokens=model_cfg.get("max_tokens", 8192),
+                max_tokens=model_cfg.get("max_tokens"),
                 temperature=model_cfg.get("temperature", 0.4),
                 request_timeout=timeout,
             )

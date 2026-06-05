@@ -32,7 +32,7 @@ Fastest entry point for locating source files, contracts, and tests before makin
 
 | File | Role |
 |------|------|
-| `src/api/server.py` | Backend WebSocket + REST |
+| `src/api/routes/` & `src/api/ws/` | Backend REST + WebSocket |
 | `docs/CHAT_PROTOCOL.md` | WS event contract |
 | `docs/API_REFERENCE.md` | REST endpoint reference |
 | `frontend-v2/src/App.tsx` | Frontend WS consumer |
@@ -114,7 +114,7 @@ Owlynn is a local-first AI coworker that runs a LangGraph agent backend with a T
 | Layer | Technology | Location |
 |-------|-----------|----------|
 | Frontend | Tauri + React/TypeScript | `frontend-v2/` |
-| Backend | FastAPI + WebSocket streaming | `src/api/server.py` |
+| Backend | FastAPI + WebSocket streaming | `src/api/routes/` & `src/api/ws/` |
 | Agent orchestration | LangGraph nodes | `src/agent/` |
 | Memory | JSON + Mem0/Qdrant | `src/memory/` |
 | Tools | File ops, web, notebook, docs, skills, MCP | `src/tools/` |

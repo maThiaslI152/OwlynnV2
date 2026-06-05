@@ -100,17 +100,8 @@ async def plan_review_node(state: AgentState) -> AgentState:
         stated_intent = result.get("stated_intent", "")
         pitfalls = result.get("pitfalls", [])
     except Exception as e:
-        logger.warning("[plan_review] Small LLM failed, trying Medium fallback: %s", e)
-        try:
-            from src.agent.llm import get_medium_llm
-            medium_llm = await get_medium_llm("default")
-            response = await medium_llm.ainvoke(_PLAN_REVIEW_PROMPT.format(plan_summary=plan_summary))
-            result = _parse_json(response.content if hasattr(response, "content") else str(response))
-            stated_intent = result.get("stated_intent", "")
-            pitfalls = result.get("pitfalls", [])
-        except Exception as e2:
-            logger.warning("[plan_review] Medium LLM also failed: %s", e2)
-            pitfalls = ["Unable to automatically analyze plan risks — please review manually."]
+        logger.warning("[plan_review] Small LLM failed: %s", e)
+        pitfalls = ["Unable to automatically analyze plan risks — please review manually."]
 
     # ── Build interrupt payload ──────────────────────────────────
     from src.agent.hitl.context import build_hitl_context

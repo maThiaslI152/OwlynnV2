@@ -19,8 +19,9 @@ Tools are organized into 5 toolbox categories. The Router selects which categori
 src/agent/tool_sets.py            # ToolboxRegistry, resolve_tools()
 src/tools/                        # Tool implementations (@tool decorators)
 src/agent/nodes/complex.py         # Tool binding in complex_llm_node()
+src/agent/nodes/complex_utils/     # Tool formatting and fallback
 src/agent/nodes/security_proxy.py  # SENSITIVE_TOOLS set
-src/api/server.py                  # Tool discovery (GET /api/tools)
+src/api/routes/files.py            # Tool discovery (GET /api/tools)
 ```
 
 ## Architecture

@@ -49,9 +49,16 @@ memory:
 
 ## Context Budget Management
 
-Memory context is capped at 6000 characters (~1500 tokens) to stay within the model's context window. This was reduced from unlimited to prevent exceeding LM Studio's default `n_ctx=8192`.
+Memory context is capped at 12000 characters (~3000 tokens) to stay within the model's context window. This prevents exceeding LM Studio's default `n_ctx=8192`.
 
 The summarization system compresses older conversation turns when token usage exceeds 85% of the context window. Recent turns (last 10) are preserved in full. Summaries include a "Topics Discussed" section for continuity across compressions.
+
+## Vector Lifecycle Management
+
+The `VectorLifecycleManager` orchestrates the insertion and deletion of vector data within Mem0 and Qdrant. It is hooked into the file watcher events to ensure data integrity:
+- **Orphan Prevention**: Deleting a workspace file instantly drops its vectors from Qdrant.
+- **Deduplication Check**: When a file is updated, the system natively deletes the old chunks before embedding the new ones, preventing a `1+N` vector explosion per save.
+- **Project Scope Isolation**: `MemoryContextCache` explicitly keys memories to `thread_id:project_id` to strictly prevent bleeding context when a user switches workspaces. Additionally, the `recall_all_memories` tool dynamically binds its search queries to the current active project via `ContextVar`.
 
 ## Known Issues
 

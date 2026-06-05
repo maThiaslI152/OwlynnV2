@@ -49,8 +49,7 @@ logger = logging.getLogger(__name__)
 
 from src.config.audit_log import audit_info, audit_debug
 from src.config.config_loader import config
-
-connected_websockets = set()
+from src.api.shared import connected_websockets, _session_usage
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -193,7 +192,7 @@ async def serve_vendor_retired(path: str):
 # ─── REST API endpoints ──────────────────────────────────────────────────────
 
 # Track cumulative session token usage
-_session_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+# (Imported from src.api.shared)
 
 # Profile fields that require clearing cached LLM instances when changed
 _LLM_SENSITIVE_FIELDS = {
@@ -206,7 +205,7 @@ _LLM_SENSITIVE_FIELDS = {
 _ADVANCED_SETTINGS_DEFAULTS = {
     "temperature": 0.7,
     "top_p": 0.9,
-    "max_tokens": 2048,
+    "max_tokens": int(config.get("models.standard.small.max_tokens")),
     "top_k": 40,
     "streaming_enabled": True,
     "show_thinking": False,
@@ -404,95 +403,6 @@ async def _auto_index_project_file(project_id: str, filename: str, filepath: str
     return {"status": "ok"}
 
 
-_TOOL_DESTRUCTIVE_RE = re.compile(r"(?:\brm\s+-rf\b|\bdrop\b|\bdelete\b|\btruncate\b)", re.IGNORECASE)
-_TOOL_NETWORK_RE = re.compile(r"(?:\bcurl\b|\bwget\b|\bhttp[s]?://\b|\bscp\b|\bssh\b)", re.IGNORECASE)
-_TOOL_PRIV_RE = re.compile(r"(?:\bsudo\b|\bchmod\b|\bchown\b)", re.IGNORECASE)
-
-
-async def build_message_content(text: str, files: list):
-    """
-    Builds the message content block for LangChain, supporting:
-    - Images: forwarded as image_url for multimodal vision models
-    - Text PDFs: text extracted via PyMuPDF and injected
-    - Scanned PDFs: each page rendered as image and forwarded to the vision model
-    - Code/text files: decoded and injected as a fenced code block
-    """
-    import base64
-    from io import BytesIO
-
-    # Scale inline PDF excerpt to leave enough room for the response.
-    # Context window is configured in defaults.yaml.
-    # Rough heuristic: 3.5 chars per token.
-    MAX_INLINE_PDF_CHARS = int(config.get("tool_output.max_inline_pdf_chars", 16000))
-    
-    content_parts = []
-    text_injections = []
-    has_multimodal = False
-
-    for f in files:
-        mime = f.get("type", "")
-        data_b64 = f.get("data", "")
-        name = f.get("name", "file")
-        
-        try:
-            raw_bytes = base64.b64decode(data_b64)
-        except Exception:
-            continue
-        
-        if mime.startswith("image/"):
-            # Regular image — forward directly to vision model
-            has_multimodal = True
-            content_parts.append({
-                "type": "image_url",
-                "image_url": {"url": f"data:{mime};base64,{data_b64}"}
-            })
-        
-        elif mime == "application/pdf" or name.lower().endswith(".pdf"):
-            logger.info("Uploaded '%s'. Extracting text for chat context.", name)
-            # extract_pdf_text defined below — called after module load
-            pdf_text = await asyncio.to_thread(extract_pdf_text, raw_bytes)
-            pdf_text = (pdf_text or "").strip()
-            if len(pdf_text) >= 200:
-                excerpt = pdf_text[:MAX_INLINE_PDF_CHARS]
-                if len(pdf_text) > MAX_INLINE_PDF_CHARS:
-                    excerpt += (
-                        "\n\n[PDF truncated in this prompt for size; full file is on disk — "
-                        "call read_workspace_file as a real tool if you need the rest.]"
-                    )
-                text_injections.append(
-                    f"[Workspace file `{name}` — text extracted from PDF below. "
-                    f"Use this to answer when it is enough; if not, call read_workspace_file with that path "
-                    f"(function/tool call, not instructions to the user).]\n\n---\n{excerpt}\n---"
-                )
-            else:
-                text_injections.append(
-                    f"[Workspace file `{name}` — little or no extractable text in upload preview. "
-                    f"You must invoke read_workspace_file for `{name}` as a tool/function call before answering.]"
-                )
-
-        else:
-            # Text / code file
-            logger.info("Uploaded '%s'. Adding workspace reference.", name)
-            text_injections.append(
-                f"[Workspace file `{name}` saved. Invoke read_workspace_file as a tool with that path if you need contents — "
-                f"do not answer with only a suggestion to use the tool.]"
-            )
-
-
-    # Build final content
-    if has_multimodal:
-        # Multimodal message — prepend any text file injections
-        for inj in text_injections:
-            content_parts.insert(0, {"type": "text", "text": inj})
-        if text:
-            content_parts.append({"type": "text", "text": text})
-        return content_parts if content_parts else None
-    else:
-        # Plain text message
-        parts = text_injections[:]
-        if text:
-            parts.append(text)
-        return "\n\n".join(parts) if parts else None
 
 
 async def openai_stream_generator(lc_messages, project_id, persona_id, auto_approve_sensitive):
@@ -504,7 +414,7 @@ async def openai_stream_generator(lc_messages, project_id, persona_id, auto_appr
     chat_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
     created_time = int(time.time())
     
-    thread_id = body.get("thread_id") or f"api-{uuid.uuid4().hex[:8]}"
+    thread_id = f"api-{uuid.uuid4().hex[:8]}"
     config = {"configurable": {"thread_id": thread_id}}
     inputs = {
         "messages": lc_messages,

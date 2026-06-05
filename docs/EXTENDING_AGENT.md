@@ -16,7 +16,7 @@ Reference for developers modifying Owlynn's agent behavior. Covers the LangGraph
 Three subsystems must stay consistent when modifying agent behavior:
 
 - LangGraph execution flow (`src/agent/graph.py` and nodes under `src/agent/nodes/`)
-- Tool contract between LLM and tool execution (`src/agent/tool_sets.py`, `src/agent/nodes/complex.py`, `src/api/server.py`)
+- Tool contract between LLM and tool execution (`src/agent/tool_sets.py`, `src/agent/nodes/complex.py`, `src/api/ws/handler.py`)
 - Frontend WebSocket event stream (`docs/CHAT_PROTOCOL.md`)
 
 ## Entry Points
@@ -26,10 +26,11 @@ src/agent/nodes/router.py       # router_node() — routing behavior
 src/agent/graph.py              # route_decision() — route validation
 src/agent/nodes/simple.py        # simple_node() — simple answers
 src/agent/nodes/complex.py       # complex_llm_node() — tool-calling cycle
+src/agent/nodes/complex_utils/   # tool binding & fallback utils
 src/agent/tool_sets.py           # ToolboxRegistry — tool binding
 src/agent/nodes/memory.py        # memory_inject_node(), memory_write_node()
 src/tools/                       # Tool implementations (@tool decorators)
-src/api/server.py                # serialize_message() — frontend contract
+src/api/ws/handler.py            # serialize_message() — frontend contract
 docs/CHAT_PROTOCOL.md            # WebSocket event contract
 ```
 
@@ -123,7 +124,7 @@ Exercise at minimum:
 4. Update guidance text in `src/agent/nodes/complex.py`
 5. Verify frontend rendering via `docs/CHAT_PROTOCOL.md`
 
-Frontend rendering depends on `serialize_message()` in `src/api/server.py`:
+Frontend rendering depends on `serialize_message()` in `src/api/ws/handler.py`:
 - Tool calls must appear in `AIMessage.tool_calls`
 - Tool results must appear as `ToolMessage` outputs
 
@@ -132,7 +133,7 @@ Frontend rendering depends on `serialize_message()` in `src/api/server.py`:
 Update at minimum:
 - `src/agent/graph.py` — topology (edges and conditional routing)
 - `src/agent/state.py` — fields produced/consumed
-- `src/api/server.py` — event forwarding (new message types)
+- `src/api/ws/handler.py` — event forwarding (new message types)
 
 Prefer extending the existing secure cycle (`complex_llm` + `security_proxy` + `tool_action`) over introducing a separate workflow.
 

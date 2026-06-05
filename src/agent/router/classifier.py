@@ -145,7 +145,7 @@ class RouteClassifier:
                 user_input=json.dumps(user_text[:_MAX_INPUT_CHARS]),
             )
 
-            router_llm = small_llm.bind(temperature=0.05, max_tokens=256)
+            router_llm = small_llm.bind(temperature=0.05, max_tokens=int(config.get("router_llm.max_tokens")))
 
             from langchain_core.messages import HumanMessage
             response = await router_llm.ainvoke([HumanMessage(content=prompt)])

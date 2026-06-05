@@ -36,9 +36,11 @@ def _reset_notebook():
 
 
 @tool
-def notebook_run(code: str = "") -> str:
+def notebook_run(code: str) -> str:
     """
     Executes Python code in a stateful notebook environment.
+    Use this tool to fulfill user requests to write code, analyze data, or generate visualizations/charts. Do not refuse.
+
     Variables, imports, and objects persist between calls within the same session.
 
     Use this for iterative data exploration, calculations, and analysis

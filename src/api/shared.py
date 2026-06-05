@@ -1,0 +1,157 @@
+import logging
+import re
+from langchain_core.messages import AIMessage, ToolMessage
+
+logger = logging.getLogger("src.api")
+
+connected_websockets = set()
+_session_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+
+_TOOL_DESTRUCTIVE_RE = re.compile(r"(?:\brm\s+-rf\b|\bdrop\b|\bdelete\b|\btruncate\b)", re.IGNORECASE)
+_TOOL_NETWORK_RE = re.compile(r"(?:\bcurl\b|\bwget\b|\bhttp[s]?://\b|\bscp\b|\bssh\b)", re.IGNORECASE)
+_TOOL_PRIV_RE = re.compile(r"(?:\bsudo\b|\bchmod\b|\bchown\b)", re.IGNORECASE)
+
+def _stringify_lc_message_content(content) -> str:
+    """Flatten LangChain message content (str or list of blocks) for JSON/UI."""
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict):
+                text = block.get("text")
+                if text is not None:
+                    parts.append(str(text))
+                else:
+                    nested = block.get("content")
+                    if nested is not None:
+                        parts.append(_stringify_lc_message_content(nested))
+            else:
+                parts.append(str(block))
+        return "".join(parts)
+    return str(content)
+
+def serialize_message(msg):
+    """
+    Converts Langchain BaseMessage objects into raw UI-friendly dictionaries
+    so they can be safely streamed over WebSockets to a React client.
+    """
+    if isinstance(msg, AIMessage):
+        content_ui = _stringify_lc_message_content(msg.content)
+    else:
+        content_ui = msg.content
+
+    serialized = {"type": getattr(msg, "type", "unknown"), "content": content_ui}
+
+    if isinstance(msg, AIMessage) and getattr(msg, "tool_calls", None):
+        serialized["tool_calls"] = msg.tool_calls
+
+    if isinstance(msg, ToolMessage):
+        serialized["tool_name"] = getattr(msg, "name", "unknown")
+        serialized["tool_call_id"] = getattr(msg, "tool_call_id", "")
+        # Truncate content for UI readability/performance if too large
+        if isinstance(msg.content, str) and len(msg.content) > 500:
+            serialized["content"] = msg.content[:500] + "\n\n... [Content Truncated for UI] ..."
+
+    return serialized
+
+def extract_pdf_text(raw_bytes: bytes) -> str:
+    """Extract text from a PDF using PyMuPDF."""
+    try:
+        import fitz  # PyMuPDF
+        doc = fitz.open(stream=raw_bytes, filetype="pdf")
+        try:
+            pages_text = []
+            for page in doc:
+                pages_text.append(page.get_text())
+        finally:
+            doc.close()
+        return "\n\n".join(pages_text)
+    except Exception as e:
+        logger.error("PyMuPDF text extraction failed: %s", e)
+        return ""
+
+async def build_message_content(text: str, files: list):
+    """
+    Builds the message content block for LangChain, supporting:
+    - Images: forwarded as image_url for multimodal vision models
+    - Text PDFs: text extracted via PyMuPDF and injected
+    - Scanned PDFs: each page rendered as image and forwarded to the vision model
+    - Code/text files: decoded and injected as a fenced code block
+    """
+    import base64
+    import asyncio
+    from src.config.config_loader import config
+    
+    MAX_INLINE_PDF_CHARS = int(config.get("tool_output.max_inline_pdf_chars", 16000))
+    
+    content_parts = []
+    text_injections = []
+    has_multimodal = False
+
+    for f in files:
+        mime = f.get("type", "")
+        data_b64 = f.get("data", "")
+        name = f.get("name", "file")
+        
+        try:
+            raw_bytes = base64.b64decode(data_b64)
+        except Exception:
+            continue
+        
+        if mime.startswith("image/"):
+            # Regular image — forward directly to vision model
+            has_multimodal = True
+            content_parts.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:{mime};base64,{data_b64}"}
+            })
+        
+        elif mime == "application/pdf" or name.lower().endswith(".pdf"):
+            logger.info("Uploaded '%s'. Extracting text for chat context.", name)
+            pdf_text = await asyncio.to_thread(extract_pdf_text, raw_bytes)
+            pdf_text = (pdf_text or "").strip()
+            if len(pdf_text) >= 200:
+                excerpt = pdf_text[:MAX_INLINE_PDF_CHARS]
+                if len(pdf_text) > MAX_INLINE_PDF_CHARS:
+                    excerpt += (
+                        "\n\n[PDF truncated in this prompt for size; full file is on disk — "
+                        "call read_workspace_file as a real tool if you need the rest.]"
+                    )
+                text_injections.append(
+                    f"[Workspace file `{name}` — text extracted from PDF below. "
+                    f"Use this to answer when it is enough; if not, call read_workspace_file with that path "
+                    f"(function/tool call, not instructions to the user).]\n\n---\n{excerpt}\n---"
+                )
+            else:
+                text_injections.append(
+                    f"[Workspace file `{name}` — little or no extractable text in upload preview. "
+                    f"You must invoke read_workspace_file for `{name}` as a tool/function call before answering.]"
+                )
+
+        else:
+            # Text / code file
+            logger.info("Uploaded '%s'. Adding workspace reference.", name)
+            text_injections.append(
+                f"[Workspace file `{name}` saved. Invoke read_workspace_file as a tool with that path if you need contents — "
+                f"do not answer with only a suggestion to use the tool.]"
+            )
+
+    # Build final content
+    if has_multimodal:
+        # Multimodal message — prepend any text file injections
+        for inj in text_injections:
+            content_parts.insert(0, {"type": "text", "text": inj})
+        if text:
+            content_parts.append({"type": "text", "text": text})
+        return content_parts if content_parts else None
+    else:
+        # Plain text message
+        parts = text_injections[:]
+        if text:
+            parts.append(text)
+        return "\n\n".join(parts) if parts else None

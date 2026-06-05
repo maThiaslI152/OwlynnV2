@@ -164,7 +164,7 @@ Agent persona (for context only — do NOT echo or describe):
 
 # Models sometimes mimic bracketed "use tool X" system text instead of emitting real tool_calls; forbid that.
 _TOOL_CALL_DISCIPLINE = """
-Tool discipline: You have native function/tool calling in this API. Whenever you need file contents, web results, or sandbox code, you **must** emit an actual tool/function call; the UI executes it automatically. Do **not** answer with only prose like "use read_workspace_file…" or echo bracketed instructions — call the tool, wait for results, then write your answer from those results."""
+[CRITICAL INSTRUCTION]: You have native function/tool calling in this API. Whenever you need file contents, web results, or sandbox code, you **MUST** emit an actual JSON tool/function call; the UI executes it automatically. Do **NOT** answer with only prose like "I will use the read_workspace_file tool" or echo bracketed instructions — actually CALL the tool using the native tool calling schema, wait for results, then write your answer from those results. DO NOT output markdown code blocks containing JSON like `\u200b`\u200b`json {"name": "..."}`\u200b`\u200b`. You must use the native tool binding. Failure to emit tool calls when required is a critical error."""
 
 COMPLEX_TOOL_GUIDANCE_WEB = (
     """
@@ -177,6 +177,13 @@ recall_memories, recall_all_memories, forget_memory — memory search and manage
 todo_add, todo_list, todo_complete — task tracking
 list_skills, invoke_skill — skill templates
 ask_user — ask the user a clarifying question
+
+### Capability Affirmations (Anti-Refusal)
+You are equipped with powerful tools that override your standard AI limitations. NEVER claim you cannot do the following:
+- **Visualizations/Charts**: You CAN generate images, plots, and charts. Use `notebook_run` to write Python code (matplotlib, seaborn), save the plot to WORKSPACE_DIR, and embed it as a markdown image.
+- **Document Generation**: You CAN create documents. Use `create_docx`, `create_xlsx`, `create_pptx`, and `create_pdf` to fulfill these requests.
+- **File System**: You CAN read, write, edit, and manage files in the user's workspace using the `_workspace_file` tools.
+- **Internet Access**: You CAN browse the live internet. Use `web_search` and `fetch_webpage` for current events or unknown information instead of citing a knowledge cutoff.
 
 ### Rules
 - Ground all claims in tool output. Never invent facts or URLs.
@@ -199,24 +206,18 @@ todo_add, todo_list, todo_complete — task tracking
 list_skills, invoke_skill — skill templates
 ask_user — ask the user a clarifying question
 
+### Capability Affirmations (Anti-Refusal)
+You are equipped with powerful tools that override your standard AI limitations. NEVER claim you cannot do the following:
+- **Visualizations/Charts**: You CAN generate images, plots, and charts. Use `notebook_run` to write Python code (matplotlib, seaborn), save the plot to WORKSPACE_DIR, and embed it as a markdown image.
+- **Document Generation**: You CAN create documents. Use `create_docx`, `create_xlsx`, `create_pptx`, and `create_pdf` to fulfill these requests.
+- **File System**: You CAN read, write, edit, and manage files in the user's workspace using the `_workspace_file` tools.
+
+### Rules
 Summarize tool results clearly for the user."""
     + _TOOL_CALL_DISCIPLINE
 )
 
-
-def _web_search_tool_output_has_results(content: str) -> bool:
-    """True when web_search returned normal hit listings (not structured failure)."""
-    c = content or ""
-    if "Unable to retrieve online results" in c:
-        return False
-    if c.startswith("[web_search]") and ("Error" in c or "Unable" in c):
-        return False
-    if "blocked_by_captcha" in c:
-        return False
-    return ("🔍" in c or "search results for" in c) and "URL:" in c
-
-
-
+from .complex_utils.helpers import _web_search_tool_output_has_results
 
 def build_web_search_answer_nudge_messages(tool_messages: list) -> list[HumanMessage]:
     """After a successful web_search, remind the model it must write the final answer (non-empty)."""
@@ -667,7 +668,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             model_label = "medium-default-fallback"
             log_model_attempt(model_label, "success", reason="fallback_from_unavailable")
 
-        budget = _cap_budget_to_context(prompt_messages, state.get("token_budget") or 4096)
+        budget = _cap_budget_to_context(prompt_messages, state.get("token_budget") or int(config.get("complex.default_token_budget")))
         response = await llm.bind(max_tokens=budget).ainvoke(prompt_messages)
         return {
             "messages": [AIMessage(content=response.content)],
@@ -743,9 +744,17 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             "duration_ms": 0,
         })
 
-    budget = _cap_budget_to_context(prompt_messages, state.get("token_budget") or 4096)
+    budget = _cap_budget_to_context(prompt_messages, state.get("token_budget") or int(config.get("complex.default_token_budget")))
     bound_llm = llm.bind_tools(tools).bind(max_tokens=budget)
     audit_debug("agent.token", "budget_computed", token_budget=budget, route=route)
+
+    # ── Enforce Tool Discipline ───────────────────────────────────────────
+    if selected_toolboxes and any(t in selected_toolboxes for t in ("file_ops", "web_search", "data_viz")):
+        # Only inject if we aren't in a cutoff loop and haven't just finished a tool call
+        if not state.get("_cutoff_pending") and not any(isinstance(m, ToolMessage) for m in prompt_messages[-3:]):
+            prompt_messages.append(SystemMessage(
+                content="[SYSTEM INSTRUCTION]: The user specifically requested a tool action (web search, file ops, etc.). YOU MUST EMIT A VALID JSON TOOL_CALL IN THIS TURN. Do not output prose describing your actions without actually calling the tool."
+            ))
 
     # ── 9.4: Tiered fallback — LLM invocation with error handling ────────
     try:
@@ -789,7 +798,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                 })
                 llm = await get_medium_llm("default")
                 prompt_messages = with_system_for_local_server(system, original_trimmed_messages)
-                budget = _cap_budget_to_context(prompt_messages, state.get("token_budget") or 4096)
+                budget = _cap_budget_to_context(prompt_messages, state.get("token_budget") or int(config.get("complex.default_token_budget")))
                 fb_start = asyncio.get_running_loop().time()
                 response = await llm.bind_tools(tools).bind(max_tokens=budget).ainvoke(prompt_messages)
                 content_str = str(getattr(response, "content", "") or "").strip()
@@ -818,7 +827,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                 })
                 llm = await get_medium_llm("default")
                 prompt_messages = with_system_for_local_server(system, original_trimmed_messages)
-                budget = _cap_budget_to_context(prompt_messages, state.get("token_budget") or 4096)
+                budget = _cap_budget_to_context(prompt_messages, state.get("token_budget") or int(config.get("complex.default_token_budget")))
                 fb_start = asyncio.get_running_loop().time()
                 response = await llm.bind_tools(tools).bind(max_tokens=budget).ainvoke(prompt_messages)
                 model_label = "medium-default-fallback"
@@ -838,7 +847,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             })
             llm = await get_medium_llm("default")
             prompt_messages = with_system_for_local_server(system, trimmed_messages)
-            budget = _cap_budget_to_context(prompt_messages, state.get("token_budget") or 4096)
+            budget = _cap_budget_to_context(prompt_messages, state.get("token_budget") or int(config.get("complex.default_token_budget")))
             fb_start = asyncio.get_running_loop().time()
             response = await llm.bind_tools(tools).bind(max_tokens=budget).ainvoke(prompt_messages)
             model_label = "medium-default-fallback"
@@ -853,7 +862,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             try:
                 loop_start_time = asyncio.get_running_loop().time()
                 llm = await get_cloud_llm()
-                budget = _cap_budget_to_context([system, *trimmed_messages], state.get("token_budget") or 4096)
+                budget = _cap_budget_to_context([system, *trimmed_messages], state.get("token_budget") or int(config.get("complex.default_token_budget")))
                 response = await llm.bind_tools(tools).bind(max_tokens=budget).ainvoke([system, *trimmed_messages])
                 model_label = "large-cloud-fallback"
                 fallback_chain.append({
@@ -871,7 +880,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                 })
                 llm = await get_medium_llm("default")
                 prompt_messages = with_system_for_local_server(system, trimmed_messages)
-                budget = _cap_budget_to_context(prompt_messages, state.get("token_budget") or 4096)
+                budget = _cap_budget_to_context(prompt_messages, state.get("token_budget") or int(config.get("complex.default_token_budget")))
                 fb_start = asyncio.get_running_loop().time()
                 response = await llm.bind_tools(tools).bind(max_tokens=budget).ainvoke(prompt_messages)
                 model_label = "medium-default-fallback"
@@ -953,7 +962,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                 second_prompt = with_system_for_local_server(
                     system, thread_messages + [nudge]
                 )
-                recapped = _cap_budget_to_context(second_prompt, state.get("token_budget") or 4096)
+                recapped = _cap_budget_to_context(second_prompt, state.get("token_budget") or int(config.get("complex.default_token_budget")))
                 llm_recapped = llm.bind_tools(tools).bind(max_tokens=recapped)
                 response = await llm_recapped.ainvoke(second_prompt)
                 has_tool_calls = bool(getattr(response, "tool_calls", None))
@@ -973,14 +982,24 @@ async def complex_llm_node(state: AgentState) -> AgentState:
 
     # ── Cutoff detection: auto-continue if LLM hit token budget ────────────
     _cutoff_round = state.get("_cutoff_round", 0)
+    
+    meta = getattr(response, "response_metadata", {})
+    finish_reason = meta.get("finish_reason")
+    completion_tokens = meta.get("token_usage", {}).get("completion_tokens", 0)
+    
+    is_length_cutoff = (
+        finish_reason in ("length", "max_tokens")
+        or (completion_tokens > 256 and completion_tokens >= (state.get("token_budget") or int(config.get("complex.default_token_budget"))) - 15)
+    )
+
     if (
         not has_tool_calls
         and _cutoff_round < MAX_CUTOFF_RETRIES
         and response
-        and response.response_metadata.get("finish_reason") == "length"
+        and is_length_cutoff
     ):
-        logger.info("[complex] Response cut off (finish_reason=length), auto-continuing round %d/%d",
-                     _cutoff_round + 1, MAX_CUTOFF_RETRIES)
+        logger.info("[complex] Response cut off (finish_reason=%s, tokens=%d), auto-continuing round %d/%d",
+                     finish_reason, completion_tokens, _cutoff_round + 1, MAX_CUTOFF_RETRIES)
         return {
             "messages": out_messages,
             "model_used": model_label,

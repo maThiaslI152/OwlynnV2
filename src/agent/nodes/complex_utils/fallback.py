@@ -20,6 +20,8 @@ from src.memory.user_profile import get_profile
 from src.config.audit_log import audit_debug, audit_info, audit_warn
 from src.config.log_middleware import log_model_attempt, log_node
 from src.config.config_loader import config
+from .helpers import _web_search_tool_output_has_results
+from .formatter import _synthetic_answer_from_web_search_tool
 
 def _fallback_for_blank_response(messages: list, *, web_search_enabled: bool) -> AIMessage:
     """

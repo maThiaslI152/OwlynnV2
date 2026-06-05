@@ -29,7 +29,7 @@ This feature lets the user switch assistant personas (e.g., Owlynn, Coder, Write
     *   Defines built-in profiles and custom profile directories under `data/personas/`.
 *   **Prompt Injection Nodes**: [src/agent/nodes/memory.py](file:///Users/tim/Works/OwlynnV2/src/agent/nodes/memory.py) & [src/agent/nodes/simple.py](file:///Users/tim/Works/OwlynnV2/src/agent/nodes/simple.py)
     *   Dynamically pulls `persona_id` from the active LangGraph state and shapes system prompt templates.
-*   **REST API Endpoints**: [src/api/server.py](file:///Users/tim/Works/OwlynnV2/src/api/server.py)
+*   **REST API Endpoints**: [src/api/routes/profile.py](file:///Users/tim/Works/OwlynnV2/src/api/routes/profile.py)
     *   `GET /api/personas` (returns all active personas) & `POST /api/personas` (saves custom profiles).
 *   **Frontend Zustand Store**: [frontend-v2/src/state/useAppStore.ts](file:///Users/tim/Works/OwlynnV2/frontend-v2/src/state/useAppStore.ts)
     *   Maintains `activePersonaId` (defaulting to `"default"`) and provides `setActivePersonaId(id)`.
@@ -45,7 +45,7 @@ This feature lets the user switch assistant personas (e.g., Owlynn, Coder, Write
 ### B. OpenAI-Compatible API Server & CLI
 Exposes local completions REST endpoints so developers can integrate Owlynn V2 into command-line scripts or IDE code editors (like Cursor or VSCode extensions).
 
-*   **REST endpoint (`POST /v1/chat/completions`)**: [src/api/server.py](file:///Users/tim/Works/OwlynnV2/src/api/server.py)
+*   **REST endpoint (`POST /v1/chat/completions`)**: [src/api/routes/openai.py](file:///Users/tim/Works/OwlynnV2/src/api/routes/openai.py)
     *   Implements official OpenAI schema mapping, supporting synchronous JSON response and real-time SSE token streaming (`stream=True`).
 *   **Security Gating Bypasses**: [src/agent/nodes/security_proxy.py](file:///Users/tim/Works/OwlynnV2/src/agent/nodes/security_proxy.py)
     *   Automatically handles sensitive tools in API mode according to the `auto_approve_sensitive` client payload flag, bypassing visual HITL blocks.
@@ -57,9 +57,9 @@ Exposes local completions REST endpoints so developers can integrate Owlynn V2 i
 ### C. Zero-Config Workspace RAG Indexer
 Automatically watches local project directories, indexes new documents, generates embeddings, and retrieves relevant chunks using hybrid search.
 
-*   **Directory Watcher & Indexer callback**: [src/api/file_processor.py](file:///Users/tim/Works/OwlynnV2/src/api/file_processor.py) & [src/api/server.py](file:///Users/tim/Works/OwlynnV2/src/api/server.py)
+*   **Directory Watcher & Indexer callback**: [src/api/file_processor.py](file:///Users/tim/Works/OwlynnV2/src/api/file_processor.py) & [src/api/routes/files.py](file:///Users/tim/Works/OwlynnV2/src/api/routes/files.py)
     *   Catches added/modified files in the active workspace directory, splits text into 1500-char chunks (with 200-char overlap), and auto-indexes vectors to Qdrant collection.
-*   **LM Studio Embeddings Wrapper**: [src/api/server.py](file:///Users/tim/Works/OwlynnV2/src/api/server.py)
+*   **LM Studio Embeddings Wrapper**: [src/api/routes/](file:///Users/tim/Works/OwlynnV2/src/api/routes/)
     *   Calls local embedding endpoint `/v1/embeddings` (using `nomic-embed-text-v1.5`) to optimize VRAM and memory footprints.
 *   **Retriever Tool**: [src/tools/rag_tools.py](file:///Users/tim/Works/OwlynnV2/src/tools/rag_tools.py) & [src/agent/tool_sets.py](file:///Users/tim/Works/OwlynnV2/src/agent/tool_sets.py)
     *   Exposes `@tool` `search_workspace_docs` to LangGraph sessions, performing project-isolated semantic hybrid search on Qdrant.
@@ -171,7 +171,7 @@ The file watcher monitors the `workspace/` directory relative to the project roo
 ## Related
 
 - [`docs/README.md`](README.md) — project documentation map
-- [`docs/AI_AGENT_INDEX.md`](AI_AGENT_INDEX.md) — navigation index
+- [`docs/PROJECT_GUIDE.md`](PROJECT_GUIDE.md) — navigation index
 
 ## Last updated
 

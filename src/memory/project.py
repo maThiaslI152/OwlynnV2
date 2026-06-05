@@ -115,6 +115,8 @@ class ProjectManager:
         import uuid
         with self._lock:
             pid = str(uuid.uuid4())[:8]
+            while pid in self.projects:
+                pid = str(uuid.uuid4())[:8]
             project = {
                 "id": pid,
                 "name": name,

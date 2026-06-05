@@ -113,5 +113,10 @@ class AgentState(TypedDict):
     summary_takeaways: list[str] | None
     # Payload for the context_summarized WS event
     context_summarized_event: dict | None
+    
+    # ── Internal Continuation Flags ───────────────────────────────────────
+    _cutoff_pending: bool | None
+    _cutoff_round: int | None
+    web_search_suggested: bool | None
 
 

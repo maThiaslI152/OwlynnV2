@@ -66,6 +66,34 @@ class FileWatcherHandler(FileSystemEventHandler):
         logger.info(f"[Watcher] File modified: {event.src_path}")
         self._trigger_processing(event.src_path)
 
+    def on_deleted(self, event):
+        if event.is_directory:
+            return
+        logger.info(f"[Watcher] File deleted: {event.src_path}")
+        # Skip hidden files
+        if os.path.basename(event.src_path).startswith("."):
+            return
+        # Skip if within the .processed directory
+        if event.src_path.startswith(self.processed_dir):
+            return
+        from src.memory.vector_lifecycle import VectorLifecycleManager
+        filename = os.path.basename(event.src_path)
+        VectorLifecycleManager.on_file_deleted(self.workspace_dir, filename)
+
+    def on_moved(self, event):
+        if event.is_directory:
+            return
+        logger.info(f"[Watcher] File moved: {event.src_path} -> {event.dest_path}")
+        # Skip hidden files
+        if os.path.basename(event.src_path).startswith("."):
+            return
+        if event.src_path.startswith(self.processed_dir):
+            return
+        from src.memory.vector_lifecycle import VectorLifecycleManager
+        old_filename = os.path.basename(event.src_path)
+        new_filename = os.path.basename(event.dest_path)
+        VectorLifecycleManager.on_file_renamed(self.workspace_dir, old_filename, new_filename)
+
     def _trigger_processing(self, filepath):
         # Skip hidden files and already processed files to prevent loops
         if os.path.basename(filepath).startswith("."):
@@ -92,6 +120,15 @@ class FileWatcherHandler(FileSystemEventHandler):
     def process_file(self, filepath):
         """Processes the file based on its extension into .processed/"""
         filename = os.path.basename(filepath)
+        
+        # File size limit (H7): 50 MB
+        try:
+            if os.path.getsize(filepath) > 50 * 1024 * 1024:
+                logger.warning(f"[Watcher] File {filename} exceeds 50MB limit, skipping.")
+                return
+        except OSError:
+            pass
+            
         ext = os.path.splitext(filename)[1].lower()
         output_name = filename + ".txt" # default extension
         output_path = os.path.join(self.processed_dir, output_name)
@@ -487,21 +524,21 @@ class FileWatcherHandler(FileSystemEventHandler):
                         f.write(f"### {table_name}\n")
                         
                         # Get schema
-                        cursor.execute(f"PRAGMA table_info({table_name})")
+                        cursor.execute(f'PRAGMA table_info("{table_name}")')
                         columns = cursor.fetchall()
                         f.write("**Columns:**\n")
                         for col in columns:
                             f.write(f"- {col[1]} ({col[2]})\n")
                         
                         # Get row count
-                        cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
+                        cursor.execute(f'SELECT COUNT(*) FROM "{table_name}"')
                         count = cursor.fetchone()[0]
                         f.write(f"\nRows: {count}\n\n")
                         
                         # Sample data (first 5 rows)
                         if count > 0:
                             f.write("**Sample Data:**\n```\n")
-                            cursor.execute(f"SELECT * FROM {table_name} LIMIT 5")
+                            cursor.execute(f'SELECT * FROM "{table_name}" LIMIT 5')
                             for row in cursor.fetchall():
                                 f.write(str(row) + "\n")
                             f.write("```\n\n")

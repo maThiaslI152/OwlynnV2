@@ -58,8 +58,8 @@ models:
   medium:
     base_url: "http://127.0.0.1:1234/v1"      # MEDIUM_LLM_BASE_URL env
     temperature: 0.7                         # Qwen non-thinking rec: 0.7, top_p=0.8, top_k=20
-    max_tokens: 8192                        # Ample room for reasoning_content + output
-    max_output_tokens: 8192
+    max_tokens: 16384                       # Ample room for reasoning_content + output
+    max_output_tokens: 16384
     timeout: 600                             # M4: 600s — Qwen3.5 9B@Q6_K 32K ctx is slow
     request_timeout: 600                     # HTTP request timeout — prevents infinite hangs
     fold_system: true                        # LM Studio Jinja compat
@@ -71,7 +71,7 @@ models:
     variants:
       default:
         model_name: "qwen3.5-9b-uncensored-hauhaucs-aggressive@q6_k"
-        context_window: 8192                # Practical limit — 32K is too slow on M4 Air Q6_K
+        context_window: 16384               # Practical limit — 32K is too slow on M4 Air Q6_K
       vision:
         model_name: "qwen3.5-9b-uncensored-hauhaucs-aggressive@q6_k"
         context_window: 8192
@@ -144,7 +144,7 @@ routing:
   # Per-route budget maximums
   budget_max:
     cloud: 16384
-    other: 8192                           # Raised from 8192 for long-form writing
+    other: 4096                           # Balanced for M4 at ~4 TPS (prevents 10-minute hangs)
 
   # Skill matching
   skill:

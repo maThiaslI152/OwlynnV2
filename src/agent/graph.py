@@ -158,11 +158,12 @@ def build_graph():
     # scope_clarify → complex_llm (always continue)
     builder.add_edge("scope_clarify", "complex_llm")
 
-    # complex_llm → plan_review | security_proxy | memory_write
+    # complex_llm → plan_review | security_proxy | memory_write | complex_llm
     builder.add_conditional_edges("complex_llm", llm_next_step, {
         "plan_review": "plan_review",
         "security_proxy": "security_proxy",
         "memory_write": "memory_write",
+        "complex_llm": "complex_llm",
     })
 
     # plan_review → security_proxy (approved) | memory_write (denied)

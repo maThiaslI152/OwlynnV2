@@ -7,7 +7,7 @@ owner: human
 
 # API Reference
 
-> **Purpose:** Backend endpoints exposed by `src/api/server.py`. Written for developers modifying backend behavior.
+> **Purpose:** Backend endpoints exposed by `src/api/routes/` and `src/api/ws/`. Written for developers modifying backend behavior.
 
 ## Overview
 
@@ -16,7 +16,9 @@ Documents all REST endpoints and WebSocket entry point. Consumed by `frontend-v2
 ## Entry Points
 
 ```text
-src/api/server.py              # All endpoint implementations
+src/api/server.py               # FastAPI app builder
+src/api/routes/                 # REST endpoint implementations
+src/api/ws/handler.py           # WebSocket handler
 frontend-v2/src/lib/wsClient.ts # WebSocket client consumer
 frontend-v2/src/App.tsx         # REST API consumer
 ```
@@ -227,11 +229,12 @@ Project-scoping handled by `get_project_workspace(project_id)` with path-prefix 
 - Body: `{ "name": "...", "instructions": "..." }`
 
 `GET /api/projects/{project_id}`
+- Returns project metadata or 404 error if not found.
 
 `PUT /api/projects/{project_id}`
 - Updates project metadata
 - Body: `{ "name": "...", "instructions": "..." }`
-- Response: Updated project object
+- Response: Updated project object or 404 error if not found.
 
 `POST /api/projects/{project_id}/knowledge`
 - Adds knowledge/document to a project's vector index
@@ -244,12 +247,14 @@ Project-scoping handled by `get_project_workspace(project_id)` with path-prefix 
 
 `POST /api/projects/{project_id}/chats`
 - Body: `{ "id": "...", "name": "..." }`
+- Returns 400 error if `project_id` is missing or invalid.
 
 `PUT /api/projects/{project_id}/chats/{chat_id}`
 
 `DELETE /api/projects/{project_id}/chats/{chat_id}`
 
 `DELETE /api/projects/{project_id}`
+- Deletes project metadata, wipes workspace, and cascades drop of all project vectors via `VectorLifecycleManager`.
 
 ### Chat History
 

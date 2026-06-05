@@ -82,34 +82,35 @@ class MemoryContextCache:
     _lock = __import__("threading").Lock()
     
     @classmethod
-    def get(cls, thread_id: str) -> Optional[str]:
+    def get(cls, thread_id: str, project_id: str) -> Optional[str]:
         """Get cached context if still valid."""
+        cache_key = f"{thread_id}:{project_id}"
         with cls._lock:
-            if thread_id in cls._cache:
-                cached_at, context = cls._cache[thread_id]
+            if cache_key in cls._cache:
+                cached_at, context = cls._cache[cache_key]
                 age = datetime.now() - cached_at
                 if age < timedelta(seconds=cls._ttl_seconds):
                     audit_debug("memory.cache", "cache_hit", age_seconds=int(age.total_seconds()))
                     return context
                 else:
                     audit_debug("memory.cache", "cache_miss", reason="expired", age_seconds=int(age.total_seconds()))
-                    del cls._cache[thread_id]
+                    del cls._cache[cache_key]
             else:
                 audit_debug("memory.cache", "cache_miss", reason="not_found")
             return None
-    
     @classmethod
-    def set(cls, thread_id: str, context: str):
+    def set(cls, thread_id: str, project_id: str, context: str):
         """Cache context with timestamp."""
+        cache_key = f"{thread_id}:{project_id}"
         with cls._lock:
-            cls._cache[thread_id] = (datetime.now(), context)
-    
+            cls._cache[cache_key] = (datetime.now(), context)
     @classmethod
     def invalidate(cls, thread_id: str):
         """Invalidate cache when memory updates."""
         with cls._lock:
-            if thread_id in cls._cache:
-                del cls._cache[thread_id]
+            keys_to_delete = [k for k in cls._cache.keys() if k.startswith(f"{thread_id}:")]
+            for k in keys_to_delete:
+                del cls._cache[k]
     
     @classmethod
     def invalidate_on_write(cls, thread_id: str):
@@ -148,7 +149,8 @@ async def memory_inject_node(state: AgentState) -> AgentState:
     user_message = state["messages"][-1].content if state.get("messages") else ""
     
     # Check cache first (M4 optimization - avoid rebuilding context repeatedly)
-    cached_context = MemoryContextCache.get(thread_id)
+    project_id = state.get("project_id") or "default"
+    cached_context = MemoryContextCache.get(thread_id, project_id)
     if cached_context:
         persona_id = state.get("persona_id") or "default"
         persona = get_persona_by_id(persona_id)
@@ -229,7 +231,7 @@ async def memory_inject_node(state: AgentState) -> AgentState:
     memory_context = format_memory_context(results, profile, enhanced_context, project_instructions)
     
     # Cache for subsequent requests (M4 optimization)
-    MemoryContextCache.set(thread_id, memory_context)
+    MemoryContextCache.set(thread_id, project_id, memory_context)
     audit_info("memory.inject", "context_assembled", context_chars=len(memory_context), result_count=len(results))
     
     persona_summary = f"You are {persona['name']}, a {persona['role']}. Tone: {persona['tone']}. {persona['instructions']}"
@@ -279,7 +281,10 @@ def format_memory_context(results: list, profile: dict, enhanced_context: str = 
               else:
                    lines.append(f"  - {item}")
     
-    return "\n".join(lines) if lines else "No prior memory available."
+    final_text = "\n".join(lines) if lines else "No prior memory available."
+    if len(final_text) > 12000:
+        final_text = final_text[:12000] + "\n... [truncated for context budget]"
+    return final_text
 
 # --- WRITE: fires after response is generated ---
 async def _should_save_memory(last_human: str, last_ai: str) -> bool:
