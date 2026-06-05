@@ -13,8 +13,8 @@ from src.config.config_loader import config, get_m4_optimization
 # ── Base Paths ───────────────────────────────────────────────────────────────
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
-DATA_DIR = PROJECT_ROOT / "data"
-WORKSPACE_DIR = PROJECT_ROOT / "workspace"
+DATA_DIR = Path(os.getenv("OWLYNN_DATA_DIR", PROJECT_ROOT / "data"))
+WORKSPACE_DIR = Path(os.getenv("OWLYNN_WORKSPACE_DIR", PROJECT_ROOT / "workspace"))
 MODELS_DIR = PROJECT_ROOT / ".models"
 
 
