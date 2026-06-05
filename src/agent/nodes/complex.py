@@ -1070,8 +1070,8 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                         ),
                     }
                 )
-            except Exception as e:
-                import logging; logging.debug("Silent error suppressed: %s", e)
+            except Exception as inner_e:
+                import logging; logging.debug("Silent error suppressed: %s", inner_e)
                 fallback_chain.append(
                     {
                         "model": "medium-longctx",
