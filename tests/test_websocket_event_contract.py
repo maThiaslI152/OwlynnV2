@@ -475,10 +475,10 @@ def test_ws_interrupt_contract_contains_backend_risk_metadata(tmp_path):
 def test_ask_user_response_preserves_structured_answer(tmp_path):
     captured_inputs = []
 
-    async def _capture_start_run(self, input_data, config):
+    async def _capture_start_run(self, input_data, config, **kwargs):
         captured_inputs.append(input_data)
 
-    with patch("src.api.server.GraphSession.start_run", new=_capture_start_run):
+    with patch("src.api.ws.handler.GraphSession.start_run", new=_capture_start_run):
         with _client_with_agent(tmp_path, _ChunkMessageAgent()) as client:
             with client.websocket_connect("/ws/chat/ws-ask-user") as ws:
                 ws.send_text(
@@ -499,13 +499,13 @@ def test_ask_user_response_preserves_structured_answer(tmp_path):
 def test_ws_interleaved_messages_preserve_project_context_per_payload(tmp_path):
     captured_inputs = []
 
-    async def _capture_start_run(self, input_data, config):
+    async def _capture_start_run(self, input_data, config, **kwargs):
         captured_inputs.append(input_data)
 
     with (
-        patch("src.api.server.GraphSession.start_run", new=_capture_start_run),
+        patch("src.api.ws.handler.GraphSession.start_run", new=_capture_start_run),
         patch(
-            "src.api.server.generate_chat_title_router_llm",
+            "src.api.ws.handler.generate_chat_title_router_llm",
             AsyncMock(return_value="mock-title"),
         ),
     ):
@@ -531,13 +531,13 @@ def test_ws_interleaved_messages_preserve_project_context_per_payload(tmp_path):
 def test_ws_and_project_crud_interleaving_preserves_project_isolation(tmp_path):
     captured_inputs = []
 
-    async def _capture_start_run(self, input_data, config):
+    async def _capture_start_run(self, input_data, config, **kwargs):
         captured_inputs.append(input_data)
 
     with (
-        patch("src.api.server.GraphSession.start_run", new=_capture_start_run),
+        patch("src.api.ws.handler.GraphSession.start_run", new=_capture_start_run),
         patch(
-            "src.api.server.generate_chat_title_router_llm",
+            "src.api.ws.handler.generate_chat_title_router_llm",
             AsyncMock(return_value="mock-title"),
         ),
     ):
@@ -598,13 +598,13 @@ def test_ws_deterministic_multi_switch_sweep_keeps_project_context_and_crud_isol
 ):
     captured_inputs = []
 
-    async def _capture_start_run(self, input_data, config):
+    async def _capture_start_run(self, input_data, config, **kwargs):
         captured_inputs.append(input_data)
 
     with (
-        patch("src.api.server.GraphSession.start_run", new=_capture_start_run),
+        patch("src.api.ws.handler.GraphSession.start_run", new=_capture_start_run),
         patch(
-            "src.api.server.generate_chat_title_router_llm",
+            "src.api.ws.handler.generate_chat_title_router_llm",
             AsyncMock(return_value="mock-title"),
         ),
     ):
@@ -702,13 +702,13 @@ def test_ws_high_pressure_interleaving_preserves_ordered_project_context_and_cru
 ):
     captured_inputs = []
 
-    async def _capture_start_run(self, input_data, config):
+    async def _capture_start_run(self, input_data, config, **kwargs):
         captured_inputs.append(input_data)
 
     with (
-        patch("src.api.server.GraphSession.start_run", new=_capture_start_run),
+        patch("src.api.ws.handler.GraphSession.start_run", new=_capture_start_run),
         patch(
-            "src.api.server.generate_chat_title_router_llm",
+            "src.api.ws.handler.generate_chat_title_router_llm",
             AsyncMock(return_value="mock-title"),
         ),
     ):

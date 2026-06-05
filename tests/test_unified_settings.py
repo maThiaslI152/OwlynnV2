@@ -115,7 +115,9 @@ class TestUnifiedSettings:
     def test_error_returns_error_dict(self):
         from src.api.server import app
 
-        with patch("src.api.server.get_profile", side_effect=RuntimeError("boom")):
+        with patch(
+            "src.api.routes.settings.get_profile", side_effect=RuntimeError("boom")
+        ):
             with TestClient(app, raise_server_exceptions=False) as c:
                 data = c.get("/api/unified-settings").json()
                 assert "error" in data

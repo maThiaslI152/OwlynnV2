@@ -20,6 +20,7 @@ from src.agent.nodes.memory import (
 
 # ── Fixtures ────────────────────────────────────────────────────────────────
 
+
 @pytest.fixture(autouse=True)
 def clear_cache():
     """Clear the MemoryContextCache between tests."""
@@ -30,13 +31,20 @@ def clear_cache():
 @pytest.fixture
 def mock_personal_assistant():
     """Mock the personal_assistant module to avoid filesystem dependencies."""
-    with patch("src.agent.nodes.memory.TopicExtractor") as mock_te, \
-         patch("src.agent.nodes.memory.MemoryEnricher") as mock_me, \
-         patch("src.agent.nodes.memory.record_conversation") as mock_rc, \
-         patch("src.agent.nodes.memory.get_memory_context_for_prompt", return_value="Enhanced context") as mock_gmc:
+    with (
+        patch("src.agent.nodes.memory.TopicExtractor") as mock_te,
+        patch("src.agent.nodes.memory.MemoryEnricher") as mock_me,
+        patch("src.agent.nodes.memory.record_conversation") as mock_rc,
+        patch(
+            "src.agent.nodes.memory.get_memory_context_for_prompt",
+            return_value="Enhanced context",
+        ) as mock_gmc,
+    ):
         mock_te.extract_topics = MagicMock(return_value=["tech", "python"])
         mock_te.extract_interests = MagicMock(return_value=["coding"])
-        mock_me.enrich_memory = MagicMock(return_value="Enriched: user asked about python")
+        mock_me.enrich_memory = MagicMock(
+            return_value="Enriched: user asked about python"
+        )
         yield {
             "extract_topics": mock_te.extract_topics,
             "extract_interests": mock_te.extract_interests,
@@ -101,6 +109,7 @@ def _ai_msg(content: str):
 
 # ── _get_mem0_user_id ──────────────────────────────────────────────────────
 
+
 class TestGetMem0UserId:
     def test_default_project_uses_profile_name(self):
         with patch("src.agent.nodes.memory.get_profile") as mock:
@@ -122,13 +131,16 @@ class TestGetMem0UserId:
         assert uid == "project:my-project"
 
     def test_exception_falls_back_to_owner(self):
-        with patch("src.agent.nodes.memory.get_profile", side_effect=Exception("DB error")):
+        with patch(
+            "src.agent.nodes.memory.get_profile", side_effect=Exception("DB error")
+        ):
             state = _make_state(project_id="default")
             uid = _get_mem0_user_id(state)
             assert uid == "owner"
 
 
 # ── format_memory_context ──────────────────────────────────────────────────
+
 
 class TestFormatMemoryContext:
     def test_no_data_returns_fallback(self):
@@ -159,13 +171,17 @@ class TestFormatMemoryContext:
         assert "Enhanced context here" in result
 
     def test_relevant_past_context_included(self):
-        results = [{"memory": "User likes Python"}, {"memory": "User works on AI projects"}]
+        results = [
+            {"memory": "User likes Python"},
+            {"memory": "User works on AI projects"},
+        ]
         result = format_memory_context(results, {}, "", "")
         assert "Relevant Past Context" in result
         assert "User likes Python" in result
 
 
 # ── MemoryContextCache ─────────────────────────────────────────────────────
+
 
 class TestMemoryContextCache:
     def test_set_and_get(self):
@@ -196,10 +212,13 @@ class TestMemoryContextCache:
 
 # ── memory_inject_node ─────────────────────────────────────────────────────
 
+
 class TestMemoryInjectNode:
     @patch("src.memory.long_term.memory", None)  # No Mem0 available
     @pytest.mark.asyncio
-    async def test_no_mem0_uses_json_memory(self, mock_personal_assistant, mock_profile, mock_persona):
+    async def test_no_mem0_uses_json_memory(
+        self, mock_personal_assistant, mock_profile, mock_persona
+    ):
         """When Mem0 is unavailable, the node still builds context from profile/persona."""
         state = _make_state(messages=[_human_msg("Hello")])
         result = await memory_inject_node(state)
@@ -219,7 +238,9 @@ class TestMemoryInjectNode:
             state = _make_state(messages=[_human_msg("Hello")])
             # Debug: verify cache is set
             cached = MemoryContextCache.get("test_thread_1", "default")
-            assert cached == "cached value", f"Cache should contain 'cached value', got: {cached!r}"
+            assert cached == "cached value", (
+                f"Cache should contain 'cached value', got: {cached!r}"
+            )
             mock_prof.reset_mock()
             result = await memory_inject_node(state)
             assert result["memory_context"] == "cached value"
@@ -229,7 +250,9 @@ class TestMemoryInjectNode:
             mock_persona.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_cache_populated_on_miss(self, mock_personal_assistant, mock_profile, mock_persona):
+    async def test_cache_populated_on_miss(
+        self, mock_personal_assistant, mock_profile, mock_persona
+    ):
         """After a cache miss, the context is stored in the cache."""
         with patch("src.memory.long_term.memory", None):
             state = _make_state(messages=[_human_msg("Hello")])
@@ -248,6 +271,7 @@ class TestMemoryInjectNode:
 
 
 # ── memory_write_node ──────────────────────────────────────────────────────
+
 
 class TestMemoryWriteNode:
     @pytest.mark.asyncio
@@ -268,7 +292,10 @@ class TestMemoryWriteNode:
     async def test_records_conversation(self, mock_personal_assistant):
         """With human+AI messages, conversation is recorded."""
         state = _make_state(
-            messages=[_human_msg("What is Python?"), _ai_msg("Python is a programming language.")],
+            messages=[
+                _human_msg("What is Python?"),
+                _ai_msg("Python is a programming language."),
+            ],
             session_id="sess_1",
         )
         result = await memory_write_node(state)
@@ -292,7 +319,10 @@ class TestMemoryWriteNode:
         """When Mem0 is available, enriched facts are saved."""
         mock_mem0.add = MagicMock()
         state = _make_state(
-            messages=[_human_msg("Tell me about Rust"), _ai_msg("Rust is a systems language.")],
+            messages=[
+                _human_msg("Tell me about Rust"),
+                _ai_msg("Rust is a systems language."),
+            ],
         )
         result = await memory_write_node(state)
         mock_mem0.add.assert_called_once()
@@ -305,7 +335,10 @@ class TestMemoryWriteNode:
     async def test_extracts_topics_and_interests(self, mock_personal_assistant):
         """Topics and interests are extracted and used in enriched fact."""
         state = _make_state(
-            messages=[_human_msg("I love coding in Python"), _ai_msg("Python is great for AI.")],
+            messages=[
+                _human_msg("I love coding in Python"),
+                _ai_msg("Python is great for AI."),
+            ],
         )
         await memory_write_node(state)
         mock_personal_assistant["extract_topics"].assert_called_once()
@@ -317,7 +350,10 @@ class TestMemoryWriteNode:
         """Memory cache is invalidated after writing new memories."""
         MemoryContextCache.set("test_thread_1", "default", "old context")
         state = _make_state(
-            messages=[_human_msg("What is the capital of France?"), _ai_msg("The capital of France is Paris.")],
+            messages=[
+                _human_msg("What is the capital of France?"),
+                _ai_msg("The capital of France is Paris."),
+            ],
         )
         # Mock memory to avoid DB connection errors
         with patch("src.memory.long_term.memory") as mock_mem:
