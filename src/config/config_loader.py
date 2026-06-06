@@ -20,9 +20,9 @@ Module-level singletons are available for backward compatibility with the
 existing ``settings.py`` module-level constants.
 
 Note on Modernization (LangGraph/LangChain 1.x):
-While the agent architecture is actively being modernized to LangGraph 1.x, we deliberately 
-did NOT rewrite the core config loader or the `models.medium` legacy schema. This preserves 
-backward compatibility with the React frontend UI, the existing REST API, and `user_profile.json` 
+While the agent architecture is actively being modernized to LangGraph 1.x, we deliberately
+did NOT rewrite the core config loader or the `models.medium` legacy schema. This preserves
+backward compatibility with the React frontend UI, the existing REST API, and `user_profile.json`
 state formats, preventing breaking changes while still supporting the new graph execution patterns.
 """
 

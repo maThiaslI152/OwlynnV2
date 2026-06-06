@@ -33,4 +33,3 @@ def pytest_configure(config):
 
     # Disable file logging in the audit module
     _audit._file_logging_enabled = False
-
