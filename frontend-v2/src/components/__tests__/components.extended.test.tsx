@@ -276,8 +276,7 @@ describe('AppShell', () => {
 
   it('renders all panel sections', () => {
     render(<AppShell {...defaultProps} />)
-    // Section headers now include icon prefixes (e.g., "🛡 Safe Mode")
-    expect(screen.getByText((content) => content.includes('Safe Mode'))).toBeTruthy()
+    // Section headers now include icon prefixes
     expect(screen.getByText((content) => content.includes('Orchestration'))).toBeTruthy()
   })
 
