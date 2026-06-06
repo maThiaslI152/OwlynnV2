@@ -154,9 +154,13 @@ Current date and time: {current_date}
 User memory context:
 {memory_context}
 
+Knowledge Cache:
+{knowledge_context}
+
 ### Guidelines
 - If writing code, include comments
 - When reasoning through a genuinely complex problem, show your thinking. Skip elaborate reasoning for trivial questions.
+- Minimize markdown formatting (headers, bolding, heavy bullet lists) to save output tokens. Use plain text where possible.
 - Never fabricate facts — if uncertain, say so{style_hint}
 
 Agent persona (for context only — do NOT echo or describe):
@@ -482,6 +486,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         .datetime.now()
         .strftime("%B %d, %Y, %I:%M %p"),
         memory_context=memory_context,
+        knowledge_context=state.get("knowledge_context") or "None",
         persona=persona,
         style_hint=style_hint,
     )
@@ -807,20 +812,6 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     )
     bound_llm = llm.bind_tools(tools).bind(max_tokens=budget)
     audit_debug("agent.token", "budget_computed", token_budget=budget, route=route)
-
-    # ── Enforce Tool Discipline ───────────────────────────────────────────
-    if selected_toolboxes and any(
-        t in selected_toolboxes for t in ("file_ops", "web_search", "data_viz")
-    ):
-        # Only inject if we aren't in a cutoff loop and haven't just finished a tool call
-        if not state.get("_cutoff_pending") and not any(
-            isinstance(m, ToolMessage) for m in prompt_messages[-3:]
-        ):
-            prompt_messages.append(
-                SystemMessage(
-                    content="[SYSTEM INSTRUCTION]: The user specifically requested a tool action (web search, file ops, etc.). YOU MUST EMIT A VALID JSON TOOL_CALL IN THIS TURN. Do not output prose describing your actions without actually calling the tool."
-                )
-            )
 
     # ── 9.4: Tiered fallback — LLM invocation with error handling ────────
     try:

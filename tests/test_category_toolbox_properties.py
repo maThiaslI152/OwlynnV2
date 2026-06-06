@@ -97,9 +97,9 @@ class TestCategoryToolboxResolutionProperty:
         tools = _resolve_category(category)
         tool_ids = set(id(t) for t in tools)
         # Every resolved tool must come from the registry or always-included
-        assert tool_ids.issubset(
-            ALL_REGISTRY_TOOL_IDS | FULL_TOOL_IDS
-        ), f"Category '{category}' resolved tools not a subset of registry"
+        assert tool_ids.issubset(ALL_REGISTRY_TOOL_IDS | FULL_TOOL_IDS), (
+            f"Category '{category}' resolved tools not a subset of registry"
+        )
 
     @given(category=null_category_st)
     @settings(max_examples=100)
@@ -107,9 +107,9 @@ class TestCategoryToolboxResolutionProperty:
         """'general', None, or empty string resolves to the full tool set."""
         tools = _resolve_category(category)
         tool_ids = set(id(t) for t in tools)
-        assert FULL_TOOL_IDS.issubset(
-            tool_ids
-        ), f"Category '{category}' did not return all available tools"
+        assert FULL_TOOL_IDS.issubset(tool_ids), (
+            f"Category '{category}' did not return all available tools"
+        )
 
     @given(category=valid_category_st)
     @settings(max_examples=200)
@@ -117,9 +117,9 @@ class TestCategoryToolboxResolutionProperty:
         """Every key in CATEGORY_TOOLBOX_MAP maps to valid TOOLBOX_REGISTRY keys or 'all'."""
         keys = CATEGORY_TOOLBOX_MAP[category]
         for key in keys:
-            assert (
-                key == "all" or key in TOOLBOX_REGISTRY
-            ), f"Category '{category}' maps to unknown toolbox key '{key}'"
+            assert key == "all" or key in TOOLBOX_REGISTRY, (
+                f"Category '{category}' maps to unknown toolbox key '{key}'"
+            )
 
     @given(category=valid_category_st)
     @settings(max_examples=200)
@@ -136,6 +136,6 @@ class TestCategoryToolboxResolutionProperty:
                         expected_ids.add(id(t))
             for t in ALWAYS_INCLUDED_TOOLS:
                 expected_ids.add(id(t))
-            assert (
-                tool_ids == expected_ids
-            ), f"Category '{category}' resolved to unexpected tool set"
+            assert tool_ids == expected_ids, (
+                f"Category '{category}' resolved to unexpected tool set"
+            )

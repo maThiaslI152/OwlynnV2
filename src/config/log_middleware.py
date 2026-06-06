@@ -82,7 +82,10 @@ def log_node(node_name: str):
                     duration_ms=round(elapsed, 2),
                 )
                 return result
-            except Exception:
+            except Exception as e:
+                # GraphInterrupt is used for pausing the graph (HITL) - not an error
+                if e.__class__.__name__ == "GraphInterrupt":
+                    raise
                 elapsed = (time.monotonic() - started) * 1000
                 audit_event(
                     "agent.lifecycle",
@@ -107,7 +110,9 @@ def log_node(node_name: str):
                     duration_ms=round(elapsed, 2),
                 )
                 return result
-            except Exception:
+            except Exception as e:
+                if e.__class__.__name__ == "GraphInterrupt":
+                    raise
                 elapsed = (time.monotonic() - started) * 1000
                 audit_event(
                     "agent.lifecycle",

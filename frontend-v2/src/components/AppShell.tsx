@@ -50,6 +50,7 @@ interface AppShellProps {
   onHitlDecline?: (hitlId: string) => void
   onHitlSelectChoice?: (choice: InterruptChoice, userInput?: string) => void
   onHitlSkip?: (hitlId: string) => void
+  onStop?: () => void
 }
 
 function MessageAvatar({ role }: { role: ChatMessage['role'] }) {
@@ -275,6 +276,7 @@ export function AppShell({
   onSelectChat,
   onDeleteChat,
   onRenameChat,
+  onStop,
 }: AppShellProps) {
   const connectionState = useAppStore((s) => s.connectionState)
   const pendingCorrelationId = useAppStore((s) => s.pendingCorrelationId)
@@ -293,6 +295,7 @@ export function AppShell({
   const [renamingChatId, setRenamingChatId] = useState<string | null>(null)
   const [renamingProjectId, setRenamingProjectId] = useState<string | null>(null)
   const [creatingProject, setCreatingProject] = useState(false)
+  const [safeModePopoverOpen, setSafeModePopoverOpen] = useState(false)
 
   const handleToggleMode = useCallback(async (targetMode: 'compact' | 'full') => {
     if (targetMode === 'compact') {
@@ -362,6 +365,20 @@ export function AppShell({
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [handleKeyDown])
+
+  // Click outside to close safe mode popover
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (safeModePopoverOpen) {
+        const target = e.target as HTMLElement
+        if (!target.closest('.safe-mode-popover-container')) {
+          setSafeModePopoverOpen(false)
+        }
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [safeModePopoverOpen])
 
   const activeProject = projects.find((p) => p.id === activeProjectId)
   const isCompact = windowMode === 'compact'
@@ -557,6 +574,21 @@ export function AppShell({
           </h1>
           {isCompact && (
             <div className="topbar-actions">
+              <div className="safe-mode-popover-container" style={{ position: 'relative' }}>
+                <button
+                  type="button"
+                  className="topbar-btn"
+                  onClick={() => setSafeModePopoverOpen(!safeModePopoverOpen)}
+                  title="Security & Safe Mode"
+                >
+                  🛡
+                </button>
+                {safeModePopoverOpen && (
+                  <div className="topbar-popover">
+                    <SafeModePanel />
+                  </div>
+                )}
+              </div>
               <button
                 type="button"
                 className="topbar-btn"
@@ -732,7 +764,7 @@ export function AppShell({
             </span>
           </div>
         )}
-        <Composer onSend={onSend} disabled={connectionState !== 'connected' || !!pendingCorrelationId} hitlBlocked={hasPendingHitl} compact={isCompact} />
+        <Composer onSend={onSend} disabled={connectionState !== 'connected'} isGenerating={!!pendingCorrelationId} hitlBlocked={hasPendingHitl} compact={isCompact} onStop={onStop} />
       </main>
 
       {/* ── Right Panel ── */}
@@ -760,6 +792,21 @@ export function AppShell({
                   <span className={`connection-dot connection-dot-${connectionState}`} />
                   <span className="connection-label">{connectionState}</span>
                 </span>
+                <div className="safe-mode-popover-container" style={{ position: 'relative' }}>
+                  <button
+                    type="button"
+                    className="topbar-btn"
+                    onClick={() => setSafeModePopoverOpen(!safeModePopoverOpen)}
+                    title="Security & Safe Mode"
+                  >
+                    🛡
+                  </button>
+                  {safeModePopoverOpen && (
+                    <div className="topbar-popover">
+                      <SafeModePanel />
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -768,9 +815,6 @@ export function AppShell({
           </CollapsibleSection>
           <CollapsibleSection title="Memory & Context" icon="🧠" defaultOpen={false}>
             <MemoryPanel />
-          </CollapsibleSection>
-          <CollapsibleSection title="Safe Mode" icon="🛡">
-            <SafeModePanel />
           </CollapsibleSection>
           <CollapsibleSection title="Screen Assist" icon="🖥">
             <ScreenAssistPanel />

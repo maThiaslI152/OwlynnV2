@@ -55,6 +55,7 @@ class AgentState(TypedDict):
     # 'large-cloud', or any of these with '-fallback' suffix
     model_used: str | None
     memory_context: str | None  # Formatted context string
+    knowledge_context: str | None  # Synthesized facts from previous web searches
     persona: str | None  # Persona summary string
     persona_id: str | None  # Active persona ID (e.g. 'coder', 'writer', 'default')
 

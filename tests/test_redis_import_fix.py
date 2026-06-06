@@ -71,9 +71,9 @@ class TestInitAgentRedisCheckpointer:
         assert graph is not None
         # The compiled graph's checkpointer should not be MemorySaver
         checkpointer = graph.checkpointer
-        assert not isinstance(
-            checkpointer, MemorySaver
-        ), "Expected a Redis-backed checkpointer but got MemorySaver"
+        assert not isinstance(checkpointer, MemorySaver), (
+            "Expected a Redis-backed checkpointer but got MemorySaver"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -143,9 +143,9 @@ class TestInitAgentMemorySaverFallback:
         ):
             graph = await init_agent()
 
-        assert isinstance(
-            graph.checkpointer, MemorySaver
-        ), f"Expected MemorySaver fallback, got {type(graph.checkpointer)}"
+        assert isinstance(graph.checkpointer, MemorySaver), (
+            f"Expected MemorySaver fallback, got {type(graph.checkpointer)}"
+        )
 
     @pytest.mark.asyncio
     @pytest.mark.skip(
@@ -186,11 +186,11 @@ class TestInitAgentMemorySaverFallback:
             for r in caplog.records
             if r.levelno >= logging.ERROR and "src.agent.graph" in r.name
         ]
-        assert (
-            len(error_records) >= 1
-        ), "Expected at least one ERROR log from src.agent.graph"
+        assert len(error_records) >= 1, (
+            "Expected at least one ERROR log from src.agent.graph"
+        )
 
         error_msg = error_records[0].getMessage()
-        assert (
-            "MemorySaver" in error_msg or "fallback" in error_msg.lower()
-        ), f"Error log should mention MemorySaver fallback, got: {error_msg}"
+        assert "MemorySaver" in error_msg or "fallback" in error_msg.lower(), (
+            f"Error log should mention MemorySaver fallback, got: {error_msg}"
+        )

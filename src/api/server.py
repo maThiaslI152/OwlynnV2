@@ -103,6 +103,7 @@ async def lifespan(app: FastAPI):
         logger.info("[startup] All LLMs preloaded and warmed up")
 
     await _preload_llms()
+    app.state.llms_ready = True
 
     # Embedding models are pre-pulled manually via `ollama pull` or LM Studio UI.
     # The app relies on them being already available; no auto-load at startup.
@@ -272,11 +273,13 @@ async def api_cloud_verify_key(body: dict):
 
 @app.get("/api/health")
 async def api_health():
-    """Check if the agent graph is fully initialized."""
+    """Check if the agent graph and LLMs are fully initialized."""
     agent_ready = False
     try:
         agent_ready = (
-            hasattr(app, "state") and getattr(app.state, "agent", None) is not None
+            hasattr(app, "state")
+            and getattr(app.state, "agent", None) is not None
+            and getattr(app.state, "llms_ready", False) is True
         )
     except Exception as e:
         logger.warning("Error suppressed: %s", e)

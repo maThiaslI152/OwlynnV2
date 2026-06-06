@@ -402,6 +402,28 @@ body {
   box-shadow: 0 6px 14px rgba(114, 194, 255, 0.1);
 }
 
+.topbar-popover {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 8px;
+  width: 280px;
+  background: rgba(10, 20, 35, 0.95);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(148, 196, 255, 0.05);
+  z-index: 100;
+  padding: 8px;
+  animation: popover-slide-in 0.15s ease-out;
+}
+
+@keyframes popover-slide-in {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .connection-status {
   display: flex;
   align-items: center;

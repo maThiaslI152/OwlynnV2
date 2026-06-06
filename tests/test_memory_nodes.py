@@ -185,8 +185,13 @@ class TestFormatMemoryContext:
 
 class TestMemoryContextCache:
     def test_set_and_get(self):
-        MemoryContextCache.set("thread_1", "default", "cached context")
-        assert MemoryContextCache.get("thread_1", "default") == "cached context"
+        MemoryContextCache.set(
+            "thread_1", "default", ("cached context", "cached knowledge")
+        )
+        assert MemoryContextCache.get("thread_1", "default") == (
+            "cached context",
+            "cached knowledge",
+        )
 
     def test_cache_miss_returns_none(self):
         assert MemoryContextCache.get("nonexistent", "default") is None
@@ -194,17 +199,21 @@ class TestMemoryContextCache:
     def test_cache_expires(self):
         original_ttl = MemoryContextCache._ttl_seconds
         MemoryContextCache._ttl_seconds = -1  # Force immediate expiry
-        MemoryContextCache.set("thread_1", "default", "old context")
+        MemoryContextCache.set("thread_1", "default", ("old context", "old knowledge"))
         assert MemoryContextCache.get("thread_1", "default") is None
         MemoryContextCache._ttl_seconds = original_ttl  # Restore
 
     def test_invalidate_removes_entry(self):
-        MemoryContextCache.set("thread_1", "default", "some context")
+        MemoryContextCache.set(
+            "thread_1", "default", ("some context", "some knowledge")
+        )
         MemoryContextCache.invalidate("thread_1")
         assert MemoryContextCache.get("thread_1", "default") is None
 
     def test_invalidate_on_write_returns_true(self):
-        MemoryContextCache.set("thread_1", "default", "some context")
+        MemoryContextCache.set(
+            "thread_1", "default", ("some context", "some knowledge")
+        )
         result = MemoryContextCache.invalidate_on_write("thread_1")
         assert result is True
         assert MemoryContextCache.get("thread_1", "default") is None
@@ -234,16 +243,19 @@ class TestMemoryInjectNode:
             mock_prof.return_value = {"name": "TestUser"}
             # Clear and set cache manually
             MemoryContextCache._cache.clear()
-            MemoryContextCache.set("test_thread_1", "default", "cached value")
+            MemoryContextCache.set(
+                "test_thread_1", "default", ("cached value", "cached knowledge")
+            )
             state = _make_state(messages=[_human_msg("Hello")])
             # Debug: verify cache is set
             cached = MemoryContextCache.get("test_thread_1", "default")
-            assert (
-                cached == "cached value"
-            ), f"Cache should contain 'cached value', got: {cached!r}"
+            assert cached == ("cached value", "cached knowledge"), (
+                f"Cache should contain tuple, got: {cached!r}"
+            )
             mock_prof.reset_mock()
             result = await memory_inject_node(state)
             assert result["memory_context"] == "cached value"
+            assert result["knowledge_context"] == "cached knowledge"
             # Profile should NOT be re-fetched on cache hit
             mock_prof.assert_not_called()
             # Persona IS still fetched on cache hit (by design)
@@ -260,14 +272,15 @@ class TestMemoryInjectNode:
             result = await memory_inject_node(state)
             # The cache should have been populated by memory_inject_node
             # Use MemoryContextCache._cache directly to verify
-            assert (
-                "test_thread_1:default" in MemoryContextCache._cache
-            ), f"Cache should have key 'test_thread_1:default'. Keys: {list(MemoryContextCache._cache.keys())}"
+            assert "test_thread_1:default" in MemoryContextCache._cache, (
+                f"Cache should have key 'test_thread_1:default'. Keys: {list(MemoryContextCache._cache.keys())}"
+            )
             cached_entry = MemoryContextCache._cache.get("test_thread_1:default")
-            cached_text = cached_entry[1] if cached_entry else None
-            assert (
-                cached_text == result["memory_context"]
-            ), f"Cached text {cached_text!r} != result {result['memory_context']!r}"
+            cached_tuple = cached_entry[1] if cached_entry else None
+            assert cached_tuple == (
+                result["memory_context"],
+                result["knowledge_context"],
+            ), f"Cached tuple {cached_tuple!r} != result"
 
 
 # ── memory_write_node ──────────────────────────────────────────────────────
@@ -348,7 +361,9 @@ class TestMemoryWriteNode:
     @pytest.mark.asyncio
     async def test_cache_invalidated_on_write(self, mock_personal_assistant):
         """Memory cache is invalidated after writing new memories."""
-        MemoryContextCache.set("test_thread_1", "default", "old context")
+        MemoryContextCache.set(
+            "test_thread_1", "default", ("old context", "old knowledge")
+        )
         state = _make_state(
             messages=[
                 _human_msg("What is the capital of France?"),

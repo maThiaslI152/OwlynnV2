@@ -8,6 +8,20 @@ test.describe('Safemode Feature', () => {
     // Launch Electron app
     electronApp = await electron.launch({ args: ['.'] });
     page = await electronApp.firstWindow();
+    
+    // Mock the backend API fetch since page.route doesn't intercept file:// requests in Electron
+    await page.addInitScript(() => {
+      const originalFetch = window.fetch;
+      window.fetch = async (url, options) => {
+        if (typeof url === 'string' && url.includes('/api/advanced-settings')) {
+          return new Response(JSON.stringify({ status: 'ok' }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+        return originalFetch(url, options);
+      };
+    });
   });
 
   test.afterAll(async () => {
@@ -15,10 +29,10 @@ test.describe('Safemode Feature', () => {
   });
 
   test('toggle safemode changes UI state', async () => {
-    // Open Safe Mode section first
-    await page.getByText('Safe Mode', { exact: true }).click();
+    // Open Safe Mode popover by clicking the shield icon in topbar
+    await page.getByTitle('Security & Safe Mode').click();
 
-    // Locate the safemode toggle on the sidebar
+    // Locate the safemode toggle in the popover
     const safemodeToggle = page.locator('[data-testid="safemode-toggle"]');
     
     // Ensure it exists

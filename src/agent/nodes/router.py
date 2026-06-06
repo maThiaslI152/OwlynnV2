@@ -171,7 +171,7 @@ simple = greetings/thanks/small talk ONLY. If the user asks ANY factual question
 complex = code/math/writing, multi-step work, OR needs live web/news/weather/prices. ANY mention of code, python, bugs, review, OR factual questions MUST be classified as complex.
 
 Toolbox categories (pick one or more, or "all" if unsure):
-- web_search: web lookup, live data, current information, news, weather, prices
+- web_search: web lookup, live data, current information, news, weather, prices. IMPORTANT: If the requested factual information is fully answered by the provided Knowledge Cache, DO NOT include web_search.
 - file_ops: read/write/edit/list/delete workspace files
 - data_viz: create documents/spreadsheets/presentations/PDFs, run code, data analysis, charts
 - productivity: task management, todos, skills, workflow templates
@@ -180,6 +180,9 @@ Toolbox categories (pick one or more, or "all" if unsure):
 
 Reply with exactly one JSON object (nothing else):
 {{"routing":"simple"|"complex","confidence":0.0-1.0,"toolbox":"toolbox_name"|["name1","name2"]}}
+
+Knowledge Cache:
+{knowledge_context}
 
 Message: {user_input}
 
@@ -654,15 +657,38 @@ async def router_node(state: AgentState) -> AgentState:
             [
                 HumanMessage(
                     content=ROUTER_PROMPT.format(
+                        knowledge_context=state.get("knowledge_context") or "None",
                         user_input=json.dumps(
                             user_text[: int(config.get("routing.max_input_chars", 500))]
-                        )
+                        ),
                     )
                 )
             ]
         )
         decision, confidence, toolbox = parse_routing(response.content)
         classification_source = "llm_classifier"
+
+        # ── Override: Enforce complex for factual questions ──
+        if decision == "simple":
+            _question_words = re.compile(
+                r"\b(what|who|where|when|why|how much|how many|is there|are there|can you|could you)\b",
+                re.IGNORECASE,
+            )
+            if "?" in user_text or _question_words.search(user_text):
+                # Exempt casual small talk
+                if not re.search(
+                    r"\b(how are you|how do you do|what's up|whats up)\b",
+                    user_text,
+                    re.IGNORECASE,
+                ):
+                    logger.info(
+                        "[router] Overriding 'simple' to 'complex' due to question detection"
+                    )
+                    decision = "complex"
+                    confidence = 0.9  # Confident override
+                    classification_source = "question_heuristic_override"
+                    if "web_search" not in toolbox and "all" not in toolbox:
+                        toolbox.append("web_search")
     except Exception as e:
         logger.error(f"[router] Error during routing: {e}")
         audit_warn("agent.lifecycle", "router_llm_error", error=str(e)[:120])

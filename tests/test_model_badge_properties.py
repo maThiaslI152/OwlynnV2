@@ -137,9 +137,9 @@ class TestModelBadgeColorMapping:
         """
         assume("fallback" not in model)
         badge = get_model_badge_class(model)
-        assert (
-            badge == "model-badge-small"
-        ), f"Expected 'model-badge-small' for '{model}', got '{badge}'"
+        assert badge == "model-badge-small", (
+            f"Expected 'model-badge-small' for '{model}', got '{badge}'"
+        )
         assert BADGE_COLORS[badge] == "#374151"
 
     @given(model=medium_model_st)
@@ -149,9 +149,9 @@ class TestModelBadgeColorMapping:
         Req 30.11: model starting with "medium" → blue (model-badge-medium).
         """
         badge = get_model_badge_class(model)
-        assert (
-            badge == "model-badge-medium"
-        ), f"Expected 'model-badge-medium' for '{model}', got '{badge}'"
+        assert badge == "model-badge-medium", (
+            f"Expected 'model-badge-medium' for '{model}', got '{badge}'"
+        )
         assert BADGE_COLORS[badge] == "#1e3a5f"
 
     @given(model=large_model_st)
@@ -161,9 +161,9 @@ class TestModelBadgeColorMapping:
         Req 30.12: model starting with "large" → purple (model-badge-cloud).
         """
         badge = get_model_badge_class(model)
-        assert (
-            badge == "model-badge-cloud"
-        ), f"Expected 'model-badge-cloud' for '{model}', got '{badge}'"
+        assert badge == "model-badge-cloud", (
+            f"Expected 'model-badge-cloud' for '{model}', got '{badge}'"
+        )
         assert BADGE_COLORS[badge] == "#2b2646"
 
     @given(model=cloud_model_st)
@@ -173,9 +173,9 @@ class TestModelBadgeColorMapping:
         Req 30.12: model starting with "cloud" also → purple (model-badge-cloud).
         """
         badge = get_model_badge_class(model)
-        assert (
-            badge == "model-badge-cloud"
-        ), f"Expected 'model-badge-cloud' for '{model}', got '{badge}'"
+        assert badge == "model-badge-cloud", (
+            f"Expected 'model-badge-cloud' for '{model}', got '{badge}'"
+        )
         assert BADGE_COLORS[badge] == "#2b2646"
 
     @given(model=fallback_model_st)
@@ -186,9 +186,9 @@ class TestModelBadgeColorMapping:
         Fallback detection takes priority over prefix matching.
         """
         badge = get_model_badge_class(model)
-        assert (
-            badge == "model-badge-fallback"
-        ), f"Expected 'model-badge-fallback' for '{model}', got '{badge}'"
+        assert badge == "model-badge-fallback", (
+            f"Expected 'model-badge-fallback' for '{model}', got '{badge}'"
+        )
         assert BADGE_COLORS[badge] == "#451a03"
 
     @given(model=known_model_st)
@@ -198,9 +198,9 @@ class TestModelBadgeColorMapping:
         Every known model_used value maps to a valid badge class.
         """
         badge = get_model_badge_class(model)
-        assert (
-            badge in VALID_BADGE_CLASSES
-        ), f"'{model}' mapped to unknown badge '{badge}'"
+        assert badge in VALID_BADGE_CLASSES, (
+            f"'{model}' mapped to unknown badge '{badge}'"
+        )
 
     @given(model=arbitrary_model_st)
     @settings(max_examples=100)
@@ -209,9 +209,9 @@ class TestModelBadgeColorMapping:
         For any arbitrary model string, the output is always a valid badge class.
         """
         badge = get_model_badge_class(model)
-        assert (
-            badge in VALID_BADGE_CLASSES
-        ), f"'{model}' mapped to unknown badge '{badge}'"
+        assert badge in VALID_BADGE_CLASSES, (
+            f"'{model}' mapped to unknown badge '{badge}'"
+        )
 
     def test_none_and_empty_default_to_small(self):
         """None and empty string default to model-badge-small (gray)."""

@@ -250,9 +250,9 @@ def test_medium_conversation_20_turns():
                         responses_ok += 1
 
                 min_expected = max(3, len(CONVERSATION_TOPICS) // 2)
-                assert (
-                    responses_ok >= min_expected
-                ), f"Only {responses_ok}/{len(CONVERSATION_TOPICS)} turns got a valid response"
+                assert responses_ok >= min_expected, (
+                    f"Only {responses_ok}/{len(CONVERSATION_TOPICS)} turns got a valid response"
+                )
 
                 summary = await _send_message(
                     page, "What was the first question I asked?"
@@ -306,9 +306,9 @@ def test_memory_isolation_between_chats():
                 hist_b = await _fetch_history(tid_b)
 
                 a_text = " ".join(str(m.get("content", "")) for m in hist_a)
-                assert (
-                    sentinel in a_text
-                ), f"Sentinel {sentinel} missing from project A history"
+                assert sentinel in a_text, (
+                    f"Sentinel {sentinel} missing from project A history"
+                )
 
                 await _assert_no_cross_reference(hist_b, sentinel, "Chat B")
 
@@ -316,14 +316,14 @@ def test_memory_isolation_between_chats():
                 if audit_path:
                     entries_a = _read_audit_entries(tid_a)
                     for e in entries_a:
-                        assert (
-                            e.get("thread_id") == tid_a
-                        ), f"Audit entry thread_id mismatch: {e}"
+                        assert e.get("thread_id") == tid_a, (
+                            f"Audit entry thread_id mismatch: {e}"
+                        )
                     entries_b = _read_audit_entries(tid_b)
                     for e in entries_b:
-                        assert (
-                            e.get("thread_id") == tid_b
-                        ), f"Audit entry thread_id mismatch: {e}"
+                        assert e.get("thread_id") == tid_b, (
+                            f"Audit entry thread_id mismatch: {e}"
+                        )
         finally:
             await _delete_project(proj_a)
             await _delete_project(proj_b)
@@ -370,9 +370,9 @@ def test_tool_call_hitl_in_chat():
                     )
 
                 badge_text = await _hitl_badge_text(page)
-                assert (
-                    "sensitive" in badge_text
-                ), f"Expected 'sensitive' in badge, got '{badge_text}'"
+                assert "sensitive" in badge_text, (
+                    f"Expected 'sensitive' in badge, got '{badge_text}'"
+                )
                 await _click_hitl_approve(page)
                 await page.wait_for_timeout(3000)
 
@@ -440,9 +440,9 @@ def test_prompt_based_hitl_in_chat():
                     )
 
                 badge_text = await _hitl_badge_text(page)
-                assert (
-                    "before building" in badge_text
-                ), f"Expected 'before building' in badge, got '{badge_text}'"
+                assert "before building" in badge_text, (
+                    f"Expected 'before building' in badge, got '{badge_text}'"
+                )
                 await _click_hitl_choice(page)
                 await _click_hitl_approve(page)
                 await page.wait_for_timeout(3000)

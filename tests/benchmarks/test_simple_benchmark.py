@@ -90,9 +90,9 @@ class TestSimpleLatency:
         )
         record_entry(entry)
 
-        assert (
-            tracker.p50 * 1000 < 300
-        ), f"Simple node p50 {tracker.p50 * 1000:.1f}ms exceeds 300ms threshold"
+        assert tracker.p50 * 1000 < 300, (
+            f"Simple node p50 {tracker.p50 * 1000:.1f}ms exceeds 300ms threshold"
+        )
 
     @pytest.mark.asyncio
     async def test_simple_batch_throughput(self):

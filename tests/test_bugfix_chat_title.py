@@ -65,9 +65,9 @@ class TestChatTitleLogLevel:
         from src.agent.nodes.router import generate_chat_title_router_llm
 
         source = inspect.getsource(generate_chat_title_router_llm)
-        assert (
-            "logger.warning" in source
-        ), "Expected logger.warning (was upgraded from logger.debug for visibility)"
-        assert (
-            "logger.debug" not in source
-        ), "logger.debug should be replaced by logger.warning in chat title fallback"
+        assert "logger.warning" in source, (
+            "Expected logger.warning (was upgraded from logger.debug for visibility)"
+        )
+        assert "logger.debug" not in source, (
+            "logger.debug should be replaced by logger.warning in chat title fallback"
+        )

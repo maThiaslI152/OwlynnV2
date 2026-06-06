@@ -99,11 +99,14 @@ else
         --no-access-log &
 fi
 _PIDS+=("$!")
-for _ in $(seq 1 30); do
-    curl -sf http://127.0.0.1:8000/api/health 2>/dev/null | grep -q ready && break
+echo "      Waiting for backend & LLMs to warm up (this may take up to 3 minutes)..."
+for i in $(seq 1 180); do
+    if curl -sf http://127.0.0.1:8000/api/health 2>/dev/null | grep -q ready; then
+        echo "      Backend & LLMs ready (PID $!)."
+        break
+    fi
     sleep 1
 done
-echo "      Backend ready (PID $!)."
 
 # Start frontend (Vite dev server)
 if [ -d "frontend-v2" ]; then

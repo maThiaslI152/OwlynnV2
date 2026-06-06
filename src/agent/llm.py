@@ -80,6 +80,7 @@ class LLMPool:
                             extra_body=extra_body,
                             request_timeout=model_cfg.get("request_timeout")
                             or model_cfg.get("timeout", 10),
+                            stream_chunk_timeout=None,
                         )
                         audit_info(
                             "agent.model",
@@ -110,6 +111,7 @@ class LLMPool:
                     extra_body=extra_body,
                     request_timeout=model_cfg.get("request_timeout")
                     or model_cfg.get("timeout", 10),
+                    stream_chunk_timeout=None,
                 )
         else:
             audit_debug("agent.model", "pool_cache_hit", slot="small")
@@ -148,6 +150,7 @@ class LLMPool:
                 extra_body=extra_body,
                 request_timeout=model_cfg.get("request_timeout")
                 or model_cfg.get("timeout", 120),
+                stream_chunk_timeout=None,
             )
             audit_info(
                 "agent.model",

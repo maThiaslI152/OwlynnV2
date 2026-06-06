@@ -306,9 +306,9 @@ async def test_router_confident_aligned_skill_no_hitl(
     assert result["router_clarification_used"] is False
 
     skill_info = result.get("skill_matched")
-    assert (
-        skill_info is not None
-    ), "skill_matched must be set when skill match is strong"
+    assert skill_info is not None, (
+        "skill_matched must be set when skill match is strong"
+    )
     assert skill_info["name"] == "Research Assistant"
     assert skill_info["score"] == 0.91
     assert isinstance(skill_info["toolbox"], list)

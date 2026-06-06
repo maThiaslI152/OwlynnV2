@@ -113,9 +113,9 @@ class TestSeparateChatHistories:
 
             # Project A should have the new chat
             chats_a = pm.get_project(proj_a["id"])["chats"]
-            assert any(
-                c["id"] == chat["id"] for c in chats_a
-            ), f"Chat '{chat['id']}' not found in Project A after adding"
+            assert any(c["id"] == chat["id"] for c in chats_a), (
+                f"Chat '{chat['id']}' not found in Project A after adding"
+            )
         finally:
             _cleanup(pm, proj_a, proj_b)
 
@@ -132,14 +132,14 @@ class TestSeparateChatHistories:
                 pm.add_chat_to_project(proj_a["id"], chat)
 
             chats_b = pm.get_project(proj_b["id"])["chats"]
-            assert (
-                len(chats_b) == 0
-            ), f"Project B has {len(chats_b)} chats after adding {len(chats)} to Project A"
+            assert len(chats_b) == 0, (
+                f"Project B has {len(chats_b)} chats after adding {len(chats)} to Project A"
+            )
 
             chats_a = pm.get_project(proj_a["id"])["chats"]
-            assert len(chats_a) == len(
-                chats
-            ), f"Project A should have {len(chats)} chats but has {len(chats_a)}"
+            assert len(chats_a) == len(chats), (
+                f"Project A should have {len(chats)} chats but has {len(chats_a)}"
+            )
         finally:
             _cleanup(pm, proj_a, proj_b)
 
@@ -196,17 +196,17 @@ class TestSeparateChatHistories:
 
             # Project A should have no chats
             chats_a = pm.get_project(proj_a["id"])["chats"]
-            assert (
-                len(chats_a) == 0
-            ), f"Project A still has {len(chats_a)} chats after deletion"
+            assert len(chats_a) == 0, (
+                f"Project A still has {len(chats_a)} chats after deletion"
+            )
 
             # Project B should still have its chat
             chats_b = pm.get_project(proj_b["id"])["chats"]
-            assert (
-                len(chats_b) == 1
-            ), f"Project B should have 1 chat but has {len(chats_b)}"
-            assert (
-                chats_b[0]["id"] == chat_b["id"]
-            ), "Project B's chat ID changed after deleting from Project A"
+            assert len(chats_b) == 1, (
+                f"Project B should have 1 chat but has {len(chats_b)}"
+            )
+            assert chats_b[0]["id"] == chat_b["id"], (
+                "Project B's chat ID changed after deleting from Project A"
+            )
         finally:
             _cleanup(pm, proj_a, proj_b)

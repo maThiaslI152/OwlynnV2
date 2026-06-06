@@ -175,9 +175,9 @@ class TestPoolColdVsWarm:
         record_entry(entry)
 
         # Warm cached calls should be near-instant
-        assert (
-            tracker.p50 * 1000 < 5
-        ), f"Pool warm cache p50 {tracker.p50 * 1000:.1f}ms exceeds 5ms"
+        assert tracker.p50 * 1000 < 5, (
+            f"Pool warm cache p50 {tracker.p50 * 1000:.1f}ms exceeds 5ms"
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -225,6 +225,6 @@ class TestSwapManagerSimulation:
         record_entry(entry)
 
         # Simulated swap should complete in ~600ms
-        assert (
-            tracker.p50 * 1000 < 800
-        ), f"Swap simulation p50 {tracker.p50 * 1000:.1f}ms exceeds 800ms"
+        assert tracker.p50 * 1000 < 800, (
+            f"Swap simulation p50 {tracker.p50 * 1000:.1f}ms exceeds 800ms"
+        )

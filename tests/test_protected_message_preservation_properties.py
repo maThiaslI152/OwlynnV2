@@ -237,9 +237,9 @@ class TestProtectedMessagePreservation:
             for pmsg, (orig_type, orig_content) in zip(
                 protected_msgs, original_contents
             ):
-                assert (
-                    pmsg in new_messages
-                ), f"Protected {orig_type} message missing from output"
+                assert pmsg in new_messages, (
+                    f"Protected {orig_type} message missing from output"
+                )
                 assert pmsg.content == orig_content, (
                     f"Protected message content was modified: "
                     f"expected {orig_content!r}, got {pmsg.content!r}"

@@ -100,9 +100,9 @@ class TestRouterThroughput:
         )
         record_entry(entry)
 
-        assert (
-            tracker.p50 * 1000 < 500
-        ), f"Router p50 latency {tracker.p50 * 1000:.1f}ms exceeds 500ms threshold"
+        assert tracker.p50 * 1000 < 500, (
+            f"Router p50 latency {tracker.p50 * 1000:.1f}ms exceeds 500ms threshold"
+        )
 
     @pytest.mark.asyncio
     async def test_router_batch_throughput(self):
@@ -172,9 +172,9 @@ class TestTokenBudgetAccuracy:
         for text in ROUTER_INPUTS + LARGE_INPUTS:
             budget = estimate_token_budget(text, route)
             assert budget > 0, f"Budget must be positive for route={route}"
-            assert (
-                budget <= budget_max
-            ), f"Budget {budget} exceeds cap {budget_max} for route={route}"
+            assert budget <= budget_max, (
+                f"Budget {budget} exceeds cap {budget_max} for route={route}"
+            )
 
     def test_budget_scale_with_input_length(self):
         """Longer inputs produce larger budgets (up to the cap)."""
@@ -182,9 +182,9 @@ class TestTokenBudgetAccuracy:
 
         short_budget = estimate_token_budget("hi", "complex-default")
         long_budget = estimate_token_budget("x" * 2000, "complex-default")
-        assert (
-            long_budget >= short_budget
-        ), f"Long input budget {long_budget} should be >= short budget {short_budget}"
+        assert long_budget >= short_budget, (
+            f"Long input budget {long_budget} should be >= short budget {short_budget}"
+        )
 
     def test_budget_floor_512_for_complex(self):
         """Complex routes never drop below 512 token budget."""
@@ -197,9 +197,9 @@ class TestTokenBudgetAccuracy:
             "complex-cloud",
         ]:
             budget = estimate_token_budget("x" * 100000, route)
-            assert (
-                budget >= 512
-            ), f"Budget floor for {route} is {budget}, expected >= 512"
+            assert budget >= 512, (
+                f"Budget floor for {route} is {budget}, expected >= 512"
+            )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -232,9 +232,9 @@ class TestHITLInterceptRate:
         )
         actual_rate = hitl_count / len(confidences)
 
-        assert (
-            abs(actual_rate - expected_rate) < 0.01
-        ), f"HITL rate {actual_rate:.2%} vs expected {expected_rate:.2%}"
+        assert abs(actual_rate - expected_rate) < 0.01, (
+            f"HITL rate {actual_rate:.2%} vs expected {expected_rate:.2%}"
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -278,9 +278,9 @@ class TestSkillMatcherLatency:
         record_entry(entry)
 
         # Skill matcher should complete under 100ms p50
-        assert (
-            tracker.p50 * 1000 < 100
-        ), f"Skill matcher p50 {tracker.p50 * 1000:.1f}ms exceeds 100ms"
+        assert tracker.p50 * 1000 < 100, (
+            f"Skill matcher p50 {tracker.p50 * 1000:.1f}ms exceeds 100ms"
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════

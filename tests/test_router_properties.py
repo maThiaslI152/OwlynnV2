@@ -173,9 +173,9 @@ class TestRouteDecisionDomain:
         ]:
             state = _make_text_state(hint)
             route, _ = _resolve_complex_route(hint, state, ["all"])
-            assert (
-                route == "complex-cloud"
-            ), f"Frontier hint '{hint}' should route to cloud"
+            assert route == "complex-cloud", (
+                f"Frontier hint '{hint}' should route to cloud"
+            )
 
     @given(text=user_text_st)
     @settings(max_examples=100)
@@ -254,9 +254,9 @@ class TestTokenBudgetContextWindow:
         """Complex routes with large input have budget >= 512 (the context floor)."""
         for route in VALID_COMPLEX_ROUTES:
             budget = estimate_token_budget(text, route)
-            assert (
-                budget >= 512
-            ), f"Complex budget should be >= 512, got {budget} for {route}"
+            assert budget >= 512, (
+                f"Complex budget should be >= 512, got {budget} for {route}"
+            )
 
     def test_cloud_has_higher_budget_cap_than_default(self):
         """Cloud route allows a higher max budget than default/longctx."""

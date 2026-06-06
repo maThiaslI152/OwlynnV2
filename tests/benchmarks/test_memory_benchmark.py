@@ -103,9 +103,9 @@ class TestMemoryInject:
         record_entry(entry)
 
         # Memory inject should complete quickly with mocked DB
-        assert (
-            tracker.p50 * 1000 < 50
-        ), f"Memory inject p50 {tracker.p50 * 1000:.1f}ms exceeds 50ms threshold"
+        assert tracker.p50 * 1000 < 50, (
+            f"Memory inject p50 {tracker.p50 * 1000:.1f}ms exceeds 50ms threshold"
+        )
 
     @pytest.mark.asyncio
     async def test_memory_inject_cache_hit(self):
@@ -127,7 +127,10 @@ class TestMemoryInject:
             ),
             patch("src.agent.nodes.memory.MemoryContextCache") as mock_cache,
         ):
-            mock_cache.get.return_value = "Cached context string"
+            mock_cache.get.return_value = (
+                "Cached context string",
+                "Cached knowledge string",
+            )
             mock_cache.set = MagicMock()
 
             from src.agent.nodes.memory import memory_inject_node
@@ -154,9 +157,9 @@ class TestMemoryInject:
         record_entry(entry)
 
         # Cache hit path should be near-instant
-        assert (
-            tracker.p50 * 1000 < 10
-        ), f"Memory inject cache-hit p50 {tracker.p50 * 1000:.1f}ms exceeds 10ms"
+        assert tracker.p50 * 1000 < 10, (
+            f"Memory inject cache-hit p50 {tracker.p50 * 1000:.1f}ms exceeds 10ms"
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -219,9 +222,9 @@ class TestMemoryWrite:
         )
         record_entry(entry)
 
-        assert (
-            tracker.p50 * 1000 < 50
-        ), f"Memory write p50 {tracker.p50 * 1000:.1f}ms exceeds 50ms threshold"
+        assert tracker.p50 * 1000 < 50, (
+            f"Memory write p50 {tracker.p50 * 1000:.1f}ms exceeds 50ms threshold"
+        )
 
     @pytest.mark.asyncio
     async def test_memory_write_gate_skip(self):
@@ -258,9 +261,9 @@ class TestMemoryWrite:
         )
         record_entry(entry)
 
-        assert (
-            tracker.p50 * 1000 < 5
-        ), f"Memory write gate-skip p50 {tracker.p50 * 1000:.1f}ms exceeds 5ms"
+        assert tracker.p50 * 1000 < 5, (
+            f"Memory write gate-skip p50 {tracker.p50 * 1000:.1f}ms exceeds 5ms"
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -302,6 +305,6 @@ class TestContextFormatting:
         record_entry(entry)
 
         # Formatting 100 results should still be fast (< 5ms p50)
-        assert (
-            tracker.p50 * 1000 < 5
-        ), f"Format context p50 {tracker.p50 * 1000:.1f}ms exceeds 5ms for {num_results} results"
+        assert tracker.p50 * 1000 < 5, (
+            f"Format context p50 {tracker.p50 * 1000:.1f}ms exceeds 5ms for {num_results} results"
+        )

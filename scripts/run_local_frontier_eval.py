@@ -61,6 +61,7 @@ TEST_PROMPTS = [
         "topic": "Memory Retention",
         "prompt": "Without searching the web again, what city's weather did we look up earlier in this conversation, and what was the exact file name we saved it to?",
         "expected_route": "complex-default",
+        "expected_tools": [],
     },
 ]
 
@@ -228,26 +229,34 @@ def score_exchange(exchange: dict, expected: dict) -> dict:
         scores["grade"] += 50
 
     # 2. Check Tools
-    expected_tools = expected.get("expected_tools", [])
-    if expected_tools:
+    if "expected_tools" in expected:
+        expected_tools = expected["expected_tools"]
         executed_tools = exchange.get("executed_tools", [])
-        # Normalise tool names (e.g. "Tool: web_search" -> "web_search")
         executed_clean = [t.replace("Tool: ", "").strip() for t in executed_tools]
 
-        # We want to see if ALL expected tools were used
-        missing_tools = [
-            t
-            for t in expected_tools
-            if not any(t in exec_t for exec_t in executed_clean)
-        ]
-        if not missing_tools:
-            scores["tools_match"] = True
-            scores["grade"] += 50
+        if expected_tools == []:
+            # We strictly expect NO tools to be used
+            if len(executed_clean) == 0:
+                scores["tools_match"] = True
+                scores["grade"] += 50
+            else:
+                scores["tools_match"] = False
+                scores["extra_tools"] = executed_clean
         else:
-            scores["tools_match"] = False
-            scores["missing_tools"] = missing_tools
+            # We want to see if ALL expected tools were used
+            missing_tools = [
+                t
+                for t in expected_tools
+                if not any(t in exec_t for exec_t in executed_clean)
+            ]
+            if not missing_tools:
+                scores["tools_match"] = True
+                scores["grade"] += 50
+            else:
+                scores["tools_match"] = False
+                scores["missing_tools"] = missing_tools
     else:
-        # If no tools expected, give free points
+        # If no tools expected and key omitted, give free points
         scores["tools_match"] = True
         scores["grade"] += 50
 

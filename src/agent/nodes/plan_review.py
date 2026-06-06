@@ -60,6 +60,11 @@ async def plan_review_node(state: AgentState) -> AgentState:
         logger.debug("[plan_review] Skipped — disabled in profile")
         return {"plan_review_approved": None}
 
+    execution_policy = profile.get("execution_policy", "auto_approve")
+    if execution_policy == "auto_approve":
+        logger.debug("[plan_review] Skipped — execution_policy is auto_approve")
+        return {"plan_review_approved": None}
+
     tool_calls = _tool_calls_from_last_message(state)
     if not tool_calls:
         return {"plan_review_approved": None}

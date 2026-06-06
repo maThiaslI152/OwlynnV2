@@ -172,9 +172,12 @@ def analyze(report: dict) -> dict:
 def print_analysis(results: dict, report_path: str):
     """Print the Amdahl analysis in human-readable form."""
     print(f"\nReading report: {report_path}")
-    print(
-        f"Generated at: {Path(report_path).read_text().split('generated_at')[1].split('"')[2] if '"generated_at"' in Path(report_path).read_text() else 'unknown'}"
-    )
+    text_content = Path(report_path).read_text()
+    if '"generated_at"' in text_content:
+        gen_at = text_content.split('"generated_at"')[1].split('"')[1]
+    else:
+        gen_at = "unknown"
+    print(f"Generated at: {gen_at}")
 
     print("\n" + "=" * 80)
     print("  Amdahl's Law Analysis — LLM Optimization Ceiling")

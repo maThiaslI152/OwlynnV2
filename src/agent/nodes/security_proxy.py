@@ -14,6 +14,7 @@ from langchain_core.messages import AIMessage
 from langgraph.types import interrupt
 
 from src.agent.state import AgentState
+from src.memory.user_profile import get_profile
 
 logger = logging.getLogger(__name__)
 
@@ -242,13 +243,31 @@ async def security_proxy_node(state: AgentState) -> AgentState:
         }
 
     # ── API Mode Bypass / Auto-Approval ────────────────────────────────────
+    profile = get_profile()
+    execution_policy = profile.get("execution_policy", "auto_approve")
+
     if state.get("mode") == "api":
         approved = bool(state.get("auto_approve_sensitive", False))
         logger.info("[security_proxy] API mode detected — auto_approve=%s", approved)
         log_hitl_event("hitl_skipped", decision="api_mode_auto", approved=approved)
     else:
+        # Check if we should auto-approve based on Execution Policy and risk
+        # "Red lines": destructive, network, or privilege escalation always require HITL
+        highest_risk = max([c.get("risk_confidence", 0) for c in sensitive_calls])
+        has_redline = any(
+            c.get("risk_category")
+            in ("destructive_action", "network_exfiltration", "privilege_escalation")
+            for c in sensitive_calls
+        )
+
+        if execution_policy == "auto_approve" and not has_redline:
+            logger.info(
+                "[security_proxy] execution_policy is auto_approve and no redline risks detected — auto-approving"
+            )
+            log_hitl_event("hitl_skipped", decision="execution_policy_auto")
+            approved = True
         # ── Dedup: skip second interrupt when plan_review already approved ────
-        if state.get("plan_review_approved"):
+        elif state.get("plan_review_approved"):
             logger.info(
                 "[security_proxy] Plan review already approved — skipping duplicate interrupt"
             )
@@ -265,27 +284,27 @@ async def security_proxy_node(state: AgentState) -> AgentState:
                     str(c.get("name", "unknown")) for c in tool_calls
                 ],
             }
-
-        enriched_payload = enrich_interrupt(
-            {
-                "type": "security_approval_required",
-                "title": _build_title(sensitive_calls),
-                "reason": _build_reason(sensitive_calls),
-                "sensitive_tool_calls": sensitive_calls,
-                "safe_tool_calls": safe_calls,
-                "risk_categories": sorted(
-                    {
-                        str(c.get("risk_category", "sensitive_tool_execution"))
-                        for c in sensitive_calls
-                    }
-                ),
-                "instruction": "Approve or deny this action.",
-                "tool_args": sensitive_calls[0].get("args", {})
-                if sensitive_calls
-                else {},
-            },
-            state,
-        )
+        else:
+            enriched_payload = enrich_interrupt(
+                {
+                    "type": "security_approval_required",
+                    "title": _build_title(sensitive_calls),
+                    "reason": _build_reason(sensitive_calls),
+                    "sensitive_tool_calls": sensitive_calls,
+                    "safe_tool_calls": safe_calls,
+                    "risk_categories": sorted(
+                        {
+                            str(c.get("risk_category", "sensitive_tool_execution"))
+                            for c in sensitive_calls
+                        }
+                    ),
+                    "instruction": "Approve or deny this action.",
+                    "tool_args": sensitive_calls[0].get("args", {})
+                    if sensitive_calls
+                    else {},
+                },
+                state,
+            )
         decision = interrupt(enriched_payload)
         approved = _normalize_approval(decision)
 

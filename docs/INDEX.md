@@ -14,6 +14,14 @@ manifest:
   version: 3
   generated: "2026-06-04T15:00:00Z"
   files:
+    - path: docs/changes/knowledge-cache-markdown-fixes/CHANGELOG.md
+      status: active
+      category: changelog
+      last_updated: 2026-06-06
+    - path: docs/architecture/KNOWLEDGE_CACHE.md
+      status: active
+      category: architecture
+      last_updated: 2026-06-06
     # ── New in v4 ──
     - path: docs/changes/phase-2-architectural-upgrades/CHANGELOG.md
       status: active

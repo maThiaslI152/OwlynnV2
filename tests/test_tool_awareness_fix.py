@@ -46,9 +46,9 @@ def test_long_prose_with_workspace_files_detected_as_stall():
         "preferences and I'll get started right away on the analysis. "
         "There are many different approaches we could take depending on your needs."
     )
-    assert (
-        len(long_prose) >= 500
-    ), f"Test prose must be >= 500 chars, got {len(long_prose)}"
+    assert len(long_prose) >= 500, (
+        f"Test prose must be >= 500 chars, got {len(long_prose)}"
+    )
 
     response = AIMessage(content=long_prose)
     # Current _looks_like_prose_tool_stall only accepts (response) — no workspace_files_present.
@@ -79,9 +79,9 @@ def test_long_prose_returns_false_on_current_code():
         "preferences and I'll get started right away on the analysis. "
         "There are many different approaches we could take depending on your needs."
     )
-    assert (
-        len(long_prose) >= 500
-    ), f"Test prose must be >= 500 chars, got {len(long_prose)}"
+    assert len(long_prose) >= 500, (
+        f"Test prose must be >= 500 chars, got {len(long_prose)}"
+    )
 
     response = AIMessage(content=long_prose)
     result = _looks_like_prose_tool_stall(response)
@@ -205,9 +205,9 @@ def test_long_prose_without_files_returns_false():
         "Finally, we could run some basic statistical tests to validate any "
         "hypotheses about the data. Which approach interests you most?"
     )
-    assert (
-        len(long_prose) >= 420
-    ), f"Test prose must be >= 420 chars, got {len(long_prose)}"
+    assert len(long_prose) >= 420, (
+        f"Test prose must be >= 420 chars, got {len(long_prose)}"
+    )
 
     response = AIMessage(content=long_prose)
     assert _looks_like_prose_tool_stall(response) is False

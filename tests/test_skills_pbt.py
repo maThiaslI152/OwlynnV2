@@ -310,9 +310,9 @@ def test_property6_cache_consistency(name_a, name_b, triggers):
     # Step 4: load_all() again — should return cached (old) data
     cached_load = loader.load_all()
     assert len(cached_load) == 1
-    assert (
-        cached_load[0].name == name_a
-    ), "Expected cached name to be the original, but got the modified name"
+    assert cached_load[0].name == name_a, (
+        "Expected cached name to be the original, but got the modified name"
+    )
 
     # Step 5: Invalidate cache
     loader.invalidate_cache()
@@ -320,9 +320,9 @@ def test_property6_cache_consistency(name_a, name_b, triggers):
     # Step 6: load_all() again — should return new data from disk
     fresh_load = loader.load_all()
     assert len(fresh_load) == 1
-    assert (
-        fresh_load[0].name == name_b
-    ), "After invalidate_cache(), load_all() should re-read from disk"
+    assert fresh_load[0].name == name_b, (
+        "After invalidate_cache(), load_all() should re-read from disk"
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -24,6 +24,7 @@ SIMPLE_PROMPT = (
     "Today is {current_date}. "
     "Give short, direct answers (1-3 sentences). "
     "No reasoning steps, no preamble, no meta commentary. "
+    "Minimize markdown formatting (bolding, headers, lists) to save output tokens. Use plain text where possible. "
     "Never describe, repeat, or reference your own identity, role, purpose, or persona — just answer the question directly. "
     "Do not start responses with 'You are', 'I am', or any self-description."
     "{style_hint}"

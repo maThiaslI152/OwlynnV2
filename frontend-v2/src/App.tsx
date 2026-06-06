@@ -479,6 +479,12 @@ function App() {
     })
   }, [addMessage, activeProjectId])
 
+  const handleStop = useCallback(() => {
+    wsClientRef.current?.send({ type: 'stop' })
+    setPendingCorrelationId(null)
+    setOperatorNote('Interrupted by user.')
+  }, [setPendingCorrelationId, setOperatorNote])
+
   // ── Inline HITL card callbacks ────────────────────────────────────
   const handleHitlApprove = useCallback((hitlId: string, variant: string, answers?: Record<string, unknown>) => {
     const store = useAppStore.getState()
@@ -702,6 +708,7 @@ function App() {
       onHitlDecline={handleHitlDecline}
       onHitlSelectChoice={handleHitlSelectChoice}
       onHitlSkip={handleHitlSkip}
+      onStop={handleStop}
     />
   )
 }

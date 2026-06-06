@@ -105,12 +105,12 @@ async def main():
             sys.exit(1)
 
         stored_values = retrieved.checkpoint.get("channel_values", {})
-        assert (
-            stored_values.get("route") == "complex-default"
-        ), f"Route mismatch: {stored_values.get('route')}"
-        assert (
-            stored_values.get("model_used") == "medium-default"
-        ), f"model_used mismatch: {stored_values.get('model_used')}"
+        assert stored_values.get("route") == "complex-default", (
+            f"Route mismatch: {stored_values.get('route')}"
+        )
+        assert stored_values.get("model_used") == "medium-default", (
+            f"model_used mismatch: {stored_values.get('model_used')}"
+        )
         print("OK: Retrieved checkpoint matches stored state.")
     except Exception as e:
         print(f"FAIL: Checkpoint retrieval/verification failed — {e}")
@@ -146,15 +146,15 @@ async def main():
         vals_1 = retrieved_1.checkpoint.get("channel_values", {})
         vals_2 = retrieved_2.checkpoint.get("channel_values", {})
 
-        assert (
-            vals_1.get("route") == "complex-default"
-        ), f"Thread 1 route contaminated: {vals_1.get('route')}"
-        assert (
-            vals_2.get("route") == "simple"
-        ), f"Thread 2 route wrong: {vals_2.get('route')}"
-        assert vals_1.get("model_used") != vals_2.get(
-            "model_used"
-        ), "Thread isolation failed: both threads have same model_used"
+        assert vals_1.get("route") == "complex-default", (
+            f"Thread 1 route contaminated: {vals_1.get('route')}"
+        )
+        assert vals_2.get("route") == "simple", (
+            f"Thread 2 route wrong: {vals_2.get('route')}"
+        )
+        assert vals_1.get("model_used") != vals_2.get("model_used"), (
+            "Thread isolation failed: both threads have same model_used"
+        )
 
         print("OK: Thread isolation verified — threads have independent state.")
     except Exception as e:

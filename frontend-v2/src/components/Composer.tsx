@@ -12,12 +12,14 @@ interface Persona {
 
 interface ComposerProps {
   onSend: (content: string) => void
+  onStop?: () => void
   disabled?: boolean
+  isGenerating?: boolean
   compact?: boolean
   hitlBlocked?: boolean
 }
 
-export function Composer({ onSend, disabled, compact, hitlBlocked }: ComposerProps) {
+export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitlBlocked }: ComposerProps) {
   const [value, setValue] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   
@@ -176,14 +178,26 @@ export function Composer({ onSend, disabled, compact, hitlBlocked }: ComposerPro
             disabled={disabled || hitlBlocked}
           />
         </div>
-        <button
-          type="submit"
-          className="composer-send"
-          disabled={disabled || !value.trim()}
-          title="Send (Enter)"
-        >
-          ↑
-        </button>
+        {isGenerating ? (
+          <button
+            type="button"
+            className="composer-send composer-stop"
+            onClick={onStop}
+            title="Stop generation"
+            style={{ backgroundColor: 'var(--red-500)', color: 'white', opacity: 1, cursor: 'pointer' }}
+          >
+            ■
+          </button>
+        ) : (
+          <button
+            type="submit"
+            className="composer-send"
+            disabled={disabled || !value.trim()}
+            title="Send (Enter)"
+          >
+            ↑
+          </button>
+        )}
       </form>
     </div>
   )

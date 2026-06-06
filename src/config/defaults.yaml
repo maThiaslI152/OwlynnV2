@@ -48,12 +48,13 @@ models:
     max_tokens: 1024                          # Room for Qwen3.5 reasoning_content + output
     max_output_tokens: 1024
     context_window: 8192                    # Practical: 32K is slow on M4; 16K sufficient for routing
-    timeout: 10                              # M4: 10s, standard: 15s
-    request_timeout: 10                      # HTTP request timeout
+    timeout: 60                              # Allow up to 60s so LM Studio has time to load it from disk if unloaded
+    request_timeout: 60                      # HTTP request timeout
     extra_body:
       chat_template_kwargs:
         enable_thinking: false               # CRITICAL: 0.8B prone to thinking loops
       top_k: 20                              # Qwen recommended
+      keep_alive: -1                         # Ask LM Studio/Ollama to keep model loaded
 
   medium:
     base_url: "http://127.0.0.1:1234/v1"      # MEDIUM_LLM_BASE_URL env
@@ -70,6 +71,7 @@ models:
         enable_thinking: false               # Non-thinking agent mode
       top_p: 0.8                             # Qwen recommended
       top_k: 20                              # Qwen recommended
+      keep_alive: -1                         # Ask LM Studio/Ollama to keep model loaded
 
   cloud:
     base_url: "https://api.deepseek.com/v1"  # CLOUD_LLM_BASE_URL env

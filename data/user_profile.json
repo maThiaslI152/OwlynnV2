@@ -11,7 +11,7 @@
   "streaming_enabled": true,
   "show_thinking": false,
   "show_tool_execution": true,
-  "execution_policy": "hitl",
+  "execution_policy": "auto_approve",
   "audit_log_enabled": true,
   "audit_log_levels": {},
   "audit_log_dir": ""

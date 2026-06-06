@@ -141,9 +141,9 @@ class TestConversationContinuityAcrossSwaps:
 
         # Each turn adds 2 messages (human + AI)
         expected_count = len(conversation) * 2
-        assert (
-            len(state["messages"]) == expected_count
-        ), f"Expected {expected_count} messages, got {len(state['messages'])}"
+        assert len(state["messages"]) == expected_count, (
+            f"Expected {expected_count} messages, got {len(state['messages'])}"
+        )
 
     @given(conversation=conversation_st)
     @settings(max_examples=100)
@@ -157,18 +157,18 @@ class TestConversationContinuityAcrossSwaps:
         for i, record in enumerate(provenance):
             user_msg = state["messages"][2 * i]
             ai_msg = state["messages"][2 * i + 1]
-            assert isinstance(
-                user_msg, HumanMessage
-            ), f"Turn {i}: expected HumanMessage, got {type(user_msg)}"
-            assert isinstance(
-                ai_msg, AIMessage
-            ), f"Turn {i}: expected AIMessage, got {type(ai_msg)}"
-            assert (
-                user_msg.content == record["user_content"]
-            ), f"Turn {i}: user content mismatch"
-            assert (
-                ai_msg.content == record["ai_content"]
-            ), f"Turn {i}: AI content mismatch"
+            assert isinstance(user_msg, HumanMessage), (
+                f"Turn {i}: expected HumanMessage, got {type(user_msg)}"
+            )
+            assert isinstance(ai_msg, AIMessage), (
+                f"Turn {i}: expected AIMessage, got {type(ai_msg)}"
+            )
+            assert user_msg.content == record["user_content"], (
+                f"Turn {i}: user content mismatch"
+            )
+            assert ai_msg.content == record["ai_content"], (
+                f"Turn {i}: AI content mismatch"
+            )
 
     @given(conversation=conversation_st)
     @settings(max_examples=100)
@@ -184,9 +184,9 @@ class TestConversationContinuityAcrossSwaps:
 
         # Every provenance record has a valid model_used value
         for record in provenance:
-            assert (
-                record["model_used"] in VALID_MODEL_USED
-            ), f"Invalid model_used: {record['model_used']}"
+            assert record["model_used"] in VALID_MODEL_USED, (
+                f"Invalid model_used: {record['model_used']}"
+            )
 
     @given(conversation=st.lists(turn_st, min_size=2, max_size=10))
     @settings(max_examples=100)
@@ -255,7 +255,7 @@ class TestConversationContinuityAcrossSwaps:
             state["model_used"] = model_used
 
             new_count = len(state["messages"])
-            assert (
-                new_count == prev_count + 2
-            ), f"Expected {prev_count + 2} messages, got {new_count}"
+            assert new_count == prev_count + 2, (
+                f"Expected {prev_count + 2} messages, got {new_count}"
+            )
             prev_count = new_count

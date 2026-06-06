@@ -111,9 +111,9 @@ class TestComplexPerRouteLatency:
         record_entry(entry)
 
         # Assert p50 is within 2x of mock delay (allowing for CPU overhead)
-        assert (
-            tracker.p50 * 1000 < model_delay * 3
-        ), f"Route {route} p50 {tracker.p50 * 1000:.1f}ms > {model_delay * 3}ms threshold"
+        assert tracker.p50 * 1000 < model_delay * 3, (
+            f"Route {route} p50 {tracker.p50 * 1000:.1f}ms > {model_delay * 3}ms threshold"
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -154,9 +154,9 @@ class TestFallbackChainCoverage:
             for _ in range(BENCH_ITERATIONS):
                 elapsed, result = await time_async_call(complex_llm_node, state)
                 tracker.record(elapsed)
-                assert (
-                    "fallback" in result["model_used"]
-                ), f"Expected fallback label, got {result['model_used']}"
+                assert "fallback" in result["model_used"], (
+                    f"Expected fallback label, got {result['model_used']}"
+                )
 
         entry = BenchmarkEntry(
             name="fallback_cloud_unavailable",
@@ -258,17 +258,17 @@ class TestContextTrimEfficiency:
         original_count = len(messages)
         trimmed = _trim_tool_history(messages, max_tool_cycles=6)
 
-        assert (
-            len(trimmed) == original_count
-        ), "Trim preserves message count, compresses content only"
+        assert len(trimmed) == original_count, (
+            "Trim preserves message count, compresses content only"
+        )
         # Old tool messages should be compressed to summary strings
         old_tool_count = 0
         for i, msg in enumerate(trimmed):
             if isinstance(msg, ToolMessage) and "completed" in str(msg.content):
                 old_tool_count += 1
-        assert (
-            old_tool_count > 0
-        ), "Some old tool messages should be compressed to summaries"
+        assert old_tool_count > 0, (
+            "Some old tool messages should be compressed to summaries"
+        )
 
     def test_trim_preserves_recent_cycles(self):
         """Recent tool cycles are preserved, old ones compressed."""
@@ -339,9 +339,9 @@ class TestPostProcessingOverhead:
         )
         record_entry(entry)
 
-        assert (
-            tracker.p50 * 1000 < 5
-        ), f"Anonymize p50 {tracker.p50 * 1000:.1f}ms exceeds 5ms"
+        assert tracker.p50 * 1000 < 5, (
+            f"Anonymize p50 {tracker.p50 * 1000:.1f}ms exceeds 5ms"
+        )
 
     def test_deanonymize_latency(self):
         """Deanonymize with 10 mappings."""
@@ -369,9 +369,9 @@ class TestPostProcessingOverhead:
         )
         record_entry(entry)
 
-        assert (
-            tracker.p50 * 1000 < 2
-        ), f"Deanonymize p50 {tracker.p50 * 1000:.1f}ms exceeds 2ms"
+        assert tracker.p50 * 1000 < 2, (
+            f"Deanonymize p50 {tracker.p50 * 1000:.1f}ms exceeds 2ms"
+        )
 
     def test_think_tag_strip_latency(self):
         """_strip_thinking_tags with embedded <think> blocks."""
@@ -399,9 +399,9 @@ class TestPostProcessingOverhead:
         )
         record_entry(entry)
 
-        assert (
-            tracker.p50 * 1000 < 1
-        ), f"Think tag strip p50 {tracker.p50 * 1000:.1f}ms exceeds 1ms"
+        assert tracker.p50 * 1000 < 1, (
+            f"Think tag strip p50 {tracker.p50 * 1000:.1f}ms exceeds 1ms"
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -439,9 +439,9 @@ class TestToolActionThroughput:
         record_entry(entry)
 
         # Fast skip should be < 5ms p50
-        assert (
-            tracker.p50 * 1000 < 5
-        ), f"Tool action noop p50 {tracker.p50 * 1000:.1f}ms exceeds 5ms"
+        assert tracker.p50 * 1000 < 5, (
+            f"Tool action noop p50 {tracker.p50 * 1000:.1f}ms exceeds 5ms"
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -529,7 +529,7 @@ class TestGraphE2ELatency:
             patch("src.agent.nodes.memory.MemoryContextCache") as mock_cache,
             patch("src.agent.nodes.memory._should_save_memory", return_value=False),
         ):
-            mock_cache.get.return_value = "cached context"
+            mock_cache.get.return_value = ("cached context", "cached knowledge")
 
             # Warmup
             for _ in range(BENCH_WARMUP):

@@ -84,12 +84,12 @@ class MemoryContextCache:
     _lock = __import__("threading").Lock()
 
     @classmethod
-    def get(cls, thread_id: str, project_id: str) -> Optional[str]:
+    def get(cls, thread_id: str, project_id: str) -> tuple[str, str] | None:
         """Get cached context if still valid."""
         cache_key = f"{thread_id}:{project_id}"
         with cls._lock:
             if cache_key in cls._cache:
-                cached_at, context = cls._cache[cache_key]
+                cached_at, context_tuple = cls._cache[cache_key]
                 age = datetime.now() - cached_at
                 if age < timedelta(seconds=cls._ttl_seconds):
                     audit_debug(
@@ -97,7 +97,7 @@ class MemoryContextCache:
                         "cache_hit",
                         age_seconds=int(age.total_seconds()),
                     )
-                    return context
+                    return context_tuple
                 else:
                     audit_debug(
                         "memory.cache",
@@ -111,11 +111,11 @@ class MemoryContextCache:
             return None
 
     @classmethod
-    def set(cls, thread_id: str, project_id: str, context: str):
-        """Cache context with timestamp."""
+    def set(cls, thread_id: str, project_id: str, context_tuple: tuple[str, str]):
+        """Cache context tuple with timestamp."""
         cache_key = f"{thread_id}:{project_id}"
         with cls._lock:
-            cls._cache[cache_key] = (datetime.now(), context)
+            cls._cache[cache_key] = (datetime.now(), context_tuple)
 
     @classmethod
     def invalidate(cls, thread_id: str):
@@ -169,15 +169,20 @@ async def memory_inject_node(state: AgentState) -> AgentState:
 
     # Check cache first (M4 optimization - avoid rebuilding context repeatedly)
     project_id = state.get("project_id") or "default"
-    cached_context = MemoryContextCache.get(thread_id, project_id)
-    if cached_context:
+    cached_tuple = MemoryContextCache.get(thread_id, project_id)
+    if cached_tuple:
+        cached_context, cached_knowledge = cached_tuple
         persona_id = state.get("persona_id") or "default"
         persona = get_persona_by_id(persona_id)
         persona_summary = f"You are {persona['name']}, a {persona['role']}. Tone: {persona['tone']}. {persona['instructions']}"
         audit_debug(
             "memory.inject", "context_from_cache", context_chars=len(cached_context)
         )
-        return {"memory_context": cached_context, "persona": persona_summary}
+        return {
+            "memory_context": cached_context,
+            "knowledge_context": cached_knowledge,
+            "persona": persona_summary,
+        }
 
     # Semantic search against long-term memory.
     # Strategy: always search project-scoped memories, and also pull global
@@ -266,22 +271,56 @@ async def memory_inject_node(state: AgentState) -> AgentState:
         except Exception as e:
             logger.warning("[project] instructions fetch failed: %s", e)
 
+    # Split results into standard memories and knowledge cache
+    knowledge_facts = []
+    standard_results = []
+
+    # 3-month invalidation check (approx 90 days)
+    ninety_days_ago = datetime.now() - timedelta(days=90)
+
+    for item in results:
+        if isinstance(item, dict):
+            meta = item.get("metadata") or {}
+            if meta.get("type") == "knowledge_cache":
+                fact_text = item.get("memory") or item.get("text", "")
+                timestamp_str = meta.get("timestamp")
+                if timestamp_str:
+                    try:
+                        ts = datetime.fromisoformat(timestamp_str)
+                        if ts < ninety_days_ago:
+                            fact_text += " [Note: This fact is >3 months old, consider verifying if it's a fast-moving topic]"
+                    except ValueError:
+                        pass
+                knowledge_facts.append(fact_text)
+            else:
+                standard_results.append(item)
+        else:
+            standard_results.append(item)
+
     # Format into a clean context block
     memory_context = format_memory_context(
-        results, profile, enhanced_context, project_instructions
+        standard_results, profile, enhanced_context, project_instructions
+    )
+    knowledge_context = (
+        "\n".join(f"- {f}" for f in knowledge_facts) if knowledge_facts else ""
     )
 
     # Cache for subsequent requests (M4 optimization)
-    MemoryContextCache.set(thread_id, project_id, memory_context)
+    MemoryContextCache.set(thread_id, project_id, (memory_context, knowledge_context))
     audit_info(
         "memory.inject",
         "context_assembled",
         context_chars=len(memory_context),
-        result_count=len(results),
+        knowledge_chars=len(knowledge_context),
+        result_count=len(standard_results),
     )
 
     persona_summary = f"You are {persona['name']}, a {persona['role']}. Tone: {persona['tone']}. {persona['instructions']}"
-    return {"memory_context": memory_context, "persona": persona_summary}
+    return {
+        "memory_context": memory_context,
+        "knowledge_context": knowledge_context,
+        "persona": persona_summary,
+    }
 
 
 def format_memory_context(
@@ -443,6 +482,74 @@ async def _is_semantically_similar(memory, new_text: str, user_id: str) -> bool:
     return False
 
 
+async def _evaluate_and_cache_knowledge(
+    messages: list, mem0_uid: str, memory_store
+) -> None:
+    """Evaluates if a web search was performed and extracts synthesized knowledge."""
+    # Check if web_search was used in the current turn
+    web_search_used = any(
+        hasattr(m, "name") and m.name == "web_search" and m.type == "tool"
+        for m in messages
+    )
+    if not web_search_used:
+        return
+
+    # Extract human and AI messages
+    last_human = next(
+        (
+            m.content
+            for m in reversed(messages)
+            if hasattr(m, "type") and m.type == "human"
+        ),
+        "",
+    )
+    last_ai = next(
+        (
+            m.content
+            for m in reversed(messages)
+            if hasattr(m, "type") and m.type == "ai"
+        ),
+        "",
+    )
+
+    if not last_human or not last_ai:
+        return
+
+    try:
+        from src.agent.llm import get_small_llm
+        from langchain_core.messages import HumanMessage
+
+        small_llm = await get_small_llm()
+        evaluator_prompt = f"""Evaluate the following web search interaction:
+User asked: {last_human}
+AI answered: {last_ai}
+
+Was this search about technical documentation, new coding patterns, definitions, or tool updates? Or was it ephemeral data (weather, stock, daily news)?
+If it is ephemeral data, reply with exactly: DISCARD
+If it is valuable technical knowledge to keep, reply with a concise synthesized summary of the new facts learned (1-2 sentences max). Do NOT include preamble.
+
+Response:"""
+
+        response = await small_llm.ainvoke([HumanMessage(content=evaluator_prompt)])
+        content = response.content.strip()
+
+        if content and not content.upper().startswith("DISCARD"):
+            # Save the synthesized fact to Mem0 with metadata
+            await asyncio.to_thread(
+                memory_store.add,
+                content,
+                user_id=mem0_uid,
+                metadata={
+                    "type": "knowledge_cache",
+                    "timestamp": datetime.now().isoformat(),
+                },
+                infer=False,
+            )
+            audit_info("memory.knowledge_cache", "fact_saved", fact_chars=len(content))
+    except Exception as e:
+        logger.warning("[KnowledgeCache] Evaluation failed: %s", e)
+
+
 @log_node("memory_write")
 async def memory_write_node(state: AgentState) -> AgentState:
     """Post-reasoning node: extract and persist memories from the conversation turn.
@@ -566,5 +673,8 @@ async def memory_write_node(state: AgentState) -> AgentState:
 
         except Exception as e:
             logger.warning("[Memory] Failed to save enriched memory: %s", e)
+
+        # Knowledge Cache evaluation (runs concurrently or sequentially here)
+        await _evaluate_and_cache_knowledge(messages, mem0_uid, memory)
 
     return {"memory_invalidated": True}
