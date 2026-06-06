@@ -61,13 +61,8 @@ class RouteSelector:
         if target_route == "simple":
             return target_route, toolbox
 
-        # Cloud route — separate infrastructure, no M-tier swap
+        # Cloud route — separate infrastructure, DeepSeek V4 handles everything (vision via proxy)
         if target_route == "complex-cloud":
-            if features.has_images:
-                logger.warning(
-                    "[selector] Cloud requested but task has images; downgrading to complex-default"
-                )
-                return "complex-default", toolbox
             return target_route, toolbox
 
         # All other complex routes map directly to complex-default

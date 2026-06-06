@@ -186,6 +186,12 @@ def build_graph():
     Flow:
       memory_inject -> summarize_gate -> (if >85%) auto_summarize -> router -> ...
                                             (else) router -> ...
+
+    NOTE ON LANGGRAPH MODERNIZATION:
+    While LangGraph 1.2+ introduces implicit `Command(goto=...)` routing from within nodes,
+    we explicitly retain `add_conditional_edges` here. This orchestration layer is highly
+    reliable, and keeping the state machine topology explicitly visible in `graph.py`
+    is safer for our complex DeepSeek V4 fallback loops and HITL security gates.
     """
     builder = StateGraph(AgentState)
 

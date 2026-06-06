@@ -226,6 +226,12 @@ class TestRiskMetaForCall:
 
 
 class TestSecurityProxyNode:
+    @pytest.fixture(autouse=True)
+    def mock_profile(self):
+        with patch("src.agent.nodes.security_proxy.get_profile") as mock:
+            mock.return_value = {"execution_policy": "require_approval"}
+            yield mock
+
     @patch("src.agent.nodes.security_proxy.interrupt")
     @pytest.mark.asyncio
     async def test_no_tool_calls_returns_denied(self, mock_interrupt):

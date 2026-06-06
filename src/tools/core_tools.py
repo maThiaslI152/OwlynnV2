@@ -30,6 +30,12 @@ BASE_WORKSPACE_DIR = str(_WORKSPACE_PATH.resolve())
 
 def get_safe_workspace_path(filename: str) -> tuple[str, str | None]:
     """Resolve a path inside the active project workspace."""
+    if ".." in filename or filename.startswith("~"):
+        return (
+            "",
+            "Error: Access denied. Path traversal or absolute home paths are not allowed.",
+        )
+
     filename = filename.lstrip("/")
     if filename.startswith("workspace/"):
         filename = filename[len("workspace/") :]
@@ -41,6 +47,8 @@ def get_safe_workspace_path(filename: str) -> tuple[str, str | None]:
     filepath = os.path.realpath(os.path.join(workspace_root, filename))
     root_abs = os.path.realpath(workspace_root)
     base_abs = os.path.realpath(BASE_WORKSPACE_DIR)
+
+    # Symlink protection: ensure the resolved path is strictly within the allowed root
     if not filepath.startswith(root_abs) or not filepath.startswith(base_abs):
         return "", "Error: Access denied. Path is outside workspace."
     return filepath, None

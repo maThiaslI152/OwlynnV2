@@ -149,52 +149,15 @@ class MemoryContextCache:
                 del cls._cache[k]
 
 
-# --- READ: fires before the brain node ---
-@log_node("memory_inject")
-async def memory_inject_node(state: AgentState) -> AgentState:
-    """Pre-reasoning node: build memory context for the LLM system prompt.
-
-    Retrieves and merges:
-    1. Project-scoped Mem0 memories (semantic search on last user message)
-    2. Global user memories (if in a non-default project)
-    3. User profile fields
-    4. Persona summary
-    5. Enhanced topic/interest context with time decay
-    6. Active project instructions (highest priority)
-
-    Returns state updates: ``memory_context`` and ``persona``.
-    """
-    thread_id = state.get("thread_id", "default")
-    user_message = state["messages"][-1].content if state.get("messages") else ""
-
-    # Check cache first (M4 optimization - avoid rebuilding context repeatedly)
-    project_id = state.get("project_id") or "default"
-    cached_tuple = MemoryContextCache.get(thread_id, project_id)
-    if cached_tuple:
-        cached_context, cached_knowledge = cached_tuple
-        persona_id = state.get("persona_id") or "default"
-        persona = get_persona_by_id(persona_id)
-        persona_summary = f"You are {persona['name']}, a {persona['role']}. Tone: {persona['tone']}. {persona['instructions']}"
-        audit_debug(
-            "memory.inject", "context_from_cache", context_chars=len(cached_context)
-        )
-        return {
-            "memory_context": cached_context,
-            "knowledge_context": cached_knowledge,
-            "persona": persona_summary,
-        }
-
-    # Semantic search against long-term memory.
-    # Strategy: always search project-scoped memories, and also pull global
-    # user memories so the assistant still knows who you are.
+async def _build_memory_context_async(
+    thread_id: str, project_id: str, persona_id: str, user_message: str, state: dict
+) -> tuple[str, str]:
     from src.memory.long_term import memory
 
     mem0_uid = _get_mem0_user_id(state)
-    project_id = state.get("project_id") or "default"
 
     results = []
     if memory is not None:
-        # 1. Project-scoped memories (or global if default project)
         try:
             results_dict = await asyncio.to_thread(
                 lambda: memory.search(
@@ -209,8 +172,6 @@ async def memory_inject_node(state: AgentState) -> AgentState:
         except Exception as e:
             logger.warning("[mem0] search failed: %s", e)
 
-        # 2. If in a non-default project, also pull global user memories
-        #    so the assistant retains general knowledge about the user.
         if project_id != "default":
             try:
                 global_uid = "owner"
@@ -236,19 +197,10 @@ async def memory_inject_node(state: AgentState) -> AgentState:
             except Exception as e:
                 logger.warning("[mem0] global search failed: %s", e)
 
-    # Pull structured user profile
     profile = get_profile()
-
-    # Pull persona summary
-    persona_id = state.get("persona_id") or "default"
-    persona = get_persona_by_id(persona_id)
-
-    # Get enhanced memory context with topics and interests
     enhanced_context = get_memory_context_for_prompt()
 
-    # Get active project instructions (if in a project context)
     project_instructions = ""
-    project_id = state.get("project_id")
     if project_id and project_id != "default":
         try:
             from src.memory.project import project_manager
@@ -258,10 +210,8 @@ async def memory_inject_node(state: AgentState) -> AgentState:
                 parts = []
                 if project.get("instructions"):
                     parts.append(project["instructions"])
-                # Include project name for context awareness
                 if project.get("name"):
                     parts.insert(0, f"Active project: {project['name']}")
-                # Include file count so the assistant knows what's available
                 file_count = len(project.get("files", []))
                 if file_count:
                     parts.append(
@@ -271,11 +221,9 @@ async def memory_inject_node(state: AgentState) -> AgentState:
         except Exception as e:
             logger.warning("[project] instructions fetch failed: %s", e)
 
-    # Split results into standard memories and knowledge cache
     knowledge_facts = []
     standard_results = []
 
-    # 3-month invalidation check (approx 90 days)
     ninety_days_ago = datetime.now() - timedelta(days=90)
 
     for item in results:
@@ -297,7 +245,6 @@ async def memory_inject_node(state: AgentState) -> AgentState:
         else:
             standard_results.append(item)
 
-    # Format into a clean context block
     memory_context = format_memory_context(
         standard_results, profile, enhanced_context, project_instructions
     )
@@ -305,16 +252,63 @@ async def memory_inject_node(state: AgentState) -> AgentState:
         "\n".join(f"- {f}" for f in knowledge_facts) if knowledge_facts else ""
     )
 
-    # Cache for subsequent requests (M4 optimization)
+    return memory_context, knowledge_context
+
+
+async def background_prefetch_memory(
+    thread_id: str, project_id: str, persona_id: str, user_message: str
+) -> None:
+    """Pre-fetch memory context and cache it in the background."""
+    cached_tuple = MemoryContextCache.get(thread_id, project_id)
+    if cached_tuple:
+        return
+
+    state_mock = {"project_id": project_id}
+    memory_context, knowledge_context = await _build_memory_context_async(
+        thread_id, project_id, persona_id, user_message, state_mock
+    )
+
+    MemoryContextCache.set(thread_id, project_id, (memory_context, knowledge_context))
+    audit_info(
+        "memory.prefetch", "context_prefetched", context_chars=len(memory_context)
+    )
+
+
+@log_node("memory_inject")
+async def memory_inject_node(state: AgentState) -> AgentState:
+    """Pre-reasoning node: build memory context for the LLM system prompt."""
+    thread_id = state.get("thread_id", "default")
+    user_message = state["messages"][-1].content if state.get("messages") else ""
+    project_id = state.get("project_id") or "default"
+    persona_id = state.get("persona_id") or "default"
+
+    cached_tuple = MemoryContextCache.get(thread_id, project_id)
+    if cached_tuple:
+        cached_context, cached_knowledge = cached_tuple
+        persona = get_persona_by_id(persona_id)
+        persona_summary = f"You are {persona['name']}, a {persona['role']}. Tone: {persona['tone']}. {persona['instructions']}"
+        audit_debug(
+            "memory.inject", "context_from_cache", context_chars=len(cached_context)
+        )
+        return {
+            "memory_context": cached_context,
+            "knowledge_context": cached_knowledge,
+            "persona": persona_summary,
+        }
+
+    memory_context, knowledge_context = await _build_memory_context_async(
+        thread_id, project_id, persona_id, user_message, state
+    )
+
     MemoryContextCache.set(thread_id, project_id, (memory_context, knowledge_context))
     audit_info(
         "memory.inject",
         "context_assembled",
         context_chars=len(memory_context),
         knowledge_chars=len(knowledge_context),
-        result_count=len(standard_results),
     )
 
+    persona = get_persona_by_id(persona_id)
     persona_summary = f"You are {persona['name']}, a {persona['role']}. Tone: {persona['tone']}. {persona['instructions']}"
     return {
         "memory_context": memory_context,

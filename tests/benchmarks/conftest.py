@@ -144,7 +144,6 @@ class ProfileBuilder:
             "small_llm_base_url": self.small_llm_base_url,
             "small_llm_model_name": self.small_llm_model_name,
             "llm_base_url": self.llm_base_url,
-            "medium_models": self.medium_models,
             "custom_sensitive_terms": self.custom_sensitive_terms,
             "deepseek_api_key": self.deepseek_api_key,
             "web_search_enabled": self.web_search_enabled,

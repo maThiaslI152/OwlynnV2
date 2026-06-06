@@ -76,13 +76,15 @@ def anonymize(text: str, context: Optional[dict] = None) -> tuple[str, dict]:
     reverse: dict[str, str] = {}  # original → placeholder (for dedup)
     counters: dict[str, int] = {}  # category → next N
 
+    import hashlib
+
     def _get_placeholder(category: str, value: str) -> str:
-        """Get or create a placeholder for a value. Same value = same placeholder."""
+        """Get or create a deterministic placeholder for a value using a short hash."""
         if value in reverse:
             return reverse[value]
-        n = counters.get(category, 0) + 1
-        counters[category] = n
-        placeholder = f"[{category}_{n}]"
+        # Use a short hash of the value to ensure determinism across stateless turns
+        val_hash = hashlib.sha256(value.encode("utf-8")).hexdigest()[:8]
+        placeholder = f"[{category}_{val_hash}]"
         mapping[placeholder] = value
         reverse[value] = placeholder
         return placeholder

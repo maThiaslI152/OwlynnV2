@@ -178,8 +178,8 @@ Toolbox categories (pick one or more, or "all" if unsure):
 - memory: recall past conversations, user preferences, stored facts
 - all: when unsure or multiple categories needed
 
-Reply with exactly one JSON object (nothing else):
-{{"routing":"simple"|"complex","confidence":0.0-1.0,"toolbox":"toolbox_name"|["name1","name2"]}}
+Reply with exactly one JSON object (nothing else). The execution_plan should briefly break down the steps required to solve the user's request (e.g. 1. search for X, 2. write to file Y). If simple routing, leave execution_plan empty:
+{{"routing":"simple"|"complex","confidence":0.0-1.0,"toolbox":["name1","name2"],"execution_plan":"Step 1... Step 2..."}}
 
 Knowledge Cache:
 {knowledge_context}
@@ -209,8 +209,8 @@ def _last_user_text(state: AgentState) -> str:
     return str(raw)
 
 
-def parse_routing(content: str) -> tuple[str, float, list[str]]:
-    """Extract routing decision, confidence, and toolbox from LLM response."""
+def parse_routing(content: str) -> tuple[str, float, list[str], str | None]:
+    """Extract routing decision, confidence, toolbox, and execution plan from LLM response."""
     try:
         match = re.search(r"\{.*\}", content, re.DOTALL)
         if match:
@@ -222,11 +222,12 @@ def parse_routing(content: str) -> tuple[str, float, list[str]]:
             toolbox = parsed.get("toolbox", "all")
             if isinstance(toolbox, str):
                 toolbox = [toolbox]
-            return decision, confidence, toolbox
+            execution_plan = parsed.get("execution_plan")
+            return decision, confidence, toolbox, execution_plan
     except Exception as e:
         logger.warning("Error suppressed: %s", e)
         pass
-    return "complex", 0.5, ["all"]
+    return "complex", 0.5, ["all"], None
 
 
 # ── Image / frontier detection helpers ───────────────────────────────────
@@ -665,7 +666,9 @@ async def router_node(state: AgentState) -> AgentState:
                 )
             ]
         )
-        decision, confidence, toolbox = parse_routing(response.content)
+        decision, confidence, toolbox, execution_plan = parse_routing(
+            str(response.content)
+        )
         classification_source = "llm_classifier"
 
         # ── Override: Enforce complex for factual questions ──
@@ -1125,6 +1128,7 @@ async def router_node(state: AgentState) -> AgentState:
         "router_clarification_used": router_clarification_used,
         "skill_matched": skill_matched,
         "router_metadata": metadata,
+        "execution_plan": execution_plan if "execution_plan" in locals() else None,
     }
 
 

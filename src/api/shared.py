@@ -149,11 +149,20 @@ async def build_message_content(text: str, files: list):
 
         else:
             # Text / code file
-            logger.info("Uploaded '%s'. Adding workspace reference.", name)
-            text_injections.append(
-                f"[Workspace file `{name}` saved. Invoke read_workspace_file as a tool with that path if you need contents — "
-                f"do not answer with only a suggestion to use the tool.]"
-            )
+            try:
+                decoded_text = raw_bytes.decode("utf-8")
+                logger.info("Uploaded '%s'. Inlining text directly into context.", name)
+                text_injections.append(
+                    f"[Attached File: `{name}`]\n```\n{decoded_text}\n```\n"
+                )
+            except UnicodeDecodeError:
+                logger.info(
+                    "Uploaded '%s' is binary. Adding workspace reference.", name
+                )
+                text_injections.append(
+                    f"[Workspace file `{name}` saved. Invoke read_workspace_file as a tool with that path if you need contents — "
+                    f"do not answer with only a suggestion to use the tool.]"
+                )
 
     # Build final content
     if has_multimodal:

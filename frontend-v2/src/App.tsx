@@ -458,7 +458,7 @@ function App() {
     }
   }, [addMessage, executionPolicy, handleInterrupt, latestToolExecution, pushToolExecution, setLatestToolExecution, setOperatorNote, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setTtsSpeaking, upsertActionProposal, updateActionProposalStatus])
 
-  const handleSend = useCallback((content: string) => {
+  const handleSend = useCallback((content: string, files?: { name: string; data: string }[]) => {
     const activePersonaId = useAppStore.getState().activePersonaId
     const message: ChatMessage = {
       id: crypto.randomUUID(),
@@ -466,6 +466,13 @@ function App() {
       content,
       ts: Date.now(),
     }
+    
+    // Add file references to local message display
+    if (files && files.length > 0) {
+      const fileNames = files.map(f => f.name).join(', ')
+      message.content = content ? `${content}\n\n[Attached: ${fileNames}]` : `[Attached: ${fileNames}]`
+    }
+    
     addMessage(message)
     setPendingCorrelationId(message.id)
     wsClientRef.current?.send({
@@ -473,7 +480,8 @@ function App() {
       type: 'user.message',
       id: message.id,
       content: message.content,
-      message: message.content,
+      message: content, // Send the original text separately if needed, or matched backend
+      files: files && files.length > 0 ? files : undefined,
       project_id: activeProjectId,
       persona_id: activePersonaId,
     })

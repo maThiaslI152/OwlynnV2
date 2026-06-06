@@ -86,13 +86,11 @@ VOICE_AUTO_TTS = os.getenv("VOICE_AUTO_TTS", "true").strip().lower() in {
 
 # ── Context Windows ──────────────────────────────────────────────────────────
 
-MEDIUM_DEFAULT_CONTEXT = int(
-    config.get("models.medium.variants.default.context_window", 16384)
-)
+MEDIUM_DEFAULT_CONTEXT = int(config.get("models.medium.context_window"))
 MEDIUM_LONGCTX_CONTEXT = int(
-    config.get("models.medium.variants.longctx.context_window", 131072)
+    config.get("models.medium.context_window")  # longctx variant no longer exists
 )
-CLOUD_CONTEXT = int(config.get("models.cloud.context_window", 131072))
+CLOUD_CONTEXT = int(config.get("models.cloud.context_window"))
 
 # ── M4 Mac Optimization ──────────────────────────────────────────────────────
 
@@ -111,12 +109,12 @@ if (
     MAX_MEMORIES = M4_MAC_OPTIMIZATION["memory"]["max_facts"]
     MEMORY_SEARCH_WINDOW = M4_MAC_OPTIMIZATION["memory"]["search_window"]
 else:
-    MODEL_TIMEOUT_SMALL = int(config.get("models.standard.small.timeout", 15))
-    MODEL_TIMEOUT_MEDIUM = int(config.get("models.standard.medium.timeout", 45))
-    MAX_TOKENS_SMALL = int(config.get("models.standard.small.max_tokens", 1024))
-    MAX_TOKENS_MEDIUM = int(config.get("models.standard.medium.max_tokens", 8192))
-    MAX_MEMORIES = int(config.get("memory.max_facts", 200))
-    MEMORY_SEARCH_WINDOW = int(config.get("memory.search_window", 200))
+    MODEL_TIMEOUT_SMALL = int(config.get("models.standard.small.timeout"))
+    MODEL_TIMEOUT_MEDIUM = int(config.get("models.standard.medium.timeout"))
+    MAX_TOKENS_SMALL = int(config.get("models.standard.small.max_tokens"))
+    MAX_TOKENS_MEDIUM = int(config.get("models.standard.medium.max_tokens"))
+    MAX_MEMORIES = int(config.get("memory.max_facts"))
+    MEMORY_SEARCH_WINDOW = int(config.get("memory.search_window"))
 
 # ── Ensure directories exist ─────────────────────────────────────────────────
 

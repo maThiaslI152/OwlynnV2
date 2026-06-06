@@ -29,7 +29,7 @@ Owlynn is a **local-first desktop AI coworker** designed primarily for developer
 
 The system operates on a stateful, cyclic **LangGraph** architecture with a three-tier LLM routing strategy:
 - **Backend:** Python 3.12+, FastAPI, LangGraph.
-- **Frontend:** React 19, TypeScript (Vite 8), Zustand 5, wrapped in a Tauri (v2.10) desktop shell.
+- **Frontend:** React 19, TypeScript (Vite 8), Zustand 5, wrapped in an Electron desktop shell.
 - **LLM Tiers:**
   - **Small (Router):** `ibm-grok4-ultrafast-coder-1b` for quick classification.
   - **Medium (Reasoning):** `gemma-4-e4b-uncensored-hauhaucs-aggressive` for tool calling and reasoning.
@@ -53,13 +53,13 @@ The project has successfully completed Phases 1 through 7, establishing a harden
 Addressing issues identified during the 2026-05-25 Browser Audit while integrating new capabilities. Key unresolved bugs include:
 - **Critical:** System prompt/persona leaking into the first assistant response.
 - **High:** Orchestration and Memory panels failing to load or showing blank data.
-- **Medium:** Chat auto-titling defaulting to "New Chat", and Safe Mode lacking a browser fallback (Tauri IPC dependency).
+- **Medium:** Chat auto-titling defaulting to "New Chat", and Safe Mode lacking a browser fallback (Electron IPC dependency).
 
 ## 4. What Could Improve (Engineering Enhancements)
 
 Several areas have been identified for future architectural and operational polish:
 
-- **Automated CI:** Implement an optional remote CI pipeline (e.g., GitHub Actions) to run core tests, reducing reliance purely on local laptop hooks.
+- **Automated CI:** The project deliberately remains strictly on local CI (`scripts/ci.sh`) to prevent GitHub Actions quota issues.
 - **Frontend Resilience:** Increase unit and state testing around the Zustand store (`useAppStore`) and WebSocket lifecycles. Introduce React error boundaries to isolate panel failures.
 - **Graceful Degradation:** Add timeouts, retries, and circuit breakers for external services (LM Studio, Qdrant, Mem0) so the application degrades gracefully when services are offline.
 - **Security Defense-in-Depth:** Audit workspace file tools for path escapes (`..`), and consider stronger isolation boundaries for the Notebook/REPL tool.

@@ -69,7 +69,7 @@ class TestRoundTrip:
 
 
 class TestPlaceholderFormat:
-    _PLACEHOLDER_RE = re.compile(r"\[([A-Z_]+)_(\d+)\]")
+    _PLACEHOLDER_RE = re.compile(r"\[([A-Z_]+)_([a-f0-9]{8})\]")
 
     def test_placeholder_format_email(self):
         text = "Send to bob@example.org please."
@@ -114,8 +114,9 @@ class TestPatternDetection:
     def test_detect_email(self):
         text = "Contact user@domain.com"
         anon, mapping = anonymize(text)
-        assert "[EMAIL_1]" in anon
-        assert mapping["[EMAIL_1]"] == "user@domain.com"
+        ph = next(k for k in mapping if "EMAIL" in k)
+        assert ph in anon
+        assert mapping[ph] == "user@domain.com"
 
     def test_detect_api_key_sk(self):
         text = "Key: sk-abcdefghijklmnopqrstuvwxyz1234"
@@ -131,7 +132,8 @@ class TestPatternDetection:
         text = "Server at http://localhost:8080"
         anon, mapping = anonymize(text)
         assert any("URL" in ph for ph in mapping)
-        assert mapping.get("[URL_1]") == "http://localhost:8080"
+        ph = next(k for k in mapping if "URL" in k)
+        assert mapping[ph] == "http://localhost:8080"
 
     def test_detect_127_url(self):
         text = "API at http://127.0.0.1:1234"
@@ -157,7 +159,8 @@ class TestPatternDetection:
         text = "Connect to 192.168.1.100 for access"
         anon, mapping = anonymize(text)
         assert any("IP" in ph for ph in mapping)
-        assert mapping.get("[IP_1]") == "192.168.1.100"
+        ph = next(k for k in mapping if "IP" in k)
+        assert mapping[ph] == "192.168.1.100"
 
     def test_exclude_ip_zeros(self):
         text = "Bind to 0.0.0.0 for all interfaces"
@@ -185,7 +188,8 @@ class TestPatternDetection:
         ctx = {"custom_sensitive_terms": ["project-alpha"]}
         anon, mapping = anonymize(text, ctx)
         assert any("CUSTOM" in ph for ph in mapping)
-        assert mapping.get("[CUSTOM_1]") == "project-alpha"
+        ph = next(k for k in mapping if "CUSTOM" in k)
+        assert mapping[ph] == "project-alpha"
 
     def test_custom_term_case_insensitive(self):
         text = "Working on PROJECT-ALPHA today."
@@ -223,5 +227,6 @@ class TestOverlapHandling:
         ctx = {"name": "tim"}
         anon, mapping = anonymize(text, ctx)
         # The email should be a single EMAIL placeholder, not split
-        assert "[EMAIL_1]" in anon
-        assert mapping["[EMAIL_1]"] == "tim@example.com"
+        ph = next(k for k in mapping if "EMAIL" in k)
+        assert ph in anon
+        assert mapping[ph] == "tim@example.com"

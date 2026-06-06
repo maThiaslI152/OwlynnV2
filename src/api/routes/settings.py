@@ -125,12 +125,6 @@ async def api_get_unified_settings():
             if field not in unified or unified[field] is None:
                 unified[field] = config.get(dotpath)
 
-        if "medium_models" not in unified or not unified["medium_models"]:
-            variants_cfg = config.get("models.medium.variants") or {}
-            unified["medium_models"] = {
-                variant: v.get("model_name", "") for variant, v in variants_cfg.items()
-            }
-
         # Never expose raw API keys to the frontend.
         # Check Keychain first, then env var, then (deprecated) profile.
         deepseek_key = resolve_deepseek_api_key()

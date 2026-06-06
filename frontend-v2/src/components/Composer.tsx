@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useAppStore } from '../state/useAppStore'
 
 interface Persona {
@@ -10,8 +10,13 @@ interface Persona {
   allowed_toolboxes: string[]
 }
 
+interface AttachedFile {
+  name: string
+  data: string // Base64 Data URL
+}
+
 interface ComposerProps {
-  onSend: (content: string) => void
+  onSend: (content: string, files?: AttachedFile[]) => void
   onStop?: () => void
   disabled?: boolean
   isGenerating?: boolean
@@ -19,8 +24,12 @@ interface ComposerProps {
   hitlBlocked?: boolean
 }
 
+const MAX_FILE_SIZE = 20 * 1024 * 1024 // 20 MB
+
 export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitlBlocked }: ComposerProps) {
   const [value, setValue] = useState('')
+  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([])
+  const [isDragging, setIsDragging] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   
   // Persona selection states
@@ -75,13 +84,15 @@ export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitl
     }
   }, [value, compact])
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
+  const handleSubmit = (event?: React.FormEvent<HTMLFormElement>) => {
+    if (event) event.preventDefault()
     if (disabled) return
     const content = value.trim()
-    if (!content) return
-    onSend(content)
+    // Allow sending just files without text
+    if (!content && attachedFiles.length === 0) return
+    onSend(content, attachedFiles.length > 0 ? attachedFiles : undefined)
     setValue('')
+    setAttachedFiles([])
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
     }
@@ -91,9 +102,62 @@ export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitl
     // Shift+Enter inserts a newline; plain Enter sends
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      const form = (e.target as HTMLTextAreaElement).closest('form')
-      if (form) form.requestSubmit()
+      handleSubmit()
     }
+  }
+
+  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    if (!disabled && !hitlBlocked) {
+      setIsDragging(true)
+    }
+  }, [disabled, hitlBlocked])
+
+  const handleDragLeave = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    setIsDragging(false)
+  }, [])
+
+  const handleDrop = useCallback(async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    setIsDragging(false)
+    if (disabled || hitlBlocked) return
+
+    const files = Array.from(e.dataTransfer.files)
+    const validFiles: AttachedFile[] = []
+
+    for (const file of files) {
+      if (file.size > MAX_FILE_SIZE) {
+        alert(`File ${file.name} exceeds the 20MB size limit.`)
+        continue
+      }
+      // Block common executable extensions just in case
+      if (file.name.match(/\.(exe|dmg|zip|tar|gz|dll|so|dylib)$/i)) {
+        alert(`File type not allowed: ${file.name}`)
+        continue
+      }
+
+      const reader = new FileReader()
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string)
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+
+      validFiles.push({ name: file.name, data: dataUrl })
+    }
+
+    if (validFiles.length > 0) {
+      setAttachedFiles((prev) => [...prev, ...validFiles])
+    }
+  }, [disabled, hitlBlocked])
+
+  const removeFile = (index: number) => {
+    setAttachedFiles((prev) => {
+      const copy = [...prev]
+      copy.splice(index, 1)
+      return copy
+    })
   }
 
   // Find active persona metadata or provide elegant default
@@ -118,7 +182,12 @@ export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitl
   }
 
   return (
-    <div className={`composer-wrapper${compact ? ' composer-wrapper-compact' : ''}`}>
+    <div 
+      className={`composer-wrapper${compact ? ' composer-wrapper-compact' : ''} ${isDragging ? 'drag-over' : ''}`}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       {/* Dynamic Persona Selection Pill & Dropdown */}
       <div className="persona-selector-container" ref={dropdownRef}>
         <button
@@ -161,6 +230,23 @@ export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitl
       </div>
 
       <form className="composer" onSubmit={handleSubmit}>
+        {attachedFiles.length > 0 && (
+          <div className="composer-attachments">
+            {attachedFiles.map((file, idx) => (
+              <div key={idx} className="attachment-chip">
+                <span className="attachment-name" title={file.name}>{file.name}</span>
+                <button 
+                  type="button" 
+                  className="attachment-remove" 
+                  onClick={() => removeFile(idx)}
+                  title="Remove file"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="composer-input-wrap">
           <textarea
             ref={textareaRef}
@@ -170,9 +256,11 @@ export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitl
             placeholder={
               hitlBlocked
                 ? 'Approve or decline the action above to continue'
-                : compact
-                  ? 'Ask...'
-                  : `Ask ${activePersona.name}...`
+                : isDragging
+                  ? 'Drop files here to attach...'
+                  : compact
+                    ? 'Ask...'
+                    : `Ask ${activePersona.name}...`
             }
             rows={1}
             disabled={disabled || hitlBlocked}
@@ -192,7 +280,7 @@ export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitl
           <button
             type="submit"
             className="composer-send"
-            disabled={disabled || !value.trim()}
+            disabled={disabled || (!value.trim() && attachedFiles.length === 0)}
             title="Send (Enter)"
           >
             ↑

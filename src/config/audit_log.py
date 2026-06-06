@@ -295,14 +295,14 @@ def _channel_level(channel: str) -> int:
 
 # Chars to strip from log data values to keep JSON clean and compact
 _STRIP_CHARS = set("{}[]<>;\"'")
-_SANITIZE_MAX_LEN = int(_app_config.get("audit.sanitize_max_len", 500))
 
 
 def _sanitize_value(value: Any) -> Any:
     """Make a value safe for JSON serialization, truncating long strings."""
+    max_len = 500
     if isinstance(value, str):
-        if len(value) > _SANITIZE_MAX_LEN:
-            value = value[:_SANITIZE_MAX_LEN] + "…"
+        if len(value) > max_len:
+            value = value[:max_len] + "…"
         return value
     if isinstance(value, (int, float, bool)) or value is None:
         return value
@@ -310,7 +310,7 @@ def _sanitize_value(value: Any) -> Any:
         return [_sanitize_value(v) for v in value[:20]]  # cap list length
     if isinstance(value, dict):
         return {str(k): _sanitize_value(v) for k, v in list(value.items())[:20]}
-    return str(value)[:_SANITIZE_MAX_LEN]
+    return str(value)[:max_len]
 
 
 # ── Public API ───────────────────────────────────────────────────────────────

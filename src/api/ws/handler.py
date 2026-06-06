@@ -728,6 +728,22 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                 )
                 continue
 
+            if payload.get("type") == "prefetch_memory":
+                user_input = payload.get("message", "")
+                project_id = payload.get("project_id", "default")
+                persona_id = payload.get("persona_id", "default")
+                from src.agent.nodes.memory import background_prefetch_memory
+
+                logger.debug(
+                    f"Starting background memory prefetch for thread {thread_id}"
+                )
+                asyncio.create_task(
+                    background_prefetch_memory(
+                        thread_id, project_id, persona_id, user_input
+                    )
+                )
+                continue
+
             user_input = payload.get("message", "")
             files = payload.get("files", [])
             payload_mode = payload.get("mode", "tools_on")
@@ -755,6 +771,9 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                     try:
                         import base64
                         import urllib.parse
+
+                        if "," in data_b64:
+                            data_b64 = data_b64.split(",", 1)[1]
 
                         raw_bytes = base64.b64decode(data_b64)
 

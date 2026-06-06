@@ -14,11 +14,6 @@ PROFILE = {
     "small_llm_base_url": "http://127.0.0.1:1234/v1",
     "small_llm_model_name": "liquid/lfm2.5-1.2b",
     "llm_base_url": "http://127.0.0.1:1234/v1",
-    "medium_models": {
-        "default": "medium-default-model",
-        "vision": "zai-org/glm-4.6v-flash",
-        "longctx": "LFM2 8B A1B GGUF Q8_0",
-    },
     "cloud_llm_base_url": "https://api.deepseek.com/v1",
     "cloud_llm_model_name": "deepseek-chat",
     "deepseek_api_key": "",

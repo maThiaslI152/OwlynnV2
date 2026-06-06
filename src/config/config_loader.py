@@ -18,6 +18,12 @@ Usage::
 
 Module-level singletons are available for backward compatibility with the
 existing ``settings.py`` module-level constants.
+
+Note on Modernization (LangGraph/LangChain 1.x):
+While the agent architecture is actively being modernized to LangGraph 1.x, we deliberately 
+did NOT rewrite the core config loader or the `models.medium` legacy schema. This preserves 
+backward compatibility with the React frontend UI, the existing REST API, and `user_profile.json` 
+state formats, preventing breaking changes while still supporting the new graph execution patterns.
 """
 
 from __future__ import annotations
@@ -48,12 +54,12 @@ _ENV_OVERRIDE_MAP: dict[str, str] = {
     "SMALL_LLM_MODEL_NAME": "models.small.model_name",
     # Medium model
     "MEDIUM_LLM_BASE_URL": "models.medium.base_url",
-    "MEDIUM_LLM_MODEL_NAME": "models.medium.variants.default.model_name",
+    "MEDIUM_LLM_MODEL_NAME": "models.medium.model_name",
     # Cloud model
     "CLOUD_LLM_BASE_URL": "models.cloud.base_url",
     "CLOUD_LLM_MODEL_NAME": "models.cloud.model_name",
     # Longctx variant
-    "MEDIUM_LONGCTX_CONTEXT": "models.medium.variants.longctx.context_window",
+    "MEDIUM_LONGCTX_CONTEXT": "models.medium.context_window",
     # Voice
     "VOICE_WAKE_WORD": "server.voice.wake_word",
     "VOICE_AUTO_TTS": "server.voice.auto_tts",
@@ -79,14 +85,12 @@ _PROFILE_OVERRIDE_MAP: dict[str, str] = {
     "small_llm_base_url": "models.small.base_url",
     "large_llm_base_url": "models.medium.base_url",
     # LLM model names
-    "llm_model_name": "models.medium.variants.default.model_name",
+    "llm_model_name": "models.medium.model_name",
     "small_llm_model_name": "models.small.model_name",
-    "large_llm_model_name": "models.medium.variants.default.model_name",
+    "large_llm_model_name": "models.medium.model_name",
     # Cloud
     "cloud_llm_base_url": "models.cloud.base_url",
     "cloud_llm_model_name": "models.cloud.model_name",
-    # Medium variants
-    "medium_models": "models.medium.variants",
     # Redis
     "redis_url": "external_services.redis.url",
     # Routing thresholds
@@ -420,12 +424,8 @@ _REQUIRED_PATHS: list[str] = [
     "models.medium.max_tokens",
     "models.medium.timeout",
     "models.medium.request_timeout",
-    "models.medium.variants.default.model_name",
-    "models.medium.variants.default.context_window",
-    "models.medium.variants.longctx.model_name",
-    "models.medium.variants.longctx.context_window",
-    "models.medium.swap.timeout",
-    "models.medium.swap.poll_interval",
+    "models.medium.model_name",
+    "models.medium.context_window",
     # Models — cloud
     "models.cloud.base_url",
     "models.cloud.model_name",

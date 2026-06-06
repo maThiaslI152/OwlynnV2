@@ -49,7 +49,6 @@ class TestUnifiedSettings:
             "small_llm_model_name",
             "llm_base_url",
             "llm_model_name",
-            "medium_models",
             "cloud_llm_base_url",
             "cloud_llm_model_name",
         ]:
@@ -125,19 +124,6 @@ class TestUnifiedSettings:
 
 
 class TestProfileUpdateRuntimeBehavior:
-    def test_post_profile_updates_medium_models_round_trip(self, client):
-        payload = {
-            "medium_models": {
-                "default": "lfm2-8b-a1b-absolute-heresy-mpoa-mlx",
-                "vision": "zai-org/glm-4.6v-flash",
-                "longctx": "lfm2-8b-a1b",
-            }
-        }
-        resp = client.post("/api/profile", json=payload)
-        assert resp.status_code == 200
-        data = client.get("/api/profile").json()
-        assert data["medium_models"] == payload["medium_models"]
-
     def test_post_profile_clears_llm_pool_for_runtime_fields(self, client):
         with patch("src.api.server.LLMPool.clear") as clear_mock:
             resp = client.post(

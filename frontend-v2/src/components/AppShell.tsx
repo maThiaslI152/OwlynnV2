@@ -31,7 +31,7 @@ interface WorkspaceProject {
 }
 
 interface AppShellProps {
-  onSend: (content: string) => void
+  onSend: (content: string, files?: { name: string; data: string }[]) => void
   projects: WorkspaceProject[]
   activeProjectId: string
   activeChatId: string

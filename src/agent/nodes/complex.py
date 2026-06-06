@@ -548,6 +548,15 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             "Pick up mid-sentence if needed and complete your thought."
         )
 
+    execution_plan = state.get("execution_plan")
+    if execution_plan:
+        system_text += (
+            f"\n\n[EXECUTION PLAN]\n"
+            f"The routing logic has generated the following step-by-step plan for you to follow:\n"
+            f"{execution_plan}\n"
+            f"You should execute these steps using your tools."
+        )
+
     system = SystemMessage(content=system_text)
 
     # Trim conversation history to fit context window.
@@ -682,6 +691,12 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     else:
         prompt_messages = [system, *trimmed_messages]
 
+    # ── 9.X: Local VLM Pre-processing for Vision-blind Cloud LLMs ────────
+    if route == "complex-cloud":
+        from .complex_utils.vision_proxy import process_vision_messages
+
+        prompt_messages = await process_vision_messages(prompt_messages)
+
     # ── tools_off mode (no tools) ────────────────────────────────────────
     fallback_chain: list[dict] = []
     loop_start_time: float | None = None
@@ -810,7 +825,10 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         or int(config.get("complex.default_token_budget", 4096)),
         max_context,
     )
-    bound_llm = llm.bind_tools(tools).bind(max_tokens=budget)
+    if route == "complex-cloud":
+        bound_llm = llm.bind_tools(tools, strict=True).bind(max_tokens=budget)
+    else:
+        bound_llm = llm.bind_tools(tools).bind(max_tokens=budget)
     audit_debug("agent.token", "budget_computed", token_budget=budget, route=route)
 
     # ── 9.4: Tiered fallback — LLM invocation with error handling ────────

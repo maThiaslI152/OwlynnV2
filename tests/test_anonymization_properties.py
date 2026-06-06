@@ -18,7 +18,7 @@ from src.agent.anonymization import anonymize, deanonymize
 
 # ── Constants ────────────────────────────────────────────────────────────
 
-PLACEHOLDER_RE = re.compile(r"\[([A-Z_]+)_(\d+)\]")
+PLACEHOLDER_RE = re.compile(r"\[([A-Z_]+)_([a-f0-9]{8})\]")
 
 # ── Strategies ───────────────────────────────────────────────────────────
 

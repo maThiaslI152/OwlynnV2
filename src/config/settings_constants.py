@@ -9,7 +9,6 @@ _LLM_SENSITIVE_FIELDS = {
     "llm_model_name",
     "large_llm_base_url",
     "large_llm_model_name",
-    "medium_models",
     "small_llm_base_url",
     "small_llm_model_name",
 }

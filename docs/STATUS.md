@@ -103,7 +103,7 @@ frontend-v2/src/App.tsx        # Frontend runtime
 | M-tier model swap logic | Removed (2026-06-05) |
 | Security proxy HITL approval | Active |
 | Backend API + WebSocket chat | Active |
-| Tauri frontend shell | Active |
+| Electron frontend shell | Active |
 | Live Talk (wake-word, STT) | Removed (2026-04-29) |
 | TTS (`speak_text` via macOS `say`) | Active |
 | RAG File Intake (PDF/DOCX/XLSX \u2192 Qdrant) | \u2705 Fixed (Docling) |
@@ -150,7 +150,7 @@ frontend-v2/src/App.tsx        # Frontend runtime
 | BUG-2 | **HIGH** | Orchestration panel empty after message processing | `src/api/server.py` or `OrchestrationPanel.tsx` | Fixed |
 | BUG-3 | **HIGH** | Memory panel shows "Loading..." indefinitely | `MemoryPanel.tsx` | Fixed |
 | BUG-4 | **MEDIUM** | Chat auto-title defaults to "New Chat" | `src/api/server.py` lines 1600-1614 | Fixed |
-| BUG-5 | **MEDIUM** | Safe Mode depends on Tauri IPC, no browser fallback | `SafeModePanel.tsx` | Fixed |
+| BUG-5 | **MEDIUM** | Safe Mode depends on Electron IPC, no browser fallback | `SafeModePanel.tsx` | Fixed |
 | BUG-6 | **LOW** | Tool Execution panel shows permanent mock data | `ToolExecutionPanel.tsx` | Fixed |
 | BUG-7 | **LOW** | Workspace delete shows wrong operator note | `App.tsx` `handleDeleteProject()` | Fixed |
 | BUG-8 | **LOW** | Audit & Verify sub-panel doesn't expand | `ToolExecutionPanel.tsx` | Fixed |
@@ -162,7 +162,7 @@ frontend-v2/src/App.tsx        # Frontend runtime
 
 | Concern | Impact |
 |---------|--------|
-| Tauri IPC dependency leakage | SafeMode, ScreenAssist, TTS, window sizing require Tauri IPC — no browser fallbacks |
+| Electron IPC dependency leakage | SafeMode, ScreenAssist, TTS, window sizing require Electron IPC — no browser fallbacks |
 | Silent error handling | Multiple try/catch blocks swallow errors (chat title, profile updates, API calls) |
 | Loading states without timeouts | Memory and Orchestration panels show "Loading..." indefinitely |
 | Mock data in production | Tool Execution panel always shows demo entries |
@@ -182,7 +182,7 @@ All known Phase 8 bugs (BUG-1 through BUG-11) have been fixed. Remaining archite
 
 | Risk | Context |
 |------|---------|
-| Tauri on hold | Browser is primary launch mode. SafeMode, ScreenAssist, window sizing require Tauri IPC — no browser fallbacks. |
+| Electron on hold | Browser is primary launch mode. SafeMode, ScreenAssist, window sizing require Electron IPC — no browser fallbacks. |
 | File processing extraction quality | \u26a0\ufe0f Improved — Docling replaces PyMuPDF/python-docx with layout-aware extraction + table detection. Model downloads on first use (~2 GB). |
 | Web search | SearXNG recommended for self-hosted metasearch. DuckDuckGo is backup. |
 | Workspace switching UI state | Stale UI in edge transitions |

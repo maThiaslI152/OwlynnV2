@@ -12,6 +12,8 @@ def pytest_configure(config):
     """Run before test collection — disable audit file logging globabally and sandbox data."""
     os.environ["OWLYNN_AUDIT_LOG_ENABLED"] = "0"
     os.environ.setdefault("OWLYNN_AUDIT_LOG_DIR", "")
+    os.environ["OWLYNN_TESTING"] = "1"
+    os.environ["OWLYNN_NO_PRELOAD"] = "1"
 
     import tempfile
     import pytest
@@ -31,3 +33,4 @@ def pytest_configure(config):
 
     # Disable file logging in the audit module
     _audit._file_logging_enabled = False
+

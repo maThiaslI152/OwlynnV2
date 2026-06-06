@@ -305,8 +305,8 @@ async def security_proxy_node(state: AgentState) -> AgentState:
                 },
                 state,
             )
-        decision = interrupt(enriched_payload)
-        approved = _normalize_approval(decision)
+            decision = interrupt(enriched_payload)
+            approved = _normalize_approval(decision)
 
     if approved:
         approved_tools = [str(c.get("name", "unknown")) for c in tool_calls]
