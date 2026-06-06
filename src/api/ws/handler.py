@@ -28,6 +28,45 @@ from src.tools.workspace_context import set_active_project_for_run, reset_active
 from src.config.audit_log import set_thread_id, audit_info
 
 
+def _files_for_message_content(files: list, base_dir: str) -> list:
+    """Expand workspace_ref vision files into inline attachments for multimodal intake."""
+    import base64
+    import urllib.parse
+
+    from src.api.attachment_intake import infer_mime_from_name, is_vision_filename
+
+    enriched: list = []
+    abs_base = os.path.abspath(base_dir)
+    for f in files or []:
+        if f.get("type") != "workspace_ref":
+            enriched.append(f)
+            continue
+        rel_path = f.get("path") or f.get("name") or ""
+        safe_name = urllib.parse.unquote(str(rel_path)).lstrip("/")
+        if not safe_name or not is_vision_filename(safe_name):
+            enriched.append(f)
+            continue
+        filepath = os.path.abspath(os.path.join(abs_base, safe_name))
+        if not filepath.startswith(abs_base) or not os.path.isfile(filepath):
+            enriched.append(f)
+            continue
+        try:
+            with open(filepath, "rb") as fp:
+                raw_bytes = fp.read()
+            mime = infer_mime_from_name(safe_name)
+            enriched.append(
+                {
+                    "name": os.path.basename(safe_name),
+                    "type": mime,
+                    "data": base64.b64encode(raw_bytes).decode("ascii"),
+                }
+            )
+        except OSError as exc:
+            logger.warning("Failed to load workspace vision ref %s: %s", safe_name, exc)
+            enriched.append(f)
+    return enriched
+
+
 def serialize_interrupt_item(item):
     """Convert LangGraph interrupt payload items into JSON-safe values."""
     value = getattr(item, "value", item)
@@ -766,30 +805,31 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                 if f.get("type") == "workspace_ref":
                     continue  # Skip saving workspace references they already exist on disk
                 name = f.get("name")
-                data_b64 = f.get("data")
-                if name and data_b64:
-                    try:
-                        import base64
-                        import urllib.parse
+                if not name:
+                    continue
+                try:
+                    import urllib.parse
 
-                        if "," in data_b64:
-                            data_b64 = data_b64.split(",", 1)[1]
+                    from src.api.attachment_intake import normalize_file_attachment
 
-                        raw_bytes = base64.b64decode(data_b64)
+                    normalized = normalize_file_attachment(f)
+                    if not normalized:
+                        continue
 
-                        safe_name = urllib.parse.unquote(name).lstrip("/")
-                        filepath = os.path.abspath(os.path.join(base_dir, safe_name))
-                        if not filepath.startswith(os.path.abspath(base_dir)):
-                            logger.warning(
-                                "Access denied for file %s (outside workspace)", name
-                            )
-                            continue
+                    raw_bytes = normalized["raw_bytes"]
+                    safe_name = urllib.parse.unquote(name).lstrip("/")
+                    filepath = os.path.abspath(os.path.join(base_dir, safe_name))
+                    if not filepath.startswith(os.path.abspath(base_dir)):
+                        logger.warning(
+                            "Access denied for file %s (outside workspace)", name
+                        )
+                        continue
 
-                        with open(filepath, "wb") as file_out:
-                            file_out.write(raw_bytes)
-                        logger.info("Saved file to %s", filepath)
-                    except Exception as e:
-                        logger.error("Failed to save file %s: %s", name, e)
+                    with open(filepath, "wb") as file_out:
+                        file_out.write(raw_bytes)
+                    logger.info("Saved file to %s", filepath)
+                except Exception as e:
+                    logger.error("Failed to save file %s: %s", name, e)
 
             # On first user message in a thread, register the chat in the project
             if thread_id not in sessions or not sessions[thread_id].event_buffer:
@@ -820,7 +860,9 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                     title or "New Chat",
                 )
 
-            message_content = await build_message_content(user_input, files)
+            message_content = await build_message_content(
+                user_input, _files_for_message_content(files, base_dir)
+            )
             if not message_content:
                 continue
 

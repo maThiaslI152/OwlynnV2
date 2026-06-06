@@ -12,27 +12,27 @@ owner: human
 
 ## Models to Download
 
-Owlynn uses a Small model (always loaded) plus one Medium-tier model at a time (swappable):
+Owlynn uses a **router** (always loaded) plus one **medium** model for complex local work. Chat image attachments use native multimodal on the medium model — not the nomic embedding model.
 
-### Small Model (Always Loaded)
-- `ibm-grok4-ultrafast-coder-1b` — routing, simple answers, chat titles (~1.7 GB VRAM)
+### Router (Small, Always Loaded)
 
-### Medium-Tier Models (One at a Time)
-Download all three; the system auto-swaps based on task type:
+- `minicpm5-1b` (or `mlx-community/MiniCPM5-1B-8bit`) — routing, simple answers, chat titles
 
-| Variant | Model Key | Role |
-|---------|-----------|------|
-| Default | `gemma-4-e4b-uncensored-hauhaucs-aggressive` | General complex reasoning, tool calling |
-| Vision | `gemma-4-e4b-uncensored-hauhaucs-aggressive` | Image/multimodal processing |
-| Long Context | `gemma-4-e4b-uncensored-hauhaucs-aggressive` | Extended context tasks |
+### Medium (Complex Local Tasks + Vision)
 
-### Swap Behavior
+- **Main weights:** `HauhauCS/Qwen3.5-9B-Uncensored-HauhauCS-Aggressive` — load the **Q6_K** GGUF in LM Studio
+- **Vision encoder (required for image chat):** `mmproj-Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-BF16.gguf` — load alongside the main GGUF so image attachments work
 
-- Only **one M-tier model** is loaded at a time alongside the Small model.
-- The system automatically swaps models based on the task (e.g., image input triggers a swap to the Vision model).
-- Swaps use the LM Studio native API (`POST /api/v1/models/load` / `POST /api/v1/models/unload`).
-- The router prefers the currently-loaded variant when the task is borderline, avoiding unnecessary swap latency.
-- Swap timeout: 120 seconds. Poll interval: 2 seconds.
+Without the `mmproj` file, text chat works but **image uploads will fail** at the local VLM step.
+
+### Embeddings (RAG / Memory Only)
+
+- `text-embedding-nomic-embed-text-v1.5-embedding` — Qdrant vector search for **text documents only**
+- Chat images are **not** embedded; they go directly to Qwen as `image_url` multimodal input
+
+### Legacy note
+
+Older docs referenced separate vision/longctx model slots and Gemma variants. Current defaults use one Qwen3.5-9B instance for default, vision, and long-context routes (`src/config/defaults.yaml`).
 
 ## Jinja Template Issues — `No user query found in messages`
 
@@ -57,4 +57,4 @@ LM Studio applies the model's **Jinja chat template** to the `/v1/chat/completio
 
 ## Last updated
 
-2026-05-31 — `docs-standards-timeline` added frontmatter
+2026-06-07 — Qwen3.5 + mmproj vision setup; nomic embed scope clarified

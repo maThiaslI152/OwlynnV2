@@ -138,10 +138,14 @@ If you don't have either installed, `start.sh` will fail with a clear error. Ins
 See [`docs/guides/lm_studio.md`](lm_studio.md) for full model setup instructions. Quick checklist:
 
 1. Open LM Studio
-2. Download and load models (e.g., `ibm-grok4-ultrafast-coder-1b` for the small slot)
+2. Download and load models:
+   - Router: `minicpm5-1b` (small slot)
+   - Worker: `qwen3.5-9b-uncensored-hauhaucs-aggressive@q6_k` (medium slot)
+   - **Vision:** also load `mmproj-Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-BF16.gguf` for chat image attachments
+   - **RAG only:** `text-embedding-nomic-embed-text-v1.5-embedding` (not used for chat images)
 3. Start the local server (button in the top bar) — listens on port `1234`
 4. Verify: `curl -s http://127.0.0.1:1234/v1/models | python3 -m json.tool`
-5. Match the model names in `.env` to exactly what LM Studio reports
+5. Match the model names in `.env` / `defaults.yaml` to exactly what LM Studio reports
 
 The launcher will pause and prompt you if LM Studio isn't reachable — you can start it then and press Enter.
 

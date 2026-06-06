@@ -84,9 +84,7 @@ async def test_selected_toolboxes_always_present():
 
 @pytest.mark.anyio
 async def test_image_attachment_routes_to_vision():
-    """Image attachments should route to complex-vision."""
-    from unittest.mock import patch, AsyncMock
-
+    """Image attachments should route to complex-vision without router HITL."""
     state: AgentState = {
         "messages": [
             HumanMessage(
@@ -104,21 +102,61 @@ async def test_image_attachment_routes_to_vision():
         ],
         "web_search_enabled": True,
     }
-    # Mock the small LLM to classify as complex
-    mock_llm = MagicMock()
-    mock_llm.bind.return_value = mock_llm
-    mock_llm.ainvoke = AsyncMock(
-        return_value=MagicMock(
-            content='{"routing":"complex","confidence":0.9,"toolbox":"all"}'
-        )
-    )
-    with patch(
-        "src.agent.nodes.router.get_small_llm",
-        new_callable=AsyncMock,
-        return_value=mock_llm,
-    ):
-        out = await router_node(state)
+    out = await router_node(state)
     assert out["route"] == "complex-vision"
+    assert out["router_clarification_used"] is False
+    assert out["selected_toolboxes"] == ["file_ops", "memory"]
+
+
+@pytest.mark.anyio
+async def test_image_only_attachment_skips_hitl():
+    """Image-only uploads must not pause for router clarification."""
+    state: AgentState = {
+        "messages": [
+            HumanMessage(
+                content=[
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/png;base64,abc123"},
+                    },
+                    {"type": "text", "text": "What's in this?"},
+                ]
+            )
+        ],
+        "web_search_enabled": True,
+    }
+    out = await router_node(state)
+    assert out["route"] == "complex-vision"
+    assert out["router_clarification_used"] is False
+    assert out["selected_toolboxes"] == ["file_ops", "memory"]
+
+
+@pytest.mark.anyio
+async def test_image_with_frontier_routes_cloud_for_proxy():
+    """Image + frontier prompt uses complex-cloud (Qwen vision_proxy → DeepSeek)."""
+    from unittest.mock import patch
+
+    state: AgentState = {
+        "messages": [
+            HumanMessage(
+                content=[
+                    {
+                        "type": "text",
+                        "text": "Provide a formal proof based on this diagram",
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/png;base64,abc123"},
+                    },
+                ]
+            )
+        ],
+        "web_search_enabled": True,
+    }
+    with patch("src.agent.nodes.router._check_cloud_available", return_value=True):
+        out = await router_node(state)
+    assert out["route"] == "complex-cloud"
+    assert out["router_clarification_used"] is False
 
 
 # ── Cloud escalation tests ──────────────────────────────────────────────

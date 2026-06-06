@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useAppStore } from '../state/useAppStore'
+import {
+  type AttachedFile,
+  WORKSPACE_REF_DRAG_TYPE,
+  isWorkspaceRef,
+  workspaceRefAttachment,
+} from '../lib/attachments'
 
 interface Persona {
   id: string
@@ -10,9 +16,18 @@ interface Persona {
   allowed_toolboxes: string[]
 }
 
-interface AttachedFile {
-  name: string
-  data: string // Base64 Data URL
+function inferMimeType(name: string, fileType?: string): string {
+  if (fileType) return fileType
+  const lower = name.toLowerCase()
+  if (lower.endsWith('.png')) return 'image/png'
+  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg'
+  if (lower.endsWith('.webp')) return 'image/webp'
+  if (lower.endsWith('.gif')) return 'image/gif'
+  return 'application/octet-stream'
+}
+
+function isImageAttachment(file: AttachedFile): boolean {
+  return file.type.startsWith('image/')
 }
 
 interface ComposerProps {
@@ -22,11 +37,12 @@ interface ComposerProps {
   isGenerating?: boolean
   compact?: boolean
   hitlBlocked?: boolean
+  onRegisterWorkspaceAttach?: (attach: (file: AttachedFile) => void) => void
 }
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024 // 20 MB
 
-export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitlBlocked }: ComposerProps) {
+export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitlBlocked, onRegisterWorkspaceAttach }: ComposerProps) {
   const [value, setValue] = useState('')
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([])
   const [isDragging, setIsDragging] = useState(false)
@@ -84,6 +100,19 @@ export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitl
     }
   }, [value, compact])
 
+  const attachWorkspaceFile = useCallback((file: AttachedFile) => {
+    setAttachedFiles((prev) => {
+      if (prev.some((f) => isWorkspaceRef(f) && f.name === file.name)) {
+        return prev
+      }
+      return [...prev, file]
+    })
+  }, [])
+
+  useEffect(() => {
+    onRegisterWorkspaceAttach?.(attachWorkspaceFile)
+  }, [onRegisterWorkspaceAttach, attachWorkspaceFile])
+
   const handleSubmit = (event?: React.FormEvent<HTMLFormElement>) => {
     if (event) event.preventDefault()
     if (disabled) return
@@ -123,6 +152,25 @@ export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitl
     setIsDragging(false)
     if (disabled || hitlBlocked) return
 
+    const wsRefRaw = e.dataTransfer.getData(WORKSPACE_REF_DRAG_TYPE)
+    if (wsRefRaw) {
+      try {
+        const parsed = JSON.parse(wsRefRaw) as { name?: string }
+        if (parsed.name) {
+          setAttachedFiles((prev) => {
+            const next = workspaceRefAttachment(parsed.name)
+            if (prev.some((f) => isWorkspaceRef(f) && f.name === next.name)) {
+              return prev
+            }
+            return [...prev, next]
+          })
+        }
+      } catch {
+        // ignore malformed drag payload
+      }
+      return
+    }
+
     const files = Array.from(e.dataTransfer.files)
     const validFiles: AttachedFile[] = []
 
@@ -144,7 +192,11 @@ export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitl
         reader.readAsDataURL(file)
       })
 
-      validFiles.push({ name: file.name, data: dataUrl })
+      validFiles.push({
+        name: file.name,
+        type: inferMimeType(file.name, file.type),
+        data: dataUrl,
+      })
     }
 
     if (validFiles.length > 0) {
@@ -233,7 +285,24 @@ export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitl
         {attachedFiles.length > 0 && (
           <div className="composer-attachments">
             {attachedFiles.map((file, idx) => (
-              <div key={idx} className="attachment-chip">
+              <div
+                key={`${file.type}-${file.name}-${idx}`}
+                className={`attachment-chip${
+                  isImageAttachment(file) ? ' attachment-chip-image' : ''
+                }${isWorkspaceRef(file) ? ' attachment-chip-workspace' : ''}`}
+              >
+                {isWorkspaceRef(file) ? (
+                  <span className="attachment-workspace-icon" title="Workspace reference">
+                    📎
+                  </span>
+                ) : isImageAttachment(file) ? (
+                  <img
+                    className="attachment-thumb"
+                    src={file.data}
+                    alt={file.name}
+                    title={file.name}
+                  />
+                ) : null}
                 <span className="attachment-name" title={file.name}>{file.name}</span>
                 <button 
                   type="button" 
@@ -257,7 +326,7 @@ export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitl
               hitlBlocked
                 ? 'Approve or decline the action above to continue'
                 : isDragging
-                  ? 'Drop files here to attach...'
+                  ? 'Drop files or workspace references here...'
                   : compact
                     ? 'Ask...'
                     : `Ask ${activePersona.name}...`

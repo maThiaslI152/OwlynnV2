@@ -319,6 +319,20 @@ body {
   flex-shrink: 0;
 }
 
+.knowledge-item-draggable {
+  cursor: grab;
+}
+
+.knowledge-item-draggable:active {
+  cursor: grabbing;
+}
+
+.knowledge-hint {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  margin: 0 0 6px;
+}
+
 /* ── Center Panel ──────────────────────────────────────── */
 
 .center-panel {
@@ -967,6 +981,54 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.attachment-chip-image {
+  padding: 4px 8px 4px 4px;
+}
+
+.attachment-chip-workspace {
+  border-color: rgba(114, 194, 255, 0.35);
+  background: rgba(114, 194, 255, 0.08);
+}
+
+.attachment-workspace-icon {
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.attachment-thumb {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.message-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.message-attachment-image {
+  max-width: min(280px, 100%);
+  max-height: 220px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  object-fit: contain;
+  background: var(--bg-elevated);
+}
+
+.message-attachment-file {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
 }
 
 .attachment-remove {

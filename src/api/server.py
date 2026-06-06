@@ -372,6 +372,12 @@ async def _auto_index_project_file(
     """
     import asyncio
 
+    from src.api.attachment_intake import is_vision_filename
+
+    if is_vision_filename(filename):
+        logger.info("Skipped auto-index for vision-only file %s", filename)
+        return
+
     # Wait for file processor to finish
     await asyncio.sleep(3)
 
@@ -416,7 +422,11 @@ async def _auto_index_project_file(
                 pass
 
         if text and len(text.strip()) > 50:
-            await project_manager.add_knowledge(project_id, filename, text.strip())
+            from src.memory.vector_lifecycle import VectorLifecycleManager
+
+            await VectorLifecycleManager.index_processed_file(
+                project_id, filename, text.strip()
+            )
             logger.info(
                 "Auto-indexed %s into project %s knowledge base", filename, project_id
             )

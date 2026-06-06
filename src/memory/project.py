@@ -48,6 +48,37 @@ def _deep_copy(d: dict) -> dict:
     return json.loads(json.dumps(d))
 
 
+def _knowledge_doc_base(name: str) -> str:
+    """Strip legacy per-chunk suffixes so UI shows one row per source file."""
+    if not name:
+        return name
+    if "#chunk" in name:
+        return name.split("#chunk", 1)[0]
+    return name
+
+
+def _collapse_knowledge_file_entries(files: list) -> list:
+    """Merge ``filename#chunkN`` rows into a single entry per source filename."""
+    other: list = []
+    by_base: dict[str, dict] = {}
+    for entry in files:
+        if entry.get("type") != "knowledge":
+            other.append(entry)
+            continue
+        base = _knowledge_doc_base(entry.get("name", ""))
+        if not base:
+            continue
+        added_at = entry.get("added_at") or 0
+        prev = by_base.get(base)
+        if prev is None or added_at > prev.get("added_at", 0):
+            by_base[base] = {
+                "name": base,
+                "type": "knowledge",
+                "added_at": added_at,
+            }
+    return other + list(by_base.values())
+
+
 class ProjectManager:
     """In-memory project registry backed by a JSON file on disk."""
 
@@ -89,6 +120,11 @@ class ProjectManager:
         if "default" not in self.projects:
             self.projects["default"] = _deep_copy(_DEFAULT_PROJECT)
             changed = True
+        for proj in self.projects.values():
+            collapsed = _collapse_knowledge_file_entries(proj.get("files", []))
+            if collapsed != proj.get("files", []):
+                proj["files"] = collapsed
+                changed = True
         if changed:
             self._save()
 
@@ -252,13 +288,62 @@ class ProjectManager:
                 self._save()
         return True
 
+    async def index_knowledge_document(
+        self, project_id: str, filename: str, chunks: list[str]
+    ) -> bool:
+        """Index chunked document text into Mem0; one UI row per source file."""
+        cleaned = [c.strip() for c in chunks if c and c.strip()]
+        if not cleaned:
+            return False
+
+        self.remove_knowledge(project_id, filename)
+
+        from src.memory.long_term import memory
+
+        if memory is None:
+            logger.info(
+                "Mem0 unavailable — skipping knowledge indexing for %s", filename
+            )
+            return False
+
+        try:
+            import asyncio
+
+            for i, chunk_text in enumerate(cleaned):
+                await asyncio.to_thread(
+                    memory.add,
+                    chunk_text,
+                    user_id=f"project:{project_id}",
+                    metadata={"filename": filename, "chunk": i},
+                    infer=False,
+                )
+        except Exception as exc:
+            logger.warning("Failed to index %s into Qdrant: %s", filename, exc)
+            return False
+
+        with self._lock:
+            project = self.projects.get(project_id)
+            if project is None:
+                return False
+            files: list = project.setdefault("files", [])
+            files[:] = [
+                f for f in files if _knowledge_doc_base(f.get("name", "")) != filename
+            ]
+            files.append(
+                {"name": filename, "type": "knowledge", "added_at": time.time()}
+            )
+            self._save()
+        return True
+
     def remove_knowledge(self, project_id: str, name: str) -> None:
         with self._lock:
             project = self.projects.get(project_id)
             if project is None:
                 return
             project["files"] = [
-                f for f in project.get("files", []) if f.get("name") != name
+                f
+                for f in project.get("files", [])
+                if _knowledge_doc_base(f.get("name", "")) != name
             ]
             self._save()
 
@@ -270,6 +355,11 @@ class ProjectManager:
                 memory.delete(
                     user_id=f"project:{project_id}", metadata={"filename": name}
                 )
+                for i in range(21):
+                    memory.delete(
+                        user_id=f"project:{project_id}",
+                        metadata={"filename": f"{name}#chunk{i}"},
+                    )
         except Exception as exc:
             logger.warning("Failed to remove knowledge vectors for %s: %s", name, exc)
 

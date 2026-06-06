@@ -62,6 +62,15 @@ class VectorLifecycleManager:
     @staticmethod
     async def index_processed_file(project_id: str, filename: str, text: str):
         """Centralized indexing path. De-duplicates previous chunks before indexing."""
+        from src.api.attachment_intake import is_vision_filename
+
+        if is_vision_filename(filename):
+            logger.info(
+                "VectorLifecycle: skipping RAG index for vision-only file %s",
+                filename,
+            )
+            return
+
         from src.memory.project import project_manager
 
         # 1. Delete old vectors for this file to prevent duplicates (H1)
@@ -88,10 +97,9 @@ class VectorLifecycleManager:
             start += chunk_size - overlap
 
         # Execute sequentially or chunked to avoid overloading memory
-        for i, chunk_text in enumerate(chunks[:max_chunks]):
-            await project_manager.add_knowledge(
-                project_id, f"{filename}#chunk{i}", chunk_text
-            )
+        await project_manager.index_knowledge_document(
+            project_id, filename, chunks[:max_chunks]
+        )
         logger.info(
             "Auto-indexed %d chunks of %s into project %s",
             len(chunks[:max_chunks]),

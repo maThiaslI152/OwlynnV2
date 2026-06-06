@@ -144,6 +144,14 @@ class FileWatcherHandler(FileSystemEventHandler):
         output_name = filename + ".txt"  # default extension
         output_path = os.path.join(self.processed_dir, output_name)
 
+        from src.api.attachment_intake import is_vision_filename
+
+        if is_vision_filename(filename):
+            logger.info(
+                "[Watcher] Skipping RAG processing for vision-only file %s", filename
+            )
+            return
+
         logger.info(f"[Watcher] Processing {filename} ({ext})...")
 
         try:

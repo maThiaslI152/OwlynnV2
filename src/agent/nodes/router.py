@@ -236,6 +236,10 @@ def parse_routing(content: str) -> tuple[str, float, list[str], str | None]:
 # ── Image / frontier detection helpers ───────────────────────────────────
 
 
+# Image tasks: workspace + memory only — never bind web_search/deep_research.
+_VISION_TOOLBOX = ["file_ops", "memory"]
+
+
 def _has_image_content(state: AgentState) -> bool:
     """Check if the last message contains image attachments."""
     messages = state.get("messages") or []
@@ -299,33 +303,42 @@ def _resolve_complex_route(
     user_text: str,
     state: AgentState,
     toolbox: list[str],
+    *,
+    cloud_available: bool | None = None,
 ) -> tuple[str, list[str]]:
     """
     Stage 2: given a complex classification, pick the specific route.
 
     Returns (route, toolbox) — toolbox may be adjusted.
     """
-    # 1. Image attachments → complex-vision
-    if _has_image_content(state):
-        return "complex-vision", toolbox
+    if cloud_available is None:
+        cloud_available = _check_cloud_available()
 
-    # 2. Estimate input tokens (rough: ~4 chars per token)
     text_len = len(user_text)
     estimated_input = 4000 + (text_len // 4)  # input_reserve + message tokens
 
-    # 3. Exceeds Medium_LongCtx → cloud
+    # 1. Image attachments — local Qwen vision, or cloud via vision_proxy pre-step
+    if _has_image_content(state):
+        if cloud_available and (
+            estimated_input > _MEDIUM_LONGCTX_CONTEXT * 0.80
+            or _needs_frontier_quality(user_text)
+        ):
+            return "complex-cloud", toolbox
+        return "complex-vision", toolbox
+
+    # 2. Exceeds Medium_LongCtx → cloud
     if estimated_input > _MEDIUM_LONGCTX_CONTEXT * 0.80:
         return "complex-cloud", toolbox
 
-    # 4. Exceeds 80% of Medium_Default → longctx
+    # 3. Exceeds 80% of Medium_Default → longctx
     if estimated_input > _MEDIUM_DEFAULT_CONTEXT * 0.80:
         return "complex-longctx", toolbox
 
-    # 5. Frontier-quality indicators → cloud
+    # 4. Frontier-quality indicators → cloud
     if _needs_frontier_quality(user_text):
         return "complex-cloud", toolbox
 
-    # 6. Default
+    # 5. Default
     return "complex-default", toolbox
 
 
@@ -365,6 +378,51 @@ async def router_node(state: AgentState) -> AgentState:
     web_on = state.get("web_search_enabled")
     if web_on is None:
         web_on = True
+
+    # Image attachments — deterministic vision route; skip LLM/HITL clarification.
+    if has_images:
+        route, toolbox = _resolve_complex_route(
+            user_text, state, list(_VISION_TOOLBOX), cloud_available=cloud_available
+        )
+        budget = estimate_token_budget(user_text, route)
+        task_category = "vision_cloud" if route == "complex-cloud" else "vision"
+        reasoning = (
+            "image_attachment_cloud_proxy"
+            if route == "complex-cloud"
+            else "image_attachment"
+        )
+        metadata = _build_router_metadata(
+            route,
+            confidence=0.95,
+            reasoning=reasoning,
+            classification_source="deterministic",
+            cloud_available=cloud_available,
+            has_images=True,
+            task_category=task_category,
+            estimated_tokens=budget,
+            web_on=web_on,
+        )
+        audit_info(
+            "agent.lifecycle",
+            "router_decision",
+            route=route,
+            confidence=0.95,
+            source="image_attachment",
+            task_category=task_category,
+        )
+        logger.info(
+            "[router] → %s (image attachment — HITL skipped, toolbox=%s)",
+            route,
+            toolbox,
+        )
+        return {
+            "route": route,
+            "token_budget": budget,
+            "selected_toolboxes": toolbox,
+            "router_clarification_used": False,
+            "skill_matched": None,
+            "router_metadata": metadata,
+        }
 
     # ── Route detection with tracking metadata ─────────────────────────────
 
@@ -736,6 +794,12 @@ async def router_node(state: AgentState) -> AgentState:
             or match_result.is_ambiguous  # Skill ambiguous
         )
 
+        if has_images:
+            hitl_needed = False
+            logger.info(
+                "[router] Skipping HITL — image attachment present (vision route)"
+            )
+
         # When skill matcher found a confident match, skip HITL even
         # if the LLM router confidence is low — the skill signal is stronger.
         if (
@@ -975,6 +1039,14 @@ async def router_node(state: AgentState) -> AgentState:
                     toolbox=toolbox,
                 )
                 budget = estimate_token_budget(user_text, route_override)
+                if has_images:
+                    route_override, toolbox = _resolve_complex_route(
+                        user_text,
+                        state,
+                        toolbox,
+                        cloud_available=cloud_available,
+                    )
+                    budget = estimate_token_budget(user_text, route_override)
                 if route_override == "complex-cloud" and not cloud_available:
                     route_override = "complex-default"
                     logger.warning(

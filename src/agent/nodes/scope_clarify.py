@@ -16,6 +16,7 @@ from langgraph.types import interrupt, Command
 
 from src.agent.state import AgentState
 from src.agent.hitl.scope_heuristics import needs_clarification
+from src.agent.nodes.router import _has_image_content
 from src.memory.user_profile import get_profile
 
 logger = logging.getLogger(__name__)
@@ -134,6 +135,10 @@ async def scope_clarify_node(state: AgentState) -> AgentState | Command:
             break
 
     if not user_text:
+        return {}
+
+    if _has_image_content(state):
+        logger.debug("[scope_clarify] Skipped — image attachment (vision task)")
         return {}
 
     # ── Web search bypass: informational queries skip HITL ─────────

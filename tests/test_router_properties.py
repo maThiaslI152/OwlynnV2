@@ -119,11 +119,24 @@ class TestRouteDecisionDomain:
 
     @given(text=user_text_st)
     @settings(max_examples=100)
-    def test_image_always_vision_regardless_of_text(self, text: str):
-        """Any text combined with an image attachment routes to complex-vision."""
+    def test_image_always_vision_when_cloud_unavailable(self, text: str):
+        """Image + any text routes to complex-vision when cloud is unavailable."""
         state = _make_image_state(text)
-        route, _ = _resolve_complex_route(text, state, ["all"])
+        route, _ = _resolve_complex_route(text, state, ["all"], cloud_available=False)
         assert route == "complex-vision"
+
+    def test_image_with_frontier_routes_cloud_for_vision_proxy(self):
+        """Image + frontier task routes to cloud so Qwen transcribes before DeepSeek."""
+        state = _make_image_state(
+            "Analyze this diagram and provide a formal proof of the theorem shown"
+        )
+        route, _ = _resolve_complex_route(
+            "Analyze this diagram and provide a formal proof of the theorem shown",
+            state,
+            ["all"],
+            cloud_available=True,
+        )
+        assert route == "complex-cloud"
 
     def test_large_input_routes_to_longctx(self):
         """Input exceeding 80% of Medium_Default context routes to complex-longctx."""

@@ -120,14 +120,19 @@ Resumes the `plan_review` HITL gate after human review. `feedback` is optional t
 #### Uploaded Files (base64)
 
 For non-`workspace_ref` attachments, the server:
-1. Base64-decodes `data`
-2. Saves raw bytes into the active project workspace folder
+1. Normalizes each file via `normalize_file_attachment()` (`src/api/attachment_intake.py`) — strips `data:<mime>;base64,` prefixes, infers MIME from filename when `type` is omitted
+2. Base64-decodes payload and saves raw bytes into the active project workspace folder
+
+Frontend should send `type` (MIME) on each file; Composer infers from `file.type` or extension when missing.
 
 | MIME/Type | Behavior |
 |-----------|----------|
-| `image/*` | Forwarded inline as multimodal `image_url` part |
-| `application/pdf` / `.pdf` | NOT given to model inline. Injects workspace-read instruction. Model calls `read_workspace_file` (reads from `.processed/` cache) |
-| Other non-image | Same as PDF: injected as workspace-read instruction, use `read_workspace_file` for content |
+| `image/png`, `image/jpeg`, `image/webp`, `image/gif` | Forwarded inline as multimodal `image_url` to local Qwen (route `complex-vision`). UI shows thumbnail in composer + message bubble. **Not** indexed into Qdrant/RAG. |
+| `application/pdf` / `.pdf` | Text extracted inline when possible; otherwise agent calls `read_workspace_file` |
+| Other UTF-8 text/code | Inlined in prompt as fenced block |
+| Other binary | Saved to workspace; agent instructed to call `read_workspace_file` |
+
+Cloud route (`complex-cloud`) with images: local Qwen transcribes via `vision_proxy` before DeepSeek; on proxy failure, route falls back to `complex-vision` direct multimodal.
 
 ### Server → Client: Event Types
 

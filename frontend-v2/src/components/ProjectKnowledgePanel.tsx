@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { WORKSPACE_REF_DRAG_TYPE, workspaceRefAttachment, type AttachedFile } from '../lib/attachments'
 
 interface KnowledgeFile {
   name: string
@@ -6,11 +7,31 @@ interface KnowledgeFile {
   added_at: number
 }
 
-interface ProjectKnowledgePanelProps {
-  activeProjectId: string
+function knowledgeBaseName(name: string): string {
+  return name.replace(/#chunk\d+$/, '')
 }
 
-export function ProjectKnowledgePanel({ activeProjectId }: ProjectKnowledgePanelProps) {
+function collapseKnowledgeFiles(files: KnowledgeFile[]): KnowledgeFile[] {
+  const byBase = new Map<string, KnowledgeFile>()
+  for (const file of files) {
+    const base = knowledgeBaseName(file.name)
+    const existing = byBase.get(base)
+    if (!existing || file.added_at > existing.added_at) {
+      byBase.set(base, { ...file, name: base })
+    }
+  }
+  return [...byBase.values()].sort((a, b) => b.added_at - a.added_at)
+}
+
+interface ProjectKnowledgePanelProps {
+  activeProjectId: string
+  onAttachToComposer?: (file: AttachedFile) => void
+}
+
+export function ProjectKnowledgePanel({
+  activeProjectId,
+  onAttachToComposer,
+}: ProjectKnowledgePanelProps) {
   const [files, setFiles] = useState<KnowledgeFile[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -26,8 +47,8 @@ export function ProjectKnowledgePanel({ activeProjectId }: ProjectKnowledgePanel
         return
       }
       const project = await response.json()
-      const knowledgeFiles: KnowledgeFile[] = (project.files ?? []).filter(
-        (f: KnowledgeFile) => f.type === 'knowledge'
+      const knowledgeFiles: KnowledgeFile[] = collapseKnowledgeFiles(
+        (project.files ?? []).filter((f: KnowledgeFile) => f.type === 'knowledge')
       )
       setFiles(knowledgeFiles)
     } catch {
@@ -65,18 +86,36 @@ export function ProjectKnowledgePanel({ activeProjectId }: ProjectKnowledgePanel
         </div>
       )}
       {files.length > 0 && (
-        <ul className="knowledge-list">
-          {files.map((file) => (
-            <li key={file.name} className="knowledge-item">
-              <span className="knowledge-filename" title={file.name}>
-                {file.name}
-              </span>
-              <span className="knowledge-meta">
-                {new Date(file.added_at * 1000).toLocaleDateString()}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <>
+          <p className="knowledge-hint">Drag a file to the prompt to reference it.</p>
+          <ul className="knowledge-list">
+            {files.map((file) => (
+              <li
+                key={file.name}
+                className="knowledge-item knowledge-item-draggable"
+                draggable
+                title={`Drag to prompt: ${file.name}`}
+                onDragStart={(e) => {
+                  e.dataTransfer.setData(
+                    WORKSPACE_REF_DRAG_TYPE,
+                    JSON.stringify({ name: file.name })
+                  )
+                  e.dataTransfer.effectAllowed = 'copy'
+                }}
+                onDoubleClick={() => {
+                  onAttachToComposer?.(workspaceRefAttachment(file.name))
+                }}
+              >
+                <span className="knowledge-filename" title={file.name}>
+                  {file.name}
+                </span>
+                <span className="knowledge-meta">
+                  {new Date(file.added_at * 1000).toLocaleDateString()}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </section>
   )

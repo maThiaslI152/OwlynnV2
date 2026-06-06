@@ -1,6 +1,5 @@
 import logging
 import copy
-from typing import Any
 from langchain_core.messages import HumanMessage
 
 from src.agent.llm import get_medium_llm
@@ -8,7 +7,7 @@ from src.agent.llm import get_medium_llm
 logger = logging.getLogger(__name__)
 
 
-async def process_vision_messages(messages: list) -> list:
+async def process_vision_messages(messages: list) -> tuple[list, bool]:
     """
     Scans messages for `image_url` blocks. If found, sends the image to the
     local vision model (medium-vision) to transcribe the image to text,
@@ -16,8 +15,14 @@ async def process_vision_messages(messages: list) -> list:
 
     This acts as a Vision-to-Text proxy for models like DeepSeek V4 that
     do not natively support multimodal inputs.
+
+    Returns
+    -------
+    tuple[list, bool]
+        Processed messages and whether every image was transcribed successfully.
     """
     processed_messages = []
+    proxy_ok = True
 
     for msg in messages:
         if not isinstance(msg, HumanMessage) or not isinstance(msg.content, list):
@@ -37,7 +42,6 @@ async def process_vision_messages(messages: list) -> list:
                 )
 
                 try:
-                    # Construct a temporary prompt just for the local vision model
                     vlm_messages = [
                         HumanMessage(
                             content=[
@@ -53,7 +57,10 @@ async def process_vision_messages(messages: list) -> list:
                     vlm_llm = await get_medium_llm("vision")
                     response = await vlm_llm.ainvoke(vlm_messages)
 
-                    transcription = str(response.content)
+                    transcription = str(response.content).strip()
+                    if not transcription:
+                        raise ValueError("empty transcription from local VLM")
+
                     logger.info(
                         "[vision_proxy] VLM transcription complete (%d chars).",
                         len(transcription),
@@ -66,13 +73,9 @@ async def process_vision_messages(messages: list) -> list:
                         }
                     )
                 except Exception as e:
+                    proxy_ok = False
                     logger.error("[vision_proxy] Local VLM transcription failed: %s", e)
-                    new_content.append(
-                        {
-                            "type": "text",
-                            "text": "\n\n[System Note: The user attached an image, but the local Vision-to-Text proxy failed to transcribe it.]\n\n",
-                        }
-                    )
+                    new_content.append(block)
             else:
                 new_content.append(block)
 
@@ -83,4 +86,4 @@ async def process_vision_messages(messages: list) -> list:
         else:
             processed_messages.append(msg)
 
-    return processed_messages
+    return processed_messages, proxy_ok

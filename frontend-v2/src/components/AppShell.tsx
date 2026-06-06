@@ -17,6 +17,7 @@ import type { ConversationItem, ConversationToolActivity, ConversationHitlPrompt
 import { useAppStore } from '../state/useAppStore'
 import { electronBridge as tauriBridge } from '../lib/electronBridge'
 import type { ChatMessage } from '../types/protocol'
+import type { AttachedFile } from '../lib/attachments'
 
 interface ProjectChat {
   id: string
@@ -31,7 +32,7 @@ interface WorkspaceProject {
 }
 
 interface AppShellProps {
-  onSend: (content: string, files?: { name: string; data: string }[]) => void
+  onSend: (content: string, files?: AttachedFile[]) => void
   projects: WorkspaceProject[]
   activeProjectId: string
   activeChatId: string
@@ -165,13 +166,31 @@ function MessageContent({ content }: { content: string }) {
   )
 }
 
+function MessageAttachments({ attachments }: { attachments: ChatMessage['attachments'] }) {
+  if (!attachments?.length) return null
+  return (
+    <div className="message-attachments">
+      {attachments.map((file, idx) => (
+        <div key={`${file.name}-${idx}`} className="message-attachment-item">
+          {file.type.startsWith('image/') ? (
+            <img className="message-attachment-image" src={file.previewUrl} alt={file.name} title={file.name} />
+          ) : (
+            <span className="message-attachment-file" title={file.name}>{file.name}</span>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function MessageBubble({ message, isStreaming }: { message: ChatMessage; isStreaming: boolean }) {
   return (
     <div className={`message message-${message.role}`}>
       <MessageAvatar role={message.role} />
       <div className="message-body">
         <div className="message-bubble">
-          <MessageContent content={message.content} />
+          <MessageAttachments attachments={message.attachments} />
+          {message.content ? <MessageContent content={message.content} /> : null}
           {isStreaming && <span className="streaming-cursor" />}
         </div>
         <span className="message-timestamp">{formatTimeRelative(message.ts)}</span>
@@ -296,6 +315,7 @@ export function AppShell({
   const [renamingProjectId, setRenamingProjectId] = useState<string | null>(null)
   const [creatingProject, setCreatingProject] = useState(false)
   const [safeModePopoverOpen, setSafeModePopoverOpen] = useState(false)
+  const attachWorkspaceFileRef = useRef<(file: AttachedFile) => void>(() => {})
 
   const handleToggleMode = useCallback(async (targetMode: 'compact' | 'full') => {
     if (targetMode === 'compact') {
@@ -560,7 +580,10 @@ export function AppShell({
               )}
             </div>
           </div>
-          <ProjectKnowledgePanel activeProjectId={activeProjectId} />
+          <ProjectKnowledgePanel
+            activeProjectId={activeProjectId}
+            onAttachToComposer={(file) => attachWorkspaceFileRef.current(file)}
+          />
         </aside>
       )}
 
@@ -764,7 +787,17 @@ export function AppShell({
             </span>
           </div>
         )}
-        <Composer onSend={onSend} disabled={connectionState !== 'connected'} isGenerating={!!pendingCorrelationId} hitlBlocked={hasPendingHitl} compact={isCompact} onStop={onStop} />
+        <Composer
+          onSend={onSend}
+          disabled={connectionState !== 'connected'}
+          isGenerating={!!pendingCorrelationId}
+          hitlBlocked={hasPendingHitl}
+          compact={isCompact}
+          onStop={onStop}
+          onRegisterWorkspaceAttach={(attach) => {
+            attachWorkspaceFileRef.current = attach
+          }}
+        />
       </main>
 
       {/* ── Right Panel ── */}

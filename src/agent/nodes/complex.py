@@ -204,6 +204,23 @@ You are equipped with powerful tools that override your standard AI limitations.
     + _TOOL_CALL_DISCIPLINE
 )
 
+COMPLEX_TOOL_GUIDANCE_VISION = (
+    """
+### Vision task (image attached)
+You can see the user's image in this conversation. Analyze it with your vision capabilities first.
+
+### Tools
+read_workspace_file, list_workspace_files, search_workspace_docs — compare diagrams/flowcharts to project source
+recall_memories, recall_all_memories — project memory
+ask_user — clarifying questions
+
+### Rules
+- **Do NOT call web_search, fetch_webpage, or deep_research.** Answers come from the image and local codebase, not the public web.
+- For "verify", "check", or "compare" on a flowchart/diagram: read relevant files under `src/` and state whether the diagram matches the implementation.
+- Prefer one concise answer after at most 1–2 file reads. Do not run long research loops."""
+    + _TOOL_CALL_DISCIPLINE
+)
+
 COMPLEX_TOOL_GUIDANCE_NO_WEB = (
     """
 ### Tools (web search is off for this chat)
@@ -227,6 +244,24 @@ Summarize tool results clearly for the user."""
 )
 
 from .complex_utils.helpers import _web_search_tool_output_has_results
+
+_WEB_TOOL_NAMES = frozenset({"web_search", "fetch_webpage", "deep_research"})
+
+
+def _message_has_image_content(messages: list) -> bool:
+    if not messages:
+        return False
+    content = messages[-1].content
+    if isinstance(content, list):
+        return any(
+            isinstance(block, dict) and block.get("type") == "image_url"
+            for block in content
+        )
+    return False
+
+
+def _strip_web_tools(tools: list) -> list:
+    return [t for t in tools if getattr(t, "name", "") not in _WEB_TOOL_NAMES]
 
 
 def build_web_search_answer_nudge_messages(tool_messages: list) -> list[HumanMessage]:
@@ -490,10 +525,19 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         persona=persona,
         style_hint=style_hint,
     )
+    route = state.get("route") or "complex-default"
+    has_images = _message_has_image_content(thread_messages) or bool(
+        (state.get("router_metadata") or {}).get("has_images")
+    )
+    vision_task = has_images and route in ("complex-vision", "complex-cloud")
+
     if mode != "tools_off":
-        system_text += (
-            COMPLEX_TOOL_GUIDANCE_WEB if web_on else COMPLEX_TOOL_GUIDANCE_NO_WEB
-        )
+        if vision_task:
+            system_text += COMPLEX_TOOL_GUIDANCE_VISION
+        else:
+            system_text += (
+                COMPLEX_TOOL_GUIDANCE_WEB if web_on else COMPLEX_TOOL_GUIDANCE_NO_WEB
+            )
 
     if security_decision == "denied":
         system_text += (
@@ -531,7 +575,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         system_text += "\n".join(scope_lines)
 
     # ── Web search suggestion from scope_clarify bypass ────────────────────
-    if state.get("web_search_suggested") and web_on:
+    if state.get("web_search_suggested") and web_on and not vision_task:
         system_text += (
             "\n\nThe user's question is informational and may require current web data. "
             "Use web_search to find relevant information before answering. "
@@ -563,7 +607,6 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     trimmed_messages = _trim_tool_history(thread_messages)
 
     # ── 9.1: Route-based model selection ─────────────────────────────────
-    route = state.get("route") or "complex-default"
     if route == "complex-cloud":
         max_context = int(config.get("models.cloud.context_window", 1048576))
     else:
@@ -681,24 +724,48 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             )
 
     # ── 9.1 continued: Determine base_url for message format decision ────
+    fallback_chain: list[dict] = []
+    local_prompt_messages = with_system_for_local_server(system, trimmed_messages)
     if route == "complex-cloud":
         base_url = config.get("models.cloud.base_url", "https://api.deepseek.com/v1")
+        prompt_messages = [system, *trimmed_messages]
     else:
         base_url = config.get("models.small.base_url", "http://127.0.0.1:1234/v1")
-
-    if is_local_server(base_url):
-        prompt_messages = with_system_for_local_server(system, trimmed_messages)
-    else:
-        prompt_messages = [system, *trimmed_messages]
+        prompt_messages = local_prompt_messages
 
     # ── 9.X: Local VLM Pre-processing for Vision-blind Cloud LLMs ────────
+    vision_intake_mode = "direct" if route == "complex-vision" else "text"
     if route == "complex-cloud":
         from .complex_utils.vision_proxy import process_vision_messages
 
-        prompt_messages = await process_vision_messages(prompt_messages)
+        prompt_messages, vision_proxy_ok = await process_vision_messages(
+            prompt_messages
+        )
+        if vision_proxy_ok:
+            vision_intake_mode = "proxy"
+        else:
+            logger.warning(
+                "[complex] vision_proxy failed; falling back to complex-vision (direct multimodal)"
+            )
+            fallback_chain.append(
+                {
+                    "model": "large-cloud",
+                    "status": "failed",
+                    "reason": "vision_proxy_failed",
+                }
+            )
+            route = "complex-vision"
+            base_url = config.get("models.small.base_url", "http://127.0.0.1:1234/v1")
+            prompt_messages = local_prompt_messages
+            vision_intake_mode = "fallback"
+    audit_debug(
+        "agent.vision",
+        "intake_mode",
+        mode=vision_intake_mode,
+        route=route,
+    )
 
     # ── tools_off mode (no tools) ────────────────────────────────────────
-    fallback_chain: list[dict] = []
     loop_start_time: float | None = None
     if mode == "tools_off":
         try:
@@ -706,7 +773,9 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             if route == "complex-cloud":
                 llm = await get_cloud_llm()
                 model_label = "large-cloud"
-
+            elif route == "complex-vision":
+                llm = await get_medium_llm("vision")
+                model_label = "medium-vision"
             else:
                 llm = await get_medium_llm("default")
                 model_label = "medium-default"
@@ -746,9 +815,12 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     # ── 9.3: Dynamic tool binding ────────────────────────────────────────
     selected_toolboxes = state.get("selected_toolboxes")
     if selected_toolboxes and "all" not in selected_toolboxes:
-        tools = resolve_tools(selected_toolboxes, web_on)
+        tools = resolve_tools(selected_toolboxes, web_on and not vision_task)
     else:
         tools = list(COMPLEX_TOOLS_WITH_WEB if web_on else COMPLEX_TOOLS_NO_WEB)
+
+    if vision_task:
+        tools = _strip_web_tools(tools)
 
     # Include previously-used tools from conversation history
     # to ensure ToolMessage references remain valid

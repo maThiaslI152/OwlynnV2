@@ -324,4 +324,26 @@ describe('AppShell', () => {
     expect(screen.queryByText((content) => content.includes('Tool Execution'))).toBeNull()
     expect(screen.queryByText((content) => content.includes('Action Proposals'))).toBeNull()
   })
+
+  it('renders image attachment thumbnail in user message bubble', () => {
+    useAppStore.getState().addMessage({
+      id: 'msg-1',
+      role: 'user',
+      content: 'What is this?',
+      ts: Date.now(),
+      attachments: [
+        {
+          name: 'diagram.png',
+          type: 'image/png',
+          previewUrl: 'data:image/png;base64,iVBORw0KGgo=',
+        },
+      ],
+    })
+
+    render(<AppShell {...defaultProps} />)
+
+    const img = screen.getByAltText('diagram.png')
+    expect(img).toBeTruthy()
+    expect(img.getAttribute('src')).toContain('data:image/png;base64,')
+  })
 })

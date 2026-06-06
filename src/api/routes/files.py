@@ -49,6 +49,10 @@ def notify_file_processed(filepath_or_name, status="processed"):
 
     # Auto-index into project knowledge base if it's inside a project workspace and is successfully processed
     if status == "processed" and isinstance(filepath, str) and os.path.exists(filepath):
+        from src.api.attachment_intake import is_vision_filename
+
+        if is_vision_filename(filename):
+            return
         try:
             rel_path = os.path.relpath(filepath, WORKSPACE_DIR)
             parts = rel_path.split(os.sep)

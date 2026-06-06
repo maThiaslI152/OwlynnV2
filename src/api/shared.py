@@ -94,8 +94,9 @@ async def build_message_content(text: str, files: list):
     - Scanned PDFs: each page rendered as image and forwarded to the vision model
     - Code/text files: decoded and injected as a fenced code block
     """
-    import base64
     import asyncio
+
+    from src.api.attachment_intake import is_vision_mime, normalize_file_attachment
     from src.config.config_loader import config
 
     MAX_INLINE_PDF_CHARS = int(config.get("tool_output.max_inline_pdf_chars", 16000))
@@ -105,18 +106,18 @@ async def build_message_content(text: str, files: list):
     has_multimodal = False
 
     for f in files:
-        mime = f.get("type", "")
-        data_b64 = f.get("data", "")
-        name = f.get("name", "file")
-
-        try:
-            raw_bytes = base64.b64decode(data_b64)
-        except Exception as e:
-            logger.warning("Error suppressed: %s", e)
+        if f.get("type") == "workspace_ref":
+            continue
+        normalized = normalize_file_attachment(f)
+        if not normalized:
             continue
 
-        if mime.startswith("image/"):
-            # Regular image — forward directly to vision model
+        mime = normalized["type"]
+        data_b64 = normalized["data"]
+        name = normalized["name"]
+        raw_bytes = normalized["raw_bytes"]
+
+        if is_vision_mime(mime):
             has_multimodal = True
             content_parts.append(
                 {

@@ -13,6 +13,7 @@ import {
   type ConversationToolActivity,
 } from './appEventHandlers'
 import { parseHitlPrompt } from './components/HitlPromptCard'
+import { toWsFilePayload, type AttachedFile, isWorkspaceRef } from './lib/attachments'
 import type { ChatMessage, ServerEvent } from './types/protocol'
 
 interface ProjectChat {
@@ -458,7 +459,7 @@ function App() {
     }
   }, [addMessage, executionPolicy, handleInterrupt, latestToolExecution, pushToolExecution, setLatestToolExecution, setOperatorNote, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setTtsSpeaking, upsertActionProposal, updateActionProposalStatus])
 
-  const handleSend = useCallback((content: string, files?: { name: string; data: string }[]) => {
+  const handleSend = useCallback((content: string, files?: AttachedFile[]) => {
     const activePersonaId = useAppStore.getState().activePersonaId
     const message: ChatMessage = {
       id: crypto.randomUUID(),
@@ -466,13 +467,28 @@ function App() {
       content,
       ts: Date.now(),
     }
-    
-    // Add file references to local message display
+
     if (files && files.length > 0) {
-      const fileNames = files.map(f => f.name).join(', ')
-      message.content = content ? `${content}\n\n[Attached: ${fileNames}]` : `[Attached: ${fileNames}]`
+      message.attachments = files.map((f) => ({
+        name: f.name,
+        type: f.type,
+        previewUrl: isWorkspaceRef(f) ? '' : f.data,
+      }))
+      const refNames = files.filter((f) => isWorkspaceRef(f)).map((f) => f.name)
+      const uploadNames = files.filter((f) => !isWorkspaceRef(f) && !f.type.startsWith('image/')).map((f) => f.name)
+      const suffixParts: string[] = []
+      if (refNames.length > 0) {
+        suffixParts.push(`[Referenced: ${refNames.join(', ')}]`)
+      }
+      if (uploadNames.length > 0) {
+        suffixParts.push(`[Attached: ${uploadNames.join(', ')}]`)
+      }
+      if (suffixParts.length > 0) {
+        const suffix = suffixParts.join('\n')
+        message.content = content ? `${content}\n\n${suffix}` : suffix
+      }
     }
-    
+
     addMessage(message)
     setPendingCorrelationId(message.id)
     wsClientRef.current?.send({
@@ -480,8 +496,8 @@ function App() {
       type: 'user.message',
       id: message.id,
       content: message.content,
-      message: content, // Send the original text separately if needed, or matched backend
-      files: files && files.length > 0 ? files : undefined,
+      message: content,
+      files: files && files.length > 0 ? files.map(toWsFilePayload) : undefined,
       project_id: activeProjectId,
       persona_id: activePersonaId,
     })
