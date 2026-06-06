@@ -211,6 +211,9 @@ def _last_user_text(state: AgentState) -> str:
 
 def parse_routing(content: str) -> tuple[str, float, list[str], str | None]:
     """Extract routing decision, confidence, toolbox, and execution plan from LLM response."""
+    # MiniCPM5 hybrid-think safety: strip any <think>...</think> blocks that may
+    # leak through even when enable_thinking=false is set via chat_template_kwargs.
+    content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
     try:
         match = re.search(r"\{.*\}", content, re.DOTALL)
         if match:

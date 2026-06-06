@@ -35,25 +35,25 @@ external_services:
     management_url: "http://127.0.0.1:1234"  # For SwapManager API calls
 
 # ── Models — AI/LLM Configuration ────────────────────────────────────────────
-# Model recommendations tuned for Qwen3.5 family on Mac M4 Air 24 GB.
-# See: https://huggingface.co/HauhauCS/Qwen3.5-9B-Uncensored-HauhauCS-Aggressive
-#      https://huggingface.co/mlx-community/Qwen3.5-0.8B-8bit
-#      https://huggingface.co/Qwen/Qwen3.5-9B
-#      https://huggingface.co/Qwen/Qwen3.5-0.8B
+# Router: MiniCPM5-1B (openbmb) — SOTA 1B for routing/classification, MLX 8-bit
+# Worker: Qwen3.5-9B-Uncensored (HauhauCS) — local complex task execution
+# See: https://huggingface.co/mlx-community/MiniCPM5-1B-8bit
+#      https://huggingface.co/openbmb/MiniCPM5-1B
+#      https://huggingface.co/HauhauCS/Qwen3.5-9B-Uncensored-HauhauCS-Aggressive
 models:
   small:
     base_url: "http://127.0.0.1:1234/v1"      # SMALL_LLM_BASE_URL env
-    model_name: "qwen3.5-0.8b"              # Router — 0.8B, non-thinking by default
-    temperature: 0.2                         # Low temp for consistent routing
-    max_tokens: 1024                          # Room for Qwen3.5 reasoning_content + output
-    max_output_tokens: 1024
-    context_window: 8192                    # Practical: 32K is slow on M4; 16K sufficient for routing
-    timeout: 60                              # Allow up to 60s so LM Studio has time to load it from disk if unloaded
+    model_name: "minicpm5-1b"                # Router — MiniCPM5 1B MLX 8-bit, swap-loaded
+    temperature: 0.2                         # Low temp for consistent routing classification
+    max_tokens: 512                          # MiniCPM5 doesn't waste tokens on reasoning_content
+    max_output_tokens: 512
+    context_window: 8192                     # Practical limit for routing (native: 131K)
+    timeout: 60                              # Allow up to 60s for LM Studio swap-load
     request_timeout: 60                      # HTTP request timeout
     extra_body:
       chat_template_kwargs:
-        enable_thinking: false               # CRITICAL: 0.8B prone to thinking loops
-      top_k: 20                              # Qwen recommended
+        enable_thinking: false               # CRITICAL: disable MiniCPM5 hybrid-think for fast routing
+      top_p: 0.95                            # MiniCPM5 recommended for no-think mode
       keep_alive: -1                         # Ask LM Studio/Ollama to keep model loaded
 
   medium:
@@ -275,8 +275,9 @@ chat_title:
   max_tokens: 64
 
 # ── Router LLM Bind Params ──────────────────────────────────────────────────
-# Qwen3.5 models produce reasoning_content even with enable_thinking=false,
-# consuming tokens before the visible response. Budgets must account for this.
+# MiniCPM5 in no-think mode produces clean JSON without <think> preamble.
+# Budget can be tighter than Qwen3.5 since no reasoning_content overhead.
+# Note: MiniCPM5 may still emit <think> tags inline — parse_routing() strips them.
 router_llm:
   temperature: 0.05
-  max_tokens: 512
+  max_tokens: 256                           # MiniCPM5 doesn't need reasoning budget
