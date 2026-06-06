@@ -1,85 +1,130 @@
-import { createRequire as e } from "node:module";
-import { BrowserWindow as t, app as n, ipcMain as r } from "electron";
-import { fileURLToPath as i } from "node:url";
-import a from "node:path";
-import { exec as o } from "node:child_process";
+import { createRequire } from "node:module";
+import { BrowserWindow, app, ipcMain } from "electron";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+import { exec } from "node:child_process";
 //#region electron/main.ts
-e(import.meta.url);
-var s = a.dirname(i(import.meta.url));
-process.env.APP_ROOT = a.join(s, "..");
-var c = process.env.VITE_DEV_SERVER_URL, l = a.join(process.env.APP_ROOT, "dist-electron"), u = a.join(process.env.APP_ROOT, "dist");
-process.env.VITE_PUBLIC = c ? a.join(process.env.APP_ROOT, "public") : u;
-var d, f = [];
-function p() {
-	d = new t({
-		icon: a.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
+createRequire(import.meta.url);
+var __dirname = path.dirname(fileURLToPath(import.meta.url));
+process.env.APP_ROOT = path.join(__dirname, "..");
+var VITE_DEV_SERVER_URL = process.env["VITE_DEV_SERVER_URL"];
+var MAIN_DIST = path.join(process.env.APP_ROOT, "dist-electron");
+var RENDERER_DIST = path.join(process.env.APP_ROOT, "dist");
+process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, "public") : RENDERER_DIST;
+var win;
+var proposals = [];
+function createWindow() {
+	win = new BrowserWindow({
+		icon: path.join(process.env.VITE_PUBLIC, "electron-vite.svg"),
 		width: 1200,
 		height: 800,
 		backgroundColor: "#0E1C31",
 		webPreferences: {
-			preload: a.join(s, "preload.js"),
-			contextIsolation: !0,
-			nodeIntegration: !1
+			preload: path.join(__dirname, "preload.js"),
+			contextIsolation: true,
+			nodeIntegration: false
 		}
-	}), d.webContents.on("did-finish-load", () => {
-		d?.webContents.send("main-process-message", (/* @__PURE__ */ new Date()).toLocaleString());
-	}), c ? d.loadURL(c) : d.loadFile(a.join(u, "index.html"));
+	});
+	win.webContents.on("did-finish-load", () => {
+		win?.webContents.send("main-process-message", (/* @__PURE__ */ new Date()).toLocaleString());
+	});
+	if (VITE_DEV_SERVER_URL) win.loadURL(VITE_DEV_SERVER_URL);
+	else win.loadFile(path.join(RENDERER_DIST, "index.html"));
 }
-n.on("window-all-closed", () => {
-	process.platform !== "darwin" && (n.quit(), d = null);
-}), n.on("activate", () => {
-	t.getAllWindows().length === 0 && p();
-}), n.whenReady().then(() => {
-	r.handle("set_safe_mode", async (e, t) => (d?.webContents.send("runtime-event", {
-		type: "safe_mode.changed",
-		mode: t
-	}), `safe mode set: ${t}`)), r.handle("start_screen_preview", async (e, t) => new Promise((e, r) => {
-		let i = Date.now(), s = a.join(n.getPath("temp"), `owlynn-preview-${t}-${i}.jpg`);
-		process.platform === "darwin" ? o(`screencapture -x -t jpg "${s}"`, (n) => {
-			n ? r(/* @__PURE__ */ Error(`screencapture failed: ${n.message}`)) : (d?.webContents.send("runtime-event", {
-				type: "screen_assist.state",
-				mode: "preview",
-				source: t,
-				preview_path: s
-			}), e(`screen preview started: ${t} (${s})`));
-		}) : r(/* @__PURE__ */ Error("Screen capture only implemented for macOS in this version"));
-	})), r.handle("stop_screen_preview", async () => (d?.webContents.send("runtime-event", {
-		type: "screen_assist.state",
-		mode: "off",
-		source: "screen",
-		preview_path: null
-	}), "screen preview stopped")), r.handle("create_action_proposal", async (e, t) => {
-		let n = {
+app.on("window-all-closed", () => {
+	if (process.platform !== "darwin") {
+		app.quit();
+		win = null;
+	}
+});
+app.on("activate", () => {
+	if (BrowserWindow.getAllWindows().length === 0) createWindow();
+});
+app.whenReady().then(() => {
+	ipcMain.handle("set_safe_mode", async (event, mode) => {
+		win?.webContents.send("runtime-event", {
+			type: "safe_mode.changed",
+			mode
+		});
+		return `safe mode set: ${mode}`;
+	});
+	ipcMain.handle("start_screen_preview", async (event, source) => {
+		return new Promise((resolve, reject) => {
+			const millis = Date.now();
+			const previewPath = path.join(app.getPath("temp"), `owlynn-preview-${source}-${millis}.jpg`);
+			if (process.platform === "darwin") exec(`screencapture -x -t jpg "${previewPath}"`, (error) => {
+				if (error) reject(/* @__PURE__ */ new Error(`screencapture failed: ${error.message}`));
+				else {
+					win?.webContents.send("runtime-event", {
+						type: "screen_assist.state",
+						mode: "preview",
+						source,
+						preview_path: previewPath
+					});
+					resolve(`screen preview started: ${source} (${previewPath})`);
+				}
+			});
+			else reject(/* @__PURE__ */ new Error("Screen capture only implemented for macOS in this version"));
+		});
+	});
+	ipcMain.handle("stop_screen_preview", async () => {
+		win?.webContents.send("runtime-event", {
+			type: "screen_assist.state",
+			mode: "off",
+			source: "screen",
+			preview_path: null
+		});
+		return "screen preview stopped";
+	});
+	ipcMain.handle("create_action_proposal", async (event, summary) => {
+		const proposal = {
 			id: `proposal-${Date.now()}`,
-			summary: t,
+			summary,
 			source: "screen_assist",
 			created_at: Date.now(),
 			status: "pending"
 		};
-		return f.push(n), d?.webContents.send("runtime-event", {
+		proposals.push(proposal);
+		win?.webContents.send("runtime-event", {
 			type: "action.proposal",
-			proposal: n
-		}), n;
-	}), r.handle("approve_action_proposal", async (e, t) => {
-		let n = f.find((e) => e.id === t);
-		if (n) return n.status = "approved", d?.webContents.send("runtime-event", {
-			type: "action.proposal.result",
-			id: t,
-			status: "approved"
-		}), `proposal approved: ${t}`;
-		throw Error(`proposal not found: ${t}`);
-	}), r.handle("reject_action_proposal", async (e, t) => {
-		let n = f.find((e) => e.id === t);
-		if (n) return n.status = "rejected", d?.webContents.send("runtime-event", {
-			type: "action.proposal.result",
-			id: t,
-			status: "rejected"
-		}), `proposal rejected: ${t}`;
-		throw Error(`proposal not found: ${t}`);
-	}), r.handle("set_window_size", async (e, t, n) => {
-		if (d) return d.setContentSize(Math.round(t), Math.round(n)), `window resized to ${t}x${n}`;
-		throw Error("main window not found");
-	}), p();
+			proposal
+		});
+		return proposal;
+	});
+	ipcMain.handle("approve_action_proposal", async (event, id) => {
+		const proposal = proposals.find((p) => p.id === id);
+		if (proposal) {
+			proposal.status = "approved";
+			win?.webContents.send("runtime-event", {
+				type: "action.proposal.result",
+				id,
+				status: "approved"
+			});
+			return `proposal approved: ${id}`;
+		}
+		throw new Error(`proposal not found: ${id}`);
+	});
+	ipcMain.handle("reject_action_proposal", async (event, id) => {
+		const proposal = proposals.find((p) => p.id === id);
+		if (proposal) {
+			proposal.status = "rejected";
+			win?.webContents.send("runtime-event", {
+				type: "action.proposal.result",
+				id,
+				status: "rejected"
+			});
+			return `proposal rejected: ${id}`;
+		}
+		throw new Error(`proposal not found: ${id}`);
+	});
+	ipcMain.handle("set_window_size", async (event, width, height) => {
+		if (win) {
+			win.setContentSize(Math.round(width), Math.round(height));
+			return `window resized to ${width}x${height}`;
+		}
+		throw new Error("main window not found");
+	});
+	createWindow();
 });
 //#endregion
-export { l as MAIN_DIST, u as RENDERER_DIST, c as VITE_DEV_SERVER_URL };
+export { MAIN_DIST, RENDERER_DIST, VITE_DEV_SERVER_URL };

@@ -77,7 +77,7 @@ export function SafeModePanel() {
     <div>
       <label>
         Active mode
-        <select value={safeMode} onChange={(e) => onModeChange(e.target.value as SafeModeLevel)}>
+        <select data-testid="safemode-toggle" value={safeMode} onChange={(e) => onModeChange(e.target.value as SafeModeLevel)}>
           {SAFE_MODES.map((mode) => (
             <option key={mode} value={mode}>
               {MODE_LABELS[mode]}

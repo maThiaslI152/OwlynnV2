@@ -88,6 +88,10 @@ manifest:
       status: active
       category: guide
       last_updated: 2026-06-04
+    - path: docs/guides/system_modernization.md
+      status: active
+      category: guide
+      last_updated: 2026-06-06
     # ── Existing ──
     - path: docs/ADR.md
       status: active

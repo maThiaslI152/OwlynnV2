@@ -401,9 +401,9 @@ async def run_test_4():
 
             submit_btn = page.locator(".hitl-btn-approve").first
             submit_text = await submit_btn.inner_text()
-            assert "submit" in submit_text.lower() or "choice" in submit_text.lower(), (
-                f"Expected scope button: {submit_text}"
-            )
+            assert (
+                "submit" in submit_text.lower() or "choice" in submit_text.lower()
+            ), f"Expected scope button: {submit_text}"
 
             await _select_first_choice(page)
             follow = await _send_msg(page, "Let's proceed with that option.")

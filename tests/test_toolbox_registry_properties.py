@@ -63,9 +63,9 @@ class TestResolveToolsProperty:
             if name == "web_search" and not web_enabled:
                 continue
             for tool in TOOLBOX_REGISTRY[name]:
-                assert id(tool) in result_ids, (
-                    f"Tool from toolbox '{name}' missing in resolve_tools result"
-                )
+                assert (
+                    id(tool) in result_ids
+                ), f"Tool from toolbox '{name}' missing in resolve_tools result"
 
     @given(toolbox_names=toolbox_subset_st, web_enabled=web_enabled_st)
     @settings(max_examples=200)
@@ -90,9 +90,9 @@ class TestResolveToolsProperty:
         expected = COMPLEX_TOOLS_WITH_WEB if web_enabled else COMPLEX_TOOLS_NO_WEB
         expected_ids = set(id(t) for t in expected)
         result_ids = set(id(t) for t in result)
-        assert expected_ids.issubset(result_ids), (
-            "Full tool set not returned when 'all' requested"
-        )
+        assert expected_ids.issubset(
+            result_ids
+        ), "Full tool set not returned when 'all' requested"
 
     @given(toolbox_names=toolbox_subset_st)
     @settings(max_examples=200)
@@ -100,9 +100,9 @@ class TestResolveToolsProperty:
         """When web_search_enabled=False, web tools never appear."""
         result = resolve_tools(toolbox_names, web_search_enabled=False)
         result_ids = set(id(t) for t in result)
-        assert not result_ids.intersection(WEB_TOOLS), (
-            "Web tools present despite web_search_enabled=False"
-        )
+        assert not result_ids.intersection(
+            WEB_TOOLS
+        ), "Web tools present despite web_search_enabled=False"
 
     @given(toolbox_names=toolbox_subset_st)
     @settings(max_examples=200)
@@ -118,6 +118,6 @@ class TestResolveToolsProperty:
                 allowed_ids.add(id(tool))
 
         for tool in result:
-            assert id(tool) in allowed_ids, (
-                "Unexpected tool in result not from requested toolboxes"
-            )
+            assert (
+                id(tool) in allowed_ids
+            ), "Unexpected tool in result not from requested toolboxes"

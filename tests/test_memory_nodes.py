@@ -238,9 +238,9 @@ class TestMemoryInjectNode:
             state = _make_state(messages=[_human_msg("Hello")])
             # Debug: verify cache is set
             cached = MemoryContextCache.get("test_thread_1", "default")
-            assert cached == "cached value", (
-                f"Cache should contain 'cached value', got: {cached!r}"
-            )
+            assert (
+                cached == "cached value"
+            ), f"Cache should contain 'cached value', got: {cached!r}"
             mock_prof.reset_mock()
             result = await memory_inject_node(state)
             assert result["memory_context"] == "cached value"
@@ -260,14 +260,14 @@ class TestMemoryInjectNode:
             result = await memory_inject_node(state)
             # The cache should have been populated by memory_inject_node
             # Use MemoryContextCache._cache directly to verify
-            assert "test_thread_1:default" in MemoryContextCache._cache, (
-                f"Cache should have key 'test_thread_1:default'. Keys: {list(MemoryContextCache._cache.keys())}"
-            )
+            assert (
+                "test_thread_1:default" in MemoryContextCache._cache
+            ), f"Cache should have key 'test_thread_1:default'. Keys: {list(MemoryContextCache._cache.keys())}"
             cached_entry = MemoryContextCache._cache.get("test_thread_1:default")
             cached_text = cached_entry[1] if cached_entry else None
-            assert cached_text == result["memory_context"], (
-                f"Cached text {cached_text!r} != result {result['memory_context']!r}"
-            )
+            assert (
+                cached_text == result["memory_context"]
+            ), f"Cached text {cached_text!r} != result {result['memory_context']!r}"
 
 
 # ── memory_write_node ──────────────────────────────────────────────────────

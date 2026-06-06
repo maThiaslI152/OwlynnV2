@@ -2296,3 +2296,21 @@ body.tauri-glass .message-user .message-bubble {
   overflow: hidden;
 }
 
+
+/* Modern CSS Upgrades: Container Queries & View Transitions */
+.sidebar, .content-area {
+  container-type: inline-size;
+}
+
+.memory-panel-item, .chat-message {
+  view-transition-name: slide-in;
+}
+
+@keyframes slide-in-anim {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+::view-transition-new(slide-in) {
+  animation: 0.3s ease-out both slide-in-anim;
+}

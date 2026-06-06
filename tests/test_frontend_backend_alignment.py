@@ -109,9 +109,9 @@ class TestBugConditionSettingsDropped:
             f"GET /api/advanced-settings response missing 'redis_url'. "
             f"Keys returned: {list(data.keys())}"
         )
-        assert data["redis_url"] == redis_url, (
-            f"Expected redis_url='{redis_url}', got '{data.get('redis_url')}'"
-        )
+        assert (
+            data["redis_url"] == redis_url
+        ), f"Expected redis_url='{redis_url}', got '{data.get('redis_url')}'"
 
     @given(fold=lm_studio_fold_st)
     @settings(
@@ -148,9 +148,9 @@ class TestBugConditionSettingsDropped:
             f"GET /api/advanced-settings response missing 'lm_studio_fold_system'. "
             f"Keys returned: {list(data.keys())}"
         )
-        assert data["lm_studio_fold_system"] == fold, (
-            f"Expected lm_studio_fold_system={fold}, got '{data.get('lm_studio_fold_system')}'"
-        )
+        assert (
+            data["lm_studio_fold_system"] == fold
+        ), f"Expected lm_studio_fold_system={fold}, got '{data.get('lm_studio_fold_system')}'"
 
     def test_get_advanced_settings_contains_all_routing_cloud_fields(
         self, client, isolated_profile
@@ -269,29 +269,29 @@ class TestPreservationAdvancedSettingsRoundTrip:
         data = resp.json()
 
         # Numeric fields: compare with tolerance for float round-trip
-        assert abs(data["temperature"] - temperature) < 1e-9, (
-            f"temperature mismatch: posted {temperature}, got {data['temperature']}"
-        )
-        assert abs(data["top_p"] - top_p) < 1e-9, (
-            f"top_p mismatch: posted {top_p}, got {data['top_p']}"
-        )
-        assert data["max_tokens"] == max_tokens, (
-            f"max_tokens mismatch: posted {max_tokens}, got {data['max_tokens']}"
-        )
-        assert data["top_k"] == top_k, (
-            f"top_k mismatch: posted {top_k}, got {data['top_k']}"
-        )
+        assert (
+            abs(data["temperature"] - temperature) < 1e-9
+        ), f"temperature mismatch: posted {temperature}, got {data['temperature']}"
+        assert (
+            abs(data["top_p"] - top_p) < 1e-9
+        ), f"top_p mismatch: posted {top_p}, got {data['top_p']}"
+        assert (
+            data["max_tokens"] == max_tokens
+        ), f"max_tokens mismatch: posted {max_tokens}, got {data['max_tokens']}"
+        assert (
+            data["top_k"] == top_k
+        ), f"top_k mismatch: posted {top_k}, got {data['top_k']}"
 
         # Boolean toggles: exact match
-        assert data["streaming_enabled"] == streaming_enabled, (
-            f"streaming_enabled mismatch: posted {streaming_enabled}, got {data['streaming_enabled']}"
-        )
-        assert data["show_thinking"] == show_thinking, (
-            f"show_thinking mismatch: posted {show_thinking}, got {data['show_thinking']}"
-        )
-        assert data["show_tool_execution"] == show_tool_execution, (
-            f"show_tool_execution mismatch: posted {show_tool_execution}, got {data['show_tool_execution']}"
-        )
+        assert (
+            data["streaming_enabled"] == streaming_enabled
+        ), f"streaming_enabled mismatch: posted {streaming_enabled}, got {data['streaming_enabled']}"
+        assert (
+            data["show_thinking"] == show_thinking
+        ), f"show_thinking mismatch: posted {show_thinking}, got {data['show_thinking']}"
+        assert (
+            data["show_tool_execution"] == show_tool_execution
+        ), f"show_tool_execution mismatch: posted {show_tool_execution}, got {data['show_tool_execution']}"
 
 
 class TestPreservationModelBadgeClass:
@@ -358,14 +358,14 @@ class TestPreservationModelBadgeClass:
 
         # 'fallback' in the string takes priority (checked first in JS)
         if "fallback" in model:
-            assert result == "model-badge-fallback", (
-                f"Model '{model}' should be fallback, got '{result}'"
-            )
+            assert (
+                result == "model-badge-fallback"
+            ), f"Model '{model}' should be fallback, got '{result}'"
         else:
             expected = self.EXPECTED_BADGE[prefix]
-            assert result == expected, (
-                f"Model '{model}' (prefix='{prefix}') expected '{expected}', got '{result}'"
-            )
+            assert (
+                result == expected
+            ), f"Model '{model}' (prefix='{prefix}') expected '{expected}', got '{result}'"
 
     def test_none_model_returns_small(self):
         """None/empty model defaults to small badge."""

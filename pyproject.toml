@@ -1,0 +1,53 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "owlynn"
+version = "0.2.0"
+description = "Owlynn Local Cowork Agent"
+readme = "docs/README.md"
+requires-python = ">=3.11, <3.14"
+dependencies = [
+    "langgraph>=1.1.0",
+    "langchain>=0.3",
+    "langchain-community>=0.3",
+    "langchain-openai>=1.0",
+    "mcp>=1.0",
+    "mem0ai[nlp]>=1.0",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "websockets>=12.0",
+    "watchdog>=4.0",
+    "pandas>=2.0",
+    "openpyxl>=3.0",
+    "python-docx>=1.0",
+    "python-pptx>=0.6",
+    "tabulate>=0.9",
+    "PyMuPDF>=1.23",
+    "PyYAML>=6.0",
+    "tomli>=2.0",
+    "tomli_w>=1.0",
+    "docling>=2.0",
+    "duckduckgo-search>=6.0",
+    "playwright>=1.40",
+    "beautifulsoup4>=4.12",
+    "httpx>=0.24",
+    "curl_cffi>=0.7",
+    "keyring>=25.0",
+    "langgraph-checkpoint-redis>=0.3.6",
+    "numpy>=1.26",
+    "Pillow>=10.0",
+    "lxml>=5.0",
+    "crawl4ai"
+]
+
+[tool.ruff]
+line-length = 88
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]

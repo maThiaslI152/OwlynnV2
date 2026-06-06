@@ -76,9 +76,9 @@ services:
         if os.path.exists(output_path):
             with open(output_path, "r") as f:
                 content = f.read()
-            assert "# YAML File" in content or "version" in content, (
-                "YAML not processed"
-            )
+            assert (
+                "# YAML File" in content or "version" in content
+            ), "YAML not processed"
             print("✓ YAML processing works")
         else:
             print("⚠ YAML processing skipped (PyYAML not installed)")

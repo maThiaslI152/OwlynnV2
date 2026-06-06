@@ -174,9 +174,9 @@ class TestAnonymizationRoundTrip:
         """All placeholders in anonymized output match [CATEGORY_N] format."""
         anon, mapping = anonymize(text, ctx)
         for placeholder in mapping:
-            assert PLACEHOLDER_RE.fullmatch(placeholder), (
-                f"Placeholder {placeholder!r} does not match [CATEGORY_N] format"
-            )
+            assert PLACEHOLDER_RE.fullmatch(
+                placeholder
+            ), f"Placeholder {placeholder!r} does not match [CATEGORY_N] format"
 
     @given(email=email_st, prefix=safe_text_st)
     @settings(max_examples=100)
@@ -207,9 +207,9 @@ class TestSensitivePatternDetection:
         """Any email address is detected and replaced."""
         text = f"Send to {email} now"
         anon, mapping = anonymize(text)
-        assert any("EMAIL" in ph for ph in mapping), (
-            f"Email {email!r} not detected in: {anon!r}"
-        )
+        assert any(
+            "EMAIL" in ph for ph in mapping
+        ), f"Email {email!r} not detected in: {anon!r}"
         assert email not in anon
 
     @given(ip=ip_st)
@@ -227,9 +227,9 @@ class TestSensitivePatternDetection:
         """Any phone number is detected and replaced."""
         text = f"Call {phone} for support"
         anon, mapping = anonymize(text)
-        assert any("PHONE" in ph for ph in mapping), (
-            f"Phone {phone!r} not detected in: {anon!r}"
-        )
+        assert any(
+            "PHONE" in ph for ph in mapping
+        ), f"Phone {phone!r} not detected in: {anon!r}"
         assert phone not in anon
 
     @given(path=path_st)
@@ -238,9 +238,9 @@ class TestSensitivePatternDetection:
         """Any file system path is detected and replaced."""
         text = f"Open {path} to edit"
         anon, mapping = anonymize(text)
-        assert any("PATH" in ph for ph in mapping), (
-            f"Path {path!r} not detected in: {anon!r}"
-        )
+        assert any(
+            "PATH" in ph for ph in mapping
+        ), f"Path {path!r} not detected in: {anon!r}"
         assert path not in anon
 
     @given(key=api_key_st)
@@ -249,9 +249,9 @@ class TestSensitivePatternDetection:
         """Any API key pattern is detected and replaced."""
         text = f"Key: {key}"
         anon, mapping = anonymize(text)
-        assert any("API_KEY" in ph for ph in mapping), (
-            f"API key {key!r} not detected in: {anon!r}"
-        )
+        assert any(
+            "API_KEY" in ph for ph in mapping
+        ), f"API key {key!r} not detected in: {anon!r}"
         assert key not in anon
 
     @given(url=localhost_url_st)
@@ -260,9 +260,9 @@ class TestSensitivePatternDetection:
         """Any localhost URL is detected and replaced."""
         text = f"Running at {url} now"
         anon, mapping = anonymize(text)
-        assert any("URL" in ph for ph in mapping), (
-            f"URL {url!r} not detected in: {anon!r}"
-        )
+        assert any(
+            "URL" in ph for ph in mapping
+        ), f"URL {url!r} not detected in: {anon!r}"
         assert url not in anon
 
     @given(ctx=context_st)
@@ -273,9 +273,9 @@ class TestSensitivePatternDetection:
         assume(len(name) > 1)
         text = f"Hello {name}, welcome back."
         anon, mapping = anonymize(text, ctx)
-        assert any("NAME" in ph for ph in mapping), (
-            f"Name {name!r} not detected in: {anon!r}"
-        )
+        assert any(
+            "NAME" in ph for ph in mapping
+        ), f"Name {name!r} not detected in: {anon!r}"
 
     @given(term=custom_term_st)
     @settings(max_examples=100)
@@ -286,9 +286,9 @@ class TestSensitivePatternDetection:
         ctx = {"custom_sensitive_terms": [term]}
         text = f"Working on {term} today"
         anon, mapping = anonymize(text, ctx)
-        assert any("CUSTOM" in ph for ph in mapping), (
-            f"Custom term {term!r} not detected in: {anon!r}"
-        )
+        assert any(
+            "CUSTOM" in ph for ph in mapping
+        ), f"Custom term {term!r} not detected in: {anon!r}"
 
     @given(
         name=st.text(
@@ -308,9 +308,9 @@ class TestSensitivePatternDetection:
         anon, mapping = anonymize(text, ctx)
         # The composite email should be matched as a single EMAIL placeholder
         email_phs = [ph for ph in mapping if "EMAIL" in ph]
-        assert len(email_phs) >= 1, (
-            f"Email {composite_email!r} not detected as EMAIL in: {anon!r}"
-        )
+        assert (
+            len(email_phs) >= 1
+        ), f"Email {composite_email!r} not detected as EMAIL in: {anon!r}"
         # The email address should not appear in the anonymized text
         assert composite_email not in anon
 

@@ -71,7 +71,7 @@ export function ScreenAssistPanel({ bridge }: ScreenAssistPanelProps) {
         </select>
       </label>
       <div className="row">
-        <button type="button" onClick={captureAndAnalyze} title={`Capture ${screenAssist.source}`}>
+        <button type="button" data-testid="screen-assist-btn" onClick={captureAndAnalyze} title={`Capture ${screenAssist.source}`}>
           Capture
         </button>
         <button type="button" onClick={startPreview}>

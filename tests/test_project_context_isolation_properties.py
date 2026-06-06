@@ -119,9 +119,9 @@ class TestProjectContextIsolation:
         uid_a = _get_mem0_user_id(state_a)
         uid_b = _get_mem0_user_id(state_b)
 
-        assert uid_a != uid_b, (
-            f"Projects '{pid_a}' and '{pid_b}' got the same mem0 user_id: '{uid_a}'"
-        )
+        assert (
+            uid_a != uid_b
+        ), f"Projects '{pid_a}' and '{pid_b}' got the same mem0 user_id: '{uid_a}'"
 
     @given(pid=project_id_st)
     @settings(max_examples=100, suppress_health_check=[HealthCheck.too_slow])
@@ -161,14 +161,14 @@ class TestProjectContextIsolation:
         context_b = _simulate_context_load(name_b, tagged_b, memories_b)
 
         # The new context should contain project B's data
-        assert tagged_b in context_b, (
-            "New project context missing project B instructions"
-        )
+        assert (
+            tagged_b in context_b
+        ), "New project context missing project B instructions"
 
         # The new context should NOT contain project A's tagged instructions
-        assert tagged_a not in context_b, (
-            "New project context still contains project A instructions"
-        )
+        assert (
+            tagged_a not in context_b
+        ), "New project context still contains project A instructions"
 
     @given(
         name=project_name_st,
@@ -185,9 +185,9 @@ class TestProjectContextIsolation:
 
         assert instr.strip() in context, "Context missing project instructions"
         assert name.strip() in context, f"Context missing project name '{name}'"
-        assert "ACTIVE PROJECT CONTEXT" in context, (
-            "Context missing project context section header"
-        )
+        assert (
+            "ACTIVE PROJECT CONTEXT" in context
+        ), "Context missing project context section header"
 
     @given(
         name=project_name_st,
@@ -204,9 +204,9 @@ class TestProjectContextIsolation:
 
         for mem_entry in memories:
             mem_text = mem_entry["memory"]
-            assert mem_text in context, (
-                f"Context missing memory entry: '{mem_text[:50]}...'"
-            )
+            assert (
+                mem_text in context
+            ), f"Context missing memory entry: '{mem_text[:50]}...'"
 
     @given(
         name_a=project_name_st,
@@ -241,12 +241,12 @@ class TestProjectContextIsolation:
 
         # All project B memories should be present
         for mem in tagged_b:
-            assert mem["memory"] in context_b, (
-                f"Project B context missing its own memory: '{mem['memory'][:50]}...'"
-            )
+            assert (
+                mem["memory"] in context_b
+            ), f"Project B context missing its own memory: '{mem['memory'][:50]}...'"
 
         # No project A tagged memories should appear
         for mem in tagged_a:
-            assert mem["memory"] not in context_b, (
-                f"Project B context contains project A memory: '{mem['memory'][:50]}...'"
-            )
+            assert (
+                mem["memory"] not in context_b
+            ), f"Project B context contains project A memory: '{mem['memory'][:50]}...'"

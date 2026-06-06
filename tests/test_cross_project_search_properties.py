@@ -204,9 +204,9 @@ class TestCrossProjectSearchCoverage:
             pid, _ = fixture.create_project_with_file(project_name, filename, content)
             results = run_search(fixture.pm, query, project_id=pid)
             matching = [r for r in results if r["match_type"] == "filename"]
-            assert len(matching) >= 1, (
-                f"Filename query '{query}' did not match file '{filename}'"
-            )
+            assert (
+                len(matching) >= 1
+            ), f"Filename query '{query}' did not match file '{filename}'"
         finally:
             fixture.cleanup()
 
@@ -229,9 +229,9 @@ class TestCrossProjectSearchCoverage:
         try:
             pid, _ = fixture.create_project_with_file(project_name, filename, content)
             results = run_search(fixture.pm, query, project_id=pid)
-            assert len(results) >= 1, (
-                f"Content query '{query}' did not match content '{content}' in file '{filename}'"
-            )
+            assert (
+                len(results) >= 1
+            ), f"Content query '{query}' did not match content '{content}' in file '{filename}'"
         finally:
             fixture.cleanup()
 
@@ -255,9 +255,9 @@ class TestCrossProjectSearchCoverage:
             # Search without project_id — should find across all projects
             results = run_search(fixture.pm, query)
             matching = [r for r in results if r["file_name"] == filename]
-            assert len(matching) >= 1, (
-                f"Cross-project search for '{query}' did not find file '{filename}'"
-            )
+            assert (
+                len(matching) >= 1
+            ), f"Cross-project search for '{query}' did not find file '{filename}'"
         finally:
             fixture.cleanup()
 

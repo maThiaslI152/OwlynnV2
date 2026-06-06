@@ -253,13 +253,13 @@ class TestRedisCheckpointRoundTrip:
 
         for i, msg in enumerate(retrieved["messages"]):
             if i % 2 == 0:
-                assert isinstance(msg, HumanMessage), (
-                    f"Index {i}: expected HumanMessage, got {type(msg).__name__}"
-                )
+                assert isinstance(
+                    msg, HumanMessage
+                ), f"Index {i}: expected HumanMessage, got {type(msg).__name__}"
             else:
-                assert isinstance(msg, AIMessage), (
-                    f"Index {i}: expected AIMessage, got {type(msg).__name__}"
-                )
+                assert isinstance(
+                    msg, AIMessage
+                ), f"Index {i}: expected AIMessage, got {type(msg).__name__}"
 
     @given(
         pairs_a=messages_st,
