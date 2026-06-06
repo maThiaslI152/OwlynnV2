@@ -15,7 +15,12 @@ from src.agent.tool_sets import (
     COMPLEX_TOOLS_WITH_WEB,
     resolve_tools,
 )
-from src.agent.lm_studio_compat import is_local_server, with_system_for_local_server
+from src.agent.lm_studio_compat import (
+    is_local_server,
+    normalize_messages_for_lm_studio,
+    strip_image_blocks_from_messages,
+    with_system_for_local_server,
+)
 from src.agent.anonymization import anonymize, deanonymize
 
 from .complex_utils.fallback import _fallback_for_blank_response
@@ -731,7 +736,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         prompt_messages = [system, *trimmed_messages]
     else:
         base_url = config.get("models.small.base_url", "http://127.0.0.1:1234/v1")
-        prompt_messages = local_prompt_messages
+        prompt_messages = normalize_messages_for_lm_studio(local_prompt_messages)
 
     # ── 9.X: Local VLM Pre-processing for Vision-blind Cloud LLMs ────────
     vision_intake_mode = "direct" if route == "complex-vision" else "text"
@@ -756,7 +761,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             )
             route = "complex-vision"
             base_url = config.get("models.small.base_url", "http://127.0.0.1:1234/v1")
-            prompt_messages = local_prompt_messages
+            prompt_messages = normalize_messages_for_lm_studio(local_prompt_messages)
             vision_intake_mode = "fallback"
     audit_debug(
         "agent.vision",
@@ -939,8 +944,8 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                         }
                     )
                     llm = await get_medium_llm("default")
-                    prompt_messages = with_system_for_local_server(
-                        system, original_trimmed_messages
+                    prompt_messages = strip_image_blocks_from_messages(
+                        with_system_for_local_server(system, original_trimmed_messages)
                     )
                     budget = _cap_budget_to_context(
                         prompt_messages,
@@ -993,8 +998,8 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                     }
                 )
                 llm = await get_medium_llm("default")
-                prompt_messages = with_system_for_local_server(
-                    system, original_trimmed_messages
+                prompt_messages = strip_image_blocks_from_messages(
+                    with_system_for_local_server(system, original_trimmed_messages)
                 )
                 budget = _cap_budget_to_context(
                     prompt_messages,
@@ -1060,8 +1065,8 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                     }
                 )
                 llm = await get_medium_llm("default")
-                prompt_messages = with_system_for_local_server(
-                    system, original_trimmed_messages
+                prompt_messages = strip_image_blocks_from_messages(
+                    with_system_for_local_server(system, original_trimmed_messages)
                 )
                 budget = _cap_budget_to_context(
                     prompt_messages,
@@ -1111,7 +1116,9 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                 }
             )
             llm = await get_medium_llm("default")
-            prompt_messages = with_system_for_local_server(system, trimmed_messages)
+            prompt_messages = strip_image_blocks_from_messages(
+                with_system_for_local_server(system, trimmed_messages)
+            )
             budget = _cap_budget_to_context(
                 prompt_messages,
                 state.get("token_budget")
@@ -1191,7 +1198,9 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                     }
                 )
                 llm = await get_medium_llm("default")
-                prompt_messages = with_system_for_local_server(system, trimmed_messages)
+                prompt_messages = strip_image_blocks_from_messages(
+                    with_system_for_local_server(system, trimmed_messages)
+                )
                 budget = _cap_budget_to_context(
                     prompt_messages,
                     state.get("token_budget")

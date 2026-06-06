@@ -43,6 +43,13 @@
 - `complex.py`: vision-specific tool guidance; strip web tools on vision routes.
 - `scope_clarify`: skip web_search_suggested bypass when image attached.
 
+## Follow-up — LM Studio WebP vision fix
+
+- LM Studio rejects `image/webp` in `image_url` blocks (`url must be base64 encoded image`).
+- `lm_studio_safe_image_payload` converts WebP/GIF to JPEG at attachment intake.
+- `normalize_messages_for_lm_studio` rewrites existing multimodal blocks before local invoke.
+- Text-only fallbacks strip `image_url` blocks so medium-default does not 400-loop.
+
 ## Follow-up — Knowledge panel chunk spam
 
 - RAG indexing was registering each chunk as `filename#chunkN` in project.files (looked like duplicates in UI).

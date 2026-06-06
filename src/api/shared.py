@@ -96,7 +96,11 @@ async def build_message_content(text: str, files: list):
     """
     import asyncio
 
-    from src.api.attachment_intake import is_vision_mime, normalize_file_attachment
+    from src.api.attachment_intake import (
+        is_vision_mime,
+        lm_studio_safe_image_payload,
+        normalize_file_attachment,
+    )
     from src.config.config_loader import config
 
     MAX_INLINE_PDF_CHARS = int(config.get("tool_output.max_inline_pdf_chars", 16000))
@@ -119,10 +123,11 @@ async def build_message_content(text: str, files: list):
 
         if is_vision_mime(mime):
             has_multimodal = True
+            safe_mime, safe_b64 = lm_studio_safe_image_payload(mime, raw_bytes)
             content_parts.append(
                 {
                     "type": "image_url",
-                    "image_url": {"url": f"data:{mime};base64,{data_b64}"},
+                    "image_url": {"url": f"data:{safe_mime};base64,{safe_b64}"},
                 }
             )
 

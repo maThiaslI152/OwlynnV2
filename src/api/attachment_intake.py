@@ -59,6 +59,30 @@ def infer_mime_from_name(name: str) -> str:
     return mime
 
 
+def lm_studio_safe_image_payload(mime: str, raw_bytes: bytes) -> tuple[str, str]:
+    """Return (mime, base64) accepted by LM Studio vision (WebP/GIF → JPEG)."""
+    mime = (mime or "").split(";", 1)[0].strip().lower()
+    if mime == "image/jpg":
+        mime = "image/jpeg"
+    if mime in ("image/png", "image/jpeg"):
+        return mime, base64.b64encode(raw_bytes).decode("ascii")
+    try:
+        from io import BytesIO
+
+        from PIL import Image
+
+        img = Image.open(BytesIO(raw_bytes))
+        if img.mode not in ("RGB", "L"):
+            img = img.convert("RGB")
+        buf = BytesIO()
+        img.save(buf, format="JPEG", quality=85)
+        jpeg_bytes = buf.getvalue()
+        return "image/jpeg", base64.b64encode(jpeg_bytes).decode("ascii")
+    except Exception as exc:
+        logger.warning("Image conversion for LM Studio failed: %s", exc)
+        return mime or "image/jpeg", base64.b64encode(raw_bytes).decode("ascii")
+
+
 def normalize_file_attachment(f: dict) -> dict | None:
     """Parse WS/API attachment payloads into normalized name, mime, raw base64, bytes.
 

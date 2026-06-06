@@ -5,6 +5,7 @@ import pytest
 from src.api.attachment_intake import (
     is_vision_filename,
     is_vision_mime,
+    lm_studio_safe_image_payload,
     normalize_file_attachment,
 )
 from src.api.shared import build_message_content
@@ -59,6 +60,20 @@ async def test_build_message_content_image_from_data_url():
     image_blocks = [b for b in content if b.get("type") == "image_url"]
     assert len(image_blocks) == 1
     assert image_blocks[0]["image_url"]["url"].startswith("data:image/png;base64,")
+
+
+def test_lm_studio_safe_image_payload_converts_webp_to_jpeg():
+    from io import BytesIO
+
+    from PIL import Image
+
+    buf = BytesIO()
+    Image.new("RGB", (2, 2), color=(10, 20, 30)).save(buf, format="WEBP")
+    webp_bytes = buf.getvalue()
+    mime, payload = lm_studio_safe_image_payload("image/webp", webp_bytes)
+    assert mime == "image/jpeg"
+    decoded = base64.b64decode(payload)
+    assert decoded[:2] == b"\xff\xd8"
 
 
 @pytest.mark.asyncio
