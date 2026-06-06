@@ -32,7 +32,7 @@ describe('Composer', () => {
     fireEvent.change(textarea, { target: { value: '  Hello world  ' } })
     fireEvent.submit(textarea.closest('form')!)
 
-    expect(onSend).toHaveBeenCalledWith('Hello world')
+    expect(onSend).toHaveBeenCalledWith('Hello world', undefined)
   })
 
   it('does not call onSend for empty input', () => {
@@ -62,7 +62,7 @@ describe('Composer', () => {
     fireEvent.change(textarea, { target: { value: 'Hello' } })
     fireEvent.submit(textarea.closest('form')!)
 
-    expect(onSend).toHaveBeenCalledWith('Hello')
+    expect(onSend).toHaveBeenCalledWith('Hello', undefined)
   })
 })
 
@@ -294,7 +294,7 @@ describe('AppShell', () => {
     fireEvent.change(textarea, { target: { value: 'Test message' } })
     fireEvent.submit(textarea.closest('form')!)
 
-    expect(defaultProps.onSend).toHaveBeenCalledWith('Test message')
+    expect(defaultProps.onSend).toHaveBeenCalledWith('Test message', undefined)
   })
 
   it('renders the project list', () => {
