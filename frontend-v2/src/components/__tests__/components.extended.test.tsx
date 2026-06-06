@@ -6,6 +6,18 @@ import { OrchestrationPanel } from '../OrchestrationPanel'
 import { SafeModePanel } from '../SafeModePanel'
 import { ProjectKnowledgePanel } from '../ProjectKnowledgePanel'
 import { AppShell } from '../AppShell'
+import { WORKSPACE_REF_DRAG_TYPE, workspaceRefAttachment } from '../../lib/attachments'
+
+const mockSetSafeMode = vi.hoisted(() =>
+  vi.fn().mockResolvedValue({ ok: true as const })
+)
+
+vi.mock('../../lib/electronBridge', () => ({
+  electronBridge: {
+    setSafeMode: mockSetSafeMode,
+  },
+}))
+
 
 beforeEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true)
@@ -154,14 +166,9 @@ describe('SafeModePanel', () => {
   })
 
   it('sets operator note on tauri bridge failure', async () => {
-    vi.mock('../../lib/electronBridge', () => ({
-      electronBridge: {
-        setSafeMode: vi.fn().mockResolvedValue({ ok: false, error: 'Bridge not available' }),
-      },
-    }))
+    mockSetSafeMode.mockResolvedValueOnce({ ok: false, error: 'Bridge not available' })
 
-    const { SafeModePanel: FreshPanel } = await import('../SafeModePanel')
-    render(<FreshPanel />)
+    render(<SafeModePanel />)
 
     const selects = screen.getAllByRole('combobox')
     fireEvent.change(selects[0], { target: { value: 'safe_readonly' } })
@@ -228,6 +235,70 @@ describe('ProjectKnowledgePanel', () => {
     await waitFor(() => {
       expect(screen.getByText(/Failed to load/)).toBeTruthy()
     })
+  })
+
+  it('collapses chunk rows to one row per file', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        files: [
+          { name: 'doc.pdf#chunk0', type: 'knowledge', added_at: 1000 },
+          { name: 'doc.pdf#chunk1', type: 'knowledge', added_at: 2000 },
+          { name: 'notes.md', type: 'knowledge', added_at: 3000 },
+        ],
+      }),
+    } as Response)
+
+    render(<ProjectKnowledgePanel activeProjectId="proj-1" />)
+
+    await waitFor(() => {
+      expect(screen.getByText('doc.pdf')).toBeTruthy()
+      expect(screen.getByText('notes.md')).toBeTruthy()
+      expect(screen.queryByText(/#chunk/)).toBeNull()
+    })
+  })
+
+  it('sets workspace_ref drag payload on drag start', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        files: [{ name: 'notes.md', type: 'knowledge', added_at: 1000 }],
+      }),
+    } as Response)
+
+    render(<ProjectKnowledgePanel activeProjectId="proj-1" />)
+
+    await waitFor(() => {
+      expect(screen.getByText('notes.md')).toBeTruthy()
+    })
+
+    const item = screen.getByText('notes.md').closest('li')
+    expect(item).toBeTruthy()
+    const setData = vi.fn()
+    fireEvent.dragStart(item!, { dataTransfer: { setData, effectAllowed: '' } })
+    expect(setData).toHaveBeenCalledWith(
+      WORKSPACE_REF_DRAG_TYPE,
+      JSON.stringify({ name: 'notes.md' })
+    )
+  })
+
+  it('attaches workspace_ref on double-click', async () => {
+    const onAttach = vi.fn()
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        files: [{ name: 'report.pdf', type: 'knowledge', added_at: 1000 }],
+      }),
+    } as Response)
+
+    render(<ProjectKnowledgePanel activeProjectId="proj-1" onAttachToComposer={onAttach} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('report.pdf')).toBeTruthy()
+    })
+
+    fireEvent.doubleClick(screen.getByText('report.pdf'))
+    expect(onAttach).toHaveBeenCalledWith(workspaceRefAttachment('report.pdf'))
   })
 
   it('calls fetch again on refresh click', async () => {

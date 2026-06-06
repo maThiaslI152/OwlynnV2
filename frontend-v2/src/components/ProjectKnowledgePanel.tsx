@@ -1,27 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { WORKSPACE_REF_DRAG_TYPE, workspaceRefAttachment, type AttachedFile } from '../lib/attachments'
+import { collapseKnowledgeFiles, type KnowledgeFileRow } from '../lib/knowledgeFiles'
 
-interface KnowledgeFile {
-  name: string
-  type: string
-  added_at: number
-}
-
-function knowledgeBaseName(name: string): string {
-  return name.replace(/#chunk\d+$/, '')
-}
-
-function collapseKnowledgeFiles(files: KnowledgeFile[]): KnowledgeFile[] {
-  const byBase = new Map<string, KnowledgeFile>()
-  for (const file of files) {
-    const base = knowledgeBaseName(file.name)
-    const existing = byBase.get(base)
-    if (!existing || file.added_at > existing.added_at) {
-      byBase.set(base, { ...file, name: base })
-    }
-  }
-  return [...byBase.values()].sort((a, b) => b.added_at - a.added_at)
-}
+type KnowledgeFile = KnowledgeFileRow
 
 interface ProjectKnowledgePanelProps {
   activeProjectId: string

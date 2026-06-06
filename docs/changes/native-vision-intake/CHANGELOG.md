@@ -48,3 +48,13 @@
 - RAG indexing was registering each chunk as `filename#chunkN` in project.files (looked like duplicates in UI).
 - `index_knowledge_document`: one UI row per source file; chunks stored in Mem0 only.
 - Migrate/collapse legacy chunk rows on load; frontend also groups by base filename.
+
+## auto-improve loop 2 — Knowledge panel test coverage
+
+- Frontend: regression tests for chunk-row collapse, `workspace_ref` drag payload, and double-click attach in `ProjectKnowledgePanel`.
+- Hoist `electronBridge` mock in extended component tests (removes Vitest nested-mock warning).
+
+## auto-improve loop 3 — Shared knowledge file collapse helper
+
+- Extract `knowledgeFiles.ts` (base-name + collapse) used by `ProjectKnowledgePanel`.
+- Unit tests mirror Python `test_knowledge_file_list` collapse behavior.
