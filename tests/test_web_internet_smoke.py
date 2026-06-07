@@ -45,6 +45,7 @@ async def test_web_search_general_fallback_chain_mocked(monkeypatch):
             "   Python language homepage\n"
         )
 
+    monkeypatch.setattr(web_tools, "SEARXNG_URL", "")
     monkeypatch.setattr(web_tools, "_web_search_wttr_in", wttr)
     monkeypatch.setattr(web_tools, "_web_search_curl_cffi", curl_search)
     monkeypatch.setattr(web_tools, "_web_search_httpx_ddg_html", ddg_http)
@@ -93,6 +94,7 @@ async def test_web_search_news_flow_mocked(monkeypatch):
             "   Latest updates\n"
         )
 
+    monkeypatch.setattr(web_tools, "SEARXNG_URL", "")
     monkeypatch.setattr(web_tools, "_web_search_wttr_in", wttr)
     monkeypatch.setattr(web_tools, "_web_search_curl_cffi", curl_search)
     monkeypatch.setattr(web_tools, "_web_search_httpx_ddg_html", ddg_http)

@@ -109,6 +109,18 @@ async def api_get_unified_settings():
                 for field, default in _UNIFIED_SETTINGS_CLOUD_BUDGET_DEFAULTS.items()
             }
         )
+        _CLOUD_UI_DEFAULTS = {
+            "cloud_model_tier": "flash",
+            "cloud_thinking_mode": "auto",
+            "cloud_reasoning_effort": "high",
+        }
+        unified.update(
+            {
+                field: profile.get(field, default)
+                for field, default in _CLOUD_UI_DEFAULTS.items()
+                if profile.get(field) is None
+            }
+        )
 
         # Ensure all LLM override fields are present in the response
         llm_fields = {
@@ -176,6 +188,7 @@ async def api_update_unified_settings(body: dict):
                 "cloud_llm_model_name",
                 "cloud_thinking_mode",
                 "cloud_reasoning_effort",
+                "cloud_escalation_enabled",
             )
         ):
             from src.agent.llm import LLMPool

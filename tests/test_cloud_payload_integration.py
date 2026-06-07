@@ -162,3 +162,21 @@ class TestFallbackAnonymization:
         msg = AIMessage(content="Write to [EMAIL_a4f2b9c1]")
         restored = _deanonymize_ai_message(msg, mapping)
         assert "real@example.com" in restored.content
+
+
+class TestFinalizeCloudVisibleContent:
+    def test_uses_content_when_present(self):
+        from src.agent.nodes.complex_utils.cloud_payload import (
+            finalize_cloud_visible_content,
+        )
+
+        out = finalize_cloud_visible_content("Hello REST", "long reasoning chain")
+        assert out == "Hello REST"
+
+    def test_falls_back_to_reasoning_when_content_empty(self):
+        from src.agent.nodes.complex_utils.cloud_payload import (
+            finalize_cloud_visible_content,
+        )
+
+        out = finalize_cloud_visible_content("", "GraphQL comparison details")
+        assert out == "GraphQL comparison details"

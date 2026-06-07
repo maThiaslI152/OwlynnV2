@@ -69,6 +69,33 @@ class TestSessionCostTracker:
         assert summary["total_tokens"] == 700
         assert summary["total_calls"] == 1
 
+    def test_record_usage_with_pro_tier(self, tracker):
+        tracker.record_usage(
+            prompt_tokens=1_000_000,
+            completion_tokens=1_000_000,
+            model_tier="pro",
+        )
+        assert tracker.last_turn is not None
+        assert tracker.last_turn["model_tier"] == "pro"
+        assert tracker.last_turn["estimated_cost_usd"] > tracker.estimated_cost
+
+    def test_budget_warnings_fire_once(self, tracker):
+        tracker.record_usage(prompt_tokens=300_000, completion_tokens=0)
+        warnings = tracker.consume_budget_warnings(500_000, [0.5, 0.8])
+        assert len(warnings) == 1
+        assert warnings[0]["threshold"] == 0.5
+        assert tracker.consume_budget_warnings(500_000, [0.5, 0.8]) == []
+
+    def test_summary_includes_cache_hit_ratio(self, tracker):
+        tracker.record_usage(
+            prompt_tokens=1000,
+            completion_tokens=100,
+            prompt_cache_hit_tokens=800,
+        )
+        summary = tracker.summary()
+        assert summary["cache_hit_ratio"] == 0.8
+        assert summary["last_turn"] is not None
+
     def test_reset_clears_all(self, tracker):
         tracker.record_usage(prompt_tokens=1000, completion_tokens=500)
         tracker.reset()

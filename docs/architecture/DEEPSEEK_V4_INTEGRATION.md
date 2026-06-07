@@ -105,6 +105,8 @@ Local API key for dev/tests: copy [`.env.local.example`](../../.env.local.exampl
 | Brief / vision local caches | Done — process-local TTL caches |
 | Brief invalidation on memory write | Done — `invalidate_brief_cache()` from `memory_write_node` |
 | Network prefix cache test | [`tests/test_deepseek_cache_network.py`](../../tests/test_deepseek_cache_network.py) (`@pytest.mark.network`) |
+| V4 chat matrix (flash/pro × thinking) | [`tests/test_deepseek_v4_chat_matrix_network.py`](../../tests/test_deepseek_v4_chat_matrix_network.py) — see [testing guide](../guides/deepseek-v4-testing.md) |
+| Multi-turn cloud brief regression | `tests/test_cloud_brief.py::test_brief_preserves_user_task_after_assistant_turn` |
 
 ---
 
@@ -119,8 +121,7 @@ Local API key for dev/tests: copy [`.env.local.example`](../../.env.local.exampl
 
 Legacy IDs (`deepseek-chat`, `deepseek-reasoner`) map to flash non-thinking / flash thinking respectively and are **deprecated** (retirement scheduled 2026-07-24 UTC). New integrations should use explicit V4 IDs.
 
-User override today: `cloud_llm_model_name` in profile or `CLOUD_LLM_MODEL_NAME` env.  
-**Planned:** frontend toggle `cloud_model_tier: flash | pro` (B3).
+User override today: `cloud_model_tier: flash | pro` in profile + **Cloud & Usage** panel in the frontend.
 
 ### 2. Thinking vs non-thinking (single model, runtime toggle)
 

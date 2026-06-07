@@ -54,6 +54,46 @@ export interface CompressionInfo {
   tokensFreed: number
 }
 
+export interface CloudUsageTurn {
+  prompt_tokens: number
+  completion_tokens: number
+  prompt_cache_hit_tokens?: number
+  prompt_cache_miss_tokens?: number
+  reasoning_tokens?: number
+  model_tier?: string
+  model_name?: string
+  estimated_cost_usd?: number
+  cache_hit_ratio?: number
+}
+
+export interface CloudUsageSession {
+  prompt_tokens: number
+  completion_tokens: number
+  prompt_cache_hit_tokens: number
+  prompt_cache_miss_tokens: number
+  reasoning_tokens: number
+  total_tokens: number
+  cache_hit_ratio: number
+  total_calls: number
+  failed_calls: number
+  estimated_cost_usd: number
+  elapsed_seconds: number
+  last_turn?: CloudUsageTurn | null
+}
+
+export interface CloudUsageBudget {
+  daily_token_limit: number
+  used_tokens: number
+  remaining_tokens: number | null
+  used_pct: number
+}
+
+export interface CloudUsageState {
+  session: CloudUsageSession
+  budget: CloudUsageBudget
+  lastTurn: CloudUsageTurn | null
+}
+
 export interface InterruptChoice {
   label: string
   route?: string
@@ -86,6 +126,7 @@ interface AppState {
   routerMetadata: Record<string, unknown> | null
   modelInfo: string | null
   cloudStatus: { available: boolean; key_valid: boolean; model: string; error: string } | null
+  cloudUsage: CloudUsageState | null
   contextCompression: CompressionInfo | null
   memoryUpdatedAt: number | null
   ttsSpeaking: boolean
@@ -111,6 +152,7 @@ interface AppState {
   setRouterMetadata: (meta: Record<string, unknown>) => void
   setModelInfo: (model: string | null) => void
   setCloudStatus: (status: { available: boolean; key_valid: boolean; model: string; error: string } | null) => void
+  setCloudUsage: (usage: CloudUsageState | null) => void
   setContextCompression: (info: CompressionInfo | null) => void
   setMemoryUpdatedAt: (ts: number) => void
   setTtsSpeaking: (speaking: boolean) => void
@@ -144,6 +186,7 @@ export const useAppStore = create<AppState>((set) => ({
   routerMetadata: null,
   modelInfo: null,
   cloudStatus: null,
+  cloudUsage: null,
   contextCompression: null,
   memoryUpdatedAt: null,
   ttsSpeaking: false,
@@ -235,6 +278,7 @@ export const useAppStore = create<AppState>((set) => ({
   setRouterMetadata: (routerMetadata) => set({ routerMetadata }),
   setModelInfo: (modelInfo) => set({ modelInfo }),
   setCloudStatus: (cloudStatus) => set({ cloudStatus }),
+  setCloudUsage: (cloudUsage) => set({ cloudUsage }),
   setContextCompression: (contextCompression) => set({ contextCompression }),
   setMemoryUpdatedAt: (memoryUpdatedAt) => set({ memoryUpdatedAt }),
   setTtsSpeaking: (ttsSpeaking) => set({ ttsSpeaking }),
@@ -267,6 +311,7 @@ export const useAppStore = create<AppState>((set) => ({
       actionProposals: [],
       routerMetadata: null,
       modelInfo: null,
+      cloudUsage: null,
       contextCompression: null,
       operatorNote: '',
       ttsSpeaking: false,

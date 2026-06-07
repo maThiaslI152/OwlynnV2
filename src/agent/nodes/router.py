@@ -346,12 +346,22 @@ def _is_simple_informational_query(text: str) -> bool:
     return bool(_SIMPLE_INFO_RE.search(text))
 
 
-def _build_low_confidence_router_choices(user_text: str) -> list[dict]:
+def _preferred_complex_route(cloud_available: bool | None = None) -> str:
+    """Default complex route: cloud when escalation is available, else local."""
+    if cloud_available is None:
+        cloud_available = _check_cloud_available()
+    return "complex-cloud" if cloud_available else "complex-default"
+
+
+def _build_low_confidence_router_choices(
+    user_text: str, *, cloud_available: bool | None = None
+) -> list[dict]:
     """Contextual router HITL options — omit irrelevant tool paths."""
+    route = _preferred_complex_route(cloud_available)
     choices: list[dict] = [
         {
             "label": "Search the web",
-            "route": "complex-default",
+            "route": route,
             "toolbox": ["web_search"],
         },
     ]
@@ -359,7 +369,7 @@ def _build_low_confidence_router_choices(user_text: str) -> list[dict]:
         choices.append(
             {
                 "label": "Work with local files",
-                "route": "complex-default",
+                "route": route,
                 "toolbox": ["file_ops"],
             }
         )
@@ -367,14 +377,14 @@ def _build_low_confidence_router_choices(user_text: str) -> list[dict]:
         choices.append(
             {
                 "label": "Create documents/visualizations",
-                "route": "complex-default",
+                "route": route,
                 "toolbox": ["data_viz"],
             }
         )
     choices.append(
         {
             "label": "Just answer directly",
-            "route": "complex-default",
+            "route": route,
             "toolbox": ["all"],
         }
     )
@@ -417,11 +427,15 @@ def _resolve_complex_route(
             return "complex-cloud", toolbox
         return "complex-default", toolbox
 
-    # 4. Frontier-quality indicators → cloud
+    # 4. Frontier-quality indicators → cloud when available
     if _needs_frontier_quality(user_text):
-        return "complex-cloud", toolbox
+        if cloud_available:
+            return "complex-cloud", toolbox
+        return "complex-default", toolbox
 
-    # 5. Default
+    # 5. Default — cloud-first when escalation is available
+    if cloud_available:
+        return "complex-cloud", toolbox
     return "complex-default", toolbox
 
 
@@ -440,13 +454,15 @@ async def router_node(state: AgentState) -> AgentState:
     """Route to simple or complex path with 5-way variant selection and toolbox."""
     messages = state.get("messages", [])
     if not messages:
+        empty_cloud = _check_cloud_available()
+        empty_route = _preferred_complex_route(empty_cloud)
         return {
-            "route": "complex-default",
+            "route": empty_route,
             "selected_toolboxes": ["all"],
             "router_clarification_used": False,
             "skill_matched": None,
             "router_metadata": _build_router_metadata(
-                "complex-default", classification_source="empty_state_fallback"
+                empty_route, classification_source="empty_state_fallback"
             ),
         }
 
@@ -661,16 +677,18 @@ async def router_node(state: AgentState) -> AgentState:
         }
 
     # ── Deterministic complex-route bypasses ──────────────────────────
-    # Code review / refactoring requests need the 9B model for depth.
     _code_review_pattern = re.compile(
         r"(review|check|audit|inspect|improve|refactor|fix).*?(code|python|function|script|file|bug)",
         re.IGNORECASE,
     )
     if _code_review_pattern.search(user_lower) or "find bugs" in user_lower:
         logger.info("[router] Complex path — code review detected")
-        budget = estimate_token_budget(user_text, "complex-default")
+        route, toolbox = _resolve_complex_route(
+            user_text, state, ["file_ops"], cloud_available=cloud_available
+        )
+        budget = estimate_token_budget(user_text, route)
         metadata = _build_router_metadata(
-            "complex-default",
+            route,
             confidence=0.95,
             reasoning="code_review_bypass",
             classification_source="deterministic",
@@ -683,21 +701,20 @@ async def router_node(state: AgentState) -> AgentState:
         audit_info(
             "agent.lifecycle",
             "router_decision",
-            route="complex-default",
+            route=route,
             confidence=0.95,
             source="code_review_bypass",
             task_category="code_review",
         )
         return {
-            "route": "complex-default",
+            "route": route,
             "token_budget": budget,
-            "selected_toolboxes": ["file_ops"],
+            "selected_toolboxes": toolbox,
             "router_clarification_used": False,
             "skill_matched": None,
             "router_metadata": metadata,
         }
 
-    # Explain / compare / trade-off questions need the 9B model for depth.
     _explain_compare_hints = (
         "explain how",
         "explain the",
@@ -712,9 +729,12 @@ async def router_node(state: AgentState) -> AgentState:
     )
     if any(hint in user_lower for hint in _explain_compare_hints):
         logger.info("[router] Complex path — explain/compare detected")
-        budget = estimate_token_budget(user_text, "complex-default")
+        route, toolbox = _resolve_complex_route(
+            user_text, state, ["all"], cloud_available=cloud_available
+        )
+        budget = estimate_token_budget(user_text, route)
         metadata = _build_router_metadata(
-            "complex-default",
+            route,
             confidence=0.95,
             reasoning="explain_compare_bypass",
             classification_source="deterministic",
@@ -727,15 +747,15 @@ async def router_node(state: AgentState) -> AgentState:
         audit_info(
             "agent.lifecycle",
             "router_decision",
-            route="complex-default",
+            route=route,
             confidence=0.95,
             source="explain_compare_bypass",
             task_category="technical_explanation",
         )
         return {
-            "route": "complex-default",
+            "route": route,
             "token_budget": budget,
-            "selected_toolboxes": ["all"],
+            "selected_toolboxes": toolbox,
             "router_clarification_used": False,
             "skill_matched": None,
             "router_metadata": metadata,
@@ -965,13 +985,14 @@ async def router_node(state: AgentState) -> AgentState:
             # Only catch context/checkpointer errors (RuntimeError, ValueError).
             # GraphInterrupt must NOT be caught — it pauses the graph properly.
             if match_result.is_ambiguous and match_result.candidate_skills:
+                hitl_route = _preferred_complex_route(cloud_available)
                 choices: list[dict] = []
                 for skill, score in match_result.candidate_skills[:5]:
                     skill_toolbox = _toolbox_for_skill(skill)
                     choices.append(
                         {
                             "label": f"{skill.name} — {skill.description} ({score:.0%})",
-                            "route": "complex-default",
+                            "route": hitl_route,
                             "toolbox": skill_toolbox,
                             "skill_name": skill.file,
                         }
@@ -979,7 +1000,7 @@ async def router_node(state: AgentState) -> AgentState:
                 choices.append(
                     {
                         "label": "Others (describe what you need)",
-                        "route": "complex-default",
+                        "route": hitl_route,
                         "toolbox": ["all"],
                         "skill_name": None,
                         "allows_user_input": True,
@@ -1014,7 +1035,9 @@ async def router_node(state: AgentState) -> AgentState:
                         {
                             "type": "ask_user",
                             "question": "I'm not sure how to handle this. What would you prefer?",
-                            "choices": _build_low_confidence_router_choices(user_text),
+                            "choices": _build_low_confidence_router_choices(
+                                user_text, cloud_available=cloud_available
+                            ),
                         }
                     )
                     audit_info(
@@ -1068,9 +1091,15 @@ async def router_node(state: AgentState) -> AgentState:
                             skill=top[0].name,
                             score=round(top[1], 3),
                         )
-                        budget = estimate_token_budget(user_text, "complex-default")
+                        route, toolbox = _resolve_complex_route(
+                            user_text,
+                            state,
+                            re_toolbox,
+                            cloud_available=cloud_available,
+                        )
+                        budget = estimate_token_budget(user_text, route)
                         metadata = _build_router_metadata(
-                            "complex-default",
+                            route,
                             confidence=0.8,
                             reasoning="hitl_others_rematch",
                             classification_source="hitl",
@@ -1081,9 +1110,9 @@ async def router_node(state: AgentState) -> AgentState:
                             web_on=web_on,
                         )
                         return {
-                            "route": "complex-default",
+                            "route": route,
                             "token_budget": budget,
-                            "selected_toolboxes": re_toolbox,
+                            "selected_toolboxes": toolbox,
                             "router_clarification_used": True,
                             "skill_matched": None,
                             "router_metadata": metadata,
@@ -1097,10 +1126,11 @@ async def router_node(state: AgentState) -> AgentState:
                     if isinstance(clarification, dict)
                     else ["all"]
                 )
+                default_hitl_route = _preferred_complex_route(cloud_available)
                 route_override = (
-                    clarification.get("route", "complex-default")
+                    clarification.get("route", default_hitl_route)
                     if isinstance(clarification, dict)
-                    else "complex-default"
+                    else default_hitl_route
                 )
                 logger.info(
                     "[router] HITL clarification → route=%s, toolbox=%s",

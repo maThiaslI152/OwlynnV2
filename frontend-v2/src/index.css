@@ -1349,6 +1349,93 @@ body.tauri-glass .window-drag-strip {
   margin-top: 4px;
 }
 
+.cloud-settings-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.cloud-settings-panel label select {
+  margin-top: 4px;
+  width: 100%;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  font-size: 0.75rem;
+}
+
+.cloud-usage-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.cloud-usage-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 0.75rem;
+}
+
+.cloud-usage-cost {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.cloud-usage-tokens,
+.cloud-usage-cache,
+.cloud-usage-meta {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.cloud-usage-budget {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cloud-usage-budget-bar {
+  height: 6px;
+  background: var(--bg-elevated);
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+}
+
+.cloud-usage-budget-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--green), var(--amber));
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.cloud-usage-budget-label {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+.cloud-usage-last-turn {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.cloud-usage-chip {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--accent);
+  background: var(--accent-glow);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+}
+
 /* ── Buttons (right panel) ─────────────────────────────── */
 
 .row {

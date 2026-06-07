@@ -278,6 +278,7 @@ The output will be placed in `frontend-v2/dist/`.
 - [`start.sh`](../../start.sh) — the single launcher script
 - [`.env.example`](../../.env.example) — general environment variables
 - [`.env.local.example`](../../.env.local.example) — gitignored secrets template (`DEEPSEEK_API_KEY`)
+- [`docs/guides/deepseek-v4-testing.md`](deepseek-v4-testing.md) — live DeepSeek V4 test matrix (flash/pro, thinking, brief regression)
 - [`docs/guides/lm_studio.md`](lm_studio.md) — LM Studio model setup
 - [`docs/guides/quickstart.md`](quickstart.md) — chat UX features (highlighting, tool cards, mobile)
 - [`AGENTS.md`](../../AGENTS.md) — SDD workflow for Cursor agents

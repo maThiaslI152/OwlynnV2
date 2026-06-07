@@ -96,7 +96,8 @@ class TestUnifiedSettings:
         assert "sk-secret-key-12345" not in json.dumps(data)
 
     def test_deepseek_api_key_empty_when_absent(self, client):
-        data = client.get("/api/unified-settings").json()
+        with patch("src.config.secret_store.resolve_deepseek_api_key", return_value=""):
+            data = client.get("/api/unified-settings").json()
         assert data["deepseek_api_key"] == ""
 
     def test_superset_of_advanced_settings(self, client):

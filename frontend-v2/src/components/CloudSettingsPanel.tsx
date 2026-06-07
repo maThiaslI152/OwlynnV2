@@ -11,6 +11,7 @@ export function CloudSettingsPanel() {
   const [tier, setTier] = useState<CloudModelTier>('flash')
   const [thinkingMode, setThinkingMode] = useState<CloudThinkingMode>('auto')
   const [reasoningEffort, setReasoningEffort] = useState<CloudReasoningEffort>('high')
+  const [escalationEnabled, setEscalationEnabled] = useState(true)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -28,6 +29,7 @@ export function CloudSettingsPanel() {
         else setThinkingMode('auto')
         const re = String(payload.cloud_reasoning_effort || 'high').toLowerCase()
         setReasoningEffort(re === 'max' ? 'max' : 'high')
+        setEscalationEnabled(payload.cloud_escalation_enabled !== false)
       } catch (e) {
         console.warn('[CloudSettingsPanel]', e)
       } finally {
@@ -40,7 +42,7 @@ export function CloudSettingsPanel() {
     }
   }, [])
 
-  const saveField = async (fields: Record<string, string>) => {
+  const saveField = async (fields: Record<string, string | boolean>) => {
     try {
       const response = await fetch('/api/unified-settings', {
         method: 'PUT',
@@ -68,13 +70,29 @@ export function CloudSettingsPanel() {
   return (
     <div className="cloud-settings-panel">
       <p className="safe-mode-info">
-        <strong>DeepSeek cloud</strong>
+        <strong>DeepSeek cloud</strong> — routes complex tasks to DeepSeek when a key is set.
       </p>
+      <label>
+        Cloud escalation
+        <select
+          data-testid="cloud-escalation-enabled"
+          value={escalationEnabled ? 'on' : 'off'}
+          onChange={(e) => {
+            const next = e.target.value === 'on'
+            setEscalationEnabled(next)
+            void saveField({ cloud_escalation_enabled: next })
+          }}
+        >
+          <option value="on">Enabled (cloud-first routing)</option>
+          <option value="off">Disabled (local models only)</option>
+        </select>
+      </label>
       <label>
         Model tier
         <select
           data-testid="cloud-model-tier"
           value={tier}
+          disabled={!escalationEnabled}
           onChange={(e) => {
             const next = e.target.value as CloudModelTier
             setTier(next)
@@ -90,6 +108,7 @@ export function CloudSettingsPanel() {
         <select
           data-testid="cloud-thinking-mode"
           value={thinkingMode}
+          disabled={!escalationEnabled}
           onChange={(e) => {
             const next = e.target.value as CloudThinkingMode
             setThinkingMode(next)
@@ -106,6 +125,7 @@ export function CloudSettingsPanel() {
         <select
           data-testid="cloud-reasoning-effort"
           value={reasoningEffort}
+          disabled={!escalationEnabled || thinkingMode === 'never'}
           onChange={(e) => {
             const next = e.target.value as CloudReasoningEffort
             setReasoningEffort(next)

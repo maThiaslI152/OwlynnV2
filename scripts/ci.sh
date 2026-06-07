@@ -3,10 +3,12 @@
 # but on your own machine to avoid burning GitHub quota.
 #
 # Usage:
-#   ./scripts/ci.sh          # run everything
-#   ./scripts/ci.sh --quick  # skip frontend build (still runs vitest)
+#   ./scripts/ci.sh            # run everything (unit tests only; no live API)
+#   ./scripts/ci.sh --quick    # skip frontend build (still runs vitest)
 #   ./scripts/ci.sh --python-only
 #   ./scripts/ci.sh --frontend-only
+#   ./scripts/ci.sh --network  # also run @pytest.mark.network (needs DEEPSEEK_API_KEY)
+#   ./scripts/ci.sh --benchmarks
 
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
@@ -15,6 +17,7 @@ QUICK=false
 PYTHON_ONLY=false
 FRONTEND_ONLY=false
 BENCHMARKS=false
+NETWORK=false
 
 for arg in "$@"; do
   case "$arg" in
@@ -22,6 +25,7 @@ for arg in "$@"; do
     --python-only) PYTHON_ONLY=true ;;
     --frontend-only) FRONTEND_ONLY=true ;;
     --benchmarks) BENCHMARKS=true ;;
+    --network) NETWORK=true ;;
   esac
 done
 
@@ -83,6 +87,32 @@ if ! $FRONTEND_ONLY; then
     pass "Audit/contract tests passed"
   else
     fail "Audit/contract tests failed"; EXIT_CODE=1
+  fi
+
+  if $NETWORK; then
+    info "=== DeepSeek network tests (live API) ==="
+    if [ -f .env ]; then
+      set -a
+      # shellcheck disable=SC1091
+      source .env
+      set +a
+    fi
+    if [ -f .env.local ]; then
+      set -a
+      # shellcheck disable=SC1091
+      source .env.local
+      set +a
+    fi
+    if [ -z "${DEEPSEEK_API_KEY:-}" ]; then
+      warn "DEEPSEEK_API_KEY not set — skipping network tests"
+    elif python -m pytest -q -m network \
+      tests/test_deepseek_v4_chat_matrix_network.py \
+      tests/test_deepseek_cache_network.py \
+      --tb=short; then
+      pass "DeepSeek network tests passed"
+    else
+      fail "DeepSeek network tests failed"; EXIT_CODE=1
+    fi
   fi
 
 # ── Benchmark checks ───────────────────────────────────

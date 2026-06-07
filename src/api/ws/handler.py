@@ -12,6 +12,7 @@ from langgraph.types import Command
 from src.api.shared import (
     connected_websockets,
     _session_usage,
+    emit_cloud_usage_events,
     _TOOL_DESTRUCTIVE_RE,
     _TOOL_NETWORK_RE,
     _TOOL_PRIV_RE,
@@ -573,6 +574,12 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                         _session_usage["prompt_tokens"]
                                         + _session_usage["completion_tokens"]
                                     )
+                                    if _node_model_used == "large-cloud":
+                                        await emit_cloud_usage_events(
+                                            _send_ws,
+                                            turn_usage=_node_token_usage,
+                                            model_used=_node_model_used,
+                                        )
 
                                 if tc_list:
                                     # Include reasoning / pre-tool text in the same payload (serialize_message flattens content).

@@ -156,9 +156,10 @@ export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitl
     if (wsRefRaw) {
       try {
         const parsed = JSON.parse(wsRefRaw) as { name?: string }
-        if (parsed.name) {
+        const refName = parsed.name
+        if (refName) {
           setAttachedFiles((prev) => {
-            const next = workspaceRefAttachment(parsed.name)
+            const next = workspaceRefAttachment(refName)
             if (prev.some((f) => isWorkspaceRef(f) && f.name === next.name)) {
               return prev
             }

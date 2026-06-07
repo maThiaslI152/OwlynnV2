@@ -151,6 +151,8 @@ async def _invoke_cloud_path(
         prompt_cache_hit_tokens=usage.get("prompt_cache_hit_tokens", 0),
         prompt_cache_miss_tokens=usage.get("prompt_cache_miss_tokens", 0),
         reasoning_tokens=usage.get("reasoning_tokens", 0),
+        model_tier=str(profile.get("cloud_model_tier") or "flash"),
+        model_name=str(model_name or ""),
     )
     api_tokens = {
         "prompt_tokens": usage.get("prompt_tokens", 0),

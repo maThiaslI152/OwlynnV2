@@ -7,6 +7,7 @@ import type { Options } from 'rehype-sanitize'
 import { Composer } from './Composer'
 import { SafeModePanel } from './SafeModePanel'
 import { CloudSettingsPanel } from './CloudSettingsPanel'
+import { CloudUsagePanel } from './CloudUsagePanel'
 import { ScreenAssistPanel } from './ScreenAssistPanel'
 import { ProjectKnowledgePanel } from './ProjectKnowledgePanel'
 import { OrchestrationPanel } from './OrchestrationPanel'
@@ -305,6 +306,7 @@ export function AppShell({
   const conversationItems = useAppStore((s) => s.conversationItems)
   const operatorNote = useAppStore((s) => s.operatorNote)
   const cloudStatus = useAppStore((s) => s.cloudStatus)
+  const cloudUsage = useAppStore((s) => s.cloudUsage)
   const setCloudStatus = useAppStore((s) => s.setCloudStatus)
   const windowMode = useAppStore((s) => s.windowMode)
   const setWindowMode = useAppStore((s) => s.setWindowMode)
@@ -636,6 +638,15 @@ export function AppShell({
                 <span className={`connection-dot connection-dot-${connectionState}`} />
                 <span className="connection-label">{connectionState}</span>
               </span>
+              {cloudUsage && cloudUsage.session.total_calls > 0 && (
+                <span
+                  className="cloud-usage-chip"
+                  title={`DeepSeek session: $${cloudUsage.session.estimated_cost_usd.toFixed(4)} · ${cloudUsage.session.total_tokens} tokens`}
+                  data-testid="cloud-usage-chip"
+                >
+                  ${cloudUsage.session.estimated_cost_usd.toFixed(3)}
+                </span>
+              )}
               {cloudStatus && (
                 <span className="connection-status" title={
                   cloudStatus.available && cloudStatus.key_valid
@@ -829,6 +840,15 @@ export function AppShell({
                   <span className={`connection-dot connection-dot-${connectionState}`} />
                   <span className="connection-label">{connectionState}</span>
                 </span>
+                {cloudUsage && cloudUsage.session.total_calls > 0 && (
+                  <span
+                    className="cloud-usage-chip"
+                    title={`DeepSeek session: $${cloudUsage.session.estimated_cost_usd.toFixed(4)} · ${cloudUsage.session.total_tokens} tokens`}
+                    data-testid="cloud-usage-chip"
+                  >
+                    ${cloudUsage.session.estimated_cost_usd.toFixed(3)}
+                  </span>
+                )}
                 <div className="safe-mode-popover-container" style={{ position: 'relative' }}>
                   <button
                     type="button"
@@ -848,6 +868,10 @@ export function AppShell({
               </div>
             </div>
           )}
+          <CollapsibleSection title="Cloud & Usage" icon="☁" defaultOpen={false}>
+            <CloudSettingsPanel />
+            <CloudUsagePanel />
+          </CollapsibleSection>
           <CollapsibleSection title="Orchestration" icon="⚙" defaultOpen>
             <OrchestrationPanel />
           </CollapsibleSection>

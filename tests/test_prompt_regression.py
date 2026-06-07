@@ -112,6 +112,7 @@ async def test_prompt_regression_complex_route():
             ),
             patch("src.agent.nodes.memory.record_conversation", return_value=None),
             patch("src.memory.long_term.memory", None),
+            patch("src.agent.nodes.router._check_cloud_available", return_value=False),
         ):
             state: AgentState = {
                 "messages": [HumanMessage(content=COMPLEX_PROMPT)],

@@ -171,12 +171,29 @@ class TestRouteDecisionDomain:
         )
     )
     @settings(max_examples=100)
-    def test_short_text_no_frontier_routes_default(self, text: str):
-        """Short text without frontier hints or images routes to complex-default."""
+    def test_short_text_routes_local_when_cloud_unavailable(self, text: str):
+        """Short text without frontier hints routes to complex-default when cloud is off."""
         assume(not _needs_frontier_quality(text))
         state = _make_text_state(text)
-        route, _ = _resolve_complex_route(text, state, ["all"])
+        route, _ = _resolve_complex_route(text, state, ["all"], cloud_available=False)
         assert route == "complex-default"
+
+    @given(
+        text=st.text(
+            min_size=1,
+            max_size=100,
+            alphabet=st.characters(
+                whitelist_categories=("L", "N", "Z"),
+            ),
+        )
+    )
+    @settings(max_examples=100)
+    def test_short_text_routes_cloud_when_available(self, text: str):
+        """Short text without frontier hints routes to complex-cloud when cloud is on."""
+        assume(not _needs_frontier_quality(text))
+        state = _make_text_state(text)
+        route, _ = _resolve_complex_route(text, state, ["all"], cloud_available=True)
+        assert route == "complex-cloud"
 
     def test_frontier_hints_route_to_cloud(self):
         """Text with frontier-quality indicators routes to complex-cloud."""
@@ -186,7 +203,9 @@ class TestRouteDecisionDomain:
             "solve this differential equation",
         ]:
             state = _make_text_state(hint)
-            route, _ = _resolve_complex_route(hint, state, ["all"])
+            route, _ = _resolve_complex_route(
+                hint, state, ["all"], cloud_available=True
+            )
             assert route == "complex-cloud", (
                 f"Frontier hint '{hint}' should route to cloud"
             )

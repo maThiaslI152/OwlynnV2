@@ -113,6 +113,7 @@ async def test_sentence_matrix_complex_route_and_response(
         app = build_graph().compile()
 
         with (
+            patch("src.agent.nodes.router._check_cloud_available", return_value=False),
             patch("src.agent.nodes.memory.get_profile", return_value={}),
             patch(
                 "src.agent.nodes.memory.get_persona_by_id",

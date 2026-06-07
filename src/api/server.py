@@ -227,12 +227,23 @@ async def serve_vendor_retired(path: str):
 @app.get("/api/usage")
 async def api_get_usage():
     """Return cumulative cloud token usage and cost for the current session."""
-    from src.agent.cloud_cost_tracker import get_cost_tracker
+    from src.agent.cloud_cost_tracker import build_cloud_usage_payload, get_cost_tracker
+    from src.memory.user_profile import get_profile
+    from src.config.config_loader import config
 
     tracker = get_cost_tracker()
+    profile = get_profile()
+    daily_limit = int(
+        profile.get("cloud_daily_token_limit")
+        or config.get("cloud.budget.daily_token_limit", 500_000)
+    )
+    payload = build_cloud_usage_payload()
     return {
         "session": _session_usage,
         "cost": tracker.summary(),
+        "budget": payload["budget"],
+        "warning_thresholds": payload["warning_thresholds"],
+        "last_turn": tracker.last_turn,
     }
 
 

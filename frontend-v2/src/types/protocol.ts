@@ -20,9 +20,14 @@ export interface UserMessageEvent {
   id: string
   content: string
   message?: string
+  files?: Array<Record<string, string>>
   project_id?: string
   persona_id?: string
   source?: 'text' | 'voice'
+}
+
+export interface StopClientEvent {
+  type: 'stop'
 }
 
 export interface SecurityApprovalClientEvent {
@@ -155,7 +160,7 @@ export interface ToolExecutionEvent {
   duration?: number
 }
 
-export type ClientEvent = UserMessageEvent | SecurityApprovalClientEvent | AskUserResponseClientEvent | PlanReviewResponseClientEvent
+export type ClientEvent = UserMessageEvent | StopClientEvent | SecurityApprovalClientEvent | AskUserResponseClientEvent | PlanReviewResponseClientEvent
 export interface ChunkEvent {
   type: 'chunk'
   content: string
@@ -184,6 +189,8 @@ export type ServerEvent =
   | ToolExecutionEvent
   | RouterInfoEvent
   | ModelInfoEvent
+  | CloudUsageEvent
+  | CloudBudgetWarningEvent
   | ContextSummarizedEvent
   | MemoryUpdatedEvent
 
@@ -203,6 +210,23 @@ export interface ModelInfoEvent {
     reason: string
     duration_ms: number
   }>
+}
+
+export interface CloudUsageEvent {
+  type: 'cloud_usage'
+  turn?: Record<string, unknown>
+  session?: Record<string, unknown>
+  budget?: Record<string, unknown>
+  warning_thresholds?: number[]
+}
+
+export interface CloudBudgetWarningEvent {
+  type: 'cloud_budget_warning'
+  threshold: number
+  used_pct: number
+  used_tokens: number
+  daily_token_limit: number
+  estimated_cost_usd?: number
 }
 
 export interface ContextSummarizedEvent {

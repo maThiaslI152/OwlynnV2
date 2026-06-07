@@ -32,9 +32,17 @@ from src.agent.state import AgentState
     ],
 )
 def test_build_low_confidence_router_choices_contextual(text, expected_labels):
-    choices = _build_low_confidence_router_choices(text)
+    choices = _build_low_confidence_router_choices(text, cloud_available=False)
     assert [c["label"] for c in choices] == expected_labels
+    assert all(c["route"] == "complex-default" for c in choices)
     assert all("Use cloud model" not in c["label"] for c in choices)
+
+
+def test_build_low_confidence_router_choices_cloud_first():
+    choices = _build_low_confidence_router_choices(
+        "how many provinces in Norway", cloud_available=True
+    )
+    assert all(c["route"] == "complex-cloud" for c in choices)
 
 
 def test_is_simple_informational_query():

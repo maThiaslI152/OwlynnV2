@@ -13,6 +13,32 @@ _session_usage = {
     "total_tokens": 0,
 }
 
+
+async def emit_cloud_usage_events(send_ws, *, turn_usage=None, model_used=None):
+    """Emit cloud_usage and any newly crossed budget warnings over WebSocket."""
+    from src.agent.cloud_cost_tracker import (
+        build_cloud_usage_payload,
+        get_cost_tracker,
+    )
+    from src.memory.user_profile import get_profile
+    from src.config.config_loader import config
+
+    payload = build_cloud_usage_payload(turn_usage=turn_usage, model_used=model_used)
+    await send_ws({"type": "cloud_usage", **payload})
+
+    profile = get_profile()
+    daily_limit = int(
+        profile.get("cloud_daily_token_limit")
+        or config.get("cloud.budget.daily_token_limit", 500_000)
+    )
+    thresholds = profile.get("cloud_budget_warning_thresholds") or config.get(
+        "cloud.budget.warning_thresholds", [0.5, 0.8, 0.95]
+    )
+    tracker = get_cost_tracker()
+    for warning in tracker.consume_budget_warnings(daily_limit, thresholds):
+        await send_ws({"type": "cloud_budget_warning", **warning})
+
+
 _TOOL_DESTRUCTIVE_RE = re.compile(
     r"(?:\brm\s+-rf\b|\bdrop\b|\bdelete\b|\btruncate\b)", re.IGNORECASE
 )

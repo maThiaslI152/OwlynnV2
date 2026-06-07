@@ -269,10 +269,20 @@ def capture_cloud_response(response: Any) -> AIMessage:
     if not reasoning:
         meta = getattr(response, "response_metadata", {}) or {}
         reasoning = meta.get("reasoning_content")
+    content = finalize_cloud_visible_content(str(content), reasoning)
     kwargs: dict[str, Any] = {}
     if reasoning:
         kwargs["reasoning_content"] = reasoning
     return AIMessage(content=content, tool_calls=tool_calls, additional_kwargs=kwargs)
+
+
+def finalize_cloud_visible_content(content: str, reasoning: str | None = None) -> str:
+    """Use visible answer text; fall back to reasoning only when content is empty."""
+    text = (content or "").strip()
+    chain = (reasoning or "").strip()
+    if not text and chain:
+        return chain
+    return text
 
 
 def extract_api_token_usage(response: Any) -> dict[str, int]:

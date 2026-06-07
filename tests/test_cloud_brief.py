@@ -54,6 +54,24 @@ class TestCloudBrief:
         )
         assert len(brief) <= 1003  # +3 for "..."
 
+    def test_brief_preserves_user_task_after_assistant_turn(self):
+        """Multi-turn: user task must not be replaced by prior assistant greeting."""
+        from src.agent.hitl.cloud_brief import build_cloud_brief
+
+        brief = build_cloud_brief(
+            last_user_message="Compare REST vs GraphQL for a mobile backend",
+            last_assistant_summary="Hi! I'm here to assist you. What would you like to discuss?",
+        )
+        assert "Compare REST vs GraphQL" in brief
+        assert "Current user request:" in brief
+        assert "Prior assistant context:" in brief
+        # Task line must be the user question, not the greeting alone
+        task_line = [
+            ln for ln in brief.splitlines() if ln.startswith("Current user request:")
+        ][0]
+        assert "Compare REST" in task_line
+        assert task_line.count("Hi!") == 0
+
 
 class TestCloudBriefAnonymization:
     def test_memory_filter_strips_keys(self):

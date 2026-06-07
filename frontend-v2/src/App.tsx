@@ -13,6 +13,7 @@ import {
   type ConversationToolActivity,
 } from './appEventHandlers'
 import { parseHitlPrompt } from './components/HitlPromptCard'
+import { fetchCloudUsage, parseCloudUsagePayload } from './lib/cloudUsage'
 import { toWsFilePayload, type AttachedFile, isWorkspaceRef } from './lib/attachments'
 import type { ChatMessage, ServerEvent } from './types/protocol'
 
@@ -55,6 +56,7 @@ function App() {
   const setRouterMetadata = useAppStore((s) => s.setRouterMetadata)
   const setModelInfo = useAppStore((s) => s.setModelInfo)
   const setContextCompression = useAppStore((s) => s.setContextCompression)
+  const setCloudUsage = useAppStore((s) => s.setCloudUsage)
   const setMemoryUpdatedAt = useAppStore((s) => s.setMemoryUpdatedAt)
   const setTtsSpeaking = useAppStore((s) => s.setTtsSpeaking)
   const appendStreamChunk = useAppStore((s) => s.appendStreamChunk)
@@ -259,6 +261,9 @@ function App() {
       onOpen: () => {
         setConnection('connected')
         void loadHistory()
+        void fetchCloudUsage().then((usage) => {
+          if (usage) setCloudUsage(usage)
+        })
       },
       onClose: () => {
         setConnection('disconnected')
@@ -367,6 +372,14 @@ function App() {
           }
         } else if (event.type === 'model_info') {
           setModelInfo(event.model as string)
+        } else if (event.type === 'cloud_usage') {
+          setCloudUsage(parseCloudUsagePayload(event as unknown as Record<string, unknown>))
+        } else if (event.type === 'cloud_budget_warning') {
+          const threshold = Number((event as any).threshold ?? 0)
+          const pct = Math.round(Number((event as any).used_pct ?? 0) * 100)
+          setOperatorNote(
+            `Cloud budget warning: ${pct}% of daily token limit used (threshold ${Math.round(threshold * 100)}%).`
+          )
         } else if (event.type === 'chunk') {
           const chunkContent = (event as any).content || ''
           if (chunkContent) {
@@ -390,7 +403,7 @@ function App() {
       disconnect()
       wsClientRef.current = null
     }
-  }, [activeProjectId, addMessage, appendStreamChunk, currentThreadId, executionPolicy, pushToolExecution, setConnection, setLatestToolExecution, setPendingCorrelationId, setMemoryUpdatedAt, setModelInfo, setContextCompression, setOperatorNote, setRouterMetadata, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setTtsSpeaking, upsertActionProposal, updateActionProposalStatus, isTauriRuntime, wsBaseUrl])
+  }, [activeProjectId, addMessage, appendStreamChunk, currentThreadId, executionPolicy, pushToolExecution, setConnection, setLatestToolExecution, setPendingCorrelationId, setMemoryUpdatedAt, setModelInfo, setContextCompression, setCloudUsage, setOperatorNote, setRouterMetadata, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setTtsSpeaking, upsertActionProposal, updateActionProposalStatus, isTauriRuntime, wsBaseUrl])
 
   // Listen for Tauri runtime events (TTS state, screen assist, etc.)
   useEffect(() => {

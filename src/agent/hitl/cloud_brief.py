@@ -10,7 +10,8 @@ BRIEF_TEMPLATE = """--- OWLYNN CLOUD BRIEF (local-prepared, user-approved) ---
 Requirements: {clarified_scope}
 Constraints: {constraints}
 Risk notes: {risk_notes}
-Task: {task}
+Current user request: {task}
+Prior assistant context: {prior_context}
 --- END BRIEF ---"""
 
 
@@ -28,54 +29,51 @@ def build_cloud_brief(
 
     Returns empty string if there is nothing to brief.
     """
-    parts: list[tuple[str, str]] = []
+    scope_text = "Not provided"
+    constraint_lines: list[str] = []
+    task = _truncate(last_user_message, 500) if last_user_message else "Not provided"
+    prior_context = (
+        _truncate(last_assistant_summary, 300) if last_assistant_summary else "None"
+    )
 
-    # Clarified scope
     if clarified_scope and isinstance(clarified_scope, dict):
-        scope_text = _format_scope(clarified_scope)
-        if scope_text:
-            parts.append(("clarified_scope", scope_text))
+        formatted = _format_scope(clarified_scope)
+        if formatted:
+            scope_text = formatted
 
-    # Plan review summary
     if plan_review_summary and isinstance(plan_review_summary, dict):
         approved = plan_review_summary.get("approved", False)
         intent = plan_review_summary.get("stated_intent", "")
         pitfalls = plan_review_summary.get("pitfalls", [])
         if approved:
-            parts.append(
-                (
-                    "constraints",
-                    f"Plan approved. Intent: {intent} Pitfalls acknowledged: {'; '.join(pitfalls) if pitfalls else 'none'}.",
-                )
+            constraint_lines.append(
+                f"Plan approved. Intent: {intent} Pitfalls acknowledged: {'; '.join(pitfalls) if pitfalls else 'none'}."
             )
         else:
-            parts.append(("constraints", "Plan review skipped or denied."))
+            constraint_lines.append("Plan review skipped or denied.")
 
-    # Memory context (filtered subset — no API keys)
     if memory_context:
         safe_context = _filter_memory_context(memory_context)
         if safe_context:
-            parts.append(("constraints", f"Memory: {safe_context}"))
+            constraint_lines.append(f"Memory: {safe_context}")
 
-    # Recent messages
-    if last_user_message:
-        parts.append(("task", _truncate(last_user_message, 500)))
-    if last_assistant_summary:
-        parts.append(("task", _truncate(last_assistant_summary, 300)))
-
-    # Toolboxes
     if selected_toolboxes:
-        parts.append(("constraints", f"Toolboxes: {', '.join(selected_toolboxes)}"))
+        constraint_lines.append(f"Toolboxes: {', '.join(selected_toolboxes)}")
 
-    if not parts:
+    if (
+        task == "Not provided"
+        and not constraint_lines
+        and scope_text == "Not provided"
+        and prior_context == "None"
+    ):
         return ""
 
-    # Assemble and cap
     brief = BRIEF_TEMPLATE.format(
-        clarified_scope=dict(parts).get("clarified_scope", "Not provided"),
-        constraints=dict(parts).get("constraints", "None"),
-        risk_notes=dict(parts).get("risk_notes", "None reported"),
-        task=dict(parts).get("task", _truncate(last_user_message, 500)),
+        clarified_scope=scope_text,
+        constraints="\n".join(constraint_lines) if constraint_lines else "None",
+        risk_notes="None reported",
+        task=task,
+        prior_context=prior_context,
     )
 
     if len(brief) > max_chars:

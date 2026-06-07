@@ -104,6 +104,10 @@ manifest:
       status: active
       category: guide
       last_updated: 2026-06-07
+    - path: docs/guides/deepseek-v4-testing.md
+      status: active
+      category: guide
+      last_updated: 2026-06-07
     - path: docs/guides/system_modernization.md
       status: active
       category: guide
