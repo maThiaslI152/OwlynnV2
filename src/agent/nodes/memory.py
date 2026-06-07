@@ -664,6 +664,11 @@ async def memory_write_node(state: AgentState) -> AgentState:
             # Invalidate memory context cache since memory was updated (M4 optimization)
             # Uses invalidate_on_write to signal WebSocket forwarder
             MemoryContextCache.invalidate_on_write(thread_id)
+            from src.agent.nodes.complex_utils.cloud_payload import (
+                invalidate_brief_cache,
+            )
+
+            invalidate_brief_cache()
 
         except Exception as e:
             logger.warning("[Memory] Failed to save enriched memory: %s", e)

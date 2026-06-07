@@ -523,6 +523,12 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                         model_info_payload[
                                             "anonymization_placeholders_count"
                                         ] = output["anonymization_placeholders_count"]
+                                    if _node_token_usage and isinstance(
+                                        _node_token_usage, dict
+                                    ):
+                                        model_info_payload["token_usage"] = (
+                                            _node_token_usage
+                                        )
                                     await _send_ws(model_info_payload)
                                 elif _node_fallback_chain and isinstance(
                                     _node_fallback_chain, list
@@ -546,6 +552,22 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                     )
                                     _session_usage["completion_tokens"] += int(
                                         _node_token_usage.get("completion_tokens", 0)
+                                    )
+                                    _session_usage["prompt_cache_hit_tokens"] = int(
+                                        _session_usage.get("prompt_cache_hit_tokens", 0)
+                                    ) + int(
+                                        _node_token_usage.get(
+                                            "prompt_cache_hit_tokens", 0
+                                        )
+                                    )
+                                    _session_usage["prompt_cache_miss_tokens"] = int(
+                                        _session_usage.get(
+                                            "prompt_cache_miss_tokens", 0
+                                        )
+                                    ) + int(
+                                        _node_token_usage.get(
+                                            "prompt_cache_miss_tokens", 0
+                                        )
                                     )
                                     _session_usage["total_tokens"] = (
                                         _session_usage["prompt_tokens"]

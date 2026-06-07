@@ -1,7 +1,7 @@
 ---
 status: active
 category: reference
-last_updated: 2026-05-31
+last_updated: 2026-06-07
 owner: human
 ---
 
@@ -320,7 +320,7 @@ WebSocket request payload keys parsed in `websocket_endpoint()` and passed into 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `cloud_llm_base_url` | string | `"https://api.deepseek.com/v1"` | DeepSeek cloud API base URL |
-| `cloud_llm_model_name` | string | `"deepseek-chat"` | Cloud model name |
+| `cloud_llm_model_name` | string | `"deepseek-v4-flash"` | Cloud model name (`deepseek-v4-flash` or `deepseek-v4-pro`) |
 | `deepseek_api_key` | string | `""` | DeepSeek API key (env var `DEEPSEEK_API_KEY` takes priority) |
 | `medium_models` | object | `{"default": "gemma-4-e4b-uncensored-hauhaucs-aggressive", ...}` | M-tier model key mapping |
 | `cloud_escalation_enabled` | boolean | `true` | Allow routing to cloud |
@@ -333,8 +333,9 @@ WebSocket request payload keys parsed in `websocket_endpoint()` and passed into 
 ## Related
 
 - [`docs/CHAT_PROTOCOL.md`](CHAT_PROTOCOL.md) — WebSocket event contract
-- [`docs/ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) — system architecture
+- [`docs/architecture/overview.md`](architecture/overview.md) — system architecture
+- [`docs/architecture/DEEPSEEK_V4_INTEGRATION.md`](architecture/DEEPSEEK_V4_INTEGRATION.md) — DeepSeek V4 integration
 
 ## Last updated
 
-2026-05-31 — `docs-standards-timeline` added 13 missing endpoints
+2026-06-07 — DeepSeek V4 model defaults; cloud cache token fields

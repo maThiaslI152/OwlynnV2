@@ -73,6 +73,10 @@ echo "[3/3] Backend + Frontend..."
 if [ -f .env ]; then
     set -a; source .env; set +a
 fi
+# Local secrets override (e.g. DEEPSEEK_API_KEY) — see .env.local.example
+if [ -f .env.local ]; then
+    set -a; source .env.local; set +a
+fi
 
 # Docling model path (default to project-local cache)
 export DOCLING_ARTIFACTS_PATH="${DOCLING_ARTIFACTS_PATH:-$(pwd)/.models/docling/}"

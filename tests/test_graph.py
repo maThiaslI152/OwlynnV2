@@ -31,11 +31,11 @@ class TestRouteDecision:
         assert route_decision(state) == "scope_clarify"
 
     def test_complex_vision_route(self):
-        state = {"route": "complex-vision"}
+        state = {"route": "complex-cloud"}
         assert route_decision(state) == "scope_clarify"
 
     def test_complex_longctx_route(self):
-        state = {"route": "complex-longctx"}
+        state = {"route": "complex-cloud"}
         assert route_decision(state) == "scope_clarify"
 
     def test_complex_cloud_route(self):

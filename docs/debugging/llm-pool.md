@@ -127,14 +127,13 @@ ERROR:src.agent.swap_manager:ModelSwapError: Timeout waiting for model load
 
 ```
 # Small LLM initialization
-INFO:src.agent.llm:Initializing Small_LLM (ibm-grok4-ultrafast-coder-1b)
+INFO:src.agent.llm:Initializing Small_LLM (minicpm5-1b)
 
-# Medium LLM init with swap
-INFO:src.agent.llm:Requesting medium LLM variant 'vision', current: 'default'
-INFO:src.agent.llm:Triggering swap from default to vision
+# Medium LLM init
+INFO:src.agent.llm:Requesting medium LLM (qwen3.5-9b-...)
 
 # Cloud LLM usage
-INFO:src.agent.llm:Escalating to Cloud_LLM (deepseek-chat)
+INFO:src.agent.llm:Escalating to Cloud_LLM (deepseek-v4-flash)
 
 # Fallback chain
 WARNING:src.agent.llm:Cloud LLM failed (401 Unauthorized), falling back to medium-default
@@ -266,7 +265,7 @@ INFO:src.agent.llm:Cloud budget: 420000/500000 (84%) — WARNING
    curl -s -w "\nHTTP %{http_code}" https://api.deepseek.com/v1/chat/completions \
      -H "Content-Type: application/json" \
      -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
-     -d '{"model":"deepseek-chat","messages":[{"role":"user","content":"Hello"}]}' | head -20
+     -d '{"model":"deepseek-v4-flash","messages":[{"role":"user","content":"Hello"}]}' | head -20
    ```
 
 3. Common responses:

@@ -43,6 +43,15 @@ async def test_process_vision_messages_transcribes_image(monkeypatch):
     )
 
 
+@pytest.fixture(autouse=True)
+def _clear_vision_cache():
+    from src.agent.nodes.complex_utils import vision_proxy as vp
+
+    vp._TRANSCRIPTION_CACHE.clear()
+    yield
+    vp._TRANSCRIPTION_CACHE.clear()
+
+
 @pytest.mark.asyncio
 async def test_process_vision_messages_failure_keeps_image_and_returns_false(
     monkeypatch,
@@ -61,7 +70,7 @@ async def test_process_vision_messages_failure_keeps_image_and_returns_false(
             content=[
                 {
                     "type": "image_url",
-                    "image_url": {"url": "data:image/png;base64,abc"},
+                    "image_url": {"url": "data:image/png;base64,failcase"},
                 }
             ]
         )

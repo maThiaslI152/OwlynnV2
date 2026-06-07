@@ -7,6 +7,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from src.agent.nodes.complex_utils import vision_proxy
 
 
+@pytest.fixture(autouse=True)
+def _clear_vision_cache():
+    vision_proxy._TRANSCRIPTION_CACHE.clear()
+    yield
+    vision_proxy._TRANSCRIPTION_CACHE.clear()
+
+
 @pytest.mark.asyncio
 async def test_vision_proxy_replaces_image_with_transcription_text(monkeypatch):
     """Qwen describes the image; output is text-only for DeepSeek."""
@@ -29,7 +36,7 @@ async def test_vision_proxy_replaces_image_with_transcription_text(monkeypatch):
                 {"type": "text", "text": "Explain this diagram formally"},
                 {
                     "type": "image_url",
-                    "image_url": {"url": "data:image/png;base64,abc"},
+                    "image_url": {"url": "data:image/png;base64,cloudpath"},
                 },
             ]
         ),

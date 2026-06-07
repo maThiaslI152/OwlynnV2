@@ -32,14 +32,14 @@ from src.tools.skills import SkillDefinition
 VALID_ROUTES = {
     "simple",
     "complex-default",
-    "complex-vision",
-    "complex-longctx",
+    "complex-cloud",
+    "complex-cloud",
     "complex-cloud",
 }
 VALID_COMPLEX_ROUTES = {
     "complex-default",
-    "complex-vision",
-    "complex-longctx",
+    "complex-cloud",
+    "complex-cloud",
     "complex-cloud",
 }
 
@@ -111,19 +111,21 @@ class TestRouteDecisionDomain:
         route, _ = _resolve_complex_route(text, state, ["all"])
         assert route in VALID_COMPLEX_ROUTES, f"Invalid route: {route}"
 
-    def test_image_attachment_routes_to_vision(self):
-        """Messages with image_url content blocks route to complex-vision."""
+    def test_image_attachment_routes_to_cloud(self):
+        """Messages with image_url content blocks route to complex-cloud when cloud is on."""
         state = _make_image_state("What is in this picture?")
-        route, _ = _resolve_complex_route("What is in this picture?", state, ["all"])
-        assert route == "complex-vision"
+        route, _ = _resolve_complex_route(
+            "What is in this picture?", state, ["all"], cloud_available=True
+        )
+        assert route == "complex-cloud"
 
     @given(text=user_text_st)
     @settings(max_examples=100)
-    def test_image_always_vision_when_cloud_unavailable(self, text: str):
-        """Image + any text routes to complex-vision when cloud is unavailable."""
+    def test_image_always_default_when_cloud_unavailable(self, text: str):
+        """Image + any text routes to complex-default when cloud is unavailable."""
         state = _make_image_state(text)
         route, _ = _resolve_complex_route(text, state, ["all"], cloud_available=False)
-        assert route == "complex-vision"
+        assert route == "complex-default"
 
     def test_image_with_frontier_routes_cloud_for_vision_proxy(self):
         """Image + frontier task routes to cloud so Qwen transcribes before DeepSeek."""
@@ -138,18 +140,17 @@ class TestRouteDecisionDomain:
         )
         assert route == "complex-cloud"
 
-    def test_large_input_routes_to_longctx(self):
-        """Input exceeding 80% of Medium_Default context routes to complex-longctx."""
+    def test_large_input_routes_to_cloud(self):
+        """Input exceeding 80% of Medium_Default context routes to complex-cloud."""
         # 80% of 100000 context = 80000 tokens. With 4 chars/token and 4000 reserve:
         # estimated_input = 4000 + (text_len // 4) > 80000
         # text_len > (80000 - 4000) * 4 = 304000
         text = "x" * 310000
         state = _make_text_state(text)
-        route, _ = _resolve_complex_route(text, state, ["all"])
-        assert route in (
-            "complex-longctx",
-            "complex-cloud",
-        ), f"Large input should route to longctx or cloud, got {route}"
+        route, _ = _resolve_complex_route(text, state, ["all"], cloud_available=True)
+        assert route == "complex-cloud", (
+            f"Large input should route to cloud, got {route}"
+        )
 
     def test_very_large_input_routes_to_cloud(self):
         """Input exceeding 80% of Medium_LongCtx context routes to complex-cloud."""
@@ -157,7 +158,7 @@ class TestRouteDecisionDomain:
         # text_len > (104857 - 4000) * 4 = 403428
         text = "x" * 410000
         state = _make_text_state(text)
-        route, _ = _resolve_complex_route(text, state, ["all"])
+        route, _ = _resolve_complex_route(text, state, ["all"], cloud_available=True)
         assert route == "complex-cloud"
 
     @given(
@@ -222,20 +223,6 @@ class TestTokenBudgetContextWindow:
     def test_complex_default_budget_max_8192(self, text: str):
         """complex-default budget never exceeds 8192."""
         budget = estimate_token_budget(text, "complex-default")
-        assert 0 < budget <= 8192
-
-    @given(text=user_text_st)
-    @settings(max_examples=100)
-    def test_complex_vision_budget_max_8192(self, text: str):
-        """complex-vision budget never exceeds 8192."""
-        budget = estimate_token_budget(text, "complex-vision")
-        assert 0 < budget <= 8192
-
-    @given(text=user_text_st)
-    @settings(max_examples=100)
-    def test_complex_longctx_budget_max_8192(self, text: str):
-        """complex-longctx budget never exceeds 8192."""
-        budget = estimate_token_budget(text, "complex-longctx")
         assert 0 < budget <= 8192
 
     @given(text=user_text_st)

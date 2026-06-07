@@ -1,0 +1,164 @@
+"""Tests for DeepSeek cloud payload assembly and security."""
+
+import json
+import sys
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+
+sys.modules["mem0"] = MagicMock()
+
+
+@pytest.fixture
+def mock_profile():
+    return {
+        "name": "Test User",
+        "cloud_brief_enabled": True,
+        "cloud_anonymization_enabled": True,
+        "cloud_brief_max_chars": 8000,
+        "custom_sensitive_terms": [],
+    }
+
+
+class TestCloudBriefGate:
+    @pytest.mark.asyncio
+    async def test_tool_loop_skips_brief(self, mock_profile):
+        from src.agent.nodes.complex_utils.cloud_payload import prepare_cloud_payload
+
+        async def noop_vision(messages):
+            return messages, True
+
+        messages = [
+            HumanMessage(content="hello"),
+            AIMessage(
+                content="",
+                tool_calls=[{"id": "1", "name": "read_workspace_file", "args": {}}],
+            ),
+            ToolMessage(content="file contents", tool_call_id="1"),
+        ]
+        with patch(
+            "src.agent.nodes.complex_utils.cloud_payload.get_profile",
+            return_value=mock_profile,
+        ):
+            payload = await prepare_cloud_payload(
+                state={"messages": messages},
+                system_stable="stable core",
+                volatile_suffix="volatile",
+                trimmed_messages=messages,
+                vision_processor=noop_vision,
+            )
+        assert len(payload.messages) == 3
+        assert payload.cloud_brief_tokens_est == 0
+
+    @pytest.mark.asyncio
+    async def test_first_turn_uses_brief(self, mock_profile):
+        from src.agent.nodes.complex_utils.cloud_payload import prepare_cloud_payload
+
+        async def noop_vision(messages):
+            return messages, True
+
+        messages = [HumanMessage(content="Summarize project")]
+        with (
+            patch(
+                "src.agent.nodes.complex_utils.cloud_payload.get_profile",
+                return_value=mock_profile,
+            ),
+            patch(
+                "src.agent.nodes.complex_utils.cloud_payload.build_cloud_brief",
+                return_value="--- brief ---",
+            ),
+        ):
+            payload = await prepare_cloud_payload(
+                state={"messages": messages, "clarified_scope": {"goal": "test"}},
+                system_stable="stable core",
+                volatile_suffix="volatile",
+                trimmed_messages=messages,
+                vision_processor=noop_vision,
+            )
+        assert len(payload.messages) == 1
+        assert payload.cloud_brief_tokens_est > 0
+
+
+class TestReasoningContentReplay:
+    def test_message_converter_preserves_reasoning(self):
+        from src.agent.nodes.complex_utils.cloud_payload import message_to_deepseek_dict
+
+        msg = AIMessage(
+            content="answer",
+            additional_kwargs={"reasoning_content": "step by step"},
+            tool_calls=[{"id": "tc1", "name": "web_search", "args": {"q": "x"}}],
+        )
+        out = message_to_deepseek_dict(msg)
+        assert out["reasoning_content"] == "step by step"
+        assert out["tool_calls"]
+
+
+class TestStablePrefix:
+    def test_stable_prompt_excludes_date(self):
+        from src.agent.nodes.complex_utils.cloud_payload import COMPLEX_PROMPT_STABLE
+
+        assert "{current_date}" not in COMPLEX_PROMPT_STABLE
+        assert "{memory_context}" not in COMPLEX_PROMPT_STABLE
+
+
+class TestLegacyRoutesAbsent:
+    def test_graph_valid_complex_routes(self):
+        import inspect
+        import importlib.util
+
+        spec = importlib.util.find_spec("src.agent.graph")
+        assert spec is not None
+        path = spec.origin
+        assert path
+        source = open(path, encoding="utf-8").read()
+        assert "complex-vision" not in source
+        assert "complex-longctx" not in source
+
+
+class TestCloudBriefMemoryFilter:
+    def test_filters_paths_and_emails(self):
+        from src.agent.hitl.cloud_brief import _filter_memory_context
+
+        raw = "Contact tim@example.com at /Users/tim/secret.txt api_key=sk-abc12345"
+        cleaned = _filter_memory_context(raw)
+        assert "tim@example.com" not in cleaned
+        assert "/Users/tim" not in cleaned
+        assert "sk-abc" not in cleaned
+
+
+class TestVisionTranscriptionCache:
+    @pytest.mark.asyncio
+    async def test_cache_hit_avoids_second_vlm_call(self):
+        from src.agent.nodes.complex_utils import vision_proxy as vp
+
+        vp._TRANSCRIPTION_CACHE.clear()
+        image_block = {
+            "type": "image_url",
+            "image_url": {"url": "data:image/png;base64,AAAA"},
+        }
+        messages = [HumanMessage(content=[image_block])]
+
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke.return_value = MagicMock(content="screenshot text")
+
+        with patch(
+            "src.agent.nodes.complex_utils.vision_proxy.get_medium_llm",
+            AsyncMock(return_value=mock_llm),
+        ):
+            out1, ok1 = await vp.process_vision_messages(messages)
+            out2, ok2 = await vp.process_vision_messages(messages)
+
+        assert ok1 and ok2
+        assert mock_llm.ainvoke.await_count == 1
+        assert "screenshot text" in str(out2[0].content)
+
+
+class TestFallbackAnonymization:
+    def test_deanonymize_restores_placeholders(self):
+        from src.agent.nodes.complex import _deanonymize_ai_message
+
+        mapping = {"[EMAIL_a4f2b9c1]": "real@example.com"}
+        msg = AIMessage(content="Write to [EMAIL_a4f2b9c1]")
+        restored = _deanonymize_ai_message(msg, mapping)
+        assert "real@example.com" in restored.content

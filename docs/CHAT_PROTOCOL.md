@@ -1,7 +1,7 @@
 ---
 status: active
 category: reference
-last_updated: 2026-05-31
+last_updated: 2026-06-07
 owner: human
 ---
 
@@ -127,12 +127,12 @@ Frontend should send `type` (MIME) on each file; Composer infers from `file.type
 
 | MIME/Type | Behavior |
 |-----------|----------|
-| `image/png`, `image/jpeg`, `image/webp`, `image/gif` | Forwarded inline as multimodal `image_url` to local Qwen (route `complex-vision`). UI shows thumbnail in composer + message bubble. **Not** indexed into Qdrant/RAG. |
+| `image/png`, `image/jpeg`, `image/webp`, `image/gif` | **Local route (`complex-default`):** forwarded as multimodal `image_url` to local Qwen. **Cloud route (`complex-cloud`):** transcribed via `vision_proxy` before DeepSeek (text-only API). UI shows thumbnail in composer + message bubble. **Not** indexed into Qdrant/RAG. |
 | `application/pdf` / `.pdf` | Text extracted inline when possible; otherwise agent calls `read_workspace_file` |
 | Other UTF-8 text/code | Inlined in prompt as fenced block |
 | Other binary | Saved to workspace; agent instructed to call `read_workspace_file` |
 
-Cloud route (`complex-cloud`) with images: local Qwen transcribes via `vision_proxy` before DeepSeek; on proxy failure, route falls back to `complex-vision` direct multimodal.
+Cloud route (`complex-cloud`) with images: local Qwen transcribes via `vision_proxy` before DeepSeek; on proxy failure, route falls back to `complex-default` direct multimodal (legacy `complex-vision` route removed).
 
 ### Server → Client: Event Types
 
@@ -231,7 +231,9 @@ Derived from `AIMessage.tool_calls` + `ToolMessage` outputs. Tool outputs normal
   "swapping": true | false,
   "token_usage": {
     "prompt_tokens": 150,
-    "completion_tokens": 320
+    "completion_tokens": 320,
+    "prompt_cache_hit_tokens": 120,
+    "prompt_cache_miss_tokens": 30
   },
   "fallback_chain": [
     {
@@ -256,7 +258,7 @@ Sent after `complex_llm` or `simple` node completes when `model_used` is present
 |-------|-------------|
 | `model` | Model that produced the response (e.g. `"medium-default"`, `"large-cloud"`) |
 | `swapping` | Whether a model swap occurred |
-| `token_usage` | Optional prompt/completion token counts from API response |
+| `token_usage` | Optional prompt/completion counts; cloud turns may include `prompt_cache_hit_tokens` / `prompt_cache_miss_tokens` (DeepSeek KV prefix cache) |
 | `fallback_chain` | Optional ordered list of model attempts. Always has ≥1 entry and exactly one with `status == "success"`. Entries are chronological |
 
 Populated by `complex_llm_node` and `simple_node` in every node output.
@@ -439,7 +441,7 @@ Returns all user-facing settings merged from `GET /api/profile` and `GET /api/ad
   "llm_model_name": "gemma-4-e4b-uncensored-hauhaucs-aggressive",
   "medium_models": {},
   "cloud_llm_base_url": "https://api.deepseek.com/v1",
-  "cloud_llm_model_name": "deepseek-chat",
+  "cloud_llm_model_name": "deepseek-v4-flash",
   "deepseek_api_key": "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022",
   "temperature": 0.7,
   "top_p": 0.9,

@@ -85,11 +85,7 @@ def estimate_token_budget(user_text: str, route: str) -> int:
         context = _CLOUD_CONTEXT
         input_reserve = 8000
         budget_max = 16384
-    elif route == "complex-longctx":
-        context = _MEDIUM_LONGCTX_CONTEXT
-        input_reserve = 4000
-        budget_max = 8192
-    else:  # complex-default, complex-vision
+    else:  # complex-default
         context = _MEDIUM_DEFAULT_CONTEXT
         input_reserve = 4000
         budget_max = 8192

@@ -3,9 +3,6 @@
   "question": "I'm not sure how to handle this. What would you prefer?",
   "choices": [
     {"label": "Search the web", "route": "complex-default", "toolbox": ["web_search"]},
-    {"label": "Work with local files", "route": "complex-default", "toolbox": ["file_ops"]},
-    {"label": "Create documents/visualizations", "route": "complex-default", "toolbox": ["data_viz"]},
-    {"label": "Use cloud model for higher quality", "route": "complex-cloud", "toolbox": ["all"]},
     {"label": "Just answer directly", "route": "complex-default", "toolbox": ["all"]}
   ],
   "clarification_reason": "Router confidence below threshold (0.42 < 0.60)."

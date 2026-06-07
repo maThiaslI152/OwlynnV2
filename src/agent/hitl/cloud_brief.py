@@ -118,6 +118,22 @@ def _filter_memory_context(memory: str) -> str:
         memory,
         flags=re.IGNORECASE,
     )
+    cleaned = re.sub(
+        r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
+        "[REDACTED_EMAIL]",
+        cleaned,
+    )
+    cleaned = re.sub(
+        r"(?:/Users/|/home/|C:\\Users\\)[^\s\"']+",
+        "[REDACTED_PATH]",
+        cleaned,
+    )
+    cleaned = re.sub(
+        r"sk-[a-zA-Z0-9]{8,}",
+        "[REDACTED_KEY]",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
     return _truncate(cleaned, 1000)
 
 

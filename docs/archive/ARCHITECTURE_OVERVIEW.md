@@ -1,13 +1,15 @@
 ---
-status: active
-category: architecture
-last_updated: 2026-05-31
+status: archived
+category: archive
+last_updated: 2026-06-07
 owner: human
 ---
 
 # Architecture Overview
 
-> **Purpose:** System architecture, component relationships, and key data flows for Owlynn — a local-first AI productivity agent.
+> **⚠️ Superseded:** Use [`docs/architecture/overview.md`](../architecture/overview.md), [`docs/CLOUD-LLM-ARCHITECTURE.md`](../CLOUD-LLM-ARCHITECTURE.md), and [`docs/architecture/DEEPSEEK_V4_INTEGRATION.md`](../architecture/DEEPSEEK_V4_INTEGRATION.md) for current architecture.
+
+> **Purpose:** Historical system architecture (pre–DeepSeek V4 optimization). Retained for reference.
 
 Owlynn is a local-first AI productivity agent built with LangGraph for orchestration and FastAPI for the backend. Optimized for Apple Silicon (M4 Air 24GB) with a three-tier S/M(swap)/L hybrid LLM architecture.
 

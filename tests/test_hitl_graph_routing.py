@@ -9,8 +9,8 @@ class TestGraphRouting:
 
         for route in (
             "complex-default",
-            "complex-vision",
-            "complex-longctx",
+            "complex-cloud",
+            "complex-cloud",
             "complex-cloud",
         ):
             assert route_decision({"route": route}) == "scope_clarify"

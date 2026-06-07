@@ -18,7 +18,7 @@ from typing import Optional, TYPE_CHECKING
 from langchain_openai import ChatOpenAI
 
 
-from src.config.config_loader import get_model_config
+from src.config.config_loader import get_model_config, config
 from src.config.settings import DEEPSEEK_API_KEY, M4_MAC_OPTIMIZATION
 from src.memory.user_profile import get_profile
 
@@ -36,7 +36,8 @@ class LLMPool:
 
     _small_llm: Optional[ChatOpenAI] = None
     _medium_llm: Optional[ChatOpenAI] = None
-    _cloud_llm: Optional[ChatOpenAI] = None
+    _cloud_llm_flash: Optional[ChatOpenAI] = None
+    _cloud_llm_pro: Optional[ChatOpenAI] = None
 
     _lock = asyncio.Lock()
 
@@ -164,69 +165,78 @@ class LLMPool:
     # ── cloud (DeepSeek API) ──────────────────────────────────────────
 
     @classmethod
-    async def get_cloud_llm(cls) -> ChatOpenAI:
-        """Get or create cached Cloud LLM (DeepSeek API) instance.
+    def _resolve_cloud_model_name(cls, tier: Optional[str] = None) -> str:
+        """Map profile tier (flash|pro) to DeepSeek model id."""
+        profile = get_profile()
+        tier = (tier or profile.get("cloud_model_tier") or "flash").lower()
+        tiers = config.get("models.cloud.tiers") or {}
+        if tier == "pro":
+            return tiers.get("pro") or "deepseek-v4-pro"
+        return (
+            tiers.get("flash")
+            or profile.get("cloud_llm_model_name")
+            or "deepseek-v4-flash"
+        )
 
-        Resolves API key via secret store (Keychain → env var → profile).
-        Configures a request timeout to prevent hangs on slow API responses.
+    @classmethod
+    async def _build_cloud_client(cls, model_name: str) -> ChatOpenAI:
+        """Create a ChatOpenAI client for DeepSeek V4."""
+        from src.config.secret_store import resolve_deepseek_api_key
+        from src.config.config_loader import config
 
-        Raises
-        ------
-        CloudUnavailableError
-            If no valid API key is found in any source.
-        """
+        api_key = resolve_deepseek_api_key()
+        if not api_key:
+            raise CloudUnavailableError(
+                "No DeepSeek API key configured. Set DEEPSEEK_API_KEY env var, "
+                "store in macOS Keychain via Settings, or set deepseek_api_key "
+                "in user profile."
+            )
+        model_cfg = get_model_config("cloud")
+        timeout = float(
+            model_cfg.get("timeout")
+            or M4_MAC_OPTIMIZATION.get("medium_model", {}).get("cloud_timeout", 180)
+        )
+        return ChatOpenAI(
+            model=model_name,
+            api_key=api_key,
+            base_url=model_cfg.get("base_url", "https://api.deepseek.com/v1"),
+            streaming=True,
+            max_tokens=model_cfg.get("max_tokens"),
+            temperature=model_cfg.get("temperature", 0.4),
+            request_timeout=timeout,
+            extra_body=dict(model_cfg.get("extra_body") or {}),
+        )
+
+    @classmethod
+    async def get_cloud_llm(cls, tier: Optional[str] = None) -> ChatOpenAI:
+        """Get or create cached Cloud LLM (DeepSeek API) for flash or pro tier."""
         if "cloud" in cls._test_overrides:
             audit_debug("agent.model", "pool_test_override", slot="cloud")
             return cls._test_overrides["cloud"]
-        if cls._cloud_llm is not None:
-            audit_debug("agent.model", "pool_cache_hit", slot="cloud")
-            return cls._cloud_llm
+
+        model_name = cls._resolve_cloud_model_name(tier)
+        is_pro = "pro" in model_name
+        cached = cls._cloud_llm_pro if is_pro else cls._cloud_llm_flash
+        if cached is not None:
+            audit_debug("agent.model", "pool_cache_hit", slot="cloud", model=model_name)
+            return cached
 
         async with cls._lock:
-            if cls._cloud_llm is not None:
-                audit_debug("agent.model", "pool_cache_hit", slot="cloud")
-                return cls._cloud_llm
-
-            from src.config.secret_store import resolve_deepseek_api_key
-
-            api_key = resolve_deepseek_api_key()
-            if not api_key:
-                audit_warn("agent.model", "pool_no_api_key", slot="cloud")
-                raise CloudUnavailableError(
-                    "No DeepSeek API key configured. Set DEEPSEEK_API_KEY env var, "
-                    "store in macOS Keychain via Settings, or set deepseek_api_key "
-                    "in user profile."
-                )
-
-            model_cfg = get_model_config("cloud")
-
-            # Resolve timeout: config → M4 optimization → default 180s
-            timeout = float(
-                model_cfg.get("timeout")
-                or M4_MAC_OPTIMIZATION.get("medium_model", {}).get("cloud_timeout", 180)
-            )
-
-            # Resolve extra_body (Thinking Mode, Effort, etc)
-            extra_body = dict(model_cfg.get("extra_body") or {})
-
-            cls._cloud_llm = ChatOpenAI(
-                model=model_cfg.get("model_name", "deepseek-v4-flash"),
-                api_key=api_key,
-                base_url=model_cfg.get("base_url", "https://api.deepseek.com/v1"),
-                streaming=True,
-                max_tokens=model_cfg.get("max_tokens"),
-                temperature=model_cfg.get("temperature", 0.4),
-                request_timeout=timeout,
-                extra_body=extra_body,
-            )
+            cached = cls._cloud_llm_pro if is_pro else cls._cloud_llm_flash
+            if cached is not None:
+                return cached
+            client = await cls._build_cloud_client(model_name)
+            if is_pro:
+                cls._cloud_llm_pro = client
+            else:
+                cls._cloud_llm_flash = client
             audit_info(
                 "agent.model",
                 "pool_instance_created",
                 slot="cloud",
-                model=model_cfg.get("model_name"),
+                model=model_name,
             )
-
-        return cls._cloud_llm
+            return client
 
     # ── backward-compat alias ────────────────────────────────────────────
 
@@ -242,7 +252,8 @@ class LLMPool:
         """Clear cached instances (call when profile or config updates)."""
         cls._small_llm = None
         cls._medium_llm = None
-        cls._cloud_llm = None
+        cls._cloud_llm_flash = None
+        cls._cloud_llm_pro = None
         cls._test_overrides = {}
 
     # ── private ──────────────────────────────────────────────────────────
@@ -280,6 +291,6 @@ async def get_medium_llm(variant: str = "default") -> ChatOpenAI:
     return await LLMPool.get_medium_llm(variant)
 
 
-async def get_cloud_llm() -> ChatOpenAI:
-    """Get cloud LLM instance (DeepSeek API)."""
-    return await LLMPool.get_cloud_llm()
+async def get_cloud_llm(tier: Optional[str] = None) -> ChatOpenAI:
+    """Get cloud LLM instance (DeepSeek API) for optional tier flash|pro."""
+    return await LLMPool.get_cloud_llm(tier)

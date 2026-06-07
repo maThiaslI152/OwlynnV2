@@ -1,11 +1,11 @@
 # Architecture Overview — OwlynnV2
 
 > **System context, modules, data flow, and key entrypoints.**
-> Last updated: 2026-06-04
+> Last updated: 2026-06-07
 
 ## System Context
 
-Owlynn is a local-first AI coworker for Apple Silicon (Mac M4 Air 24GB). It runs entirely on-device using LM Studio for LLM inference with a three-tier model strategy. No data leaves the machine unless the user explicitly opts into cloud escalation.
+Owlynn is a local-first AI coworker for Apple Silicon (Mac M4 Air 24GB). It runs on-device using LM Studio for local inference, with optional DeepSeek V4 cloud escalation on route `complex-cloud`. No data leaves the machine unless the user opts into cloud (with anonymization).
 
 ```
 Browser (http://127.0.0.1:5173)
@@ -35,9 +35,12 @@ Browser (http://127.0.0.1:5173)
 | **Config** | `src/config/defaults.yaml` | Single source of truth for all settings. Override chain: YAML → env → profile |
 | **Config Loader** | `src/config/config_loader.py` | Layered config with typed accessors, env var mapping, validation |
 | **Agent Graph** | `src/agent/graph.py` | LangGraph orchestration: memory→router→simple/complex→tools→memory |
-| **Router** | `src/agent/nodes/router.py` | 5-way routing with keyword bypasses, LLM classification, HITL gates |
-| **Simple Node** | `src/agent/nodes/simple.py` | Fast answers via small model (0.8B), with medium fallback |
-| **Complex Node** | `src/agent/nodes/complex.py` | Tool-augmented reasoning via medium model (9B), cloud escalation |
+| **Router** | `src/agent/nodes/router.py` | 3-way routing: `simple`, `complex-default`, `complex-cloud` — keyword bypass, LLM classifier, HITL |
+| **Simple Node** | `src/agent/nodes/simple.py` | Fast answers via MiniCPM5 router model, with medium fallback |
+| **Complex Node** | `src/agent/nodes/complex.py` | Tool-augmented reasoning — local Qwen or cloud DeepSeek V4 |
+| **Cloud payload** | `src/agent/nodes/complex_utils/cloud_payload.py` | Anonymization, brief gate, stable/volatile prompt layers, cache metrics |
+| **Cloud invoke** | `src/agent/nodes/complex_utils/cloud_invoke.py` | Raw DeepSeek client, tool strict mode, reasoning replay |
+| **Vision proxy** | `src/agent/nodes/complex_utils/vision_proxy.py` | Local vision → text for cloud path; hash cache |
 | **Memory** | `src/agent/nodes/memory.py` | Memory injection + write: STM, LTM (Mem0/Qdrant), personal context |
 | **Summarizer** | `src/agent/nodes/summarize.py` | Auto-compress older turns when context >85% of window |
 | **HITL** | `src/agent/hitl/` | Safety gates: scope_clarify, plan_review, security_proxy |
@@ -58,27 +61,22 @@ memory_inject ──► Load LTM/STM/persona/profile context
 summarize_gate ──► If tokens >85% context: auto_summarize → compress history
   │
   ▼
-router ──► Classify: simple vs complex (keyword bypass → LLM classifier)
+router ──► Classify: simple | complex-default | complex-cloud
   │
-  ├── simple ──► simple_node (0.8B small model, fast)
-  │                  │
-  │                  ▼
-  │              memory_write ──► Save facts, topics, invalidate cache
+  ├── simple ──► simple_node (MiniCPM5, fast)
   │
-  └── complex ──► scope_clarify ──► complex_llm (9B medium model)
-                        │                  │
-                        │    ┌─────────────┘
-                        │    ▼
-                        │  plan_review / security_proxy (HITL gates)
-                        │    │
-                        │    ▼
-                        │  tool_action ──► web search, file ops, REPL
-                        │    │
-                        │    ▼
-                        │  complex_llm ──► cycle until no tools pending
+  └── complex ──► scope_clarify ──► complex_llm
+                        │              │
+                        │    local (complex-default) or cloud (complex-cloud)
+                        │              │
+                        │    plan_review / security_proxy (HITL)
+                        │              │
+                        │    tool_action ──► web search, file ops, REPL
+                        │              │
+                        │    complex_llm ──► cycle until no tools pending
                         │
                         ▼
-                   memory_write
+                   memory_write ──► invalidate MemoryContextCache + cloud brief cache
 ```
 
 ## Configuration Architecture
@@ -91,7 +89,8 @@ defaults.yaml  →  environment variables  →  user_profile.json
 ```
 
 **Key sections:**
-- `models` — small/medium/cloud/embedding: names, base_urls, temps, budgets, extra_body
+- `models` — small/medium/cloud/standard: names, base_urls, temps, budgets, pricing
+- `cloud` — thinking mode, reasoning effort, vision cache TTL
 - `routing` — confidence thresholds, budget tiers, keyword bypasses
 - `memory` — max facts, cache TTL, decay constants
 - `web_search` — backend timeouts, user-agents, aggregate cap
@@ -112,7 +111,9 @@ Context budget: memory capped at 6000 chars (~1500 tokens) to stay within model 
 ## Related
 
 - `docs/HITL.md` — Safety gates documentation
-- `docs/MEMORY.md` — Memory system documentation  
+- `docs/MEMORY.md` — Memory system documentation
+- `docs/CLOUD-LLM-ARCHITECTURE.md` — Cloud connection, caches, cost tracking
+- `docs/architecture/DEEPSEEK_V4_INTEGRATION.md` — DeepSeek V4 API + optimization reference
 - `docs/guides/dev-startup.md` — Dev setup and config reference
 - `src/config/defaults.yaml` — Centralized configuration
 - `specs/memory/constitution.md` — Non-negotiable constraints

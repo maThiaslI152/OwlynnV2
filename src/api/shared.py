@@ -5,7 +5,13 @@ from langchain_core.messages import AIMessage, ToolMessage
 logger = logging.getLogger("src.api")
 
 connected_websockets = set()
-_session_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+_session_usage = {
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "prompt_cache_hit_tokens": 0,
+    "prompt_cache_miss_tokens": 0,
+    "total_tokens": 0,
+}
 
 _TOOL_DESTRUCTIVE_RE = re.compile(
     r"(?:\brm\s+-rf\b|\bdrop\b|\bdelete\b|\btruncate\b)", re.IGNORECASE

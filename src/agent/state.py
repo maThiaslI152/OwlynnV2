@@ -50,7 +50,7 @@ class AgentState(TypedDict):
     # Track if any tool execution was vetted/approved by security node
     execution_approved: bool | None
 
-    # Routing decision: 'simple', 'complex-default', 'complex-vision', 'complex-longctx', or 'complex-cloud'
+    # Routing decision: 'simple', 'complex-default', or 'complex-cloud'
     route: str | None
     # Model provenance: 'small-local', 'medium-default', 'medium-vision', 'medium-longctx',
     # 'large-cloud', or any of these with '-fallback' suffix

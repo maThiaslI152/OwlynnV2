@@ -63,9 +63,9 @@ The router uses the small LLM to classify requests into `simple` (greetings, qui
 |-------|-----------|
 | Backend | `FastAPI` + `LangGraph` + Python 3.12+ |
 | Frontend | React 19 + TypeScript (Vite 8) + Zustand 5, Electron desktop |
-| Small LLM | `ibm-grok4-ultrafast-coder-1b` (Q8_0, routing) |
-| Medium LLM | `gemma-4-e4b-uncensored-hauhaucs-aggressive` (Q4_K_M, reasoning + tool calling, swappable) |
-| Cloud LLM | `deepseek-chat` (DeepSeek API, optional escalation) |
+| Small LLM | `minicpm5-1b` (MiniCPM5 1B, routing/classification) |
+| Medium LLM | `qwen3.5-9b-uncensored-hauhaucs-aggressive@q6_k` (local complex + vision) |
+| Cloud LLM | `deepseek-v4-flash` / `deepseek-v4-pro` (DeepSeek API, optional `complex-cloud` route) |
 | File Processing | Docling v2.96 (PDF/DOCX — layout-aware markdown, table structure detection) |
 | Memory | Mem0 + Qdrant + JSON files |
 | Checkpointing | Redis (falls back to in-memory `MemorySaver`) |
@@ -185,20 +185,20 @@ docs/                Architecture and API documentation
 | `QDRANT_HOST` | `localhost` | Qdrant host for vector memory |
 | `QDRANT_PORT` | `6333` | Qdrant port |
 | `SEARXNG_URL` | _(empty)_ | SearXNG URL (e.g. `http://localhost:8888`) |
-| `DEEPSEEK_API_KEY` | _(empty)_ | Optional DeepSeek API key for cloud tier |
-| `OPTIMIZE_FOR_M4` | `false` | Enable M4 Mac Air optimizations |
+| `DEEPSEEK_API_KEY` | _(empty)_ | Optional DeepSeek API key — prefer `.env.local` (see `.env.local.example`) |
+| `OPTIMIZE_FOR_M4` | `false` | Optional M4 Air timeouts/memory limits |
 
 ### LLM Setup
 
-Models configured in `data/user_profile.json` or via the Settings UI:
+Models configured in `src/config/defaults.yaml`, overridden by `.env` / `.env.local` / Settings UI:
 
-| Slot | Profile Key | Model | Description |
-|------|------------|-------|-------------|
-| Small LLM | `small_llm_model_name` | `ibm-grok4-ultrafast-coder-1b` | Routing model (Q8_0) |
-| Medium LLM | `medium_models.default` | `gemma-4-e4b-uncensored-hauhaucs-aggressive` | Reasoning model (Q4_K_M) |
-| Medium Vision | `medium_models.vision` | — | Image inputs |
-| Medium LongCtx | `medium_models.longctx` | — | Large context windows |
-| Cloud LLM | `cloud_llm_model_name` | `deepseek-chat` | DeepSeek fallback |
+| Slot | Config path | Default | Description |
+|------|------------|---------|-------------|
+| Small LLM | `models.small.model_name` | `minicpm5-1b` | Router / classification |
+| Medium LLM | `models.medium.model_name` | `qwen3.5-9b-...@q6_k` | Local complex + vision |
+| Cloud LLM | `models.cloud.model_name` | `deepseek-v4-flash` | DeepSeek V4 (`complex-cloud`) |
+
+Routes: `simple`, `complex-default`, `complex-cloud` only.
 
 All local models served via LM Studio on port 1234.
 

@@ -169,6 +169,18 @@ async def api_update_unified_settings(body: dict):
             elif field in allowed:
                 update_profile(field, value)
                 updated.append(field)
+        if any(
+            f in updated
+            for f in (
+                "cloud_model_tier",
+                "cloud_llm_model_name",
+                "cloud_thinking_mode",
+                "cloud_reasoning_effort",
+            )
+        ):
+            from src.agent.llm import LLMPool
+
+            LLMPool.clear()
         return {"status": "ok", "updated": updated}
     except Exception as e:
         logger.warning("Error suppressed: %s", e)

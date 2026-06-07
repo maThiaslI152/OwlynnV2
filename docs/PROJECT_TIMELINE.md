@@ -1,7 +1,7 @@
 ---
 status: active
 category: changelog
-last_updated: 2026-05-31
+last_updated: 2026-06-07
 owner: ai-agent
 ---
 
@@ -13,6 +13,7 @@ owner: ai-agent
 
 | Date | Change | Task | Type | Summary |
 |------|--------|------|------|---------|
+| 2026-06-07 | `deepseek-cache-optimization` | docs | docs | Synced active docs for DeepSeek V4 Phases 0–4, deferred Phase 5 output cache, `.env.local` workflow, 3-way routing, prefix cache metrics |
 | 2026-05-31 | `docs-standards-timeline` | Task 3 | docs | Applied frontmatter + template to all subfolder docs: debugging (14), guides (9), technical (1), archive (17), and changelogs (2) |
 | 2026-05-31 | `docs-standards-timeline` | Task 2 | docs | Applied YAML frontmatter, purpose blockquote, ## Related, and ## Last updated to all 31 top-level docs |
 | 2026-05-31 | `docs-standards-timeline` | Task 1 | docs | Updated documentation standard with frontmatter schema; fixed 7 doc–code sync errors (CHAT_PROTOCOL, STATUS, API_REFERENCE, ARCHITECTURE_OVERVIEW, AI_AGENT_INDEX, INDEX, TOOLS) |
@@ -29,4 +30,4 @@ owner: ai-agent
 
 ## Last updated
 
-2026-05-31 — `docs-standards-timeline` initial aggregated timeline
+2026-06-07 — DeepSeek V4 + cloud architecture doc sync

@@ -1,7 +1,7 @@
 ---
 status: active
 category: reference
-last_updated: 2026-06-04
+last_updated: 2026-06-07
 owner: ai-agent
 ---
 
@@ -11,9 +11,17 @@ owner: ai-agent
 
 ```yaml
 manifest:
-  version: 3
-  generated: "2026-06-04T15:00:00Z"
+  version: 4
+  generated: "2026-06-07T22:00:00Z"
   files:
+    - path: docs/CLOUD-LLM-ARCHITECTURE.md
+      status: active
+      category: architecture
+      last_updated: 2026-06-07
+    - path: docs/architecture/DEEPSEEK_V4_INTEGRATION.md
+      status: active
+      category: architecture
+      last_updated: 2026-06-07
     - path: docs/changes/knowledge-cache-markdown-fixes/CHANGELOG.md
       status: active
       category: changelog
@@ -95,7 +103,7 @@ manifest:
     - path: docs/guides/dev-startup.md
       status: active
       category: guide
-      last_updated: 2026-06-04
+      last_updated: 2026-06-07
     - path: docs/guides/system_modernization.md
       status: active
       category: guide
@@ -113,7 +121,7 @@ manifest:
     - path: docs/API_REFERENCE.md
       status: active
       category: reference
-      last_updated: 2026-05-31
+      last_updated: 2026-06-07
 
     - path: docs/AUDIT_EXPORT_VERIFY_RUNBOOK.md
       status: active
@@ -134,11 +142,11 @@ manifest:
     - path: docs/CHAT_PROTOCOL.md
       status: active
       category: reference
-      last_updated: 2026-05-31
+      last_updated: 2026-06-07
     - path: docs/COMPETITIVE_FEATURE_ANALYSIS.md
       status: active
       category: reference
-      last_updated: 2026-05-31
+      last_updated: 2026-06-07
     - path: docs/ENGINEERING_IMPROVEMENTS.md
       status: active
       category: planning
@@ -211,7 +219,7 @@ manifest:
     - path: docs/architecture/overview.md
       status: active
       category: architecture
-      last_updated: 2026-06-04
+      last_updated: 2026-06-07
     - path: docs/archive/ARCHITECTURE_OVERVIEW.md
       status: archived
       category: archive
@@ -422,4 +430,4 @@ manifest:
 
 ## Last updated
 
-2026-06-04 — config centralization + Qwen3.5 swap + docs/HITL.md + docs/MEMORY.md
+2026-06-07 — DeepSeek V4 doc sync; CLOUD-LLM rewrite; routing/cache updates across active docs

@@ -109,12 +109,28 @@ if (
     MAX_MEMORIES = M4_MAC_OPTIMIZATION["memory"]["max_facts"]
     MEMORY_SEARCH_WINDOW = M4_MAC_OPTIMIZATION["memory"]["search_window"]
 else:
-    MODEL_TIMEOUT_SMALL = int(config.get("models.standard.small.timeout"))
-    MODEL_TIMEOUT_MEDIUM = int(config.get("models.standard.medium.timeout"))
-    MAX_TOKENS_SMALL = int(config.get("models.standard.small.max_tokens"))
-    MAX_TOKENS_MEDIUM = int(config.get("models.standard.medium.max_tokens"))
-    MAX_MEMORIES = int(config.get("memory.max_facts"))
-    MEMORY_SEARCH_WINDOW = int(config.get("memory.search_window"))
+    MODEL_TIMEOUT_SMALL = int(
+        config.get("models.small.timeout")
+        or config.get("models.standard.small.timeout")
+        or 15
+    )
+    MODEL_TIMEOUT_MEDIUM = int(
+        config.get("models.medium.timeout")
+        or config.get("models.standard.medium.timeout")
+        or 90
+    )
+    MAX_TOKENS_SMALL = int(
+        config.get("models.small.max_tokens")
+        or config.get("models.standard.small.max_tokens")
+        or 2048
+    )
+    MAX_TOKENS_MEDIUM = int(
+        config.get("models.medium.max_tokens")
+        or config.get("models.standard.medium.max_tokens")
+        or 16384
+    )
+    MAX_MEMORIES = int(config.get("memory.max_facts") or 200)
+    MEMORY_SEARCH_WINDOW = int(config.get("memory.search_window") or 50)
 
 # ── Ensure directories exist ─────────────────────────────────────────────────
 

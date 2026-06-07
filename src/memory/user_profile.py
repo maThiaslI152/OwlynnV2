@@ -97,6 +97,9 @@ VALID_FIELDS = {
     "custom_sensitive_terms": list,
     "cloud_brief_enabled": (bool, type(None)),
     "cloud_brief_max_chars": (int, type(None)),
+    "cloud_model_tier": str,
+    "cloud_thinking_mode": str,
+    "cloud_reasoning_effort": str,
 }
 
 

@@ -7,13 +7,11 @@ Property-based tests for the Complex Node behavior.
 """
 
 import sys
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 sys.modules["mem0"] = MagicMock()
 
-import asyncio
 import pytest
-from unittest.mock import AsyncMock, patch
 from hypothesis import given, settings, assume
 from hypothesis import strategies as st
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
@@ -26,25 +24,19 @@ from src.agent.state import AgentState
 VALID_ROUTES = {
     "simple",
     "complex-default",
-    "complex-vision",
-    "complex-longctx",
     "complex-cloud",
 }
 COMPLEX_ROUTES = {
     "complex-default",
-    "complex-vision",
-    "complex-longctx",
     "complex-cloud",
 }
 
 ROUTE_TO_MODEL = {
     "complex-default": "medium-default",
-    "complex-vision": "medium-vision",
-    "complex-longctx": "medium-longctx",
     "complex-cloud": "large-cloud",
 }
 
-LOCAL_ROUTES = {"complex-default", "complex-vision", "complex-longctx"}
+LOCAL_ROUTES = {"complex-default"}
 
 
 # ── Strategies ───────────────────────────────────────────────────────────
@@ -88,6 +80,7 @@ def _mock_profile(anon_enabled: bool = True) -> dict:
         "small_llm_base_url": "http://127.0.0.1:1234/v1",
         "cloud_llm_base_url": "https://api.deepseek.com/v1",
         "cloud_anonymization_enabled": anon_enabled,
+        "cloud_brief_enabled": False,
         "custom_sensitive_terms": [],
         "lm_studio_fold_system": True,
     }
@@ -96,6 +89,7 @@ def _mock_profile(anon_enabled: bool = True) -> dict:
 def _make_mock_llm():
     """Create a mock LLM that returns a simple AIMessage."""
     mock_llm = MagicMock()
+    mock_llm.async_client = None
     mock_response = AIMessage(content="Test response")
     mock_bound = MagicMock()
     mock_bound.ainvoke = AsyncMock(return_value=mock_response)
@@ -133,7 +127,6 @@ class TestModelProvenanceMatchesRoute:
         state = _make_state(route, text)
         mock_llm = _make_mock_llm()
         profile = _mock_profile()
-
         with (
             patch(
                 "src.agent.nodes.complex.get_medium_llm",
@@ -169,7 +162,6 @@ class TestModelProvenanceMatchesRoute:
         state = _make_state(route, text)
         mock_llm = _make_mock_llm()
         profile = _mock_profile()
-
         with (
             patch(
                 "src.agent.nodes.complex.get_medium_llm",
@@ -198,7 +190,6 @@ class TestModelProvenanceMatchesRoute:
         state = _make_state("complex-cloud")
         mock_llm = _make_mock_llm()
         profile = _mock_profile()
-
         with (
             patch(
                 "src.agent.nodes.complex.get_medium_llm",
@@ -228,7 +219,6 @@ class TestModelProvenanceMatchesRoute:
         state = _make_state("complex-default")
         mock_llm = _make_mock_llm()
         profile = _mock_profile()
-
         with (
             patch(
                 "src.agent.nodes.complex.get_medium_llm",

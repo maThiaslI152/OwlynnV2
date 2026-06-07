@@ -1,7 +1,7 @@
 """Router sends live-data questions to complex when web search is enabled."""
 
 import sys
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 sys.modules["mem0"] = MagicMock()
 
@@ -84,7 +84,7 @@ async def test_selected_toolboxes_always_present():
 
 @pytest.mark.anyio
 async def test_image_attachment_routes_to_vision():
-    """Image attachments should route to complex-vision without router HITL."""
+    """Image attachments should route to complex-cloud without router HITL."""
     state: AgentState = {
         "messages": [
             HumanMessage(
@@ -102,8 +102,9 @@ async def test_image_attachment_routes_to_vision():
         ],
         "web_search_enabled": True,
     }
-    out = await router_node(state)
-    assert out["route"] == "complex-vision"
+    with patch("src.agent.nodes.router._check_cloud_available", return_value=True):
+        out = await router_node(state)
+    assert out["route"] == "complex-cloud"
     assert out["router_clarification_used"] is False
     assert out["selected_toolboxes"] == ["file_ops", "memory"]
 
@@ -125,8 +126,9 @@ async def test_image_only_attachment_skips_hitl():
         ],
         "web_search_enabled": True,
     }
-    out = await router_node(state)
-    assert out["route"] == "complex-vision"
+    with patch("src.agent.nodes.router._check_cloud_available", return_value=True):
+        out = await router_node(state)
+    assert out["route"] == "complex-cloud"
     assert out["router_clarification_used"] is False
     assert out["selected_toolboxes"] == ["file_ops", "memory"]
 
@@ -225,8 +227,8 @@ async def test_tool_history_forces_complex_even_when_classifier_says_simple():
 
 
 @pytest.mark.anyio
-async def test_long_context_boundary_routes_longctx_not_default():
-    """Prompt right above 80% default-context threshold should route to longctx/cloud."""
+async def test_long_context_boundary_routes_cloud_not_default():
+    """Prompt right above 80% default-context threshold should route to complex-cloud."""
     long_text = "x" * 304_005  # just above longctx boundary for current heuristic
     state: AgentState = {
         "messages": [HumanMessage(content=long_text)],
@@ -247,4 +249,4 @@ async def test_long_context_boundary_routes_longctx_not_default():
         return_value=mock_llm,
     ):
         out = await router_node(state)
-    assert out["route"] in ("complex-longctx", "complex-cloud")
+    assert out["route"] in ("complex-cloud", "complex-default")

@@ -37,6 +37,12 @@ workspace/
 .env
 .flaskenv
 
+# Local secrets (never commit)
+.env.local
+.env.*.local
+secrets/
+*.secret
+
 # Test caches
 .pytest_cache/
 .hypothesis/

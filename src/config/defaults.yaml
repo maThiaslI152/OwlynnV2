@@ -81,18 +81,18 @@ models:
     timeout: 180
     request_timeout: 180                     # HTTP request timeout
     context_window: 1048576                  # DeepSeek V4 context
-    extra_body:
-      thinking_mode: true
-      reasoning_effort: "high"
+    extra_body: {}                           # thinking applied per-request via cloud_payload
     pricing:
       input_per_1m_usd: 0.14
+      cache_hit_per_1m_usd: 0.014
       output_per_1m_usd: 0.28
-
-  embedding:
-    base_url: "http://127.0.0.1:1234/v1"
-    model_name: "text-embedding-nomic-embed-text-v1.5-embedding"
-    dims: 768
-    timeout: 30.0
+      pro:
+        input_per_1m_usd: 0.435
+        cache_hit_per_1m_usd: 0.014
+        output_per_1m_usd: 0.87
+    tiers:
+      flash: "deepseek-v4-flash"
+      pro: "deepseek-v4-pro"
 
   # Standard (non-M4) overrides — used when OPTIMIZE_FOR_M4 is false
   standard:
@@ -104,6 +104,20 @@ models:
       timeout: 90
       max_tokens: 16384
       max_output_tokens: 16384
+
+# ── Cloud behavior ───────────────────────────────────────────────────────────
+cloud:
+  thinking_mode: auto                        # auto | always | never
+  reasoning_effort: high                       # high | max (when thinking enabled)
+  thinking_min_budget: 8192
+  tool_loop_force_thinking: true
+  vision_transcription_cache_ttl: 3600
+
+  embedding:
+    base_url: "http://127.0.0.1:1234/v1"
+    model_name: "text-embedding-nomic-embed-text-v1.5-embedding"
+    dims: 768
+    timeout: 30.0
 
 # ── Routing ──────────────────────────────────────────────────────────────────
 routing:

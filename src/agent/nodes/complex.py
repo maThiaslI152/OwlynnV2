@@ -3,6 +3,7 @@ import json
 import logging
 from typing import Any
 import re
+from unittest.mock import MagicMock
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.prebuilt import ToolNode
@@ -25,7 +26,15 @@ from src.agent.anonymization import anonymize, deanonymize
 
 from .complex_utils.fallback import _fallback_for_blank_response
 from .complex_utils.formatter import _strip_thinking_tags, _flatten_human_content
-from src.agent.hitl.cloud_brief import build_cloud_brief, estimate_brief_tokens
+from .complex_utils.cloud_payload import (
+    COMPLEX_PROMPT_STABLE,
+    build_volatile_suffix,
+    prepare_cloud_payload,
+    resolve_cloud_thinking_config,
+    extract_api_token_usage,
+)
+from .complex_utils.cloud_invoke import invoke_cloud_chat, response_to_ai_message
+from src.agent.cloud_cost_tracker import get_cost_tracker
 from src.memory.user_profile import get_profile
 
 logger = logging.getLogger(__name__)
@@ -89,6 +98,90 @@ async def _invoke_with_cloud_retry(
 
     breaker.record_failure()
     raise last_error if last_error else Exception("Cloud retry exhausted")
+
+
+async def _invoke_cloud_path(
+    *,
+    llm,
+    prompt_messages: list,
+    tools: list | None,
+    budget: int,
+    state: dict,
+    profile: dict,
+    mode: str,
+    tools_bound: bool,
+) -> tuple[Any, dict[str, int]]:
+    """Invoke DeepSeek via raw API path with thinking config and cost tracking."""
+    thinking = resolve_cloud_thinking_config(
+        state=state,
+        profile=profile,
+        tools_bound=tools_bound,
+        mode=mode,
+    )
+    model_name = getattr(llm, "model_name", None) or config.get(
+        "models.cloud.model_name", "deepseek-v4-flash"
+    )
+    client = getattr(llm, "async_client", None)
+    use_raw_api = (
+        client is not None
+        and not isinstance(client, MagicMock)
+        and hasattr(getattr(client, "chat", None), "completions")
+    )
+
+    if not use_raw_api:
+        if tools_bound and tools:
+            bound = llm.bind_tools(tools, strict=True).bind(max_tokens=budget)
+        else:
+            bound = llm.bind(max_tokens=budget)
+        response = await bound.ainvoke(prompt_messages)
+        usage = extract_api_token_usage(response)
+    else:
+        raw, usage = await invoke_cloud_chat(
+            llm_client=client,
+            model_name=model_name,
+            messages=prompt_messages,
+            tools=tools if tools_bound else None,
+            max_tokens=budget,
+            thinking=thinking,
+        )
+        response = response_to_ai_message(raw)
+    get_cost_tracker().record_usage(
+        usage.get("prompt_tokens", 0),
+        usage.get("completion_tokens", 0),
+        prompt_cache_hit_tokens=usage.get("prompt_cache_hit_tokens", 0),
+        prompt_cache_miss_tokens=usage.get("prompt_cache_miss_tokens", 0),
+        reasoning_tokens=usage.get("reasoning_tokens", 0),
+    )
+    api_tokens = {
+        "prompt_tokens": usage.get("prompt_tokens", 0),
+        "completion_tokens": usage.get("completion_tokens", 0),
+        "prompt_cache_hit_tokens": usage.get("prompt_cache_hit_tokens", 0),
+        "prompt_cache_miss_tokens": usage.get("prompt_cache_miss_tokens", 0),
+    }
+    return response, api_tokens
+
+
+def _deanonymize_ai_message(
+    response: AIMessage, anon_mapping: dict[str, str]
+) -> AIMessage:
+    """Deanonymize assistant content, tool args, and reasoning_content."""
+    content = response.content
+    if content:
+        content = deanonymize(str(content), anon_mapping)
+    reasoning = getattr(response, "additional_kwargs", {}).get("reasoning_content")
+    if reasoning:
+        reasoning = deanonymize(str(reasoning), anon_mapping)
+    tool_calls = getattr(response, "tool_calls", None) or []
+    if tool_calls:
+        for tc in tool_calls:
+            if tc.get("args"):
+                args_str = json.dumps(tc["args"])
+                args_str = deanonymize(args_str, anon_mapping)
+                tc["args"] = json.loads(args_str)
+    kwargs = dict(getattr(response, "additional_kwargs", None) or {})
+    if reasoning:
+        kwargs["reasoning_content"] = reasoning
+    return AIMessage(content=content, tool_calls=tool_calls, additional_kwargs=kwargs)
 
 
 def _estimate_message_tokens(messages: list) -> int:
@@ -520,45 +613,29 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     style_hint = style_instruction_for_prompt(state.get("response_style"))
     security_decision = state.get("security_decision")
     security_reason = state.get("security_reason")
-
-    system_text = COMPLEX_PROMPT.format(
-        current_date=__import__("datetime")
-        .datetime.now()
-        .strftime("%B %d, %Y, %I:%M %p"),
-        memory_context=memory_context,
-        knowledge_context=state.get("knowledge_context") or "None",
-        persona=persona,
-        style_hint=style_hint,
-    )
+    profile = get_profile()
     route = state.get("route") or "complex-default"
     has_images = _message_has_image_content(thread_messages) or bool(
         (state.get("router_metadata") or {}).get("has_images")
     )
-    vision_task = has_images and route in ("complex-vision", "complex-cloud")
+    vision_task = has_images and route == "complex-cloud"
+    knowledge_context = state.get("knowledge_context") or "None"
 
-    if mode != "tools_off":
-        if vision_task:
-            system_text += COMPLEX_TOOL_GUIDANCE_VISION
-        else:
-            system_text += (
-                COMPLEX_TOOL_GUIDANCE_WEB if web_on else COMPLEX_TOOL_GUIDANCE_NO_WEB
-            )
-
+    volatile_extra = ""
     if security_decision == "denied":
-        system_text += (
+        volatile_extra += (
             "\n\nSecurity notice: A previous tool request was denied. "
             "Do not retry the blocked operation. Suggest a safer alternative or explain why it was blocked."
         )
         if security_reason:
-            system_text += f"\nBlocked reason: {security_reason}"
+            volatile_extra += f"\nBlocked reason: {security_reason}"
 
     denied_tools = state.get("denied_tools") or []
     if denied_tools:
-        system_text += (
+        volatile_extra += (
             f"\n\nBLOCKED TOOLS (do NOT call these): {', '.join(denied_tools)}"
         )
 
-    # ── Inject user-approved clarified_scope if present ────────────────────
     clarified_scope = state.get("clarified_scope")
     if (
         clarified_scope
@@ -577,21 +654,19 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                 )
             else:
                 scope_lines.append(f"- {key}: {value}")
-        system_text += "\n".join(scope_lines)
+        volatile_extra += "\n".join(scope_lines)
 
-    # ── Web search suggestion from scope_clarify bypass ────────────────────
     if state.get("web_search_suggested") and web_on and not vision_task:
-        system_text += (
+        volatile_extra += (
             "\n\nThe user's question is informational and may require current web data. "
             "Use web_search to find relevant information before answering. "
             "If search snippets are insufficient, call fetch_webpage on result URLs "
             "to get full page content."
         )
 
-    # ── Cutoff continuation: LLM was cut off — pick up where it stopped ────
     _cutoff_round = state.get("_cutoff_round", 0)
     if state.get("_cutoff_pending") and _cutoff_round > 0:
-        system_text += (
+        volatile_extra += (
             "\n\nYour previous response was cut off (token budget exceeded). "
             "Continue from where you stopped. Do NOT repeat what you already wrote. "
             "Pick up mid-sentence if needed and complete your thought."
@@ -599,12 +674,39 @@ async def complex_llm_node(state: AgentState) -> AgentState:
 
     execution_plan = state.get("execution_plan")
     if execution_plan:
-        system_text += (
+        volatile_extra += (
             f"\n\n[EXECUTION PLAN]\n"
             f"The routing logic has generated the following step-by-step plan for you to follow:\n"
             f"{execution_plan}\n"
             f"You should execute these steps using your tools."
         )
+
+    stable_core = COMPLEX_PROMPT_STABLE.format(style_hint=style_hint)
+    if mode != "tools_off":
+        if vision_task:
+            stable_core += COMPLEX_TOOL_GUIDANCE_VISION
+        else:
+            stable_core += (
+                COMPLEX_TOOL_GUIDANCE_WEB if web_on else COMPLEX_TOOL_GUIDANCE_NO_WEB
+            )
+
+    system_text = COMPLEX_PROMPT.format(
+        current_date=__import__("datetime")
+        .datetime.now()
+        .strftime("%B %d, %Y, %I:%M %p"),
+        memory_context=memory_context,
+        knowledge_context=knowledge_context,
+        persona=persona,
+        style_hint=style_hint,
+    )
+    if mode != "tools_off":
+        if vision_task:
+            system_text += COMPLEX_TOOL_GUIDANCE_VISION
+        else:
+            system_text += (
+                COMPLEX_TOOL_GUIDANCE_WEB if web_on else COMPLEX_TOOL_GUIDANCE_NO_WEB
+            )
+    system_text += volatile_extra
 
     system = SystemMessage(content=system_text)
 
@@ -619,138 +721,41 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     model_label = "medium-default"
     anon_mapping = None
     api_tokens = None
-    profile = get_profile()
-
-    # Keep a pre-anonymization copy for cloud fallback paths.
-    original_trimmed_messages = list(trimmed_messages)
-
-    # ── 9.2: Anonymization for cloud route ───────────────────────────────
-    if route == "complex-cloud" and profile.get("cloud_anonymization_enabled", True):
-        anon_ctx = {
-            "name": profile.get("name", ""),
-            "custom_sensitive_terms": profile.get("custom_sensitive_terms", []),
-        }
-        # Anonymize system text
-        system_text, anon_mapping = anonymize(system_text, anon_ctx)
-        system = SystemMessage(content=system_text)
-        # Anonymize each message content
-        import copy
-
-        anon_messages = []
-        for msg in trimmed_messages:
-            content = msg.content
-            if isinstance(content, str):
-                content, msg_mapping = anonymize(content, anon_ctx)
-                if anon_mapping is not None:
-                    anon_mapping.update(msg_mapping)
-                else:
-                    anon_mapping = msg_mapping
-            new_msg = copy.copy(msg)
-            new_msg.content = content
-            anon_messages.append(new_msg)
-        trimmed_messages = anon_messages
-
-    # ── 9.3: Cloud brief (compact, anonymized prompt for DeepSeek) ────────
     cloud_brief_tokens_est = 0
     anonymization_placeholders_count = 0
-    if route == "complex-cloud" and profile.get("cloud_brief_enabled", True):
-        # Build plan_review summary from state
-        plan_review_summary: dict[str, Any] | None = None
-        if state.get("plan_review_approved") is not None:
-            plan_review_summary = {
-                "approved": bool(state.get("plan_review_approved")),
-                "stated_intent": state.get("plan_review_feedback") or "Plan reviewed",
-                "pitfalls": [],
-            }
 
-        # Extract last user message and last assistant summary
-        last_user_message = ""
-        last_assistant_summary = ""
-        for msg in reversed(thread_messages):
-            if isinstance(msg, HumanMessage) and not last_user_message:
-                last_user_message = str(msg.content)
-            if isinstance(msg, AIMessage) and not last_assistant_summary:
-                content = str(msg.content)
-                # Truncate long assistant responses to just a summary line
-                last_assistant_summary = (
-                    content[:300] if len(content) > 300 else content
-                )
-            if last_user_message and last_assistant_summary:
-                break
-
-        # Build memory context from state
-        memory_context = ""
-        if state.get("memory_context"):
-            mc = state.get("memory_context")
-            memory_context = str(mc) if isinstance(mc, str) else json.dumps(mc)
-
-        # Build the brief
-        brief = build_cloud_brief(
-            clarified_scope=state.get("clarified_scope"),
-            plan_review_summary=plan_review_summary,
-            memory_context=memory_context,
-            last_user_message=last_user_message,
-            last_assistant_summary=last_assistant_summary,
-            selected_toolboxes=state.get("selected_toolboxes"),
-            max_chars=profile.get("cloud_brief_max_chars", 8000),
-        )
-
-        if brief:
-            # Anonymize the brief text as well
-            if profile.get("cloud_anonymization_enabled", True):
-                anon_ctx = {
-                    "name": profile.get("name", ""),
-                    "custom_sensitive_terms": profile.get("custom_sensitive_terms", []),
-                }
-                brief, brief_mapping = anonymize(brief, anon_ctx)
-                if anon_mapping is not None:
-                    anon_mapping.update(brief_mapping)
-                else:
-                    anon_mapping = brief_mapping
-                anonymization_placeholders_count = (
-                    len(brief_mapping) if brief_mapping else 0
-                )
-            else:
-                anonymization_placeholders_count = (
-                    len(anon_mapping) if anon_mapping else 0
-                )
-
-            cloud_brief_tokens_est = estimate_brief_tokens(brief)
-            logger.info(
-                "[complex] Cloud brief built — tokens_est=%d placeholders=%d",
-                cloud_brief_tokens_est,
-                anonymization_placeholders_count,
-            )
-            # Replace full trimmed messages with the compact brief
-            trimmed_messages = [HumanMessage(content=brief)]
-        else:
-            logger.info(
-                "[complex] Cloud brief empty, falling back to full trimmed messages"
-            )
-
-    # ── 9.1 continued: Determine base_url for message format decision ────
-    fallback_chain: list[dict] = []
+    original_trimmed_messages = list(trimmed_messages)
     local_prompt_messages = with_system_for_local_server(system, trimmed_messages)
-    if route == "complex-cloud":
-        base_url = config.get("models.cloud.base_url", "https://api.deepseek.com/v1")
-        prompt_messages = [system, *trimmed_messages]
-    else:
-        base_url = config.get("models.small.base_url", "http://127.0.0.1:1234/v1")
-        prompt_messages = normalize_messages_for_lm_studio(local_prompt_messages)
+    fallback_chain: list[dict] = []
+    vision_intake_mode = "text"
 
-    # ── 9.X: Local VLM Pre-processing for Vision-blind Cloud LLMs ────────
-    vision_intake_mode = "direct" if route == "complex-vision" else "text"
     if route == "complex-cloud":
         from .complex_utils.vision_proxy import process_vision_messages
 
-        prompt_messages, vision_proxy_ok = await process_vision_messages(
-            prompt_messages
+        volatile_suffix = build_volatile_suffix(
+            memory_context=str(memory_context),
+            knowledge_context=str(knowledge_context),
+            persona=str(persona),
+            extra_suffix=volatile_extra,
         )
-        if vision_proxy_ok:
-            vision_intake_mode = "proxy"
-        else:
+        payload = await prepare_cloud_payload(
+            state=state,
+            system_stable=stable_core,
+            volatile_suffix=volatile_suffix,
+            trimmed_messages=trimmed_messages,
+            vision_processor=process_vision_messages,
+        )
+        prompt_messages = payload.prompt_messages
+        system = payload.system
+        trimmed_messages = payload.messages
+        anon_mapping = payload.anon_mapping
+        cloud_brief_tokens_est = payload.cloud_brief_tokens_est
+        anonymization_placeholders_count = payload.anonymization_placeholders_count
+        vision_intake_mode = payload.vision_intake_mode
+
+        if not payload.vision_proxy_ok and has_images:
             logger.warning(
-                "[complex] vision_proxy failed; falling back to complex-vision (direct multimodal)"
+                "[complex] vision_proxy failed; falling back to complex-default"
             )
             fallback_chain.append(
                 {
@@ -759,10 +764,14 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                     "reason": "vision_proxy_failed",
                 }
             )
-            route = "complex-vision"
-            base_url = config.get("models.small.base_url", "http://127.0.0.1:1234/v1")
+            route = "complex-default"
+            max_context = int(config.get("models.medium.context_window", 16384))
             prompt_messages = normalize_messages_for_lm_studio(local_prompt_messages)
+            anon_mapping = None
             vision_intake_mode = "fallback"
+    else:
+        prompt_messages = normalize_messages_for_lm_studio(local_prompt_messages)
+
     audit_debug(
         "agent.vision",
         "intake_mode",
@@ -776,11 +785,8 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         try:
             loop_start_time = asyncio.get_running_loop().time()
             if route == "complex-cloud":
-                llm = await get_cloud_llm()
+                llm = await get_cloud_llm(profile.get("cloud_model_tier"))
                 model_label = "large-cloud"
-            elif route == "complex-vision":
-                llm = await get_medium_llm("vision")
-                model_label = "medium-vision"
             else:
                 llm = await get_medium_llm("default")
                 model_label = "medium-default"
@@ -804,9 +810,28 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             or int(config.get("complex.default_token_budget", 4096)),
             max_context,
         )
-        response = await llm.bind(max_tokens=budget).ainvoke(prompt_messages)
+        api_tokens = None
+        if route == "complex-cloud":
+            response, api_tokens = await _invoke_cloud_path(
+                llm=llm,
+                prompt_messages=prompt_messages,
+                tools=None,
+                budget=budget,
+                state=state,
+                profile=profile,
+                mode=mode,
+                tools_bound=False,
+            )
+            if anon_mapping:
+                response = _deanonymize_ai_message(response, anon_mapping)
+        else:
+            response = await llm.bind(max_tokens=budget).ainvoke(prompt_messages)
         return {
-            "messages": [AIMessage(content=response.content)],
+            "messages": [
+                response
+                if isinstance(response, AIMessage)
+                else AIMessage(content=response.content)
+            ],
             "model_used": model_label,
             "pending_tool_calls": False,
             "security_decision": None,
@@ -845,19 +870,9 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     try:
         if route == "complex-cloud":
             loop_start_time = asyncio.get_running_loop().time()
-            llm = await get_cloud_llm()
+            llm = await get_cloud_llm(profile.get("cloud_model_tier"))
             model_label = "large-cloud"
             log_model_attempt("large-cloud", "success", reason="initial_route")
-        elif route == "complex-vision":
-            loop_start_time = asyncio.get_running_loop().time()
-            llm = await get_medium_llm("vision")
-            model_label = "medium-vision"
-            log_model_attempt("medium-vision", "success", reason="initial_route")
-        elif route == "complex-longctx":
-            loop_start_time = asyncio.get_running_loop().time()
-            llm = await get_medium_llm("longctx")
-            model_label = "medium-longctx"
-            log_model_attempt("medium-longctx", "success", reason="initial_route")
         else:
             loop_start_time = asyncio.get_running_loop().time()
             llm = await get_medium_llm("default")
@@ -910,7 +925,19 @@ async def complex_llm_node(state: AgentState) -> AgentState:
 
     # ── 9.4: Tiered fallback — LLM invocation with error handling ────────
     try:
-        response = await bound_llm.ainvoke(prompt_messages)
+        if route == "complex-cloud":
+            response, api_tokens = await _invoke_cloud_path(
+                llm=llm,
+                prompt_messages=prompt_messages,
+                tools=tools,
+                budget=budget,
+                state=state,
+                profile=profile,
+                mode=mode,
+                tools_bound=True,
+            )
+        else:
+            response = await bound_llm.ainvoke(prompt_messages)
     except Exception as e:
         error_str = str(e).lower()
         if route == "complex-cloud":
@@ -1092,139 +1119,6 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                         ),
                     }
                 )
-        elif route == "complex-vision":
-            logger.warning(
-                "[complex] Vision model failed (%s), falling back to medium-default", e
-            )
-            fallback_chain.append(
-                {
-                    "model": "medium-vision",
-                    "status": "failed",
-                    "reason": str(e)[:120],
-                    "duration_ms": max(
-                        0,
-                        int(
-                            (
-                                asyncio.get_running_loop().time()
-                                - (loop_start_time or asyncio.get_running_loop().time())
-                            )
-                            * 1000
-                        ),
-                    )
-                    if loop_start_time
-                    else 0,
-                }
-            )
-            llm = await get_medium_llm("default")
-            prompt_messages = strip_image_blocks_from_messages(
-                with_system_for_local_server(system, trimmed_messages)
-            )
-            budget = _cap_budget_to_context(
-                prompt_messages,
-                state.get("token_budget")
-                or int(config.get("complex.default_token_budget", 4096)),
-                max_context,
-            )
-            fb_start = asyncio.get_running_loop().time()
-            response = (
-                await llm.bind_tools(tools)
-                .bind(max_tokens=budget)
-                .ainvoke(prompt_messages)
-            )
-            model_label = "medium-default-fallback"
-            fallback_chain.append(
-                {
-                    "model": "medium-default-fallback",
-                    "status": "success",
-                    "reason": "fallback_vision_failed",
-                    "duration_ms": max(
-                        0, int((asyncio.get_running_loop().time() - fb_start) * 1000)
-                    ),
-                }
-            )
-        elif route == "complex-longctx":
-            # Try cloud first, then medium-default
-            try:
-                loop_start_time = asyncio.get_running_loop().time()
-                llm = await get_cloud_llm()
-                budget = _cap_budget_to_context(
-                    [system, *trimmed_messages],
-                    state.get("token_budget")
-                    or int(config.get("complex.default_token_budget", 4096)),
-                    max_context,
-                )
-                response = (
-                    await llm.bind_tools(tools)
-                    .bind(max_tokens=budget)
-                    .ainvoke([system, *trimmed_messages])
-                )
-                model_label = "large-cloud-fallback"
-                fallback_chain.append(
-                    {
-                        "model": "large-cloud-fallback",
-                        "status": "success",
-                        "reason": "longctx_cloud_escalation",
-                        "duration_ms": max(
-                            0,
-                            int(
-                                (asyncio.get_running_loop().time() - loop_start_time)
-                                * 1000
-                            ),
-                        ),
-                    }
-                )
-            except Exception as inner_e:
-                logger.warning("Error suppressed: %s", inner_e)
-                fallback_chain.append(
-                    {
-                        "model": "medium-longctx",
-                        "status": "failed",
-                        "reason": "longctx_local_unavailable_cloud_failed",
-                        "duration_ms": max(
-                            0,
-                            int(
-                                (
-                                    asyncio.get_running_loop().time()
-                                    - (
-                                        loop_start_time
-                                        or asyncio.get_running_loop().time()
-                                    )
-                                )
-                                * 1000
-                            ),
-                        )
-                        if loop_start_time
-                        else 0,
-                    }
-                )
-                llm = await get_medium_llm("default")
-                prompt_messages = strip_image_blocks_from_messages(
-                    with_system_for_local_server(system, trimmed_messages)
-                )
-                budget = _cap_budget_to_context(
-                    prompt_messages,
-                    state.get("token_budget")
-                    or int(config.get("complex.default_token_budget", 4096)),
-                    max_context,
-                )
-                fb_start = asyncio.get_running_loop().time()
-                response = (
-                    await llm.bind_tools(tools)
-                    .bind(max_tokens=budget)
-                    .ainvoke(prompt_messages)
-                )
-                model_label = "medium-default-fallback"
-                fallback_chain.append(
-                    {
-                        "model": "medium-default-fallback",
-                        "status": "success",
-                        "reason": "fallback_last_resort",
-                        "duration_ms": max(
-                            0,
-                            int((asyncio.get_running_loop().time() - fb_start) * 1000),
-                        ),
-                    }
-                )
         else:
             # medium-default failure — produce a graceful error instead of crashing the graph
             logger.error(
@@ -1267,26 +1161,21 @@ async def complex_llm_node(state: AgentState) -> AgentState:
 
     # ── 9.2 continued: Deanonymize response (before stripping think tags) ─
     if anon_mapping and route == "complex-cloud":
-        if response.content:
-            response = AIMessage(content=deanonymize(response.content, anon_mapping))
-        if hasattr(response, "tool_calls") and response.tool_calls:
-            for tc in response.tool_calls:
-                if tc.get("args"):
-                    args_str = json.dumps(tc["args"])
-                    args_str = deanonymize(args_str, anon_mapping)
-                    tc["args"] = json.loads(args_str)
+        response = _deanonymize_ai_message(response, anon_mapping)
 
     # ── 9.5: Cloud token usage tracking ──────────────────────────────────
-    if route == "complex-cloud" and "fallback" not in model_label:
-        usage = getattr(response, "response_metadata", {}).get("token_usage", {})
-        if not usage:
-            usage = getattr(response, "usage_metadata", {})
-        if usage:
+    if (
+        route == "complex-cloud"
+        and "fallback" not in model_label
+        and api_tokens is None
+    ):
+        usage = extract_api_token_usage(response)
+        if usage.get("prompt_tokens"):
             api_tokens = {
-                "prompt_tokens": usage.get("input_tokens")
-                or usage.get("prompt_tokens", 0),
-                "completion_tokens": usage.get("output_tokens")
-                or usage.get("completion_tokens", 0),
+                "prompt_tokens": usage["prompt_tokens"],
+                "completion_tokens": usage["completion_tokens"],
+                "prompt_cache_hit_tokens": usage.get("prompt_cache_hit_tokens", 0),
+                "prompt_cache_miss_tokens": usage.get("prompt_cache_miss_tokens", 0),
             }
 
     has_tool_calls = bool(getattr(response, "tool_calls", None))

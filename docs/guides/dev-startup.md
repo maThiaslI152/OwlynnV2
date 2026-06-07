@@ -1,7 +1,7 @@
 ---
 status: active
 category: guide
-last_updated: 2026-06-01
+last_updated: 2026-06-07
 owner: ai-agent
 ---
 
@@ -40,13 +40,16 @@ http://127.0.0.1:6333           # Qdrant (vector DB)
 http://127.0.0.1:6379           # Redis (session persistence)
 ```
 
-## Step 1: Environment Configuration (.env)
+## Step 1: Environment Configuration (.env + .env.local)
 
-Copy the template and fill in the values:
+Copy the templates and fill in the values:
 
 ```bash
 cp .env.example .env
+cp .env.local.example .env.local   # optional — recommended for DEEPSEEK_API_KEY only
 ```
+
+**Secrets workflow:** Keep general config in `.env`. Put API keys and other secrets in `.env.local` (gitignored). `start.sh` loads `.env` first, then `.env.local` — local values win.
 
 ### Centralized Configuration (New — June 2026)
 
@@ -62,8 +65,9 @@ To swap a model, change 1-2 lines in `defaults.yaml`. No code changes needed.
 | Section | What it controls |
 |---------|-----------------|
 | `models.small` | Router/model for simple tasks (name, base_url, temp, max_tokens, context_window) |
-| `models.medium` | Complex task model + variants (default/vision/longctx) |
-| `models.cloud` | DeepSeek API cloud fallback |
+| `models.medium` | Complex local task model (Qwen 9B) |
+| `models.cloud` | DeepSeek V4 API (`deepseek-v4-flash` / `deepseek-v4-pro`) |
+| `cloud` | Thinking mode, reasoning effort, vision cache TTL |
 | `routing` | Confidence thresholds, budget tiers, keyword bypasses |
 | `memory` | Max facts, cache TTL, decay constants |
 | `web_search` | Search backend timeouts, user-agents |
@@ -83,10 +87,10 @@ python3 -c "from src.config.config_loader import validate_config; print(validate
 | `SMALL_LLM_BASE_URL` | `models.small.base_url` | `http://127.0.0.1:1234/v1` |
 | `MEDIUM_LLM_BASE_URL` | `models.medium.base_url` | same |
 | `CLOUD_LLM_BASE_URL` | `models.cloud.base_url` | `https://api.deepseek.com/v1` |
-| `SMALL_LLM_MODEL_NAME` | `models.small.model_name` | `qwen3.5-0.8b` |
-| `MEDIUM_LLM_MODEL_NAME` | `models.medium.variants.default.model_name` | `qwen3.5-9b-...@q6_k` |
-| `CLOUD_LLM_MODEL_NAME` | `models.cloud.model_name` | `deepseek-v4` |
-| `MEDIUM_LONGCTX_CONTEXT` | `models.medium.variants.longctx.context_window` | `131072` |
+| `SMALL_LLM_MODEL_NAME` | `models.small.model_name` | `minicpm5-1b` |
+| `MEDIUM_LLM_MODEL_NAME` | `models.medium.model_name` | `qwen3.5-9b-...@q6_k` |
+| `CLOUD_LLM_MODEL_NAME` | `models.cloud.model_name` | `deepseek-v4-flash` |
+| `DEEPSEEK_API_KEY` | env (or `.env.local`) | — |
 | `QDRANT_HOST` / `QDRANT_PORT` | `external_services.qdrant.*` | `localhost:6333` |
 | `REDIS_URL` | `external_services.redis.url` | `redis://localhost:6379` |
 | `SEARXNG_URL` | `external_services.searxng.url` | `""` |
@@ -110,9 +114,9 @@ python3 -c "from src.config.config_loader import validate_config; print(validate
 
 | Variable | Purpose |
 |----------|---------|
-| `DEEPSEEK_API_KEY` | Cloud escalation fallback (set only if you want DeepSeek cloud backup) |
-| `CLOUD_LLM_MODEL_NAME` | `deepseek-chat` (only needed with API key) |
-| `OPTIMIZE_FOR_M4` | Set to `true` on Mac M4 Air for optimized thread config |
+| `DEEPSEEK_API_KEY` | Cloud route (`complex-cloud`); prefer `.env.local` over `.env` |
+| `CLOUD_LLM_MODEL_NAME` | `deepseek-v4-flash` or `deepseek-v4-pro` (only with API key) |
+| `OPTIMIZE_FOR_M4` | Set to `true` on Mac M4 Air for shorter timeouts / memory limits (optional; CI works without it) |
 | `SEARXNG_URL` | Self-hosted search engine for web search (optional) |
 | `REDIS_URL` | Default `redis://localhost:6379` — no change needed |
 | `DOCLING_ARTIFACTS_PATH` | `.models/docling/` — auto-set, no change needed |
@@ -187,10 +191,11 @@ The frontend is a React 19 + Vite app. Running `npm run dev` uses Vite's dev ser
 
 What `start.sh` does, in order:
 
-1. **Containers** — brings up Qdrant + Redis via podman/docker compose (skips if already running)
-2. **LM Studio** — checks port `1234`, prompts you to start it if not responding
-3. **Backend** — `uvicorn src.api.server:app --port 8000` with auto-reload
-4. **Frontend** — `cd frontend-v2 && npx vite --port 5173`
+1. **Env** — sources `.env` then `.env.local` if present
+2. **Containers** — brings up Qdrant + Redis via podman/docker compose (skips if already running)
+3. **LM Studio** — checks port `1234`, prompts you to start it if not responding
+4. **Backend** — `uvicorn src.api.server:app --port 8000` with auto-reload
+5. **Frontend** — `cd frontend-v2 && npx vite --port 5173`
 
 The script opens `http://127.0.0.1:5173` in your browser. Press `Ctrl+C` to stop everything — the cleanup trap kills all background processes.
 
@@ -271,7 +276,8 @@ The output will be placed in `frontend-v2/dist/`.
 ## Related
 
 - [`start.sh`](../../start.sh) — the single launcher script
-- [`.env.example`](../../.env.example) — all configurable environment variables
+- [`.env.example`](../../.env.example) — general environment variables
+- [`.env.local.example`](../../.env.local.example) — gitignored secrets template (`DEEPSEEK_API_KEY`)
 - [`docs/guides/lm_studio.md`](lm_studio.md) — LM Studio model setup
 - [`docs/guides/quickstart.md`](quickstart.md) — chat UX features (highlighting, tool cards, mobile)
 - [`AGENTS.md`](../../AGENTS.md) — SDD workflow for Cursor agents

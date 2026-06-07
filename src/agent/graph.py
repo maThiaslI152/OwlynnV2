@@ -74,8 +74,6 @@ def route_decision(state: AgentState) -> str:
         return "simple"
     valid_complex = {
         "complex-default",
-        "complex-vision",
-        "complex-longctx",
         "complex-cloud",
     }
     if route in valid_complex:
@@ -298,8 +296,10 @@ async def _check_cloud_connectivity() -> dict:
 
         import httpx
 
+        from src.agent.llm import LLMPool
+
         base_url = config.get("models.cloud.base_url", "https://api.deepseek.com/v1")
-        model = config.get("models.cloud.model_name", "deepseek-v4")
+        model = LLMPool._resolve_cloud_model_name(profile.get("cloud_model_tier"))
         result["model"] = model
 
         async with httpx.AsyncClient(

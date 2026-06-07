@@ -1,7 +1,7 @@
 ---
 status: active
 category: reference
-last_updated: 2026-05-31
+last_updated: 2026-06-07
 owner: human
 ---
 
@@ -9,9 +9,11 @@ owner: human
 
 > **Purpose:** Competitive feature gap analysis — Owlynn vs. leading local AI assistants.
 
-**Date:** 2026-05-22
-**Audience:** Owlynn maintainers, AI agents planning feature work
+**Date:** 2026-05-22 (original) · **Revised:** 2026-06-07  
+**Audience:** Owlynn maintainers, AI agents planning feature work  
 **Context:** Feature comparison of Owlynn against Open WebUI, AnythingLLM, Jan, LM Studio, and GPT4All
+
+> **Revision note (2026-06-07):** Updated architecture recap, routing, models, cloud tier, and feature status to match DeepSeek V4 Phases 0–4, Electron desktop, 3-way routing, removed SwapManager, OpenAI-compatible API + CLI, image upload, Docling parsing, and Knowledge Cache. Gap analysis recommendations adjusted accordingly.
 
 ---
 
@@ -19,33 +21,38 @@ owner: human
 
 Owlynn has carved a unique niche as a **local-first AI desktop agent with a sophisticated hybrid model routing architecture, security proxy, and LangGraph orchestration** — none of the five competitors combine all of these. However, significant gaps exist in **programmatic access, model management UX, document RAG, and tool extensibility**. The highest-impact opportunities are features that build on existing strengths without requiring architectural overhauls.
 
-**Top 3 recommendations:**
+**Top 3 recommendations (updated 2026-06-07):**
 
-1. **Local OpenAI-compatible API server** — Quick Win, unlocks scripting/automation (Jan parity)
-2. **LocalDocs-style workspace file indexing (Automatic Document RAG)** — Medium effort, fills biggest UX gap (GPT4All parity)
-3. **Extension/plugin system for tools** — Medium effort, leverages MCP foundation (Open WebUI/Jan parity)
+1. **LocalDocs-style workspace file indexing (Automatic Document RAG)** — Medium effort, fills biggest remaining UX gap (GPT4All parity). Knowledge Cache covers conversation facts, not folder-wide doc search.
+2. **Extension/plugin system for tools** — Medium effort, leverages MCP foundation (Open WebUI/Jan parity)
+3. **In-app model browser / hub** — Medium effort; config is centralized in `defaults.yaml` but discovery still requires LM Studio
+
+*Previously top priority:* OpenAI-compatible local API + CLI — **now implemented** (see §3.1); polish HITL/API-mode behavior remains.
 
 ---
 
 ## 2. Owlynn Current Architecture Recap
 
-Before comparing, here is what Owlynn already has (documented in `docs/ARCHITECTURE_OVERVIEW.md`):
+Before comparing, here is what Owlynn already has (see [`architecture/overview.md`](architecture/overview.md), [`CLOUD-LLM-ARCHITECTURE.md`](CLOUD-LLM-ARCHITECTURE.md), [`architecture/DEEPSEEK_V4_INTEGRATION.md`](architecture/DEEPSEEK_V4_INTEGRATION.md)):
 
 | Capability | Implementation |
 |---|---|
-| Desktop shell | Tauri v2 (Rust), macOS transparent titlebar, CSS frosted glass |
-| Agent orchestration | LangGraph 9-node graph with `memory_inject → router → complex_llm ↔ security_proxy ↔ tool_action → memory_write` |
-| Model routing | 5-way with 3 tiers: Small (always loaded, routing + simple), Medium (3 swappable local variants via LM Studio), Cloud (DeepSeek v4 — 1M token context window, ~$0.27/M input tokens, all cloud traffic passes through PII anonymization) |
-| Tools (23) | File ops, web search/fetch, Python notebook, document gen (docx/xlsx/pptx/pdf), tasks, skill chains, MCP STDIO |
-| Security | `security_proxy` node with HITL approval on sensitive tools, HMAC audit trail, PII anonymization for cloud |
-| Memory | Three-tier: JSON short-term, Mem0+Qdrant long-term (multilingual-e5-small embeddings), auto topic/interest extraction |
-| Context management | Auto-summarization at 85% tokens via Small_LLM, multi-level compression with prior-summary awareness |
-| Frontend | React 19 + TypeScript, Vite 8, Zustand 5, WebSocket streaming, 9 panel components |
-| Voice | Only `speak_text` TTS (macOS `say`); Live Talk (wake-word + STT) removed |
-| Test coverage | 705 Python + 77 frontend tests, property-based + contract suites |
+| Desktop shell | **Electron** (macOS `.app` / `.dmg` via `frontend-v2`); legacy Tauri CSS classes remain in stylesheet only |
+| Agent orchestration | LangGraph graph: `memory_inject → router → complex_llm ↔ security_proxy ↔ tool_action → memory_write` |
+| Model routing | **3 routes:** `simple`, `complex-default`, `complex-cloud`. Local: MiniCPM5-1B (router/simple), Qwen3.5-9B (complex + multimodal). Cloud: DeepSeek V4 flash/pro. Legacy `complex-vision` / `complex-longctx` and **SwapManager** removed (2026-06) |
+| Cloud path | `prepare_cloud_payload()` — PII anonymization, brief gate, stable/volatile prompt layers, vision proxy, prefix cache metrics. Phase 5 **output** cache deferred |
+| Tools | 20+ built-in tools + skill chains (`.md` in `skills/`) + MCP STDIO |
+| Security | `security_proxy` HITL on sensitive tools, HMAC audit trail, cloud anonymization |
+| Memory | Three-tier: JSON STM, Mem0+Qdrant LTM (**nomic-embed-text-v1.5**, 768-dim), topic/interest extraction. **Knowledge Cache** for fast factual recall (see [`architecture/KNOWLEDGE_CACHE.md`](architecture/KNOWLEDGE_CACHE.md)) |
+| Document parsing | **Docling** in `file_processor.py` for PDF/DOCX/PPTX → markdown; workspace file tools; not full auto-folder RAG |
+| Context management | Auto-summarization at ~85% tokens; multi-level compression |
+| Frontend | React 19 + TypeScript, Vite, Zustand, WebSocket streaming; composer supports drag-and-drop files/images |
+| Programmatic access | `POST /v1/chat/completions` on port **8000** ([`openai.py`](../src/api/routes/openai.py)); CLI via [`src/cli.py`](../src/cli.py) |
+| Voice | `speak_text` TTS (macOS `say`); Live Talk removed |
+| Test coverage | ~934 Python + 103 frontend tests; property-based + contract suites |
 | CI/CD | Local CI via `scripts/ci.sh`, pre-push hook |
 
-**Cloud tier rationale:** Owlynn's cloud routing heavily favors DeepSeek v4 for three reasons: (1) cost — at ~$0.27/M input tokens and ~$1.10/M output tokens, it's the cheapest frontier model by a wide margin; (2) context — the 1M token window handles the longest conversations and largest document batches without summarization pressure; (3) safety — all cloud traffic passes through Owlynn's PII anonymization engine before leaving the machine, so even sensitive conversations remain private when routed to cloud. This makes the "local-first, cloud-augmented" model viable in practice rather than just aspirational.
+**Cloud tier rationale:** DeepSeek V4 flash is the default cloud workhorse because of (1) **cost** — ~$0.14/M input tokens, ~$0.014/M cache hits, ~$0.28/M output (flash tier in `defaults.yaml`); (2) **context** — 1M token window; (3) **safety** — all cloud traffic anonymized before leaving the machine. Pro tier available for higher reasoning quality at higher cost.
 
 ---
 
@@ -58,8 +65,9 @@ Before comparing, here is what Owlynn already has (documented in `docs/ARCHITECT
 | | |
 |---|---|
 | **Who has it** | Jan (localhost:1337), LM Studio (localhost:1234, consumed internally) |
-| **Owlynn status** | No programmatic API. All interaction is WebSocket-based through the Tauri shell. Owlynn *consumes* OpenAI-compatible APIs (LM Studio, DeepSeek) but does not *expose* one. |
-| **Effort** | Quick Win (4–8 hours) |
+| **Owlynn status** | **Implemented (basic).** `POST /v1/chat/completions` on `127.0.0.1:8000` routes through LangGraph ([`src/api/routes/openai.py`](../src/api/routes/openai.py)). Supports streaming SSE and `project_id` / `auto_approve_sensitive` flags. WebSocket remains the primary GUI path. |
+| **Remaining gaps** | No dedicated port 1337/8001 alias; HITL behavior in API mode still evolving; not all WS features exposed (router metadata, cache stats). |
+| **Effort** | Quick Win polish (2–4 hours) — docs, auth token, parity with WS modes |
 | **Impact** | **High.** Enables scripting, IDE integration (VS Code/Cursor extension), CI/CD pipelines, and headless operation. Opens Owlynn to automation use cases without the GUI. |
 | **Technical approach** | Add a `/v1/chat/completions` endpoint to FastAPI that routes through the LangGraph graph with a `mode: "api"` flag. The endpoint would accept standard OpenAI-compatible JSON, execute the full agent flow (routing → tool loop → memory), and stream back SSE or return a complete response. Key considerations: |
 |  | - Authenticate via localhost-only binding or a local API key (file-based token) |
@@ -73,8 +81,9 @@ Before comparing, here is what Owlynn already has (documented in `docs/ARCHITECT
 | | |
 |---|---|
 | **Who has it** | LM Studio (`lms` CLI), GPT4All (Python bindings) |
-| **Owlynn status** | No CLI. GUI-only interaction. |
-| **Effort** | Quick Win (4–8 hours) |
+| **Owlynn status** | **Implemented (basic).** [`src/cli.py`](../src/cli.py) with `query`, `stream`, and `status` commands targeting `/v1/chat/completions`. Run: `python src/cli.py query "Hello"`. |
+| **Remaining gaps** | No packaged `owlynn` shell shim; no `owlynn serve` auto-start. |
+| **Effort** | Quick Win polish (1–2 hours) |
 | **Impact** | **Medium.** Convenience for power users. Enables `owlynn "summarize this file"` from terminal. |
 | **Technical approach** | A Python CLI via `click` or `typer` that sends requests to the local API server (from §3.1.1). Wrap as `scripts/owlynn` shell script. Options: |
 |  | - `owlynn chat "question"` — single-turn query |
@@ -106,15 +115,15 @@ Before comparing, here is what Owlynn already has (documented in `docs/ARCHITECT
 | | |
 |---|---|
 | **Who has it** | LM Studio (built-in HuggingFace browser), Jan (model hub with HF integration), GPT4All (curated model gallery) |
-| **Owlynn status** | Depends entirely on LM Studio for model management. Models are referenced by key strings in `user_profile.json`. No in-app browsing, search, or download. Users must separately open LM Studio to discover and load models. |
+| **Owlynn status** | Depends on LM Studio for load/unload. Model names and endpoints live in **`src/config/defaults.yaml`** (override via `.env`, `.env.local`, Settings UI). No in-app HF browser. SwapManager removed — single medium model handles complex + vision. |
 | **Effort** | Medium (3–5 days) |
 | **Impact** | **High.** Major UX improvement. Currently, users must leave Owlynn to manage models, breaking the single-app experience. |
-| **Technical approach** | Since Owlynn already uses LM Studio's API on port 1234, extend the model management UI to: |
-|  | 1. **List loaded models** — `GET /api/v1/models` from LM Studio (already used by SwapManager) |
-|  | 2. **List available/downloaded models** — LM Studio's local model directory |
-|  | 3. **HuggingFace search** — Add a search bar that queries HF API for MLX-compatible models, displays results with VRAM estimates, download links |
-|  | 4. **One-click configure** — Set a model as Small/Medium/Vision/LongCtx from the UI, updating `user_profile.json` and triggering `LLMPool.clear()` |
-|  | 5. **Model card view** — Size, context window, VRAM estimate, quantization level, HF link |
+| **Technical approach** | Since Owlynn uses LM Studio on port 1234, extend the model management UI to: |
+|  | 1. **List loaded models** — `GET /v1/models` from LM Studio |
+|  | 2. **List available/downloaded models** — LM Studio local model directory |
+|  | 3. **HuggingFace search** — HF API for MLX-compatible models with VRAM estimates |
+|  | 4. **One-click configure** — Map models to `models.small` / `models.medium` in Settings, persist to profile overrides |
+|  | 5. **Model card view** — Size, context window, quantization, HF link |
 |  | **Caveat:** Actual download still happens via LM Studio or `huggingface-cli`. Owlynn's role is discovery + configuration. Full one-click download requires LM Studio to support it via API (currently it doesn't). |
 
 #### 3.2.2 Chat Format Templates / Presets
@@ -129,7 +138,7 @@ Before comparing, here is what Owlynn already has (documented in `docs/ARCHITECT
 |  | ```json |
 |  | { |
 |  |   "chat_templates": { |
-|  |     "gemma-4": { "system_prefix": "<start_of_turn>user\n", "user_prefix": "<start_of_turn>user\n", "model_prefix": "<start_of_turn>model\n" }, |
+|  |     "qwen3.5": { "system_prefix": "...", ... }, |
 |  |     "llama-3": { "system_prefix": "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n", ... } |
 |  |   } |
 |  | } |
@@ -160,8 +169,8 @@ Before comparing, here is what Owlynn already has (documented in `docs/ARCHITECT
 | | |
 |---|---|
 | **Who has it** | GPT4All (LocalDocs — zero-config file indexing), Open WebUI (9 vector DBs for RAG), AnythingLLM (data connectors) |
-| **Owlynn status** | Owlynn has workspace file tools (read/write/list) and a PDF cache in `.processed/`, but **no automatic file indexing or embedding**. The Mem0+Qdrant memory is used for conversation memory, not document RAG. The `recall_all_memories` tool is for conversation facts, not document chunks. Users must manually read files into context. |
-| **Effort** | Medium (3–5 days) |
+| **Owlynn status** | **Partial.** Workspace file tools, Docling parsing (`file_processor.py`), PDF cache in `.processed/`, and **Knowledge Cache** (conversation-derived facts in Qdrant — see [`KNOWLEDGE_CACHE.md`](architecture/KNOWLEDGE_CACHE.md)) exist. **No** automatic folder watch or chunk-indexed document RAG like GPT4All LocalDocs. `ProjectKnowledgePanel` lists project-attached knowledge files but does not embed entire workspace trees. |
+| **Effort** | Medium (3–5 days) for full LocalDocs parity |
 | **Impact** | **Very High.** This is the single biggest UX gap. GPT4All's killer feature is "drop a folder and ask questions about it." Owlynn already has Qdrant running — the infrastructure exists. |
 | **Technical approach** | Build a document indexing pipeline that uses Owlynn's existing Qdrant instance: |
 |  | 1. **Watch folders** — Monitor workspace directories for new/changed files (use `watchfiles` Python package) |
@@ -178,15 +187,13 @@ Before comparing, here is what Owlynn already has (documented in `docs/ARCHITECT
 | | |
 |---|---|
 | **Who has it** | Open WebUI (Tika, Docling, Mistral OCR) |
-| **Owlynn status** | PDF parsing via PyMuPDF. No OCR. No advanced document understanding. Scanned PDFs and images are not processed. |
-| **Effort** | Medium (2–3 days for Docling integration; Major for OCR) |
+| **Owlynn status** | **Partial.** Docling integrated for PDF/DOCX/PPTX in [`file_processor.py`](../src/api/file_processor.py). PyMuPDF fallback paths remain. No standalone `parse_document` agent tool; OCR via Docling/EasyOCR on ingest. Scanned PDF quality varies. |
+| **Effort** | Quick Win (expose parsed markdown as tool) to Medium (full pipeline integration) |
 | **Impact** | **Medium.** Enables processing of scanned documents, screenshots, and complex formats. Complements the document indexing feature above. |
-| **Technical approach** | Prioritize **Docling** (IBM's open-source document converter) as it handles PDF, DOCX, PPTX, images, HTML, Markdown and converts to unified markdown. It runs locally (100% offline, privacy-preserving): |
-|  | - `pip install docling` |
-|  | - Add a `parse_document` tool that runs Docling on a file and returns structured markdown |
-|  | - Integrate into the indexing pipeline from §3.3.1: before chunking, run through Docling |
-|  | - For OCR specifically: Docling uses EasyOCR internally. On M4 Air, this adds ~5–15 seconds per page but preserves offline operation. |
-|  | - Defer Mistral OCR (requires cloud API — conflicts with local-first stance, but could be an opt-in cloud feature). |
+| **Technical approach** | Docling is already a dependency. Next steps: |
+|  | - Expose `parse_document` as an agent tool wrapping existing `file_processor` |
+|  | - Feed Docling markdown into the §3.3.1 indexing pipeline when built |
+|  | - Defer Mistral OCR (cloud-only; conflicts with local-first unless opt-in) |
 
 ---
 
@@ -197,7 +204,7 @@ Before comparing, here is what Owlynn already has (documented in `docs/ARCHITECT
 | | |
 |---|---|
 | **Who has it** | Open WebUI (plugin marketplace, Pipelines framework), Jan (extension system), AnythingLLM (agent skills marketplace) |
-| **Owlynn status** | Owlynn has 23 built-in tools and a **skill chain** system (`.md` prompt templates in `skills/`) plus **MCP STDIO** integration. However: |
+| **Owlynn status** | 20+ built-in tools, skill chains (`.md` in `skills/`), and MCP STDIO. However: |
 |  | - Skills are prompt templates, not code — they can't add new capabilities |
 |  | - MCP STDIO is the closest to an extension mechanism but requires running separate servers |
 |  | - No marketplace or community contribution model |
@@ -249,11 +256,11 @@ Before comparing, here is what Owlynn already has (documented in `docs/ARCHITECT
 | | |
 |---|---|
 | **Who has it** | AnythingLLM |
-| **Owlynn status** | Vision model routing exists (Medium_Vision via `zai-org/glm-4.6v-flash`) for image attachments. No audio file processing. |
-| **Effort** | Quick Win for image attachments UX (2–3 hours); Medium for audio (1–2 days) |
+| **Owlynn status** | **Implemented (images).** Composer drag-and-drop + attachment chips ([`Composer.tsx`](../frontend-v2/src/components/Composer.tsx)). Router sends images to `complex-default` (local Qwen multimodal) or `complex-cloud` (vision proxy → DeepSeek text). No audio file ingestion. |
+| **Effort** | Done for images; Medium for audio (1–2 days) |
 | **Impact** | **Medium.** Image support exists but upload UX could be polished. Audio file analysis (e.g., "summarize this meeting recording") is a differentiator. |
-| **Technical approach** | 1. **Image upload:** Drag-and-drop images into composer. Send as base64 data URL. Router detects image → `complex-vision` route already handles this. |
-|  | 2. **Audio file:** Transcribe via same Whisper pipeline from §3.5.1, then feed transcription into agent. |
+| **Technical approach** | 1. **Image upload:** ✅ Drag-and-drop in composer; base64 `image_url` to backend. |
+|  | 2. **Audio file:** Transcribe via Whisper pipeline from §3.5.1, then feed transcription into agent. |
 
 ---
 
@@ -366,22 +373,22 @@ Before comparing, here is what Owlynn already has (documented in `docs/ARCHITECT
 
 ### Tier 1: Do Now (Highest Impact / Lowest Effort)
 
-| # | Feature | Effort | Impact | Parities |
-|---|---------|--------|--------|----------|
-| 1 | **OpenAI-compatible local API server** | 4–8 hours | **Critical** — unlocks all scripting, IDE integration, headless use cases | Jan, LM Studio |
-| 2 | **CLI tool (`owlynn`)** | 4–8 hours | **High** — power user convenience, piggybacks on API server | LM Studio (`lms`) |
-| 3 | **Chat format templates / model presets** | 2–3 hours | **Medium** — smoother model switching UX | LM Studio |
-| 4 | **Image upload UX** (drag-and-drop images into composer) | 2–3 hours | **Medium** — vision model is already routed; just needs upload UI | AnythingLLM |
+| # | Feature | Status | Effort | Impact |
+|---|---------|--------|--------|--------|
+| 1 | **OpenAI-compatible local API server** | ✅ Basic (`:8000/v1/chat/completions`) | Polish 2–4h | Scripting, IDE integration |
+| 2 | **CLI tool (`owlynn`)** | ✅ Basic (`src/cli.py`) | Polish 1–2h | Terminal access |
+| 3 | **Chat format templates / model presets** | ❌ Not done | 2–3 hours | Smoother model switching |
+| 4 | **Image upload UX** | ✅ Done (composer drag-and-drop) | — | Vision routing works |
 
 ### Tier 2: Do Next (Highest Impact / Medium Effort)
 
 | # | Feature | Effort | Impact | Parities |
 |---|---------|--------|--------|----------|
-| 5 | **LocalDocs-style auto document indexing** | 3–5 days | **Very High** — biggest UX gap; "drop a folder, ask questions" | GPT4All, Open WebUI |
-| 6 | **Extension/plugin system** (MCP-based + local tool plugins) | 4–7 days | **High** — community contributions, user customization | Open WebUI, Jan |
-| 7 | **Custom agent personas** | 3–5 days | **High** — specialized workflows without switching tools | AnythingLLM |
-| 8 | **In-app model browser** | 3–5 days | **High** — single-app experience for model management | LM Studio, Jan, GPT4All |
-| 9 | **Content extraction (Docling)** | 2–3 days | **Medium** — complements document indexing for complex formats | Open WebUI |
+| 5 | **LocalDocs-style auto document indexing** | 3–5 days | **Very High** — biggest remaining UX gap | GPT4All, Open WebUI |
+| 6 | **Extension/plugin system** (MCP + local plugins) | 4–7 days | **High** | Open WebUI, Jan |
+| 7 | **Custom agent personas** | 3–5 days | **High** | AnythingLLM |
+| 8 | **In-app model browser** | 3–5 days | **High** | LM Studio, Jan |
+| 9 | **Content extraction polish** (Docling tool surface) | 1–2 days | **Medium** | Open WebUI |
 
 ### Tier 3: Consider Later (Lower Impact or Higher Effort)
 
@@ -408,15 +415,15 @@ Before comparing, here is what Owlynn already has (documented in `docs/ARCHITECT
 
 ## 5. Implementation Roadmap (Suggested Order)
 
-### Sprint 1: Quick Wins (1–2 weeks)
+### Sprint 1: Quick Wins — **mostly done** (2026-06-07)
 ```
-API Server → CLI → Image Upload UX → Chat Templates
+✅ API Server → ✅ CLI → ✅ Image Upload UX → ⬜ Chat Templates
 ```
-Deliverables: Scriptable Owlynn, terminal access, polished composer UX.
+Remaining: chat format presets, API/CLI polish (auth, packaged `owlynn` shim).
 
 ### Sprint 2: RAG & Models (2–3 weeks)
 ```
-Document Indexing (LocalDocs) → In-App Model Browser → Content Extraction (Docling)
+Document Indexing (LocalDocs) → In-App Model Browser → Docling tool surface
 ```
 Deliverables: "Drop a folder, ask questions" works. Single-app model management.
 
@@ -436,21 +443,22 @@ Deliverables: Nice-to-haves as user base grows.
 
 ## 6. Competitive Positioning After Recommended Changes
 
-| Dimension | Owlynn Now | Owlynn After Tier 1–2 | Best Competitor |
-|-----------|------------|----------------------|-----------------|
-| Model routing intelligence | **Best in class** | Same | No competitor has 5-way routing |
+| Dimension | Owlynn Now (2026-06-07) | Owlynn After Tier 2 | Best Competitor |
+|-----------|---------------------------|----------------------|-----------------|
+| Model routing intelligence | **Best in class** — 3-way + HITL + cloud brief | Same | No direct equivalent |
 | Security / HITL | **Best in class** | Same | No competitor has equivalent |
-| Agent orchestration | **Best in class** | Same | LangGraph is unique in this space |
-| Programmatic API | None | OpenAI-compatible | Jan (best: built-in API) |
-| Document RAG | None | Auto-indexing + Docling | GPT4All (best: LocalDocs) |
-| Model management UX | LM Studio only | In-app browser + presets | LM Studio (best: HF integration) |
-| Tool ecosystem | 23 built-in + MCP | Plugin system + MCP | Open WebUI (best: marketplace) |
-| Custom agents | Single persona | Persona system | AnythingLLM (best: agent builder) |
-| Voice input | None | Push-to-talk Whisper | Open WebUI (best: Whisper) |
-| CLI / automation | None | CLI + Python SDK | LM Studio (best: `lms` + SDK) |
-| Multi-user | ❌ (by design) | ❌ (by design) | Open WebUI (best: RBAC) |
+| Agent orchestration | **Best in class** — LangGraph | Same | Unique in this space |
+| Programmatic API | Basic OpenAI-compatible (`:8000`) | Polished + documented | Jan |
+| Document RAG | Knowledge Cache + Docling ingest; **no** auto folder index | Auto-indexing + search tool | GPT4All (LocalDocs) |
+| Model management UX | `defaults.yaml` + LM Studio | In-app browser + presets | LM Studio |
+| Tool ecosystem | 20+ built-in + MCP | Plugin system + MCP | Open WebUI |
+| Custom agents | Single persona + skills | Persona system | AnythingLLM |
+| Voice input | None | Push-to-talk Whisper | Open WebUI |
+| CLI / automation | Basic `src/cli.py` | Packaged CLI + SDK docs | LM Studio |
+| Multi-user | ❌ (by design) | ❌ (by design) | Open WebUI |
+| Image attachments | ✅ Composer drag-and-drop | Same | AnythingLLM |
 
-**Owlynn's moat:** LangGraph orchestration + security proxy + multi-model routing + DeepSeek v4 cloud augmentation (1M context at commodity pricing, anonymized). These are genuinely unique in the local AI assistant space — no competitor has all four. The recommended features fill the parity gaps without diluting this differentiator.
+**Owlynn's moat:** LangGraph orchestration + security proxy + hybrid local/cloud routing (DeepSeek V4 with anonymization + prefix cache optimization). Recommended Tier 2 features fill parity gaps without diluting this differentiator.
 
 ---
 
@@ -466,9 +474,13 @@ These constraints should guide all feature implementation:
 
 ## Related
 
+- [`docs/architecture/overview.md`](architecture/overview.md) — current system architecture
+- [`docs/CLOUD-LLM-ARCHITECTURE.md`](CLOUD-LLM-ARCHITECTURE.md) — cloud connection and caches
+- [`docs/architecture/DEEPSEEK_V4_INTEGRATION.md`](architecture/DEEPSEEK_V4_INTEGRATION.md) — DeepSeek V4 optimization reference
+- [`docs/architecture/KNOWLEDGE_CACHE.md`](architecture/KNOWLEDGE_CACHE.md) — conversation knowledge layer
 - [`docs/README.md`](README.md) — project documentation map
 - [`docs/INDEX.md`](INDEX.md) — documentation index
 
 ## Last updated
 
-2026-05-31 — `docs-standards-timeline` added frontmatter, purpose blockquote
+2026-06-07 — architecture, routing, models, API/CLI/image status, Docling/Knowledge Cache, Tier 1 completion

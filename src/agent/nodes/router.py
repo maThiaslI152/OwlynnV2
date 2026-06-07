@@ -95,8 +95,7 @@ def estimate_token_budget(user_text: str, route: str) -> int:
     Uses per-tier context windows:
     - simple → _SMALL_MODEL_CONTEXT (4096) with 1500 reserve
     - complex-cloud → _CLOUD_CONTEXT (131072) with 8000 reserve, budget_max 16384
-    - complex-longctx → _MEDIUM_LONGCTX_CONTEXT (131072) with 4000 reserve, budget_max 8192
-    - complex-default, complex-vision → _MEDIUM_DEFAULT_CONTEXT (100000) with 4000 reserve, budget_max 8192
+    - complex-default → _MEDIUM_DEFAULT_CONTEXT (100000) with 4000 reserve, budget_max 8192
     """
     reserves_cfg = config.get("routing.input_reserves", {})
     budget_max_cfg = config.get("routing.budget_max", {})
@@ -108,16 +107,11 @@ def estimate_token_budget(user_text: str, route: str) -> int:
         simple_reserve = int(reserves_cfg.get("simple", 1500))
         return min(budget, _SMALL_MODEL_CONTEXT - simple_reserve)
 
-    # Determine context window and reserves based on route
     if route == "complex-cloud":
         context = _CLOUD_CONTEXT
         input_reserve = int(reserves_cfg.get("cloud", 8000))
         budget_max = int(budget_max_cfg.get("cloud", 16384))
-    elif route == "complex-longctx":
-        context = _MEDIUM_LONGCTX_CONTEXT
-        input_reserve = int(reserves_cfg.get("longctx", 4000))
-        budget_max = int(budget_max_cfg.get("other", 8192))
-    else:  # complex-default, complex-vision
+    else:
         context = _MEDIUM_DEFAULT_CONTEXT
         input_reserve = int(reserves_cfg.get("default", 4000))
         budget_max = int(budget_max_cfg.get("other", 8192))
@@ -298,6 +292,94 @@ _WEBISH_HINTS = (
     "live score",
 )
 
+_FILE_WORK_HINTS = (
+    "workspace",
+    "uploaded",
+    "attached file",
+    "[attached",
+    "read_workspace",
+    "local file",
+    "in my project",
+    "in the repo",
+)
+
+_DATA_VIZ_HINTS = (
+    "chart",
+    "graph",
+    "plot",
+    "visualiz",
+    "diagram",
+    "spreadsheet",
+    "create a document",
+    "create a report",
+    "generate a report",
+    "export to pdf",
+    "export to xlsx",
+    "make a ppt",
+    "build a dashboard",
+)
+
+_SIMPLE_INFO_RE = re.compile(
+    r"\b("
+    r"what is|what are|what's|who is|who are|where is|where are|"
+    r"when was|when did|how many|how much|capital of|population of|"
+    r"list of|name of"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def _user_wants_file_work(text: str) -> bool:
+    lower = text.lower()
+    return any(h in lower for h in _FILE_WORK_HINTS)
+
+
+def _user_wants_data_viz(text: str) -> bool:
+    lower = text.lower()
+    return any(h in lower for h in _DATA_VIZ_HINTS)
+
+
+def _is_simple_informational_query(text: str) -> bool:
+    """Factual Q&A that should not trigger toolbox picker HITL."""
+    if _user_wants_file_work(text) or _user_wants_data_viz(text):
+        return False
+    return bool(_SIMPLE_INFO_RE.search(text))
+
+
+def _build_low_confidence_router_choices(user_text: str) -> list[dict]:
+    """Contextual router HITL options — omit irrelevant tool paths."""
+    choices: list[dict] = [
+        {
+            "label": "Search the web",
+            "route": "complex-default",
+            "toolbox": ["web_search"],
+        },
+    ]
+    if _user_wants_file_work(user_text):
+        choices.append(
+            {
+                "label": "Work with local files",
+                "route": "complex-default",
+                "toolbox": ["file_ops"],
+            }
+        )
+    if _user_wants_data_viz(user_text):
+        choices.append(
+            {
+                "label": "Create documents/visualizations",
+                "route": "complex-default",
+                "toolbox": ["data_viz"],
+            }
+        )
+    choices.append(
+        {
+            "label": "Just answer directly",
+            "route": "complex-default",
+            "toolbox": ["all"],
+        }
+    )
+    return choices
+
 
 def _resolve_complex_route(
     user_text: str,
@@ -317,22 +399,23 @@ def _resolve_complex_route(
     text_len = len(user_text)
     estimated_input = 4000 + (text_len // 4)  # input_reserve + message tokens
 
-    # 1. Image attachments — local Qwen vision, or cloud via vision_proxy pre-step
+    # 1. Image attachments — cloud with vision_proxy, or local default when cloud off
     if _has_image_content(state):
-        if cloud_available and (
-            estimated_input > _MEDIUM_LONGCTX_CONTEXT * 0.80
-            or _needs_frontier_quality(user_text)
-        ):
+        if cloud_available:
             return "complex-cloud", toolbox
-        return "complex-vision", toolbox
+        return "complex-default", toolbox
 
-    # 2. Exceeds Medium_LongCtx → cloud
+    # 2. Exceeds Medium_LongCtx → cloud when available
     if estimated_input > _MEDIUM_LONGCTX_CONTEXT * 0.80:
-        return "complex-cloud", toolbox
+        if cloud_available:
+            return "complex-cloud", toolbox
+        return "complex-default", toolbox
 
-    # 3. Exceeds 80% of Medium_Default → longctx
+    # 3. Exceeds 80% of Medium_Default → cloud when available, else local default
     if estimated_input > _MEDIUM_DEFAULT_CONTEXT * 0.80:
-        return "complex-longctx", toolbox
+        if cloud_available:
+            return "complex-cloud", toolbox
+        return "complex-default", toolbox
 
     # 4. Frontier-quality indicators → cloud
     if _needs_frontier_quality(user_text):
@@ -843,6 +926,24 @@ async def router_node(state: AgentState) -> AgentState:
             except ImportError:
                 pass  # heuristic module unavailable; fall through to router HITL
 
+        # Simple factual questions (e.g. capitals, counts) — no toolbox picker.
+        if (
+            hitl_needed
+            and confidence < routing_confidence_threshold
+            and not match_result.is_ambiguous
+            and _is_simple_informational_query(user_text)
+        ):
+            hitl_needed = False
+            logger.info(
+                "[router] Skipping HITL — simple informational query: %r",
+                user_text[:80],
+            )
+            audit_info(
+                "agent.hitl",
+                "router_hitl_skipped",
+                reason="simple_informational_query",
+            )
+
         # HITL requires a checkpointer AND an interactive context.
         # In API mode (stateless) there is no human to respond to interrupts,
         # so we must auto-resolve or fall through without pausing.
@@ -913,33 +1014,7 @@ async def router_node(state: AgentState) -> AgentState:
                         {
                             "type": "ask_user",
                             "question": "I'm not sure how to handle this. What would you prefer?",
-                            "choices": [
-                                {
-                                    "label": "Search the web",
-                                    "route": "complex-default",
-                                    "toolbox": ["web_search"],
-                                },
-                                {
-                                    "label": "Work with local files",
-                                    "route": "complex-default",
-                                    "toolbox": ["file_ops"],
-                                },
-                                {
-                                    "label": "Create documents/visualizations",
-                                    "route": "complex-default",
-                                    "toolbox": ["data_viz"],
-                                },
-                                {
-                                    "label": "Use cloud model for higher quality",
-                                    "route": "complex-cloud",
-                                    "toolbox": ["all"],
-                                },
-                                {
-                                    "label": "Just answer directly",
-                                    "route": "complex-default",
-                                    "toolbox": ["all"],
-                                },
-                            ],
+                            "choices": _build_low_confidence_router_choices(user_text),
                         }
                     )
                     audit_info(
@@ -1151,13 +1226,9 @@ async def router_node(state: AgentState) -> AgentState:
     # If cloud route but cloud unavailable, downgrade
     swap_from_route = route
     if route == "complex-cloud" and not cloud_available:
-        estimated_input = 4000 + (len(user_text) // 4)
-        if estimated_input > _MEDIUM_DEFAULT_CONTEXT * 0.80:
-            route = "complex-longctx"
-        else:
-            route = "complex-default"
+        route = "complex-default"
         logger.warning(
-            f"[router] Cloud unavailable, downgraded from complex-cloud to {route}"
+            "[router] Cloud unavailable, downgraded from complex-cloud to complex-default"
         )
         audit_warn(
             "agent.model",

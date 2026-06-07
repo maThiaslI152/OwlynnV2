@@ -1,7 +1,7 @@
 ---
 status: active
 category: reference
-last_updated: 2026-06-05
+last_updated: 2026-06-07
 owner: ai-agent
 ---
 
@@ -36,7 +36,9 @@ docs/
 ├── HITL.md                        # Human-in-the-Loop safety system documentation
 ├── MEMORY.md                      # Three-tier memory system documentation
 ├── architecture/
-│   └── overview.md                # System design overview
+│   ├── overview.md                # System design overview
+│   └── DEEPSEEK_V4_INTEGRATION.md # DeepSeek V4 API, caches, deferred Phase 5
+├── CLOUD-LLM-ARCHITECTURE.md      # Cloud connection, security, cost/cache tracking
 ├── debugging/                     # Debugging guides by subsystem
 ├── evaluations/                   # Conversation evaluation reports (v1→v7)
 ├── guides/                        # How-to guides
@@ -86,4 +88,4 @@ See [`AGENTS.md`](../AGENTS.md) for the full workflow. Summary:
 
 ## Last updated
 
-2026-05-31 — `docs-standards-timeline` added PROJECT_TIMELINE.md, expanded structure
+2026-06-07 — DeepSeek V4 architecture docs; CLOUD-LLM rewrite; dev-startup `.env.local`

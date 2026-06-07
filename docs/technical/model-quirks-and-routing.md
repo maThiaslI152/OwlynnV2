@@ -45,4 +45,20 @@ The `medium` model is used for complex local execution. We use the `HauhauCS/Qwe
 ## 3. Configuration Architecture (Single Source of Truth)
 
 All model base URLs, endpoints, temperature settings, and context windows are stored strictly in `src/config/defaults.yaml`. 
-We **do not** hardcode temperatures or token limits in node files (`router.py`, `complex.py`), except for deterministic overrides. `config_loader.py` handles the merging of `defaults.yaml` and `.env` variables.
+We **do not** hardcode temperatures or token limits in node files (`router.py`, `complex.py`), except for deterministic overrides. `config_loader.py` handles the merging of `defaults.yaml`, `.env`, `.env.local`, and profile overrides.
+
+Non-M4 timeout/token overrides live under `models.standard` in `defaults.yaml` (merged into `models.small` / `models.medium` at load time).
+
+---
+
+## 4. Routing (3 routes)
+
+| Route | Model path | When |
+|-------|------------|------|
+| `simple` | `models.small` (MiniCPM5) | Short Q&A, low tool need |
+| `complex-default` | `models.medium` (Qwen 9B) | Local tool loops, multimodal images |
+| `complex-cloud` | `models.cloud` (DeepSeek V4) | Frontier reasoning; images via `vision_proxy` → text |
+
+Legacy routes `complex-vision` and `complex-longctx` were removed (2026-06). Cloud path details: [`DEEPSEEK_V4_INTEGRATION.md`](../architecture/DEEPSEEK_V4_INTEGRATION.md).
+
+**Last updated:** 2026-06-07

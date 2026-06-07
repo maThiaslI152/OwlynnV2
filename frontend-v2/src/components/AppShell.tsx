@@ -6,6 +6,7 @@ import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
 import type { Options } from 'rehype-sanitize'
 import { Composer } from './Composer'
 import { SafeModePanel } from './SafeModePanel'
+import { CloudSettingsPanel } from './CloudSettingsPanel'
 import { ScreenAssistPanel } from './ScreenAssistPanel'
 import { ProjectKnowledgePanel } from './ProjectKnowledgePanel'
 import { OrchestrationPanel } from './OrchestrationPanel'
@@ -18,6 +19,7 @@ import { useAppStore } from '../state/useAppStore'
 import { electronBridge as tauriBridge } from '../lib/electronBridge'
 import type { ChatMessage } from '../types/protocol'
 import type { AttachedFile } from '../lib/attachments'
+import { isTauriRuntime } from '../lib/runtime'
 
 interface ProjectChat {
   id: string
@@ -404,13 +406,14 @@ export function AppShell({
   const isCompact = windowMode === 'compact'
   const showInspector = !isCompact || inspectorOpen
   const projectChats = activeProject?.chats ?? []
+  const showDragStrip = isTauriRuntime()
 
   return (
     <div className={`app-shell${isCompact ? ' app-shell-compact' : ''}`}>
       {/* ── Left Panel (full mode only) ── */}
       {!isCompact && (
         <aside className="panel left-panel">
-          <div className="window-drag-strip" data-tauri-drag-region />
+          {showDragStrip && <div className="window-drag-strip" data-tauri-drag-region />}
           <div className="workspace-section">
             <div className="workspace-header">
               <h2>Workspace</h2>
@@ -589,7 +592,7 @@ export function AppShell({
 
       {/* ── Center Panel ── */}
       <main className={`panel center-panel${isCompact ? ' center-panel-compact' : ''}`}>
-        <div className="window-drag-strip" data-tauri-drag-region />
+        {showDragStrip && <div className="window-drag-strip" data-tauri-drag-region />}
         <header className="topbar" data-tauri-drag-region>
           <h1>
             <span className="logo-dot" />
@@ -609,6 +612,7 @@ export function AppShell({
                 {safeModePopoverOpen && (
                   <div className="topbar-popover">
                     <SafeModePanel />
+                    <CloudSettingsPanel />
                   </div>
                 )}
               </div>
@@ -803,7 +807,7 @@ export function AppShell({
       {/* ── Right Panel ── */}
       {showInspector && (
         <aside className={`panel right-panel${isCompact ? ' right-panel-overlay' : ''}`}>
-          <div className="window-drag-strip" data-tauri-drag-region />
+          {showDragStrip && <div className="window-drag-strip" data-tauri-drag-region />}
           {isCompact ? (
             <div className="inspector-header" data-tauri-drag-region>
               <h2>Inspector</h2>
@@ -837,6 +841,7 @@ export function AppShell({
                   {safeModePopoverOpen && (
                     <div className="topbar-popover">
                       <SafeModePanel />
+                    <CloudSettingsPanel />
                     </div>
                   )}
                 </div>

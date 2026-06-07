@@ -348,13 +348,18 @@ body {
   --max-chat-width: 620px;
 }
 
-/* Dedicated drag strip for reliable Tauri dragging + traffic light clearance */
+/* Tauri only: drag strip + macOS traffic-light clearance (hidden in browser) */
 .window-drag-strip {
+  display: none;
   height: 34px;
   flex-shrink: 0;
   border-bottom: 1px solid var(--border-subtle);
   background: color-mix(in srgb, var(--bg-surface) 96%, transparent);
   -webkit-app-region: drag;
+}
+
+body.tauri-glass .window-drag-strip {
+  display: block;
 }
 
 /* ── Topbar ────────────────────────────────────────────── */
@@ -857,20 +862,28 @@ body {
 }
 
 .composer-wrapper-compact .composer-send {
-  width: 34px;
-  height: 34px;
+  min-width: 34px;
   font-size: 0.9rem;
 }
 
 .composer {
   display: flex;
+  flex-direction: column;
   gap: 8px;
-  align-items: flex-end;
+  -webkit-app-region: no-drag;
+}
+
+.composer-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  width: 100%;
   -webkit-app-region: no-drag;
 }
 
 .composer-input-wrap {
   flex: 1;
+  min-width: 0;
   -webkit-app-region: no-drag;
 }
 
@@ -879,6 +892,7 @@ body {
   resize: none;
   min-height: 38px;
   max-height: 40vh;
+  margin: 0;
   border: 1px solid var(--border-default);
   background: rgba(9, 18, 33, 0.74);
   color: var(--text-primary);
@@ -908,13 +922,19 @@ body {
 }
 
 .composer-send {
-  width: 38px;
-  height: 38px;
+  width: auto;
+  min-width: 38px;
+  height: auto;
+  align-self: stretch;
+  aspect-ratio: 1;
+  margin: 0;
+  padding: 0;
   border: 1px solid var(--accent);
   border-radius: var(--radius-md);
   background: var(--accent);
   color: white;
   font-size: 1.1rem;
+  line-height: 1;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -960,7 +980,6 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-bottom: 8px;
   width: 100%;
 }
 
@@ -977,7 +996,7 @@ body {
 }
 
 .attachment-name {
-  max-width: 150px;
+  max-width: min(220px, 40vw);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

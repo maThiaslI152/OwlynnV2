@@ -32,21 +32,21 @@ from src.agent.state import AgentState
 VALID_ROUTES = [
     "simple",
     "complex-default",
-    "complex-vision",
-    "complex-longctx",
+    "complex-cloud",
+    "complex-cloud",
     "complex-cloud",
 ]
 
 VALID_MODEL_USED = [
     "small-local",
     "medium-default",
-    "medium-vision",
-    "medium-longctx",
+    "large-cloud",
+    "medium-default",
     "large-cloud",
     "small-local-fallback",
     "medium-default-fallback",
-    "medium-vision-fallback",
-    "medium-longctx-fallback",
+    "large-cloud-fallback",
+    "medium-default-fallback",
     "large-cloud-fallback",
 ]
 

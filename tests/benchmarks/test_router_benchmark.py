@@ -160,8 +160,6 @@ class TestTokenBudgetAccuracy:
         [
             ("simple", 4096 - 1500),
             ("complex-default", 8192),
-            ("complex-vision", 8192),
-            ("complex-longctx", 8192),
             ("complex-cloud", 16384),
         ],
     )
@@ -192,8 +190,8 @@ class TestTokenBudgetAccuracy:
 
         for route in [
             "complex-default",
-            "complex-vision",
-            "complex-longctx",
+            "complex-cloud",
+            "complex-cloud",
             "complex-cloud",
         ]:
             budget = estimate_token_budget("x" * 100000, route)
@@ -222,7 +220,7 @@ class TestHITLInterceptRate:
 
         for conf in confidences:
             content = '{"routing":"complex","confidence":%.2f,"toolbox":"all"}' % conf
-            decision, confidence, toolbox = parse_routing(content)
+            decision, confidence, toolbox, _execution_plan = parse_routing(content)
             # HITL fires if confidence < threshold AND HITL enabled
             if confidence < confidence_threshold:
                 hitl_count += 1

@@ -96,7 +96,7 @@ export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitl
     if (el) {
       el.style.height = 'auto'
       const maxH = compact ? 80 : Math.round(window.innerHeight * 0.4)
-      el.style.height = Math.min(el.scrollHeight, maxH) + 'px'
+      el.style.height = `${Math.min(el.scrollHeight, maxH)}px`
     }
   }, [value, compact])
 
@@ -316,45 +316,47 @@ export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitl
             ))}
           </div>
         )}
-        <div className="composer-input-wrap">
-          <textarea
-            ref={textareaRef}
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={
-              hitlBlocked
-                ? 'Approve or decline the action above to continue'
-                : isDragging
-                  ? 'Drop files or workspace references here...'
-                  : compact
-                    ? 'Ask...'
-                    : `Ask ${activePersona.name}...`
-            }
-            rows={1}
-            disabled={disabled || hitlBlocked}
-          />
+        <div className="composer-input-row">
+          <div className="composer-input-wrap">
+            <textarea
+              ref={textareaRef}
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={
+                hitlBlocked
+                  ? 'Approve or decline the action above to continue'
+                  : isDragging
+                    ? 'Drop files or workspace references here...'
+                    : compact
+                      ? 'Ask...'
+                      : `Ask ${activePersona.name}...`
+              }
+              rows={1}
+              disabled={disabled || hitlBlocked}
+            />
+          </div>
+          {isGenerating ? (
+            <button
+              type="button"
+              className="composer-send composer-stop"
+              onClick={onStop}
+              title="Stop generation"
+              style={{ backgroundColor: 'var(--red-500)', color: 'white', opacity: 1, cursor: 'pointer' }}
+            >
+              ■
+            </button>
+          ) : (
+            <button
+              type="submit"
+              className="composer-send"
+              disabled={disabled || (!value.trim() && attachedFiles.length === 0)}
+              title="Send (Enter)"
+            >
+              ↑
+            </button>
+          )}
         </div>
-        {isGenerating ? (
-          <button
-            type="button"
-            className="composer-send composer-stop"
-            onClick={onStop}
-            title="Stop generation"
-            style={{ backgroundColor: 'var(--red-500)', color: 'white', opacity: 1, cursor: 'pointer' }}
-          >
-            ■
-          </button>
-        ) : (
-          <button
-            type="submit"
-            className="composer-send"
-            disabled={disabled || (!value.trim() && attachedFiles.length === 0)}
-            title="Send (Enter)"
-          >
-            ↑
-          </button>
-        )}
       </form>
     </div>
   )

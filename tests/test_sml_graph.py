@@ -35,12 +35,12 @@ class TestSMLRouting:
         assert route_decision({"route": "complex-default"}) == "scope_clarify"
 
     def test_medium_vision_path(self):
-        """complex-vision → scope_clarify → complex_llm (Medium_Vision)."""
-        assert route_decision({"route": "complex-vision"}) == "scope_clarify"
+        """complex-cloud → scope_clarify → complex_llm (Medium_Vision)."""
+        assert route_decision({"route": "complex-cloud"}) == "scope_clarify"
 
     def test_medium_longctx_path(self):
-        """complex-longctx → scope_clarify → complex_llm (Medium_LongCtx)."""
-        assert route_decision({"route": "complex-longctx"}) == "scope_clarify"
+        """complex-cloud → scope_clarify → complex_llm (Medium_LongCtx)."""
+        assert route_decision({"route": "complex-cloud"}) == "scope_clarify"
 
     def test_cloud_path(self):
         """complex-cloud → scope_clarify → complex_llm (Cloud_LLM)."""
