@@ -28,9 +28,7 @@ OCR_JSON = json.dumps(
     }
 )
 
-TINY_PNG_B64 = (
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
-)
+TINY_PNG_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 DATA_URL = f"data:image/png;base64,{TINY_PNG_B64}"
 
 
@@ -70,9 +68,7 @@ async def test_vision_pipeline_json_to_cloud_block(mock_vlm):
 
     assert ok is True
     human = processed[1]
-    text = " ".join(
-        b.get("text", "") for b in human.content if b.get("type") == "text"
-    )
+    text = " ".join(b.get("text", "") for b in human.content if b.get("type") == "text")
     assert not any(b.get("type") == "image_url" for b in human.content)
     assert "[Vision sensor output" in text
     assert "connection refused" in text
@@ -116,9 +112,7 @@ async def test_vlm_failure_preserves_image_for_fallback():
         processed, ok = await vision_proxy.process_vision_messages(messages)
 
     assert ok is False
-    assert any(
-        b.get("type") == "image_url" for b in processed[0].content
-    )
+    assert any(b.get("type") == "image_url" for b in processed[0].content)
 
 
 def test_unparsed_vlm_prose_fallback():

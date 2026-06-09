@@ -22,12 +22,8 @@ from src.memory.extraction.queue import STREAM_KEY, enqueue_extraction
 from src.memory.extraction.worker import process_extraction_job
 
 PENTEST_QUERY = "Explain OWASP Top 10 for our pentest engagement"
-HUMAN_TURN = (
-    "Remember my preferred AWS region is ap-southeast-1 for all deployments"
-)
-AI_TURN = (
-    "I will remember ap-southeast-1 as your preferred AWS region for deployments."
-)
+HUMAN_TURN = "Remember my preferred AWS region is ap-southeast-1 for all deployments"
+AI_TURN = "I will remember ap-southeast-1 as your preferred AWS region for deployments."
 
 FAKE_ATOMS_JSON = json.dumps(
     {
@@ -83,7 +79,9 @@ def clear_memory_cache():
 
 
 @pytest.mark.anyio
-async def test_memory_pipeline_lite_router_retrieve_write(pentest_state, mock_extractor_llm):
+async def test_memory_pipeline_lite_router_retrieve_write(
+    pentest_state, mock_extractor_llm
+):
     """Full inject → route → retrieve → write → extraction worker path."""
     with patch("src.memory.long_term.memory") as mock_mem:
         mock_mem.search = MagicMock()
@@ -140,7 +138,9 @@ async def test_memory_pipeline_lite_router_retrieve_write(pentest_state, mock_ex
 
     mock_mem = MagicMock()
     mock_mem.add = MagicMock()
-    with patch("src.agent.llm.get_medium_llm", AsyncMock(return_value=mock_extractor_llm)):
+    with patch(
+        "src.agent.llm.get_medium_llm", AsyncMock(return_value=mock_extractor_llm)
+    ):
         with patch("src.memory.long_term.memory", mock_mem):
             with patch(
                 "src.agent.nodes.memory._is_semantically_similar",
