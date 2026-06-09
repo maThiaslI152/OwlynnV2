@@ -89,14 +89,9 @@ def _tool_calls_from_last_message(state: AgentState) -> list[dict[str, Any]]:
 
 
 def _is_sensitive_call(tool_name: str, args: Any) -> bool:
-    if is_information_retrieval(tool_name):
-        return False
-    if tool_name in SENSITIVE_TOOLS:
-        return True
-    args_text = (
-        json.dumps(args, ensure_ascii=True) if not isinstance(args, str) else args
-    )
-    return bool(SENSITIVE_PATTERN_RE.search(args_text))
+    from src.agent.hitl.policy import is_sensitive_call
+
+    return is_sensitive_call(tool_name, args)
 
 
 def _risk_meta_for_call(tool_name: str, args: Any) -> dict[str, Any]:

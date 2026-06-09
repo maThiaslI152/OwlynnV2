@@ -199,6 +199,14 @@ memory:
 
   cloud_inject_max_chars: 800
 
+# ── MCP extensions (stdio servers from mcp_config.json) ─────────────────────
+mcp:
+  enabled: true
+  include_on_all: true                     # Merge MCP tools when toolbox is "all" / empty
+  auto_toolbox_on_pentest: true            # Append toolbox "mcp" on pentest scenario_id
+  sensitive_name_prefixes:                 # HITL approval required (server_key + "_" + tool)
+    - "pentest_"
+
 # ── Screen assist (Phase 3) ──────────────────────────────────────────────────
 screen_assist:
   enabled: true

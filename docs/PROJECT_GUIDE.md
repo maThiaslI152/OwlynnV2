@@ -29,7 +29,9 @@ Related: [`architecture/overview.md`](architecture/overview.md) (system shape), 
 | `src/agent/nodes/complex_utils/cloud_invoke.py` | DeepSeek client, tool strict mode |
 | `src/agent/nodes/complex_utils/vision_florence.py` | Florence OCR parser |
 | `src/agent/nodes/complex_utils/vision_*.py` | Vision proxy for cloud image path (Florence default) |
-| `src/config/defaults.yaml` | Model names, routing thresholds, `startup.preload`, `models.vision_proxy` (source of truth) |
+| `src/tools/mcp_client.py` | MCP stdio client; tools merged via `merge_mcp_tools()` |
+| `mcp_config.json` | MCP server manifests (see `mcp_config.json.example`) |
+| `src/config/defaults.yaml` | Model names, routing, `mcp.*`, `startup.preload` (source of truth) |
 | `tests/test_router_properties.py` | Router property tests |
 | `tests/test_router_web_intent.py` | Web-intent forcing tests |
 | `tests/test_llm_pool.py` | LLM pool tests |
@@ -103,6 +105,7 @@ Related: [`architecture/overview.md`](architecture/overview.md) (system shape), 
 | `src/tools/` | Tool implementations (`@tool` decorators) |
 | `docs/TOOLS.md` | Tool reference |
 | `tests/test_toolbox_registry*.py` | Toolbox tests |
+| `tests/test_mcp_tool_binding.py` | MCP merge + HITL prefix tests |
 | `tests/test_web_tools.py` | Web search tools |
 
 ## Config

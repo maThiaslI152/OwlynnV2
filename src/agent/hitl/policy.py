@@ -43,6 +43,16 @@ CATEGORY_REMEDIATION = {
 }
 
 
+def is_mcp_execution_tool(tool_name: str) -> bool:
+    """MCP pentest / remote-exec tools require HITL (prefix from defaults.yaml)."""
+    from src.config.config_loader import config
+
+    if not config.get("mcp.enabled", True):
+        return False
+    prefixes = config.get("mcp.sensitive_name_prefixes") or ["pentest_"]
+    return any(tool_name.startswith(str(prefix)) for prefix in prefixes)
+
+
 def is_information_retrieval(tool_name: str) -> bool:
     """Check if a tool is pure information retrieval (no side effects).
 
@@ -63,6 +73,8 @@ def is_sensitive_call(tool_name: str, args) -> bool:
         return False
     import json
 
+    if is_mcp_execution_tool(tool_name):
+        return True
     if tool_name in SENSITIVE_TOOLS:
         return True
     args_text = (

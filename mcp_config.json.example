@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "sequential-thinking": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+    },
+    "pentest": {
+      "comment": "LayeSec006/pentest-mcp-server — SSH + tmux on Kali/Parrot. Install: pip install -e . in that repo.",
+      "command": "python",
+      "args": ["-m", "pentest_mcp_server"],
+      "env": {
+        "TARGET_HOST": "192.168.1.100",
+        "TARGET_PORT": "22",
+        "TARGET_USER": "kali",
+        "TARGET_SSH_KEY": "/Users/you/.ssh/id_ed25519"
+      }
+    }
+  }
+}

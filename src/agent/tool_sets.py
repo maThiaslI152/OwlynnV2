@@ -108,9 +108,42 @@ TOOLBOX_REGISTRY: dict[str, list] = {
         search_workspace_docs,
     ],
     "screen_assist": list(SCREEN_ASSIST_TOOLS),
+    # MCP tools are loaded at runtime from mcp_config.json — see merge_mcp_tools()
+    "mcp": [],
 }
 
 ALWAYS_INCLUDED_TOOLS: list = [ask_user]
+
+
+def should_include_mcp_tools(toolbox_names: list[str] | None) -> bool:
+    """Whether MCP extension tools should be merged for this toolbox selection."""
+    from src.config.config_loader import config
+
+    if not config.get("mcp.enabled", True):
+        return False
+    names = list(toolbox_names or [])
+    if not names or "all" in names:
+        return bool(config.get("mcp.include_on_all", True))
+    return "mcp" in names
+
+
+def merge_mcp_tools(tools: list, *, toolbox_names: list[str] | None = None) -> list:
+    """Append LangChain tools discovered from mcp_config.json (deduped by name)."""
+    if not should_include_mcp_tools(toolbox_names):
+        return tools
+    from src.tools.mcp_client import get_mcp_tools
+
+    mcp_tools = get_mcp_tools()
+    if not mcp_tools:
+        return tools
+    seen = {getattr(t, "name", "") for t in tools}
+    merged = list(tools)
+    for tool in mcp_tools:
+        name = getattr(tool, "name", "")
+        if name and name not in seen:
+            seen.add(name)
+            merged.append(tool)
+    return merged
 
 
 def resolve_tools(toolbox_names: list[str], web_search_enabled: bool = True) -> list:
@@ -120,21 +153,23 @@ def resolve_tools(toolbox_names: list[str], web_search_enabled: bool = True) -> 
     - "all" in toolbox_names → full tool set (equivalent to COMPLEX_TOOLS_WITH_WEB/NO_WEB)
     - web_search_enabled=False → exclude web_search toolbox tools even if requested
     - ask_user is always included regardless of selection
+    - MCP extension tools merged when enabled (see defaults.yaml mcp.*)
     """
     if not toolbox_names or "all" in toolbox_names:
         base = list(
             COMPLEX_TOOLS_WITH_WEB if web_search_enabled else COMPLEX_TOOLS_NO_WEB
         )
-        # Ensure ask_user is present
         for t in ALWAYS_INCLUDED_TOOLS:
             if t not in base:
                 base.append(t)
-        return base
+        return merge_mcp_tools(base, toolbox_names=toolbox_names or ["all"])
 
     tools: list = []
     seen_ids: set = set()
     for name in toolbox_names:
         if name == "web_search" and not web_search_enabled:
+            continue
+        if name == "mcp":
             continue
         if name in TOOLBOX_REGISTRY:
             for t in TOOLBOX_REGISTRY[name]:
@@ -143,10 +178,15 @@ def resolve_tools(toolbox_names: list[str], web_search_enabled: bool = True) -> 
                     seen_ids.add(tid)
                     tools.append(t)
 
-    # Always include ask_user
     for t in ALWAYS_INCLUDED_TOOLS:
         if id(t) not in seen_ids:
             seen_ids.add(id(t))
             tools.append(t)
 
-    return tools
+    return merge_mcp_tools(tools, toolbox_names=toolbox_names)
+
+
+def all_complex_tools(web_search_enabled: bool = True) -> list:
+    """Built-in complex tools plus MCP extensions (for tool-loop replay)."""
+    base = list(COMPLEX_TOOLS_WITH_WEB if web_search_enabled else COMPLEX_TOOLS_NO_WEB)
+    return merge_mcp_tools(base, toolbox_names=["all"])

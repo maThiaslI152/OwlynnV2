@@ -114,7 +114,16 @@ class TestResolveToolsProperty:
         result = resolve_tools(toolbox_names, web_search_enabled=True)
         allowed_ids = set(id(t) for t in ALWAYS_INCLUDED_TOOLS)
         for name in toolbox_names:
+            if name == "mcp":
+                continue
             for tool in TOOLBOX_REGISTRY[name]:
+                allowed_ids.add(id(tool))
+
+        from src.agent.tool_sets import should_include_mcp_tools
+        from src.tools.mcp_client import get_mcp_tools
+
+        if should_include_mcp_tools(toolbox_names):
+            for tool in get_mcp_tools():
                 allowed_ids.add(id(tool))
 
         for tool in result:

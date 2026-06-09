@@ -167,7 +167,8 @@ Toolbox categories (pick one or more, or "all" if unsure):
 - data_viz: create documents/spreadsheets/presentations/PDFs, run code, data analysis, charts
 - productivity: task management, todos, skills, workflow templates
 - memory: recall past conversations, user preferences, stored facts
-- screen_assist: local tmux terminal, macOS UI context, browser tab, remote Kali SSH tmux
+- screen_assist: local tmux terminal, macOS UI context, browser tab, remote Kali SSH tmux (read-only)
+- mcp: external MCP servers (e.g. pentest SSH/tmux on Kali) — only when configured in mcp_config.json
 - all: when unsure or multiple categories needed
 
 Reply with exactly one JSON object (nothing else). The execution_plan should briefly break down the steps required to solve the user's request (e.g. 1. search for X, 2. write to file Y). If simple routing, leave execution_plan empty and set needs_memory_retrieval to false. If the Knowledge Cache fully answers the question, set needs_memory_retrieval to false and omit web_search from toolbox:
@@ -514,14 +515,27 @@ def _augment_toolbox_for_scenario(
     scenario_id: str | None,
     user_text: str,
 ) -> list[str]:
-    """Add screen_assist when pentest scenario or explicit terminal/screen intent."""
+    """Add screen_assist / mcp toolboxes for pentest and terminal workflows."""
     if "all" in toolbox:
         return toolbox
-    if scenario_id != "pentest" and not _user_wants_screen_assist(user_text):
-        return toolbox
-    if "screen_assist" in toolbox:
-        return toolbox
-    return [*toolbox, "screen_assist"]
+
+    if scenario_id == "pentest" or _user_wants_screen_assist(user_text):
+        if "screen_assist" not in toolbox:
+            toolbox = [*toolbox, "screen_assist"]
+
+    from src.config.config_loader import config
+
+    if (
+        config.get("mcp.auto_toolbox_on_pentest", True)
+        and scenario_id == "pentest"
+        and "mcp" not in toolbox
+    ):
+        from src.tools.mcp_client import get_mcp_tools
+
+        if get_mcp_tools():
+            toolbox = [*toolbox, "mcp"]
+
+    return toolbox
 
 
 def _is_simple_informational_query(text: str) -> bool:

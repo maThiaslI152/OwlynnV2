@@ -94,6 +94,17 @@ src/api/routes/files.py            # Tool discovery (GET /api/tools)
 
 `complex_llm_node` and `complex_tool_action_node` both resolve tools via `_resolve_complex_tools()` in [`complex.py`](../../src/agent/nodes/complex.py), honoring `selected_toolboxes`, `web_search_enabled`, and vision web-tool stripping. This keeps bound tools aligned with the `ToolNode` executor on multi-turn tool loops.
 
+## MCP extensions
+
+External MCP servers (stdio) are declared in [`mcp_config.json`](../../mcp_config.json) (see [`mcp_config.json.example`](../../mcp_config.json.example)). At startup, `mcp_manager.initialize()` discovers tools; `merge_mcp_tools()` appends them when toolbox is `all`, `mcp`, or pentest auto-augment.
+
+| Config | Role |
+|--------|------|
+| `defaults.yaml` → `mcp.*` | Enable, include-on-all, pentest auto-toolbox, HITL prefixes |
+| `mcp_config.json` | Server command + env (e.g. Kali SSH for pentest-mcp-server) |
+
+Pentest MCP tools (`pentest_*`) require HITL approval. Guide: [mcp-pentest-kali.md](../guides/mcp-pentest-kali.md).
+
 ## Key Decisions
 
 | Decision | Rationale | Trade-off |
@@ -133,4 +144,4 @@ All other tools auto-approve. Dangerous shell patterns (`rm -rf`, `sudo`, etc.) 
 
 ## Last updated
 
-2026-06-10 — Document `_resolve_complex_tools()` parity between binder and tool executor
+2026-06-10 — MCP tool merge + pentest Kali guide

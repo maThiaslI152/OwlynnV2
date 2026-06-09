@@ -14,6 +14,8 @@ from src.agent.response_styles import style_instruction_for_prompt
 from src.agent.tool_sets import (
     COMPLEX_TOOLS_NO_WEB,
     COMPLEX_TOOLS_WITH_WEB,
+    all_complex_tools,
+    merge_mcp_tools,
     resolve_tools,
 )
 from src.agent.lm_studio_compat import (
@@ -351,10 +353,12 @@ def _resolve_complex_tools(
 ) -> list:
     """Resolve tool list for bind and execute — must stay in sync."""
     selected_toolboxes = state.get("selected_toolboxes")
+    toolbox_key = selected_toolboxes if selected_toolboxes else ["all"]
     if selected_toolboxes and "all" not in selected_toolboxes:
         tools = resolve_tools(selected_toolboxes, web_on and not vision_task)
     else:
         tools = list(COMPLEX_TOOLS_WITH_WEB if web_on else COMPLEX_TOOLS_NO_WEB)
+        tools = merge_mcp_tools(tools, toolbox_names=toolbox_key)
 
     if vision_task:
         tools = _strip_web_tools(tools)
@@ -366,8 +370,7 @@ def _resolve_complex_tools(
                 prev_tool_names.add(tc.get("name", ""))
 
     if prev_tool_names:
-        all_tools = COMPLEX_TOOLS_WITH_WEB if web_on else COMPLEX_TOOLS_NO_WEB
-        for t in all_tools:
+        for t in all_complex_tools(web_on):
             if getattr(t, "name", "") in prev_tool_names and t not in tools:
                 tools.append(t)
     return tools
