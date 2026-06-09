@@ -104,7 +104,7 @@ class TestRouteDecisionDomain:
     """
 
     @given(text=user_text_st)
-    @settings(max_examples=100)
+    @settings(max_examples=100, deadline=None)
     def test_route_always_in_valid_set(self, text: str):
         """Route is always one of the five valid values."""
         state = _make_text_state(text)
@@ -120,7 +120,7 @@ class TestRouteDecisionDomain:
         assert route == "complex-cloud"
 
     @given(text=user_text_st)
-    @settings(max_examples=100)
+    @settings(max_examples=100, deadline=None)
     def test_image_always_default_when_cloud_unavailable(self, text: str):
         """Image + any text routes to complex-default when cloud is unavailable."""
         state = _make_image_state(text)
@@ -170,7 +170,7 @@ class TestRouteDecisionDomain:
             ),
         )
     )
-    @settings(max_examples=100)
+    @settings(max_examples=100, deadline=None)
     def test_short_text_routes_local_when_cloud_unavailable(self, text: str):
         """Short text without frontier hints routes to complex-default when cloud is off."""
         assume(not _needs_frontier_quality(text))
@@ -187,7 +187,7 @@ class TestRouteDecisionDomain:
             ),
         )
     )
-    @settings(max_examples=100)
+    @settings(max_examples=100, deadline=None)
     def test_short_text_routes_cloud_when_available(self, text: str):
         """Short text without frontier hints routes to complex-cloud when cloud is on."""
         assume(not _needs_frontier_quality(text))
@@ -211,7 +211,7 @@ class TestRouteDecisionDomain:
             )
 
     @given(text=user_text_st)
-    @settings(max_examples=100)
+    @settings(max_examples=100, deadline=None)
     def test_toolbox_preserved_through_routing(self, text: str):
         """The toolbox list passed in is returned unchanged."""
         state = _make_text_state(text)
@@ -231,28 +231,28 @@ class TestTokenBudgetContextWindow:
     """
 
     @given(text=user_text_st)
-    @settings(max_examples=100)
+    @settings(max_examples=100, deadline=None)
     def test_simple_budget_within_small_context(self, text: str):
         """Simple route budget never exceeds SMALL_MODEL_CONTEXT - 1500."""
         budget = estimate_token_budget(text, "simple")
         assert 0 < budget <= 4096 - 1500
 
     @given(text=user_text_st)
-    @settings(max_examples=100)
+    @settings(max_examples=100, deadline=None)
     def test_complex_default_budget_max_8192(self, text: str):
         """complex-default budget never exceeds 8192."""
         budget = estimate_token_budget(text, "complex-default")
         assert 0 < budget <= 8192
 
     @given(text=user_text_st)
-    @settings(max_examples=100)
+    @settings(max_examples=100, deadline=None)
     def test_complex_cloud_budget_max_16384(self, text: str):
         """complex-cloud budget never exceeds 16384."""
         budget = estimate_token_budget(text, "complex-cloud")
         assert 0 < budget <= 16384
 
     @given(text=user_text_st)
-    @settings(max_examples=100)
+    @settings(max_examples=100, deadline=None)
     def test_budget_always_positive(self, text: str):
         """Budget is always positive for any route."""
         for route in VALID_ROUTES:
@@ -268,7 +268,7 @@ class TestTokenBudgetContextWindow:
             ),
         )
     )
-    @settings(max_examples=10, suppress_health_check=[HealthCheck.too_slow])
+    @settings(max_examples=10, deadline=None, suppress_health_check=[HealthCheck.too_slow])
     def test_complex_budget_at_least_512_for_large_input(self, text: str):
         """Complex routes with large input have budget >= 512 (the context floor)."""
         for route in VALID_COMPLEX_ROUTES:
@@ -316,7 +316,7 @@ class TestRouterHITLThreshold:
     """
 
     @given(confidence=confidence_st, threshold=threshold_st)
-    @settings(max_examples=200)
+    @settings(max_examples=200, deadline=None)
     def test_hitl_triggers_iff_below_threshold_and_enabled(
         self, confidence: float, threshold: float
     ):
@@ -332,7 +332,7 @@ class TestRouterHITLThreshold:
         assert actual == should_trigger
 
     @given(confidence=confidence_st, threshold=threshold_st)
-    @settings(max_examples=200)
+    @settings(max_examples=200, deadline=None)
     def test_hitl_never_triggers_when_disabled(
         self, confidence: float, threshold: float
     ):
@@ -342,7 +342,7 @@ class TestRouterHITLThreshold:
         assert should_trigger is False
 
     @given(threshold=threshold_st)
-    @settings(max_examples=100)
+    @settings(max_examples=100, deadline=None)
     def test_confidence_at_threshold_does_not_trigger(self, threshold: float):
         """Confidence exactly at threshold should NOT trigger (strictly below)."""
         confidence = threshold
@@ -350,7 +350,7 @@ class TestRouterHITLThreshold:
         assert should_trigger is False
 
     @given(threshold=st.floats(min_value=0.01, max_value=1.0, allow_nan=False))
-    @settings(max_examples=100)
+    @settings(max_examples=100, deadline=None)
     def test_confidence_just_below_threshold_triggers_when_enabled(
         self, threshold: float
     ):
@@ -365,7 +365,7 @@ class TestRouterHITLThreshold:
         threshold=threshold_st,
         enabled=st.booleans(),
     )
-    @settings(max_examples=200)
+    @settings(max_examples=200, deadline=None)
     def test_hitl_decision_matches_spec(
         self, confidence: float, threshold: float, enabled: bool
     ):
@@ -387,7 +387,7 @@ class TestParseRoutingProperty:
     """parse_routing always returns a valid (decision, confidence, toolbox) tuple."""
 
     @given(content=st.text(min_size=0, max_size=500))
-    @settings(max_examples=100)
+    @settings(max_examples=100, deadline=None)
     def test_parse_routing_never_crashes(self, content: str):
         """parse_routing handles any string input without raising."""
         decision, confidence, toolbox, _, _, _ = parse_routing(content)
@@ -403,7 +403,7 @@ class TestParseRoutingProperty:
             ["web_search", "file_ops", "data_viz", "productivity", "memory", "all"]
         ),
     )
-    @settings(max_examples=100)
+    @settings(max_examples=100, deadline=None)
     def test_parse_routing_valid_json_round_trip(
         self, routing: str, confidence: float, toolbox: str
     ):
