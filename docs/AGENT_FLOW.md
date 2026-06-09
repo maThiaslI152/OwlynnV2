@@ -1,7 +1,7 @@
 ---
 status: active
 category: architecture
-last_updated: 2026-05-31
+last_updated: 2026-06-09
 owner: human
 ---
 
@@ -22,7 +22,7 @@ src/agent/nodes/simple.py          # simple_node()
 src/agent/nodes/complex.py         # complex_llm_node(), complex_tool_action_node()
 src/agent/nodes/scope_clarify.py   # scope_clarify_node() (NEW)
 src/agent/nodes/plan_review.py     # plan_review_node() (NEW)
-src/agent/nodes/memory.py          # memory_inject_node(), memory_write_node()
+src/agent/nodes/memory.py          # memory_inject_lite_node(), memory_retrieve_node(), memory_write_node()
 src/agent/nodes/security_proxy.py  # security proxy gate
 src/agent/hitl/policy.py          # Shared policy + is_sensitive_call() (NEW)
 src/agent/hitl/context.py         # build_hitl_context(), enrich_interrupt() (NEW)
@@ -37,8 +37,8 @@ src/agent/state.py                 # AgentState TypedDict
 ### Graph Topology
 
 ```
-START → memory_inject → auto_summarize? → router → simple → memory_write → END
-                                              → scope_clarify ─────────────────┐
+START → memory_inject_lite → router → memory_retrieve → auto_summarize? → simple → memory_write → END
+                                                                              → scope_clarify ─────┐
                                                    ↓                          │
                                               complex_llm ←───────────────────┐│
                                                    ↓                         ││

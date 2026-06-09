@@ -58,7 +58,9 @@ class VisionModelManager:
                     config.get("cloud.vision_max_tokens", 2048)
                 )
                 self._client = ChatOpenAI(
-                    model=model_cfg.get("model_name", "qwen3.5-9b-uncensored-hauhaucs-aggressive@q6_k"),
+                    model=model_cfg.get(
+                        "model_name", "qwen3.5-9b-uncensored-hauhaucs-aggressive@q6_k"
+                    ),
                     api_key="sk-local-no-key-needed",
                     base_url=model_cfg.get("base_url", "http://127.0.0.1:1234/v1"),
                     temperature=float(config.get("cloud.vision_temperature", 0.1)),

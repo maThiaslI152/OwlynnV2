@@ -71,9 +71,9 @@ def normalize_vision_payload(data: dict[str, Any]) -> dict[str, Any]:
                 }
             )
 
-    subjects = [
-        str(s).strip() for s in (data.get("subjects") or []) if str(s).strip()
-    ][:8]
+    subjects = [str(s).strip() for s in (data.get("subjects") or []) if str(s).strip()][
+        :8
+    ]
 
     try:
         confidence = float(data.get("confidence", 0.8))

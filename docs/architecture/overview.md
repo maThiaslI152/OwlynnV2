@@ -56,13 +56,19 @@ Browser (http://127.0.0.1:5173)
 User Message
   │
   ▼
-memory_inject ──► Load LTM/STM/persona/profile context
+memory_inject_lite ──► Profile, persona, topics (no vector search)
   │
   ▼
-summarize_gate ──► If tokens >85% context: auto_summarize → compress history
+router ──► Classify: simple | complex-default | complex-cloud; memory gate + scenario
   │
   ▼
-router ──► Classify: simple | complex-default | complex-cloud
+memory_retrieve ──► Gated Qdrant/Mem0 + scenario markdown (when needed)
+  │
+  ▼
+after_memory_retrieve ──► If tokens >85% context: auto_summarize → compress history
+  │
+  ▼
+simple | scope_clarify → complex_llm
   │
   ├── simple ──► simple_node (MiniCPM5, fast)
   │
@@ -77,7 +83,7 @@ router ──► Classify: simple | complex-default | complex-cloud
                         │    complex_llm ──► cycle until no tools pending
                         │
                         ▼
-                   memory_write ──► invalidate MemoryContextCache + cloud brief cache
+                   memory_write ──► PII scrub → extraction queue → invalidate caches
 ```
 
 ## Configuration Architecture

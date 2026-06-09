@@ -133,7 +133,7 @@ class TestFallbackChainCoverage:
 
         mock_medium = make_mock_llm(delay_ms=80, content="Fallback response")
 
-        async def _cloud_raises():
+        async def _cloud_raises(*_args, **_kwargs):
             raise CloudUnavailableError("No API key")
 
         setup_benchmark_llms(medium=mock_medium)

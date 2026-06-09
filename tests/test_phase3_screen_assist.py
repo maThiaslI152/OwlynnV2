@@ -50,9 +50,7 @@ async def test_read_ax_fallback_to_vision(monkeypatch):
 
     async def fake_proc(*_a, **_k):
         proc = MagicMock()
-        proc.communicate = AsyncMock(
-            return_value=(b"Terminal|window|10,20|", b"")
-        )
+        proc.communicate = AsyncMock(return_value=(b"Terminal|window|10,20|", b""))
         proc.returncode = 0
         return proc
 

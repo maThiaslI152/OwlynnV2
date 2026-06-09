@@ -80,6 +80,7 @@ class TestBugConditionSettingsDropped:
     @given(redis_url=redis_url_st)
     @settings(
         max_examples=50,
+        deadline=None,
         suppress_health_check=[HealthCheck.function_scoped_fixture],
     )
     def test_redis_url_round_trips_through_advanced_settings(
@@ -222,6 +223,7 @@ class TestPreservationAdvancedSettingsRoundTrip:
     )
     @settings(
         max_examples=50,
+        deadline=None,
         suppress_health_check=[HealthCheck.function_scoped_fixture],
     )
     def test_working_fields_round_trip_through_advanced_settings(

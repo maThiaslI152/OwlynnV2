@@ -83,7 +83,9 @@ async def read_ax_context(x: int, y: int) -> tuple[str, bool]:
         lines.append(crop_text)
         return ("\n".join(lines), True)
 
-    lines.append("ax_value=(empty — enable Accessibility for Owlynn/Python in System Settings)")
+    lines.append(
+        "ax_value=(empty — enable Accessibility for Owlynn/Python in System Settings)"
+    )
     return ("\n".join(lines), False)
 
 

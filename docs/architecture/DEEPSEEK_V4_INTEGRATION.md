@@ -306,7 +306,7 @@ Effort:       reasoning_effort = high|max  (only when thinking enabled)
 Tools:        bind_tools(strict=True); replay reasoning_content in loops
 Cache:        automatic prefix cache; put stable text first, volatile last
 Security:     anonymize → cloud → deanonymize
-Images:       Qwen vision_proxy → text in prompt
+Images:       vision_proxy (JSON OCR) → text block in prompt
 Legacy:       deepseek-chat / deepseek-reasoner → migrate before 2026-07-24
 ```
 

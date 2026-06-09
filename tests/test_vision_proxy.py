@@ -30,9 +30,7 @@ async def test_process_vision_messages_transcribes_image(monkeypatch):
 
         return FakeLLM()
 
-    monkeypatch.setattr(
-        vision_proxy, "get_vision_llm", fake_get_vision_llm
-    )
+    monkeypatch.setattr(vision_proxy, "get_vision_llm", fake_get_vision_llm)
 
     messages = [
         SystemMessage(content="sys"),
@@ -85,9 +83,7 @@ async def test_process_vision_messages_failure_keeps_image_and_returns_false(
 
         return FakeLLM()
 
-    monkeypatch.setattr(
-        vision_proxy, "get_vision_llm", fake_get_vision_llm
-    )
+    monkeypatch.setattr(vision_proxy, "get_vision_llm", fake_get_vision_llm)
 
     messages = [
         HumanMessage(
@@ -119,9 +115,7 @@ async def test_transcribe_crop_uses_bytes_cache(monkeypatch):
 
         return FakeLLM()
 
-    monkeypatch.setattr(
-        vision_proxy, "get_vision_llm", fake_get_vision_llm
-    )
+    monkeypatch.setattr(vision_proxy, "get_vision_llm", fake_get_vision_llm)
 
     out1 = await vision_proxy.transcribe_crop(b"\x89PNG\x01", mime_type="image/png")
     out2 = await vision_proxy.transcribe_crop(b"\x89PNG\x01", mime_type="image/png")

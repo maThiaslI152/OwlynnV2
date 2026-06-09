@@ -40,9 +40,7 @@ async def test_vision_proxy_replaces_image_with_transcription_text(monkeypatch):
 
         return FakeLLM()
 
-    monkeypatch.setattr(
-        vision_proxy, "get_vision_llm", fake_get_vision_llm
-    )
+    monkeypatch.setattr(vision_proxy, "get_vision_llm", fake_get_vision_llm)
 
     messages = [
         SystemMessage(content="You are helpful."),
