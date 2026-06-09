@@ -1,17 +1,18 @@
 ---
 status: active
 category: audit
-last_updated: 2026-05-31
+last_updated: 2026-06-10
 owner: human
+audience: agent
 ---
 
-# Bug Tracker: Browser Audit — OwlynnV2
+# Bug Tracker: Browser & File-Intake Audits — OwlynnV2
 
-> **Purpose:** Bug tracker for browser audit findings with root cause analysis and fix verification.
+> **Purpose:** Canonical bug fix log with root cause analysis and verification. Agents: pair with [`docs/STATUS.md`](STATUS.md) for open remaining tasks.
 
-**Created:** 2026-05-30
-**Last Updated:** 2026-05-30 (all 8 bugs fixed and verified)
-**Source:** `docs/BUG-ANALYSIS.md` (browser audit 2026-05-25)
+**Created:** 2026-05-30  
+**Last Updated:** 2026-06-10 (BUG-1..11 fixed and verified)  
+**Sources:** [`docs/BUG-ANALYSIS.md`](BUG-ANALYSIS.md) (browser audit 2026-05-25), [`docs/audit-file-intake-2026-05-30.md`](audit-file-intake-2026-05-30.md) (file intake 2026-05-30)  
 **Status Key:** OPEN | IN_PROGRESS | FIXED | WONT_FIX
 
 ---
@@ -103,22 +104,22 @@ owner: human
 
 ---
 
-## BUG-5 [MEDIUM] [FIXED]: Safe Mode Dropdown Requires Tauri IPC, No Browser Fallback
+## BUG-5 [MEDIUM] [FIXED]: Safe Mode Dropdown Requires Desktop IPC, No Browser Fallback
 
 **Symptom:** Changing the safe mode in browser produces: `"Cannot read properties of undefined (reading 'invoke')"`. The dropdown visually resets.
 
-**Root Cause:** `tauriBridge.ts` had a top-level static import `import { convertFileSrc, invoke as tauriInvoke } from '@tauri-apps/api/core'`. In browser mode, this package doesn't exist, causing the entire module to fail at parse time — before any runtime checks or the REST API fallback could run.
+**Root Cause:** The desktop bridge module (`electronBridge.ts`, formerly `tauriBridge.ts`) used top-level Tauri imports that failed in browser mode before REST fallback could run.
 
 **Fix Applied:**
-1. `tauriBridge.ts` — Replaced top-level import with lazy dynamic `import('@tauri-apps/api/core')` inside `invokeOrResult()`. Module now loads safely in browser.
+1. `electronBridge.ts` — Lazy `invokeOrResult()` with REST API fallback when `window.electronAPI` is unavailable. Module loads safely in browser-only mode.
 2. `SafeModePanel.tsx` — `setSafeMode(mode)` called optimistically before REST API call, preventing dropdown visual bounce on failure.
 3. Added `console.warn` when REST fallback is used for traceability.
 
 **Verification:**
-- Frontend full suite: 96/96 pass (no regression). SafeModePanel tests (including `setSafeMode` + operator note tests) all pass.
-- No top-level `@tauri-apps/api/core` imports remaining in `tauriBridge.ts`.
+- Frontend vitest suite passes (no regression). SafeModePanel tests (including `setSafeMode` + operator note) pass.
+- Safe mode changes work via REST in browser; Electron IPC used when available.
 
-**Files Changed:** `frontend-v2/src/lib/tauriBridge.ts`, `frontend-v2/src/components/SafeModePanel.tsx`
+**Files Changed:** `frontend-v2/src/lib/electronBridge.ts`, `frontend-v2/src/components/SafeModePanel.tsx`
 
 ---
 
@@ -177,30 +178,94 @@ owner: human
 
 ---
 
+## BUG-9 [CRITICAL] [FIXED]: Default Project Auto-Indexing Skipped (Cache Path Mismatch)
+
+**Symptom:** Files processed to `workspace/.processed/` were not auto-indexed into Qdrant for the default project (and some non-default paths failed silently).
+
+**Root Cause:** `notify_file_processed()` looked only at `workspace/projects/{id}/.processed/`, but the file watcher writes to `workspace/.processed/` (global). Default project indexing was skipped.
+
+**Fix Applied:**
+1. `src/api/routes/files.py` — Search both `WORKSPACE_DIR/.processed` (root, checked first) and project-local `.processed` before indexing.
+2. Auto-index all projects including `default` when processed text exceeds 50 chars.
+3. Broadcast `file_status: indexed` or `indexing_failed` over WebSocket on completion.
+
+**Verification:**
+- Code review: dual-path cache lookup in `notify_file_processed()`.
+- `VectorLifecycleManager.index_processed_file()` invoked for matching project_id.
+
+**Files Changed:** `src/api/routes/files.py`, `src/api/server.py` (`_auto_index_project_file`)
+
+**Source:** [`docs/audit-file-intake-2026-05-30.md`](audit-file-intake-2026-05-30.md)
+
+---
+
+## BUG-10 [MEDIUM] [FIXED]: DOCX Table Content Not Extracted
+
+**Symptom:** DOCX files with tables lost table data in processed output; only paragraphs were visible to the LLM.
+
+**Root Cause:** `python-docx` paragraph-only extraction omitted table cells.
+
+**Fix Applied:**
+1. `_process_word()` — Primary path uses Docling (`export_to_markdown()`) with table structure detection.
+2. Fallback: `python-docx` with explicit table row iteration when Docling unavailable.
+
+**Verification:**
+- Code review: Docling path in `_process_word()`; table loop in fallback branch.
+
+**Files Changed:** `src/api/file_processor.py`
+
+**Source:** [`docs/audit-file-intake-2026-05-30.md`](audit-file-intake-2026-05-30.md)
+
+---
+
+## BUG-11 [LOW] [FIXED]: XLSX Merged Cells Produce "Unnamed" Column Headers
+
+**Symptom:** Merged cells in XLSX produced `Unnamed: N` headers and empty rows in markdown output.
+
+**Root Cause:** `pandas.read_excel()` does not infer headers from merged title rows.
+
+**Fix Applied:**
+1. `_process_table()` — Drop all-NaN rows/columns after read.
+2. Infer headers from first data row when columns are `Unnamed: N`.
+3. Second-pass rename scanning first 5 rows; fallback to `Column_{i}` labels.
+
+**Verification:**
+- Code review: merged-cell cleanup block in `_process_table()`.
+
+**Files Changed:** `src/api/file_processor.py`
+
+**Source:** [`docs/audit-file-intake-2026-05-30.md`](audit-file-intake-2026-05-30.md)
+
+---
+
 ## Summary
 
 | Bug | Severity | Status | Verification |
 |-----|----------|--------|-------------|
-| BUG-1: Persona leak | CRITICAL | FIXED | 7 new unit tests + 96 frontend tests pass |
-| BUG-2: Orchestration panel empty | HIGH | FIXED | 28 orchestration tests pass |
-| BUG-3: Memory panel loading | HIGH | FIXED | 96 frontend tests pass |
-| BUG-4: Chat title defaults | MEDIUM | FIXED | 9 new unit tests pass |
-| BUG-5: Safe mode Tauri dependency | MEDIUM | FIXED | 96 frontend tests pass |
-| BUG-6: Tool panel mock data | LOW | FIXED | Store audit + 96 frontend tests pass |
-| BUG-7: Wrong delete operator note | LOW | FIXED | 96 frontend tests pass |
-| BUG-8: Audit panel expand | LOW | FIXED | 96 frontend tests pass |
+| BUG-1: Persona leak | CRITICAL | FIXED | `tests/test_bugfix_persona_leak.py` (7 tests) |
+| BUG-2: Orchestration panel empty | HIGH | FIXED | OrchestrationPanel tests |
+| BUG-3: Memory panel loading | HIGH | FIXED | MemoryPanel error/empty states |
+| BUG-4: Chat title defaults | MEDIUM | FIXED | `tests/test_bugfix_chat_title.py` (9 tests) |
+| BUG-5: Safe mode desktop IPC | MEDIUM | FIXED | `electronBridge.ts` REST fallback |
+| BUG-6: Tool panel mock data | LOW | FIXED | WS disconnect clears `latestToolExecution` |
+| BUG-7: Wrong delete operator note | LOW | FIXED | `activeProjectIdRef` in App.tsx |
+| BUG-8: Audit panel expand | LOW | FIXED | `showAdvanced` toggle sizing |
+| BUG-9: Auto-index cache path | CRITICAL | FIXED | Dual `.processed` path lookup |
+| BUG-10: DOCX tables | MEDIUM | FIXED | Docling + table fallback |
+| BUG-11: XLSX merged cells | LOW | FIXED | Header inference in `_process_table()` |
 
 ## Test Results
 
-- **Frontend vitest**: 96/96 passing (7 test files, 0 failures)
-- **Backend pytest (new)**: 16/16 passing (2 test files for BUG-1 + BUG-4)
-- **Regression checks**: No regressions introduced by any of the fixes
+- **Backend pytest (BUG-1, BUG-4):** `tests/test_bugfix_persona_leak.py`, `tests/test_bugfix_chat_title.py`
+- **Frontend vitest:** full suite passes after browser-audit fixes
+- **BUG-9..11:** verified by code review (no dedicated regression tests yet)
 
 ## Related
 
-- [`docs/STATUS.md`](STATUS.md) — project status and risks
-- [`docs/BUG-ANALYSIS.md`](BUG-ANALYSIS.md) — bug analysis
+- [`docs/STATUS.md`](STATUS.md) — current risks and remaining tasks (R3, R5, R7, R9)
+- [`docs/BUG-ANALYSIS.md`](BUG-ANALYSIS.md) — historical audit symptoms (2026-05-25)
+- [`docs/audit-file-intake-2026-05-30.md`](audit-file-intake-2026-05-30.md) — file-intake audit source
 
 ## Last updated
 
-2026-05-31 — `docs-standards-timeline` added frontmatter, purpose blockquote
+2026-06-10 — added BUG-9..11; electronBridge naming; audience agent

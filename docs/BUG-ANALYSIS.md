@@ -1,13 +1,16 @@
 ---
-status: active
+status: archived
 category: audit
-last_updated: 2026-05-31
+last_updated: 2026-06-10
 owner: human
+audience: archive
 ---
 
 # Bug Analysis: Browser Audit — OwlynnV2 Full Feature Test
 
-> **Purpose:** Browser audit bug analysis and feature test matrix for OwlynnV2.
+> **Purpose:** Historical record of the 2026-05-25 browser audit findings. **Agents:** use [`docs/BUG-TRACKER.md`](BUG-TRACKER.md) for fix details and [`docs/STATUS.md`](STATUS.md) for current open work.
+
+> **Resolution:** All BUG-1 through BUG-8 from this audit are **FIXED** (verified 2026-05-30). See [`docs/BUG-TRACKER.md`](BUG-TRACKER.md). File-intake bugs BUG-9 through BUG-11 are documented in STATUS.md and BUG-TRACKER.md.
 
 **Date:** 2026-05-25  
 **Session:** Browser-based interactive audit of all frontend features  
@@ -18,178 +21,136 @@ owner: human
 
 ## Audit Method
 
-Every user-facing feature was tested interactively through the built-in browser. The backend (`src/api/server.py` line 1-1830) and agent state (`src/agent/state.py`) were reviewed for context. Tests were conducted in "Normal" safe mode with "Auto-approve" execution policy.
+Every user-facing feature was tested interactively through the built-in browser. The backend (`src/api/server.py`) and agent state (`src/agent/state.py`) were reviewed for context. Tests were conducted in "Normal" safe mode with "Auto-approve" execution policy.
 
 ---
 
 ## Feature Test Matrix
 
-| # | Feature | Status | Notes |
-|---|---------|--------|-------|
-| 1 | WebSocket Connection | PASS | Shows "connected" in inspector header |
-| 2 | Workspace Create | PASS | Creates new workspace, switches to it, shows operator note |
-| 3 | Workspace Rename | PASS | Inline rename input appears, updates active name |
-| 4 | Workspace Delete | PASS* | Deletes successfully but shows wrong operator note (BUG-7) |
-| 5 | Workspace Switch | PASS | Falls back to default workspace on delete |
-| 6 | Chat Create (+ New) | PASS | Creates new thread, resets conversation |
-| 7 | Chat Rename | PASS | Edit/delete buttons appear on chat items |
-| 8 | Chat Delete | PASS | Shows confirm dialog, removes from list |
-| 9 | Message Send | PASS | Clears input, disables send button |
-| 10 | Message Receive | PASS* | Receives response but content is wrong (BUG-1) |
-| 11 | Streaming Indicator | PASS | "Thinking..." animation during response |
-| 12 | Suggestion Buttons | PASS | Shown in empty state, disabled when disconnected |
-| 13 | Composer Enable/Disable | PASS | Disabled when not connected |
-| 14 | Operator Note | PASS | Shows contextual messages (new workspace, errors, audit status) |
-| 15 | Full/Compact Toggle | PASS | Both modes render correctly |
-| 16 | Inspector Overlay | PASS | Opens in compact mode with all panels |
-| 17 | Orchestration Panel | FAIL | Empty after message processing (BUG-2) |
-| 18 | Memory Panel | FAIL | Shows "Loading..." indefinitely (BUG-3) |
-| 19 | Safe Mode Dropdown | FAIL | Depends on Tauri IPC, errors in browser (BUG-5) |
-| 20 | Execution Policy Dropdown | UNTESTED | Requires backend interaction |
-| 21 | Screen Assist | UNTESTED | Requires Tauri IPC bridge |
-| 22 | Tool Execution Filters | PASS | All/Risky/Error buttons clickable |
-| 23 | Tool Execution Export | PASS | Shows appropriate message when no data |
-| 24 | Tool Exec Audit & Verify | FAIL | Panel doesn't expand (BUG-8) |
-| 25 | Action Proposals | PASS | Shows "No pending proposals" correctly |
-| 26 | Project Knowledge | PASS | Shows empty state with hint text |
-| 27 | Chat Auto-Title | FAIL | Defaults to "New Chat" (BUG-4) |
-| 28 | Security Approval | UNTESTED | No security-sensitive tool calls triggered |
+| # | Feature | Status (at audit) | Resolution | Notes |
+|---|---------|-------------------|------------|-------|
+| 1 | WebSocket Connection | PASS | — | Shows "connected" in inspector header |
+| 2 | Workspace Create | PASS | — | Creates new workspace, switches to it, shows operator note |
+| 3 | Workspace Rename | PASS | — | Inline rename input appears, updates active name |
+| 4 | Workspace Delete | PASS* | FIXED (BUG-7) | Wrong operator note at audit time |
+| 5 | Workspace Switch | PASS | — | Falls back to default workspace on delete |
+| 6 | Chat Create (+ New) | PASS | — | Creates new thread, resets conversation |
+| 7 | Chat Rename | PASS | — | Edit/delete buttons appear on chat items |
+| 8 | Chat Delete | PASS | — | Shows confirm dialog, removes from list |
+| 9 | Message Send | PASS | — | Clears input, disables send button |
+| 10 | Message Receive | PASS* | FIXED (BUG-1) | Wrong content at audit time (persona leak) |
+| 11 | Streaming Indicator | PASS | — | "Thinking..." animation during response |
+| 12 | Suggestion Buttons | PASS | — | Shown in empty state, disabled when disconnected |
+| 13 | Composer Enable/Disable | PASS | — | Disabled when not connected |
+| 14 | Operator Note | PASS | — | Shows contextual messages |
+| 15 | Full/Compact Toggle | PASS | — | Both modes render correctly |
+| 16 | Inspector Overlay | PASS | — | Opens in compact mode with all panels |
+| 17 | Orchestration Panel | FAIL | FIXED (BUG-2) | Empty after message processing at audit time |
+| 18 | Memory Panel | FAIL | FIXED (BUG-3) | "Loading..." indefinitely at audit time |
+| 19 | Safe Mode Dropdown | FAIL | FIXED (BUG-5) | Desktop IPC error in browser at audit time |
+| 20 | Execution Policy Dropdown | UNTESTED | — | Requires backend interaction |
+| 21 | Screen Assist | UNTESTED | — | Requires Electron IPC bridge |
+| 22 | Tool Execution Filters | PASS | — | All/Risky/Error buttons clickable |
+| 23 | Tool Execution Export | PASS | — | Shows appropriate message when no data |
+| 24 | Tool Exec Audit & Verify | FAIL | FIXED (BUG-8) | Panel didn't expand at audit time |
+| 25 | Action Proposals | PASS | — | Shows "No pending proposals" correctly |
+| 26 | Project Knowledge | PASS | — | Shows empty state with hint text |
+| 27 | Chat Auto-Title | FAIL | FIXED (BUG-4) | Defaulted to "New Chat" at audit time |
+| 28 | Security Approval | UNTESTED | — | No security-sensitive tool calls triggered |
 
 ---
 
-## Bugs Found
+## Bugs Found (historical symptoms)
 
-### BUG-1 (CRITICAL): Persona/System Prompt Leaks into First Response
+Symptoms below are preserved for context. Fixes are in [`docs/BUG-TRACKER.md`](BUG-TRACKER.md).
 
-**Symptom:** When sending "Hello, what is 2+2?", the assistant responded with a persona description instead of answering the question:
+### BUG-1 (CRITICAL): Persona/System Prompt Leaks into First Response — FIXED
 
-> "Owlynn (you) is a helpful assistant specializing in programming languages like Python and JavaScript. They provide short, direct answers for common questions such as: How to install dependencies. Best practices for error handling..."
+**Symptom (2026-05-25):** First message echoed persona text instead of answering (e.g. "Hello, what is 2+2?" → identity description).
 
-The system prompt/persona text is leaking into the output as if it were the assistant's response.
-
-**Location:** Likely in `src/agent/nodes/simple.py` or `src/agent/nodes/complex.py` — the initial system message may be getting included in the `messages` list incorrectly.
-
-**Severity:** Critical — corrupts the first interaction with every new conversation.
+**Location:** `src/agent/nodes/simple.py`, `src/agent/nodes/complex.py`
 
 ---
 
-### BUG-2 (HIGH): Orchestration Panel Remains Empty After Message Processing
+### BUG-2 (HIGH): Orchestration Panel Remains Empty — FIXED
 
-**Symptom:** After the agent processes a message, the Orchestration panel in the inspector shows nothing. The initial "No routing information yet" message disappears, but no routing data (model, route, confidence, source) appears.
+**Symptom (2026-05-25):** No routing data after message processing.
 
-**Expected:** Panel should show the model used (e.g., "gemma-4-e2b-heretic-uncensored-mlx"), route ("simple"/"complex-default"), confidence gauge, and source.
-
-**Location:** 
-- Backend: `src/api/server.py` line 1388-1404 — `router_info` WebSocket event emission in `on_chain_end` for node `"router"`
-- Frontend: `OrchestrationPanel.tsx` — reads `routerMetadata` from store
-
-**Hypothesis:** Either the `router_info` event is not being emitted (router node may not have set `router_metadata` in state), or the frontend store isn't receiving/processing the event correctly.
+**Location:** `src/api/ws/handler.py`, `frontend-v2/src/components/OrchestrationPanel.tsx`
 
 ---
 
-### BUG-3 (HIGH): Memory Panel Shows "Loading..." Indefinitely
+### BUG-3 (HIGH): Memory Panel Shows "Loading..." Indefinitely — FIXED
 
-**Symptom:** The Memory & Context panel shows "Loading..." and never resolves to show tracked topics, interests, or memory context.
+**Symptom (2026-05-25):** Panel never resolved topics/interests.
 
-**Expected:** Panel should show tracked topics (from `GET /api/topics`), interests (from `GET /api/interests`), and provide access to Mem0 search and memory context display.
-
-**Location:** Frontend `MemoryPanel.tsx` — the data fetching for topics/interests may be:
-1. Failing silently (API returns error)
-2. Hanging (no timeout on fetch)
-3. Not being triggered at all
+**Location:** `frontend-v2/src/components/MemoryPanel.tsx`
 
 ---
 
-### BUG-4 (MEDIUM): Chat Auto-Title Defaults to "New Chat"
+### BUG-4 (MEDIUM): Chat Auto-Title Defaults to "New Chat" — FIXED
 
-**Symptom:** When a new chat is created via the first message, the chat title should be auto-generated from the message content (e.g., "Math question" or "2+2 calculation"). Instead, it defaults to "New Chat".
+**Symptom (2026-05-25):** Title not auto-generated from first message.
 
-**Location:** `src/api/server.py` lines 1600-1614 — `generate_chat_title_router_llm(user_input[:1000], file_names=file_names)` is wrapped in try/except. On failure, `title` is set to `""`, resulting in "New Chat".
-
-**Hypothesis:** The router LLM for title generation is either:
-- Not loaded/available
-- Returning an error that's silently caught
-- The `generate_chat_title_router_llm` function is failing
+**Location:** `src/agent/nodes/router.py` (`generate_chat_title_router_llm`)
 
 ---
 
-### BUG-5 (MEDIUM): Safe Mode Dropdown Requires Tauri IPC, No Browser Fallback
+### BUG-5 (MEDIUM): Safe Mode Dropdown Requires Desktop IPC — FIXED
 
-**Symptom:** Changing the safe mode from the dropdown produces error: `"Safe Mode error: Cannot read properties of undefined (reading 'invoke')"`. The dropdown visually resets to "Normal" after selection.
+**Symptom (2026-05-25):** `"Cannot read properties of undefined (reading 'invoke')"` in browser.
 
-**Location:** `SafeModePanel.tsx` — calls `tauriBridge.set_safe_mode()` which invokes `window.__TAURI__` IPC. In browser-only mode, `window.__TAURI__` is undefined.
-
-**Fix:** The SafeModePanel should either:
-1. Fall back to a REST API call (`POST /api/advanced-settings`) for mode changes
-2. Disable the dropdown in non-Tauri environments with a tooltip explaining it's Tauri-only
-3. Use the unified settings endpoint consistently instead of Tauri bridge
+**Location:** `frontend-v2/src/lib/electronBridge.ts`, `frontend-v2/src/components/SafeModePanel.tsx`
 
 ---
 
-### BUG-6 (LOW): Tool Execution Panel Shows Mock/Preview Data Permanently
+### BUG-6 (LOW): Tool Execution Panel Shows Mock/Preview Data — FIXED
 
-**Symptom:** Even when no tools have been executed in the current session, the Tool Execution panel shows:
-- "workspace_search · pending"
-- "browser_snapshot · queued"
+**Symptom (2026-05-25):** Stale mock entries visible with no tool activity.
 
-These appear to be mock/demo entries from the empty state preview.
-
-**Location:** `ToolExecutionPanel.tsx` — the empty state preview renders these as mock entries.
-
-**Fix:** Remove mock entries or conditionally render them only when `toolExecutionHistory.length === 0 && !latestToolExecution`. They should not persist after real tool activity begins.
+**Location:** `frontend-v2/src/App.tsx`, `frontend-v2/src/components/ToolExecutionPanel.tsx`
 
 ---
 
-### BUG-7 (LOW): Workspace Delete Shows Wrong Operator Note
+### BUG-7 (LOW): Workspace Delete Shows Wrong Operator Note — FIXED
 
-**Symptom:** After deleting a workspace (non-default), the operator note reads: `"Chat thread-<uuid> deleted."` instead of something like `"Workspace <name> deleted."` or `"Project deleted."`.
+**Symptom (2026-05-25):** Note said "Chat thread deleted" instead of workspace deleted.
 
-**Location:** `App.tsx` `handleDeleteProject()` — the operator note text references "Chat thread" when it should reference the project/workspace.
-
----
-
-### BUG-8 (LOW): Audit & Verify Sub-Panel Doesn't Expand
-
-**Symptom:** Clicking the "+ Audit & Verify" button in the Tool Execution panel focuses the button but does not expand the sub-panel containing "Copy verify script", "Signing key", "Signing secret", "Verify bundle", and "Export report" controls.
-
-**Location:** `ToolExecutionPanel.tsx` — the expand/collapse toggle for the audit section may not be wired correctly, or the expanded state is not being set.
+**Location:** `frontend-v2/src/App.tsx` `handleDeleteProject()`
 
 ---
 
-## Architecture Observations
+### BUG-8 (LOW): Audit & Verify Sub-Panel Doesn't Expand — FIXED
+
+**Symptom (2026-05-25):** "+ Audit & Verify" button did not expand sub-panel.
+
+**Location:** `frontend-v2/src/components/ToolExecutionPanel.tsx`
+
+---
+
+## Architecture Observations (at audit time)
 
 ### Strengths
-1. **Clean three-panel layout** with responsive compact/full mode toggle
-2. **Real-time WebSocket communication** handles streaming, interrupts, and tool execution events
-3. **Comprehensive inspector panels** for debugging (orchestration, memory, tool execution, action proposals)
-4. **Audit trail export** with SHA-256 hash chaining and HMAC signing support
-5. **Workspace/project isolation** with per-project knowledge bases and chat organization
+1. Clean three-panel layout with responsive compact/full mode toggle
+2. Real-time WebSocket communication
+3. Comprehensive inspector panels
+4. Audit trail export with SHA-256 hash chaining
+5. Workspace/project isolation
 
-### Concerns
-1. **Tauri dependency leakage** — SafeMode, ScreenAssist, TTS, and window sizing all require Tauri IPC and have no browser-only fallbacks
-2. **Silent error handling** — Many try/catch blocks in the frontend swallow errors without logging (e.g., chat title generation, profile updates)
-3. **Stale closure patterns** — `useCallback` with complex dependency chains (documented in prior session)
-4. **Loading states without timeouts** — Memory panel and orchestration panel have no timeout/error fallback
-5. **Mock data in production panels** — Tool Execution panel always shows mock entries regardless of actual tool activity
+### Concerns (mitigated where noted)
+1. **Desktop IPC dependency** — BUG-5 fixed REST fallback for Safe Mode; Screen Assist still Electron-only
+2. **Silent error handling** — partially addressed in BUG-3/BUG-4 (still a general concern; see STATUS.md)
+3. **Loading states without timeouts** — mitigated by BUG-3 (error + retry UI)
+4. **Mock data in tool panel** — mitigated by BUG-6
 
 ---
-
-## Recommended Priority Actions
-
-1. **Fix BUG-1 (Persona Leak)** — Critical, affects every new conversation
-2. **Fix BUG-2 (Orchestration Panel)** — Core observability feature, needed for debugging
-3. **Fix BUG-3 (Memory Loading)** — Core feature, needed for personalization
-4. **Fix BUG-5 (Tauri Fallback)** — Blocks Safe Mode in browser deployments
-5. **Fix BUG-4 (Chat Titling)** — Quality of life, auto-generated titles improve navigation
-6. **Fix BUG-6 (Mock Data)** — Remove demo entries for clean production UI
-7. **Fix BUG-7 (Operator Note)** — Correct the delete message text
-8. **Fix BUG-8 (Audit Expand)** — Enable the audit verification features
 
 ## Related
 
-- [`docs/STATUS.md`](STATUS.md) — project status and risks
-- [`docs/BUG-ANALYSIS.md`](BUG-ANALYSIS.md) — bug analysis
+- [`docs/BUG-TRACKER.md`](BUG-TRACKER.md) — root cause, fixes, verification (BUG-1..11)
+- [`docs/STATUS.md`](STATUS.md) — current risks and remaining tasks (R3, R5, R7, R9)
+- [`docs/audit-file-intake-2026-05-30.md`](audit-file-intake-2026-05-30.md) — source audit for BUG-9..11
 
 ## Last updated
 
-2026-05-31 — `docs-standards-timeline` added frontmatter, purpose blockquote
+2026-06-10 — marked historical; added resolution column; all BUG-1..8 fixed per BUG-TRACKER

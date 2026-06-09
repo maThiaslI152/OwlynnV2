@@ -52,9 +52,9 @@ Project status tracker. Last updated: 2026-06-10 — MiniCPM5 router, agent-firs
 - **R2**: Inference latency — 105-276s vs SLO <8s (✅ Fixed via context optimization for M4 Air)
 
 ### 🟡 Medium Impact
-- **R3**: Cloud fallback test with valid DeepSeek key
-- **R7**: Verify web search aggregate timeout (coded, untested)
-- **R9**: Verify API thread persistence (coded, untested)
+- **R3**: Cloud E2E with valid DeepSeek key (✅ `tests/test_cloud_e2e_network.py`, `@pytest.mark.network`)
+- **R7**: Web search aggregate timeout (✅ `tests/test_web_search_aggregate_timeout.py`)
+- **R9**: API thread_id in OpenAI compat config (✅ `tests/test_openai_thread_persistence.py`)
 - **R8**: Thermal throttling — run evals on AC power, not battery (✅ Mitigated via defaults.yaml)
 
 ### 🟢 Documentation & Code Health
@@ -65,7 +65,8 @@ Project status tracker. Last updated: 2026-06-10 — MiniCPM5 router, agent-firs
 
 ```text
 docs/STATUS.md                # This file
-docs/BUG-ANALYSIS.md          # Bug inventory and analysis
+docs/BUG-TRACKER.md           # Canonical bug fix log (BUG-1..11)
+docs/BUG-ANALYSIS.md          # Historical audit symptoms (2026-05-25)
 docs/ADR.md                   # Architecture decisions
 docs/PERFORMANCE_SLOS.md      # Performance targets
 src/api/server.py              # Backend runtime
@@ -161,23 +162,25 @@ frontend-v2/src/App.tsx        # Frontend runtime
 
 ### Architectural Concerns
 
-| Concern | Impact |
-|---------|--------|
-| Electron IPC dependency leakage | SafeMode, ScreenAssist, TTS, window sizing require Electron IPC — no browser fallbacks |
-| Silent error handling | Multiple try/catch blocks swallow errors (chat title, profile updates, API calls) |
-| Loading states without timeouts | Memory and Orchestration panels show "Loading..." indefinitely |
-| Mock data in production | Tool Execution panel always shows demo entries |
+| Concern | Impact | Status |
+|---------|--------|--------|
+| Electron IPC for Screen Assist / TTS | Screen Assist and TTS require Electron main process; no browser fallback | Open — by design for desktop-only features |
+| Safe Mode in browser | REST fallback via `electronBridge.ts` when IPC unavailable | Mitigated (BUG-5 fixed) |
+| Silent error handling | Some try/catch blocks swallow errors (profile updates, API calls) | Open — partial mitigation in BUG-3/BUG-4 |
+| Memory/Orchestration loading UX | Panels could hang without feedback | Mitigated (BUG-2, BUG-3 fixed — error/empty states) |
+| Tool panel stale data | Mock or stale execution entries after disconnect | Mitigated (BUG-6 fixed) |
 
 ## Key Decisions
 
 | Decision | Rationale | Trade-off |
 |----------|-----------|-----------|
-| Phase 8 priority order | BUG-1 (persona leak) is release blocker \u2192 BUG-2 \u2192 BUG-3 \u2192 BUG-5 \u2192 ... | Lower-priority bugs may remain post-release |
+| Phase 8 complete | BUG-1 through BUG-11 fixed and verified | See [`docs/BUG-TRACKER.md`](BUG-TRACKER.md) |
 | Live Talk removal | Simplified codebase, reduced maintenance | Lost voice interaction capability |
+| Browser-first launch | `./start.sh` opens Vite; Electron optional via `npm run dev` | Desktop-only features inactive in browser |
 
 ## Next Plan
 
-All known Phase 8 bugs (BUG-1 through BUG-11) have been fixed. Remaining architectural concerns tracked above.
+All known Phase 8 bugs (BUG-1 through BUG-11) are fixed. Open work is remaining tasks R3, R5, R7, R9 (see above) and architectural concerns marked Open in the table.
 
 ### Lingering Risks
 
@@ -194,10 +197,11 @@ All known Phase 8 bugs (BUG-1 through BUG-11) have been fixed. Remaining archite
 
 ## Related
 
-- [`docs/BUG-ANALYSIS.md`](BUG-ANALYSIS.md) — bug inventory and analysis
+- [`docs/BUG-TRACKER.md`](BUG-TRACKER.md) — canonical fix log (BUG-1..11)
+- [`docs/BUG-ANALYSIS.md`](BUG-ANALYSIS.md) — historical audit symptoms
 - [`docs/ADR.md`](ADR.md) — architecture decisions
 - [`docs/PERFORMANCE_SLOS.md`](PERFORMANCE_SLOS.md) — performance targets
 
 ## Last updated
 
-2026-05-31 — `docs-standards-timeline` bug status reconciliation
+2026-06-10 — reconciled architectural concerns with fixed bug table; BUG-TRACKER is canonical
