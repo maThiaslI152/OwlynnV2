@@ -268,7 +268,9 @@ class TestTokenBudgetContextWindow:
             ),
         )
     )
-    @settings(max_examples=10, deadline=None, suppress_health_check=[HealthCheck.too_slow])
+    @settings(
+        max_examples=10, deadline=None, suppress_health_check=[HealthCheck.too_slow]
+    )
     def test_complex_budget_at_least_512_for_large_input(self, text: str):
         """Complex routes with large input have budget >= 512 (the context floor)."""
         for route in VALID_COMPLEX_ROUTES:
