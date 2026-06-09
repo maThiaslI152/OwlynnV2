@@ -90,6 +90,9 @@ PYTHONPATH=$(pwd) python -m pytest -q \
   tests/test_phase1_memory_orchestration.py \
   tests/test_memory_retrieve_gate.py \
   tests/test_memory_nodes.py
+
+# Full automated pipeline smoke (inject → router → retrieve → write → worker)
+./scripts/test_memory.sh
 ```
 
 ## Next phases

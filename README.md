@@ -152,12 +152,16 @@ Local models via LM Studio on port `1234`.
 **Current suite (local CI):** ~884 backend tests (pytest), 107 frontend tests (vitest). Benchmarks: 60 tests with `-m benchmark`.
 
 ```bash
-# Phase feature tests
+# Automated memory suite (unit + smoke)
+./scripts/test_memory.sh
+./scripts/test_memory.sh --redis   # include live Redis enqueue when Redis is up
+
+# Or pytest directly
 PYTHONPATH=$(pwd) pytest -q \
   tests/test_phase1_memory_orchestration.py \
   tests/test_memory_retrieve_gate.py \
-  tests/test_vision_schema.py tests/test_vision_proxy.py \
-  tests/test_phase3_screen_assist.py -m "not network"
+  tests/test_memory_orchestration_smoke.py \
+  -m "not network"
 ```
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for workflow details.
