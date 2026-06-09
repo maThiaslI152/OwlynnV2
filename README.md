@@ -1,252 +1,177 @@
----
-last_verified: 2026-05-26
-auto_generated: false
----
-
 # Owlynn — Local AI Cowork Agent
 
-[![Python](https://img.shields.io/badge/python-3.12+-blue)](https://python.org)
+[![Python](https://img.shields.io/badge/python-3.11+-blue)](https://python.org)
 [![Node](https://img.shields.io/badge/node-18+-green)](https://nodejs.org)
 [![CI](https://img.shields.io/badge/CI-local_scripts%2Fci.sh-059669)](scripts/ci.sh)
 [![Frontend](https://img.shields.io/badge/frontend-React_19_%2B_Vite_8-61DAFB)](frontend-v2/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-A private, local-first AI productivity agent. Runs entirely on your machine with LangGraph orchestration, three-tier LLM routing, and an Electron desktop frontend. Optimized for Apple Silicon (M4 Air 24GB).
+A private, local-first AI productivity agent. LangGraph orchestration, three-tier LLM routing (local + optional DeepSeek V4 cloud), semantic memory, and an Electron desktop UI. Optimized for Apple Silicon (M4 Air 24GB).
 
 ## Goal
 
-Owlynn is a **desktop AI coworker** that keeps your data local. It reasons through complex tasks, calls tools (web search, file ops, document generation, notebook execution), remembers across sessions via semantic vector memory, and gates sensitive operations behind human approval — all without sending data to the cloud unless you explicitly opt in.
+Owlynn is a **desktop AI coworker** that keeps your data local. It reasons through complex tasks, calls tools (web search, file ops, document generation, notebook execution, screen/terminal context), remembers across sessions via vector memory, and gates sensitive operations behind human approval — cloud escalation is opt-in.
 
-**Target user**: Developers and power users on Apple Silicon who want an AI assistant that respects privacy, runs locally, and can be extended with custom tools and skills.
+**Target user**: Developers and power users on Apple Silicon who want a privacy-respecting assistant with pentest/research workflows, optional cloud reasoning, and extensible tools/skills.
 
-## Overview
+## Highlights
 
-Owlynn is a desktop AI assistant that keeps data local. It uses a stateful cyclic LangGraph to orchestrate conversations through a small routing model, a medium reasoning model, and an optional cloud fallback — all with a security proxy that gates sensitive tool calls behind human approval.
+| Capability | Summary |
+|------------|---------|
+| **Routing** | MiniCPM5 router → `simple` \| `complex-default` \| `complex-cloud` |
+| **Memory orchestration** | Split inject (`memory_inject_lite` → router → gated `memory_retrieve`), async 8B extraction, PII scrub, pentest/research scenarios |
+| **Vision proxy** | Local VLM → JSON OCR → text-only DeepSeek path; lazy load + idle unload |
+| **Screen assist** | macOS tmux capture, Accessibility API, browser tab, Kali SSH tmux (Python tools) |
+| **HITL** | Security proxy + plan review for sensitive tool calls |
+| **Search** | wttr.in → SearXNG → curl_cffi → DDGS → Playwright |
+
+Full roadmap: [`docs/guides/memory-vision-screen-roadmap.md`](docs/guides/memory-vision-screen-roadmap.md)
 
 ## Entry Points
 
 ```text
-src/api/server.py          # FastAPI entry point (REST + WebSocket)
-src/agent/graph.py          # LangGraph graph builder, init_agent()
-frontend-v2/electron/main.ts # Electron main process runtime
-frontend-v2/src/App.tsx     # React app shell, WebSocket lifecycle
-./start.sh                  # Full stack launcher
-uvicorn src.api.server:app --host 127.0.0.1 --port 8000
+src/api/server.py            # FastAPI (REST + WebSocket + OpenAI-compatible API)
+src/agent/graph.py           # LangGraph builder, init_agent()
+frontend-v2/electron/main.ts   # Electron main process
+frontend-v2/src/App.tsx        # React shell + WebSocket lifecycle
+./start.sh                     # Full stack launcher
 ```
 
 ## Architecture
 
-```
+```text
 User Message
     │
     ▼
-memory_inject ──► (85% context?) ──► auto_summarize
-    │                                      │
-    ▼                                      ▼
-  router ─────────────────────────────────►│
-    │                                      │
+memory_inject_lite ──► profile, persona, topics (no vector search)
+    │
+    ▼
+router ──► simple | complex-default | complex-cloud; memory gate + scenario
+    │
+    ▼
+memory_retrieve ──► gated Qdrant/Mem0 + scenario markdown (when needed)
+    │
+    ▼
+auto_summarize? ──► if tokens > 85% context window
+    │
     ├── simple ──► memory_write ──► END
     │
-    └── complex_llm ──► (tool call?) ──► security_proxy
-            ▲                                  │
-            │                           (approved?) ──► tool_action
-            │                                              │
-            └──────────────────────────────────────────────┘
-                                    (loop back)
+    └── scope_clarify ──► complex_llm ◄──┐
+              │              │            │
+              │    [images + cloud] vision_proxy → DeepSeek (text only)
+              │              │            │
+              │    plan_review / security_proxy (HITL)
+              │              ▼
+              │         tool_action ─────┘
+              │
+              ▼
+         memory_write ──► PII scrub → Redis extraction queue → END
 ```
 
-The router uses the small LLM to classify requests into `simple` (greetings, quick answers) or `complex` (reasoning, tool use). Complex requests are further routed to the appropriate model variant: default, vision, long-context, or cloud.
+Routes: **`simple`**, **`complex-default`** (local Qwen), **`complex-cloud`** (DeepSeek V4). Legacy `complex-vision` / `complex-longctx` routes removed.
 
 ### Tech Stack
 
 | Layer | Technology |
-|-------|-----------|
-| Backend | `FastAPI` + `LangGraph` + Python 3.12+ |
+|-------|------------|
+| Backend | FastAPI + LangGraph + Python 3.11+ |
 | Frontend | React 19 + TypeScript (Vite 8) + Zustand 5, Electron desktop |
-| Small LLM | `minicpm5-1b` (MiniCPM5 1B, routing/classification) |
-| Medium LLM | `qwen3.5-9b-uncensored-hauhaucs-aggressive@q6_k` (local complex + vision) |
-| Cloud LLM | `deepseek-v4-flash` / `deepseek-v4-pro` (DeepSeek API, optional `complex-cloud` route) |
-| File Processing | Docling v2.96 (PDF/DOCX — layout-aware markdown, table structure detection) |
-| Memory | Mem0 + Qdrant + JSON files |
-| Checkpointing | Redis (falls back to in-memory `MemorySaver`) |
-| Search | Multi-tier: wttr.in / SearXNG (self-hosted) → curl_cffi / DDGS → Playwright |
-| Testing | `pytest` + `hypothesis` (backend), `vitest` + `@testing-library/react` (frontend) |
-| Desktop | Electron (macOS, Node IPC bridges) |
-
-## Project Progress
-
-### Phase Completion
-
-| Phase | Status | Description |
-|-------|--------|-------------|
-| Phase 1: Stabilization | Done | Browser multi-switch harness, WS+CRUD timing tests, frontend cutover |
-| Phase 2: Reliability | Done | Route/fallback telemetry, WS contract tests, CI gate standardization |
-| Phase 3: Capability | Done | Enhanced summarize/context compression, project knowledge panel |
-| Phase 4: Governance | Done | ADR log (11 decisions), performance SLOs, release train alignment |
-| Phase 5: Live Test | Done | Dead test removal, tool awareness assertions — 203 passed |
-| Phase 6: MVP Hardening | Done | Env config, logging, dependency pinning, 89 new tests |
-| Phase 7: Test Fixes | Done | 13 skipped tests fixed. **724 passed, 0 failed, 5 skipped** (Redis/integration) |
-| **Phase 8: Bug Fixes** | **In Progress** | Fixing 8 bugs found in browser audit (see below) |
-
-Test suite: **724 backend** (pytest + hypothesis), **77 frontend** (vitest + testing-library). All passing.
-
-### Known Bugs (Phase 8)
-
-| Severity | Bug | Location |
-|----------|-----|----------|
-| **CRITICAL** | Persona/system prompt leaks into first assistant response | `src/agent/nodes/simple.py` / `complex.py` |
-| **HIGH** | Orchestration panel empty after message processing | `OrchestrationPanel.tsx` |
-| **HIGH** | Memory panel shows "Loading..." indefinitely | `MemoryPanel.tsx` |
-| MEDIUM | Chat auto-title defaults to "New Chat" | `src/api/server.py` |
-| MEDIUM | Safe Mode depends on Tauri IPC, no browser fallback | `SafeModePanel.tsx` |
-| LOW | Tool Execution panel shows permanent mock data | `ToolExecutionPanel.tsx` |
-| LOW | Workspace delete shows wrong operator note | `App.tsx` |
-| LOW | Audit & Verify sub-panel doesn't expand | `ToolExecutionPanel.tsx` |
-
-Full status: [`docs/STATUS.md`](docs/STATUS.md) | Bug analysis: [`docs/BUG-ANALYSIS.md`](docs/BUG-ANALYSIS.md)
-
-### Architectural Concerns
-
-- **Electron IPC dependency**: SafeMode, ScreenAssist, and window sizing require Electron IPC — no browser fallbacks.
-- **Silent error handling**: Multiple try/catch blocks swallow errors silently.
-- **Loading states without timeouts**: Memory and Orchestration panels can hang indefinitely.
-
-Performance and memory SLOs: [`docs/PERFORMANCE_SLOS.md`](docs/PERFORMANCE_SLOS.md)
+| Router LLM | `minicpm5-1b` (classification) |
+| Medium LLM | `qwen3.5-9b-uncensored-hauhaucs-aggressive@q6_k` (local complex + vision proxy) |
+| Cloud LLM | `deepseek-v4-flash` / `deepseek-v4-pro` (optional `complex-cloud`) |
+| File processing | Docling v2 (PDF/DOCX → markdown) |
+| Memory | Mem0 + Qdrant + JSON STM; Redis extraction worker |
+| Checkpointing | Redis (`AsyncRedisSaver`; falls back to in-memory) |
+| Search | Multi-tier: wttr.in / SearXNG → curl_cffi / DDGS → Playwright |
+| Testing | pytest + hypothesis (backend), vitest (frontend) |
+| CI | Local [`scripts/ci.sh`](scripts/ci.sh) (pre-push hook) |
 
 ## Project Structure
 
 ```text
-src/agent/           LangGraph orchestration
-  ├── graph.py         Graph builder and init_agent()
-  ├── llm.py           LLMPool singleton (small + medium + cloud)
-  ├── swap_manager.py  Hot-swap M-tier models via LM Studio API
-  ├── state.py         AgentState TypedDict
-  └── nodes/           Node implementations
-      ├── router.py      5-way routing with HITL clarification
-      ├── complex.py     Reasoning node with tool binding + fallback
-      ├── simple.py      Fast answers via small LLM
-      ├── memory.py      Memory inject/write nodes
-      ├── security_proxy.py  HITL gate for sensitive tools
-      └── summarize.py  Auto-summarize when context is near capacity
+src/agent/
+  graph.py, llm.py, state.py, tool_sets.py
+  nodes/
+    router.py, complex.py, simple.py, memory.py, summarize.py
+    complex_utils/vision_proxy.py, vision_schema.py, vision_model_manager.py
+    security_proxy.py, scope_clarify.py, plan_review.py
 
-src/api/             FastAPI backend
-  ├── server.py        REST endpoints + WebSocket streaming
-  └── file_processor.py  Watchdog-based file watcher + format extraction
+src/memory/
+  long_term.py, memory_manager.py, personal_assistant.py
+  extraction/          # async 8B atom extractor (Redis stream)
+  scenarios.py         # pentest + research L2/L3 markdown loader
+  compression.py       # cloud brief memory block
 
-src/memory/          Memory system
-  ├── memory_manager.py     JSON-based fact storage + keyword search
-  ├── personal_assistant.py Topic/interest extraction with time decay
-  ├── user_profile.py       User profile management
-  ├── persona.py            Agent persona configuration
-  ├── project.py            Project CRUD manager
-  └── long_term.py          Mem0 + Qdrant integration
+src/tools/
+  core_tools.py, web_tools.py, doc_generator.py, notebook.py, skills.py
+  screen_assist/       # tmux, AX, browser, Kali SSH tools
 
-src/tools/           Tool implementations (20 tools)
-  ├── core_tools.py         File ops + memory recall
-  ├── web_tools.py          web_search + fetch_webpage
-  ├── web_search_enhanced.py SearXNG integration
-  ├── doc_generator.py      DOCX/XLSX/PPTX/PDF generation
-  ├── notebook.py           Python REPL sandbox
-  ├── todo.py               Task management
-  ├── skills.py             Reusable prompt templates
-  └── ask_user.py           HITL clarification tool
+scenarios/
+  pentest/, research/  # playbook + constraints markdown
 
-src/config/          Configuration
-  └── settings.py      Global settings + M4 optimization config
-
-frontend-v2/          React 19 + TypeScript frontend (active)
-  ├── src/
-  │   ├── components/    Composer, OrchestrationPanel, SafeModePanel,
-  │   │                   ScreenAssistPanel, ToolExecutionPanel,
-  │   │                   ActionProposalQueue,
-  │   │                   ProjectKnowledgePanel, AppShell
-  │   ├── state/         Zustand store (useAppStore)
-  │   ├── types/         WebSocket protocol type definitions
-  │   └── lib/           tauriBridge, wsClient
-  └── package.json
-
-frontend-v2/electron/    Electron Node.js runtime
-  ├── main.ts           Electron main process + IPC handlers
-  └── preload.ts        Context bridge exposition
-
-skills/              Reusable prompt templates (markdown)
-data/                User data (profile, memories, todos, topics)
-tests/               pytest + hypothesis test suite
-docs/                Architecture and API documentation
+frontend-v2/           # React + Electron UI
+tests/                 # pytest + benchmarks
+docs/                  # architecture, guides, API reference
 ```
 
 ## Configuration
 
+Settings live in `src/config/defaults.yaml` (override chain: YAML → env → `user_profile.json`).
+
 ### Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `REDIS_URL` | `redis://localhost:6379` | Redis for LangGraph checkpointing |
-| `QDRANT_HOST` | `localhost` | Qdrant host for vector memory |
-| `QDRANT_PORT` | `6333` | Qdrant port |
-| `SEARXNG_URL` | _(empty)_ | SearXNG URL (e.g. `http://localhost:8888`) |
-| `DEEPSEEK_API_KEY` | _(empty)_ | Optional DeepSeek API key — prefer `.env.local` (see `.env.local.example`) |
-| `OPTIMIZE_FOR_M4` | `false` | Optional M4 Air timeouts/memory limits |
+| Variable | Description |
+|----------|-------------|
+| `REDIS_URL` | LangGraph checkpointing + memory extraction stream |
+| `QDRANT_HOST` / `QDRANT_PORT` | Vector memory |
+| `SEARXNG_URL` | Self-hosted search (e.g. `http://localhost:8888`) |
+| `DEEPSEEK_API_KEY` | Optional cloud route (`complex-cloud`) |
+| `KALI_SSH_HOST` | Remote Kali VM for `capture_kali_terminal` |
+| `SCREEN_ASSIST_TMUX_SESSION` | Default local tmux session name |
+| `OPTIMIZE_FOR_M4` | M4 Air timeouts and memory limits |
 
 ### LLM Setup
 
-Models configured in `src/config/defaults.yaml`, overridden by `.env` / `.env.local` / Settings UI:
+| Slot | Default model | Role |
+|------|---------------|------|
+| Small | `minicpm5-1b` | Router |
+| Medium | `qwen3.5-9b-...@q6_k` | Local complex + vision proxy |
+| Cloud | `deepseek-v4-flash` | DeepSeek V4 (`complex-cloud`) |
 
-| Slot | Config path | Default | Description |
-|------|------------|---------|-------------|
-| Small LLM | `models.small.model_name` | `minicpm5-1b` | Router / classification |
-| Medium LLM | `models.medium.model_name` | `qwen3.5-9b-...@q6_k` | Local complex + vision |
-| Cloud LLM | `models.cloud.model_name` | `deepseek-v4-flash` | DeepSeek V4 (`complex-cloud`) |
-
-Routes: `simple`, `complex-default`, `complex-cloud` only.
-
-All local models served via LM Studio on port 1234.
-
-## Prerequisites
-
-- Python 3.12+ with `pip`/`uv`
-- LM Studio with models loaded on port 1234
-- Docker/Podman for Qdrant and SearXNG containers
-- Node.js 18+ for frontend tests and Electron build
+Local models via LM Studio on port `1234`.
 
 ## Testing
 
-Local CI via `scripts/ci.sh` (runs pre-push). See [`CONTRIBUTING.md`](CONTRIBUTING.md) for full development workflow.
-
 ```bash
-./scripts/ci.sh              # Full suite (Python + frontend tests + build)
-./scripts/ci.sh --quick      # Skip frontend build
+./scripts/ci.sh              # Full suite (Python + frontend + build)
+./scripts/ci.sh --quick      # Skip frontend production build
 ./scripts/ci.sh --python-only
+./scripts/ci.sh --benchmarks # Optional latency benchmarks
 ```
 
-### Backend (`pytest` + `hypothesis`)
+**Current suite (local CI):** ~884 backend tests (pytest), 107 frontend tests (vitest). Benchmarks: 60 tests with `-m benchmark`.
 
 ```bash
-pytest tests/ -v
-pytest tests/test_crud_properties.py -v
-pytest tests/ -v --hypothesis-show-statistics
+# Phase feature tests
+PYTHONPATH=$(pwd) pytest -q \
+  tests/test_phase1_memory_orchestration.py \
+  tests/test_memory_retrieve_gate.py \
+  tests/test_vision_schema.py tests/test_vision_proxy.py \
+  tests/test_phase3_screen_assist.py -m "not network"
 ```
 
-### Frontend (`vitest` + `@testing-library/react`)
-
-```bash
-cd frontend-v2
-npx vitest run
-```
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for workflow details.
 
 ## Quick Start
 
 ### One-time setup
 
 ```bash
-git clone <repo-url> && cd owlynn
-./setup.sh              # containers, venv, pip install, Docling models, .env
+git clone <repo-url> && cd OwlynnV2
+./setup.sh    # containers, venv, pip, Docling models, .env
 ```
 
-Edit `.env` and set your LM Studio model name:
-```
-MEDIUM_LLM_MODEL_NAME=gemma-4-e4b-uncensored-hauhaucs-aggressive
-```
+Set models in `.env` or the Settings UI (see [`docs/guides/dev-startup.md`](docs/guides/dev-startup.md)).
 
 ### Launch
 
@@ -254,191 +179,102 @@ MEDIUM_LLM_MODEL_NAME=gemma-4-e4b-uncensored-hauhaucs-aggressive
 ./start.sh
 ```
 
-Launches 3 stages:
-1. **Podman containers** — Qdrant (port 6333) + Redis (port 6379)
-2. **LM Studio** — prompts you to start the server on port 1234
-3. **Backend + Frontend** — uvicorn (port 8000) + Vite dev server
+Starts Podman containers (Qdrant + Redis), prompts for LM Studio on `:1234`, then backend (`:8000`) + Vite (`:5173`).
 
-## Electron Desktop App
+### Browser-only dev
 
-The application is primarily distributed as an Electron `.app` for macOS.
+```bash
+# Terminal 1
+source .venv/bin/activate && uvicorn src.api.server:app --host 127.0.0.1 --port 8000
 
-To build the desktop application locally:
+# Terminal 2
+cd frontend-v2 && npx vite --host 127.0.0.1
+```
+
+Open `http://127.0.0.1:5173`. Safe Mode and Screen Assist **preview** need Electron IPC; **backend** screen assist tools work headless on macOS.
+
+### Electron desktop build
 
 ```bash
 cd frontend-v2 && npm run build
 ```
 
-This will output the packaged `.app` and `.dmg` inside `frontend-v2/dist/`.
+Output: `frontend-v2/dist/` (`.app` / `.dmg` on macOS).
 
-Press `Ctrl+C` to stop all services.
-
-### Browser-Only (Backend + Frontend HMR)
-
-```bash
-# Terminal 1 — backend
-source .venv/bin/activate && uvicorn src.api.server:app --host 127.0.0.1 --port 8000
-
-# Terminal 2 — frontend (hot reload)
-cd frontend-v2 && npx vite --host 127.0.0.1
-```
-
-Open `http://127.0.0.1:5173`. Safe Mode and Screen Assist require Electron IPC — unavailable in browser mode.
-
-### CLI / Headless (Backend Only)
-
-```bash
-source .venv/bin/activate
-uvicorn src.api.server:app --host 127.0.0.1 --port 8000
-```
-
-Backend at `http://127.0.0.1:8000`. Use REST API or WebSocket (`ws://127.0.0.1:8000/ws/chat/{thread_id}`). Full API reference in [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md).
-
-| Mode | Backend | Frontend | Electron | Best For |
-|------|---------|----------|----------|----------|
-| `./start.sh` | Yes | Vite HMR | No | Daily browser use |
-| Browser (manual) | Yes | Vite HMR | No | Dev, hot reload |
-| CLI | Yes | No | No | Scripting, API testing |
-
-## API
-
-### REST Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/health` | Health check (agent ready status) |
-| `GET` | `/api/profile` | Get user profile |
-| `POST` | `/api/profile` | Update user profile |
-| `GET` | `/api/memories` | List stored short-term (JSON) memories |
-| `POST` | `/api/memories` | Save a fact to short-term memory |
-| `DELETE` | `/api/memories` | Delete from short-term memory |
-| `GET` | `/api/mem0/search` | Search Mem0/Qdrant vector long-term memory |
-| `GET` | `/api/mem0/count` | Count memories in Mem0 |
-| `POST` | `/api/mem0/delete` | Delete a memory by ID from Mem0 |
-| `GET` | `/api/projects` | List all projects |
-| `POST` | `/api/projects` | Create a project |
-| `GET` | `/api/topics` | Get tracked topics with relevance |
-| `GET` | `/api/files` | List workspace files |
-| `GET` | `/api/tools` | List available tools |
-| `WS` | `/ws/chat/{thread_id}` | WebSocket for streaming chat |
-
-Full reference: [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md)
-
-## Tools (22)
+## Tools
 
 | Category | Tools |
 |----------|-------|
-| Web | `web_search`, `fetch_webpage` |
-| Files | `read`, `write`, `edit`, `list`, `delete` workspace files |
+| Web | `web_search`, `fetch_webpage`, `deep_research` |
+| Files | `read_workspace_file`, `write_workspace_file`, `edit_workspace_file`, `list_workspace_files`, `delete_workspace_file` |
 | Documents | `create_docx`, `create_xlsx`, `create_pptx`, `create_pdf` |
 | Compute | `notebook_run`, `notebook_reset` |
-| Memory | `recall_memories`, `recall_all_memories`, `forget_memory` |
-| Tasks | `todo_add`, `todo_list`, `todo_complete` |
-| System prompts | `list_skills`, `invoke_skill` |
-| HITL | `ask_user` (with choice buttons) |
+| Memory | `recall_memories`, `recall_all_memories`, `forget_memory`, `search_workspace_docs` |
+| Screen assist | `capture_local_terminal`, `read_screen_element`, `get_active_browser_context`, `capture_kali_terminal` |
+| Tasks / skills | `todo_*`, `list_skills`, `invoke_skill` |
+| HITL | `ask_user` |
 
-## Skills (18)
-
-Reusable prompt templates in `skills/`. Zero token cost until invoked.
-
-| Skill | Triggers |
-|-------|----------|
-| Research Assistant | research, investigate |
-| Document Summarizer | summarize, tldr |
-| Morning Briefing | briefing, daily summary |
-| Visual Comparison | compare, vs, chart |
-| Data Visualization | graph, plot, histogram |
-| Data Analyzer | analyze data, statistics, insights, trends |
-| Meeting Notes | meeting notes, action items |
-| Email Drafter | draft email, compose |
-| Report Generator | create report, weekly report |
-| Presentation Builder | make slides, powerpoint |
-| Content Rewriter | rewrite, polish, proofread |
-| Brainstorm | brainstorm, ideas, what if |
-| Code Reviewer | review code, code review, review |
-| Fact Checker | fact check, verify, check facts |
-| Information Scanner | scan, find, search for information |
-| Explainer | explain, how does, what is |
-| Todo Planner | plan tasks, organize, schedule |
-| Weekly Review | weekly review, week summary, recap |
+Toolbox categories: `web_search`, `file_ops`, `data_viz`, `productivity`, `memory`, `screen_assist`, `all`. See [`docs/TOOLS.md`](docs/TOOLS.md).
 
 ## Memory System
 
-Three-tier memory architecture:
+| Tier | Storage | Role |
+|------|---------|------|
+| STM | `data/memories.json` | Keyword facts |
+| LTM | Qdrant + Mem0 | Semantic recall (gated per turn) |
+| L1 atoms | Qdrant via extractor | Structured facts (JSDoc / JSON) |
+| L2/L3 | `scenarios/*/playbook.md` | Pentest / research workflows |
+| Personal | topics, interests, conversations | Time-decay context |
 
-### Short-Term Memory (JSON)
+**Inject path:** `memory_inject_lite` → router decides `needs_memory_retrieval` → `memory_retrieve`.
 
-- File-based fact storage in `data/memories.json`
-- Managed by `src/memory/memory_manager.py`
-- Simple keyword-overlap search, 200-entry cap
-- Used for quick recall of user facts during a session
+**Write path:** PII scrub → enqueue Redis stream `owlynn:memory:extract` → 8B worker → Qdrant.
 
-### Long-Term Memory (Mem0 + Qdrant)
+Details: [`docs/MEMORY.md`](docs/MEMORY.md) · [`docs/guides/memory-orchestration-phase1.md`](docs/guides/memory-orchestration-phase1.md)
 
-- Vector-based semantic memory with Mem0 + Qdrant backend (`cowork_memory_nomic` collection)
-- Embeddings: LM Studio (`nomic-embed-text-v1.5`, 768-dim)
-- Managed by `src/memory/long_term.py`
+## API
 
-| Feature | Description |
-|---------|-------------|
-| Project isolation | Memories scoped by `project:<id>`. `default` project uses global `owner` user ID |
-| Cross-session recall | Semantic search surfaces memories from past conversations within same project |
-| Cross-project knowledge | Non-default projects pull global user memories (profile name) |
-| Selective memory gate | Skips trivial/greeting exchanges |
-| Semantic dedup | Similarity search before write avoids near-duplicates |
-| Context cache | 5-minute `MemoryContextCache` per thread |
-| WebSocket notification | `memory_updated` event triggers UI refresh |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/health` | Health + agent ready |
+| `GET`/`POST` | `/api/profile` | User profile |
+| `GET`/`POST`/`DELETE` | `/api/memories` | Short-term JSON memories |
+| `GET` | `/api/mem0/search` | Vector memory search |
+| `GET`/`POST` | `/api/projects` | Project CRUD |
+| `WS` | `/ws/chat/{thread_id}` | Streaming chat |
 
-### Personal Assistant Memory
-
-Managed by `src/memory/personal_assistant.py`:
-
-- Topic extraction: regex-based, 10 categories, stored in `data/topics.json`
-- Interest detection: 8 types, stored in `data/interests.json`
-- Conversation summaries: last 100 entries in `data/conversations.json`
-- Time-decay relevance scoring
-
-### Memory Tools
-
-| Tool | Description |
-|------|-------------|
-| `recall_memories` | Search short-term JSON memories (keyword overlap) |
-| `recall_all_memories` | Deep semantic search of Mem0/Qdrant vector store |
-| `forget_memory` | Delete specific memories by their ID hash |
-
-### Memory Node Flow (LangGraph)
-
-1. `memory_inject_node` (pre-reasoning): Builds memory context from Mem0 + profile + topics + project instructions
-2. `memory_write_node` (post-reasoning): Extracts topics/interests, saves enriched facts to Mem0, invalidates cache
-
-## Key Decisions
-
-| Decision | Rationale | Trade-off |
-|----------|-----------|-----------|
-| Three-tier LLM routing | Local-first with cloud fallback | Added swap latency for M-tier model changes |
-| LangGraph orchestration | Stateful cyclic graph with checkpointing | More complex than linear pipelines |
-| Tauri desktop shell | Native macOS integration, small binary | macOS-only features, Tauri IPC dependency |
-| Mem0 + Qdrant memory | Semantic vector search | Requires Docker container for Qdrant |
-| Security proxy HITL | Gated destructive operations | Adds latency for approved sensitive tool calls |
+Full reference: [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md) · WebSocket contract: [`docs/CHAT_PROTOCOL.md`](docs/CHAT_PROTOCOL.md)
 
 ## Documentation
 
-- [`docs/ARCHITECTURE_OVERVIEW.md`](docs/ARCHITECTURE_OVERVIEW.md)
-- [`docs/AGENT_FLOW.md`](docs/AGENT_FLOW.md)
-- [`docs/TOOLS.md`](docs/TOOLS.md)
-- [`docs/CHAT_PROTOCOL.md`](docs/CHAT_PROTOCOL.md)
-- [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md)
-- [`docs/STATUS.md`](docs/STATUS.md) — project status, known bugs, next steps
-- [`docs/ADR.md`](docs/ADR.md) — architecture decision records
-- [`docs/PERFORMANCE_SLOS.md`](docs/PERFORMANCE_SLOS.md) — latency, memory, CPU targets
-- [`docs/BUG-ANALYSIS.md`](docs/BUG-ANALYSIS.md) — bug inventory and audit reports
-- [`docs/HUMAN_PROJECT_GUIDE.md`](docs/HUMAN_PROJECT_GUIDE.md) — human workflow guide
-- [`docs/AI_AGENT_PROJECT_GUIDE.md`](docs/AI_AGENT_PROJECT_GUIDE.md) — AI agent execution guide
-- [`docs/AI_AGENT_INDEX.md`](docs/AI_AGENT_INDEX.md) — file-level navigation for AI agents
+| Doc | Topic |
+|-----|-------|
+| [`docs/architecture/overview.md`](docs/architecture/overview.md) | System overview |
+| [`docs/AGENT_FLOW.md`](docs/AGENT_FLOW.md) | LangGraph nodes and edges |
+| [`docs/guides/memory-vision-screen-roadmap.md`](docs/guides/memory-vision-screen-roadmap.md) | Memory + vision + screen assist |
+| [`docs/architecture/VISION_PROXY.md`](docs/architecture/VISION_PROXY.md) | Cloud vision / OCR pipeline |
+| [`docs/guides/screen-assist-phase3.md`](docs/guides/screen-assist-phase3.md) | Terminal / AX / Kali tools |
+| [`docs/architecture/DEEPSEEK_V4_INTEGRATION.md`](docs/architecture/DEEPSEEK_V4_INTEGRATION.md) | Cloud routing and security |
+| [`docs/CLOUD-LLM-ARCHITECTURE.md`](docs/CLOUD-LLM-ARCHITECTURE.md) | Cloud payload and anonymization |
+| [`docs/WEB_SEARCH.md`](docs/WEB_SEARCH.md) | Search tier fallbacks |
+| [`docs/STATUS.md`](docs/STATUS.md) | Project status and known issues |
+| [`docs/INDEX.md`](docs/INDEX.md) | Full doc manifest |
+
+## Key Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| Local-first routing | Privacy + latency; cloud only on `complex-cloud` |
+| Split memory inject | Sub-300ms router path; vector search gated after classification |
+| Custom extraction (no mem0 infer) | Controlled atom schema + guaranteed PII scrub before LTM |
+| Vision as OCR sensor | DeepSeek V4 is text-only; structured JSON not prose |
+| Screen assist in Python | tmux/AX/browser need native macOS, not only Electron |
+| LangGraph + Redis checkpoint | Stateful tool loops with resume across sessions |
+| Local CI | `scripts/ci.sh` on pre-push instead of GitHub Actions quota |
 
 ## Contributing
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) for development setup, code style, and testing guidelines. PRs welcome — please scope changes per the `docs/AI_AGENT_INDEX.md` concern areas and ensure all tests pass before submitting.
+See [`CONTRIBUTING.md`](CONTRIBUTING.md). Run `./scripts/ci.sh --quick` before pushing.
 
 ## License
 
