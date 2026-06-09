@@ -1,7 +1,7 @@
 ---
 status: active
 category: reference
-last_updated: 2026-06-07
+last_updated: 2026-06-09
 owner: ai-agent
 ---
 
@@ -11,17 +11,33 @@ owner: ai-agent
 
 ```yaml
 manifest:
-  version: 4
-  generated: "2026-06-07T22:00:00Z"
+  version: 5
+  generated: "2026-06-09T12:00:00Z"
   files:
+    - path: docs/architecture/VISION_PROXY.md
+      status: active
+      category: architecture
+      last_updated: 2026-06-09
+    - path: docs/guides/memory-vision-screen-roadmap.md
+      status: active
+      category: guide
+      last_updated: 2026-06-09
+    - path: docs/guides/screen-assist-phase3.md
+      status: active
+      category: guide
+      last_updated: 2026-06-09
+    - path: docs/guides/memory-orchestration-phase1.md
+      status: active
+      category: guide
+      last_updated: 2026-06-09
     - path: docs/CLOUD-LLM-ARCHITECTURE.md
       status: active
       category: architecture
-      last_updated: 2026-06-07
+      last_updated: 2026-06-09
     - path: docs/architecture/DEEPSEEK_V4_INTEGRATION.md
       status: active
       category: architecture
-      last_updated: 2026-06-07
+      last_updated: 2026-06-09
     - path: docs/changes/knowledge-cache-markdown-fixes/CHANGELOG.md
       status: active
       category: changelog
@@ -51,7 +67,7 @@ manifest:
     - path: docs/MEMORY.md
       status: active
       category: architecture
-      last_updated: 2026-06-04
+      last_updated: 2026-06-09
     - path: docs/changes/backend-stabilization/CHANGELOG.md
       status: active
       category: changelog

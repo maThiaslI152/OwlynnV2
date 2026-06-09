@@ -112,6 +112,9 @@ cloud:
   thinking_min_budget: 8192
   tool_loop_force_thinking: true
   vision_transcription_cache_ttl: 3600
+  vision_idle_unload_seconds: 300          # Drop lazy VLM client after idle
+  vision_max_tokens: 2048
+  vision_temperature: 0.1
 
   embedding:
     base_url: "http://127.0.0.1:1234/v1"
@@ -177,6 +180,27 @@ memory:
     interest_half_life_days: 21
     focus_window_days: 3
     relevance_floor: 0.05
+
+  extraction:
+    temperature: 0.1
+    max_tokens: 1024
+
+  cloud_inject_max_chars: 800
+
+# ── Screen assist (Phase 3) ──────────────────────────────────────────────────
+screen_assist:
+  enabled: true
+  tmux_session: "owlynn"                   # Default local tmux target
+  tmux_history_lines: 200
+  ax_blindspot_crop_size: 512              # Vision fallback when AX empty
+  browser_cdp_url: ""                      # Optional Playwright CDP (e.g. :9222)
+  kali:
+    host: ""                               # KALI_SSH_HOST env
+    user: "kali"
+    port: 22
+    tmux_session: "main"
+    history_lines: 200
+    identity_file: ""                      # Optional SSH key path
 
 # ── Web Search ───────────────────────────────────────────────────────────────
 web_search:

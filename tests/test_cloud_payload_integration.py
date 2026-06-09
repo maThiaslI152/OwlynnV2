@@ -140,10 +140,12 @@ class TestVisionTranscriptionCache:
         messages = [HumanMessage(content=[image_block])]
 
         mock_llm = AsyncMock()
-        mock_llm.ainvoke.return_value = MagicMock(content="screenshot text")
+        mock_llm.ainvoke.return_value = MagicMock(
+            content='{"text_blocks":[{"text":"screenshot text"}],"subjects":[],"confidence":0.9}'
+        )
 
         with patch(
-            "src.agent.nodes.complex_utils.vision_proxy.get_medium_llm",
+            "src.agent.nodes.complex_utils.vision_proxy.get_vision_llm",
             AsyncMock(return_value=mock_llm),
         ):
             out1, ok1 = await vp.process_vision_messages(messages)

@@ -20,6 +20,7 @@ def build_cloud_brief(
     clarified_scope: dict | None = None,
     plan_review_summary: dict | None = None,
     memory_context: str | None = None,
+    knowledge_context: str | None = None,
     last_user_message: str = "",
     last_assistant_summary: str = "",
     selected_toolboxes: list[str] | None = None,
@@ -52,10 +53,15 @@ def build_cloud_brief(
         else:
             constraint_lines.append("Plan review skipped or denied.")
 
-    if memory_context:
-        safe_context = _filter_memory_context(memory_context)
+    if memory_context or knowledge_context:
+        from src.memory.compression import compress_memory_for_cloud
+
+        safe_context = compress_memory_for_cloud(
+            _filter_memory_context(memory_context) if memory_context else None,
+            knowledge_context,
+        )
         if safe_context:
-            constraint_lines.append(f"Memory: {safe_context}")
+            constraint_lines.append(safe_context)
 
     if selected_toolboxes:
         constraint_lines.append(f"Toolboxes: {', '.join(selected_toolboxes)}")

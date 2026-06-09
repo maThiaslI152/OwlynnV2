@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 # Stub mem0 before any project imports
 sys.modules["mem0"] = MagicMock()
 
-from src.agent.graph import summarize_gate, build_graph
+from src.agent.graph import after_memory_retrieve, summarize_gate, build_graph
 
 
 class TestSummarizeGate:
@@ -66,13 +66,25 @@ class TestGraphStructure:
         """All expected nodes should be present in the graph."""
         builder = build_graph()
         expected = {
-            "memory_inject",
+            "memory_inject_lite",
+            "memory_retrieve",
             "auto_summarize",
             "router",
             "simple",
+            "scope_clarify",
             "complex_llm",
             "security_proxy",
             "tool_action",
             "memory_write",
         }
         assert expected.issubset(set(builder.nodes.keys()))
+
+
+class TestAfterMemoryRetrieve:
+    def test_routes_simple_when_not_summarizing(self):
+        state = {"active_tokens": 100, "route": "simple"}
+        assert after_memory_retrieve(state) == "simple"
+
+    def test_routes_scope_clarify_for_complex(self):
+        state = {"active_tokens": 100, "route": "complex-cloud"}
+        assert after_memory_retrieve(state) == "scope_clarify"

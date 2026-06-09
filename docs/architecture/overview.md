@@ -40,7 +40,8 @@ Browser (http://127.0.0.1:5173)
 | **Complex Node** | `src/agent/nodes/complex.py` | Tool-augmented reasoning — local Qwen or cloud DeepSeek V4 |
 | **Cloud payload** | `src/agent/nodes/complex_utils/cloud_payload.py` | Anonymization, brief gate, stable/volatile prompt layers, cache metrics |
 | **Cloud invoke** | `src/agent/nodes/complex_utils/cloud_invoke.py` | Raw DeepSeek client, tool strict mode, reasoning replay |
-| **Vision proxy** | `src/agent/nodes/complex_utils/vision_proxy.py` | Local vision → text for cloud path; hash cache |
+| **Vision proxy** | `vision_proxy.py`, `vision_schema.py`, `vision_model_manager.py` | Lazy VLM → JSON OCR → text for DeepSeek cloud path |
+| **Screen assist** | `src/tools/screen_assist/` | tmux, macOS AX, browser, Kali SSH tools |
 | **Memory** | `src/agent/nodes/memory.py` | Memory injection + write: STM, LTM (Mem0/Qdrant), personal context |
 | **Summarizer** | `src/agent/nodes/summarize.py` | Auto-compress older turns when context >85% of window |
 | **HITL** | `src/agent/hitl/` | Safety gates: scope_clarify, plan_review, security_proxy |

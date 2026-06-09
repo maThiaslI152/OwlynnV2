@@ -39,7 +39,9 @@ complex_llm_node
 |--------|---------|
 | [`cloud_payload.py`](src/agent/nodes/complex_utils/cloud_payload.py) | Stable/volatile prompt layers, brief cache (300s TTL), thinking config, cache metrics extraction |
 | [`cloud_invoke.py`](src/agent/nodes/complex_utils/cloud_invoke.py) | Raw OpenAI client, `/v1` + `/beta` fallback, `reasoning_content` on tool loops |
-| [`vision_proxy.py`](src/agent/nodes/complex_utils/vision_proxy.py) | Local Qwen vision → text for DeepSeek; hash cache (3600s TTL) |
+| [`vision_proxy.py`](src/agent/nodes/complex_utils/vision_proxy.py) | Lazy VLM → JSON OCR → text for DeepSeek; hash cache + idle unload |
+| [`vision_schema.py`](src/agent/nodes/complex_utils/vision_schema.py) | OCR/layout JSON parse + cloud formatting |
+| [`vision_model_manager.py`](src/agent/nodes/complex_utils/vision_model_manager.py) | Lazy load / idle unload of local VLM client |
 | [`cloud_cost_tracker.py`](src/agent/cloud_cost_tracker.py) | Per-session tokens, cache hit ratio, USD estimate |
 
 ### Cache Layers (current)

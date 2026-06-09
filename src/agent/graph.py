@@ -10,7 +10,11 @@ from src.agent.nodes.complex import complex_llm_node, complex_tool_action_node
 from src.agent.nodes.security_proxy import security_proxy_node
 from src.agent.nodes.scope_clarify import scope_clarify_node
 from src.agent.nodes.plan_review import plan_review_node
-from src.agent.nodes.memory import memory_inject_node, memory_write_node
+from src.agent.nodes.memory import (
+    memory_inject_lite_node,
+    memory_retrieve_node,
+    memory_write_node,
+)
 from src.agent.nodes.summarize import auto_summarize_node
 
 import logging
@@ -20,7 +24,7 @@ logger = logging.getLogger(__name__)
 from src.config.audit_log import audit_debug, set_route
 from src.config.config_loader import config
 
-# ── Summarize gate: conditional edge from memory_inject ───────────────
+# ── Summarize gate: conditional edge after memory_retrieve ───────────
 
 _DEFAULT_CONTEXT_WINDOW = int(
     config.get("models.medium.variants.default.context_window", 16384)
@@ -92,6 +96,14 @@ def route_decision(state: AgentState) -> str:
         reason="unrecognised_fallback",
     )
     return "scope_clarify"
+
+
+def after_memory_retrieve(state: AgentState) -> str:
+    """Summarize when over token threshold, else branch simple vs complex."""
+    gate = summarize_gate(state)
+    if gate == "auto_summarize":
+        return "auto_summarize"
+    return route_decision(state)
 
 
 def scope_clarify_next(state: AgentState) -> str:
@@ -182,8 +194,7 @@ def build_graph():
     scope_clarify → plan_review → security_proxy → tool_action.
 
     Flow:
-      memory_inject -> summarize_gate -> (if >85%) auto_summarize -> router -> ...
-                                            (else) router -> ...
+      memory_inject_lite -> router -> memory_retrieve -> summarize_gate -> ...
 
     NOTE ON LANGGRAPH MODERNIZATION:
     While LangGraph 1.2+ introduces implicit `Command(goto=...)` routing from within nodes,
@@ -193,7 +204,8 @@ def build_graph():
     """
     builder = StateGraph(AgentState)
 
-    builder.add_node("memory_inject", memory_inject_node)
+    builder.add_node("memory_inject_lite", memory_inject_lite_node)
+    builder.add_node("memory_retrieve", memory_retrieve_node)
     builder.add_node("auto_summarize", auto_summarize_node)
     builder.add_node("router", router_node)
     builder.add_node("simple", simple_node)
@@ -204,22 +216,21 @@ def build_graph():
     builder.add_node("tool_action", complex_tool_action_node)
     builder.add_node("memory_write", memory_write_node)
 
-    builder.set_entry_point("memory_inject")
+    builder.set_entry_point("memory_inject_lite")
+    builder.add_edge("memory_inject_lite", "router")
+    builder.add_edge("router", "memory_retrieve")
 
-    # memory_inject -> summarize_gate -> [auto_summarize -> router] | [router]
     builder.add_conditional_edges(
-        "memory_inject",
-        summarize_gate,
+        "memory_retrieve",
+        after_memory_retrieve,
         {
             "auto_summarize": "auto_summarize",
-            "router": "router",
+            "simple": "simple",
+            "scope_clarify": "scope_clarify",
         },
     )
-    builder.add_edge("auto_summarize", "router")
-
-    # router → simple | scope_clarify (complex paths go through clarification)
     builder.add_conditional_edges(
-        "router",
+        "auto_summarize",
         route_decision,
         {
             "simple": "simple",

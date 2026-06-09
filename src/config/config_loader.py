@@ -75,6 +75,11 @@ _ENV_OVERRIDE_MAP: dict[str, str] = {
     "WEB_SEARCH_TIMEOUT_SECONDS": "web_search.timeout_seconds",
     "WEB_SEARCH_ENABLE_CURL_CFFI": "web_search.enable_curl_cffi",
     "WEB_SEARCH_ENABLE_BROWSER_FALLBACK": "web_search.enable_browser_fallback",
+    # Screen assist
+    "KALI_SSH_HOST": "screen_assist.kali.host",
+    "KALI_SSH_USER": "screen_assist.kali.user",
+    "KALI_SSH_PORT": "screen_assist.kali.port",
+    "SCREEN_ASSIST_TMUX_SESSION": "screen_assist.tmux_session",
 }
 
 # ── User profile key → config dot-path mapping ───────────────────────────────

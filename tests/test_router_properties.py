@@ -390,7 +390,7 @@ class TestParseRoutingProperty:
     @settings(max_examples=100)
     def test_parse_routing_never_crashes(self, content: str):
         """parse_routing handles any string input without raising."""
-        decision, confidence, toolbox, _ = parse_routing(content)
+        decision, confidence, toolbox, _, _, _ = parse_routing(content)
         assert decision in ("simple", "complex")
         assert 0.0 <= confidence <= 1.0
         assert isinstance(toolbox, list)
@@ -417,7 +417,7 @@ class TestParseRoutingProperty:
                 "toolbox": toolbox,
             }
         )
-        dec, conf, tb, _ = parse_routing(content)
+        dec, conf, tb, _, _, _ = parse_routing(content)
         assert dec == routing
         assert abs(conf - confidence) < 1e-6
         assert tb == [toolbox]

@@ -38,9 +38,9 @@ DeepSeek V4 is **text-only**. Images never go to the API as multimodal input.
 
 When `route == complex-cloud` and the user attached images:
 
-1. [`vision_proxy.py`](../../src/agent/nodes/complex_utils/vision_proxy.py) runs local Qwen vision.
-2. Transcription text is appended to the prompt as a `[System Note: …]` block.
-3. DeepSeek receives a normal text conversation.
+1. [`vision_proxy.py`](../../src/agent/nodes/complex_utils/vision_proxy.py) runs local VLM (lazy-loaded via `vision_model_manager.py`).
+2. VLM returns **structured JSON** (OCR + layout); [`vision_schema.py`](../../src/agent/nodes/complex_utils/vision_schema.py) formats a dense `[Vision sensor output …]` text block.
+3. DeepSeek receives a normal text conversation (no `image_url`).
 
 On proxy failure, the code falls back to local `complex-default` (not legacy vision routes).
 

@@ -236,8 +236,8 @@ class TestMemoryInjectNode:
         assert "TestUser" in str(result["memory_context"])
 
     @pytest.mark.asyncio
-    async def test_cache_hit_skips_profile_and_persona_lookup(self, mock_persona):
-        """When the cache is populated, we return cached context + persona."""
+    async def test_cache_hit_uses_vector_cache_on_retrieve(self, mock_persona):
+        """Vector retrieve layer returns cached context when populated."""
         # Use minimal mocks for the cache-hit path
         with patch("src.agent.nodes.memory.get_profile") as mock_prof:
             mock_prof.return_value = {"name": "TestUser"}
@@ -252,14 +252,10 @@ class TestMemoryInjectNode:
             assert cached == ("cached value", "cached knowledge"), (
                 f"Cache should contain tuple, got: {cached!r}"
             )
-            mock_prof.reset_mock()
             result = await memory_inject_node(state)
             assert result["memory_context"] == "cached value"
             assert result["knowledge_context"] == "cached knowledge"
-            # Profile should NOT be re-fetched on cache hit
-            mock_prof.assert_not_called()
-            # Persona IS still fetched on cache hit (by design)
-            mock_persona.assert_called_once()
+            mock_persona.assert_called()
 
     @pytest.mark.asyncio
     async def test_cache_populated_on_miss(
@@ -327,10 +323,16 @@ class TestMemoryWriteNode:
         assert result.get("memory_invalidated") is True
 
     @patch("src.memory.long_term.memory")
+    @patch(
+        "src.memory.extraction.queue.enqueue_extraction",
+        new_callable=__import__("unittest").mock.AsyncMock,
+    )
     @pytest.mark.asyncio
-    async def test_saves_fact_to_mem0(self, mock_mem0, mock_personal_assistant):
-        """When Mem0 is available, enriched facts are saved."""
-        mock_mem0.add = MagicMock()
+    async def test_queues_extraction_job(
+        self, mock_enqueue, mock_mem0, mock_personal_assistant
+    ):
+        """When Mem0 is available, extraction is queued asynchronously."""
+        mock_enqueue.return_value = True
         state = _make_state(
             messages=[
                 _human_msg("Tell me about Rust"),
@@ -338,10 +340,10 @@ class TestMemoryWriteNode:
             ],
         )
         result = await memory_write_node(state)
-        mock_mem0.add.assert_called_once()
-        call_kwargs = mock_mem0.add.call_args[1]
-        assert call_kwargs["user_id"] is not None
-        assert call_kwargs["infer"] is False
+        mock_enqueue.assert_called_once()
+        payload = mock_enqueue.call_args[0][0]
+        assert "turn_text" in payload
+        assert payload["mem0_uid"] is not None
         assert result.get("memory_invalidated") is True
 
     @pytest.mark.asyncio
@@ -353,10 +355,14 @@ class TestMemoryWriteNode:
                 _ai_msg("Python is great for AI."),
             ],
         )
-        await memory_write_node(state)
+        with patch(
+            "src.memory.extraction.queue.enqueue_extraction",
+            new_callable=__import__("unittest").mock.AsyncMock,
+            return_value=True,
+        ):
+            await memory_write_node(state)
         mock_personal_assistant["extract_topics"].assert_called_once()
         mock_personal_assistant["extract_interests"].assert_called_once()
-        mock_personal_assistant["enrich_memory"].assert_called_once()
 
     @pytest.mark.asyncio
     async def test_cache_invalidated_on_write(self, mock_personal_assistant):

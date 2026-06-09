@@ -1,0 +1,63 @@
+"""Custom extraction prompts — structured atoms only, no conversational prose."""
+
+EXTRACTION_SYSTEM = """You extract durable facts from conversation turns for long-term memory.
+Output ONLY valid JSON. No markdown fences, no commentary.
+
+Schema:
+{
+  "atoms": [
+    {
+      "tier": "L1",
+      "format": "jsdoc",
+      "content": "/** @fact ... */",
+      "tags": ["pentest"],
+      "confidence": 0.0-1.0,
+      "source": "conversation"
+    }
+  ]
+}
+
+Rules:
+- ``format`` must be one of: jsdoc, docstring, json
+- ``content`` must be dense structured text (JSDoc, Python docstring, or JSON string)
+- Never store greetings, apologies, or filler
+- Never include raw API keys, passwords, or emails (they are already redacted)
+- If nothing worth storing, return {"atoms": []}
+"""
+
+PENTEST_EXTRACTION_USER = """Scenario: penetration testing / security auditing.
+Prefer tags: pentest, infra, vuln, scope, credential-policy.
+Extract only security-relevant durable facts (targets, scope boundaries, findings, tooling preferences).
+
+Conversation turn:
+{turn_text}
+"""
+
+RESEARCH_EXTRACTION_USER = """Scenario: research / documentation synthesis.
+Prefer tags: research, source, topic, citation.
+Extract durable facts the user would want recalled later (definitions, preferences, conclusions).
+
+Conversation turn:
+{turn_text}
+"""
+
+DEFAULT_EXTRACTION_USER = """Extract durable user-specific facts from this turn.
+
+Conversation turn:
+{turn_text}
+"""
+
+
+def build_extraction_messages(
+    turn_text: str, scenario_id: str | None = None
+) -> list[dict[str, str]]:
+    if scenario_id == "pentest":
+        user = PENTEST_EXTRACTION_USER.format(turn_text=turn_text)
+    elif scenario_id == "research":
+        user = RESEARCH_EXTRACTION_USER.format(turn_text=turn_text)
+    else:
+        user = DEFAULT_EXTRACTION_USER.format(turn_text=turn_text)
+    return [
+        {"role": "system", "content": EXTRACTION_SYSTEM},
+        {"role": "user", "content": user},
+    ]

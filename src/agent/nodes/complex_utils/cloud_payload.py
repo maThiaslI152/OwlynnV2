@@ -420,6 +420,7 @@ async def prepare_cloud_payload(
                 clarified_scope=state.get("clarified_scope"),
                 plan_review_summary=plan_review_summary,
                 memory_context=memory_context,
+                knowledge_context=str(state.get("knowledge_context") or ""),
                 last_user_message=last_user_message,
                 last_assistant_summary=last_assistant_summary,
                 selected_toolboxes=state.get("selected_toolboxes"),

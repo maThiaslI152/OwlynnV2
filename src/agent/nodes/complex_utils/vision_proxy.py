@@ -1,12 +1,19 @@
+import base64
+import copy
 import hashlib
 import logging
 import time
-import copy
 from typing import Callable, Optional
 
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 
-from src.agent.llm import get_medium_llm
+from src.agent.nodes.complex_utils.vision_model_manager import get_vision_llm
+from src.agent.nodes.complex_utils.vision_schema import (
+    VISION_OCR_SYSTEM,
+    VISION_OCR_USER,
+    format_vision_for_cloud,
+    parse_vision_payload,
+)
 from src.config.config_loader import config
 
 logger = logging.getLogger(__name__)
@@ -19,6 +26,10 @@ def _image_cache_key(image_url: str) -> str:
     """Hash image URL or base64 prefix for transcription cache lookup."""
     sample = image_url[:8192] if len(image_url) > 8192 else image_url
     return hashlib.sha256(sample.encode("utf-8", errors="replace")).hexdigest()[:24]
+
+
+def _bytes_cache_key(image_bytes: bytes) -> str:
+    return hashlib.sha256(image_bytes[:65536]).hexdigest()[:24]
 
 
 def _get_cached_transcription(key: str) -> Optional[str]:
@@ -36,6 +47,64 @@ def _store_transcription(key: str, text: str) -> None:
     _TRANSCRIPTION_CACHE[key] = (time.monotonic(), text)
 
 
+def _raw_to_cloud_text(raw: str) -> str:
+    payload = parse_vision_payload(raw)
+    if payload is None:
+        payload = {
+            "text_blocks": [{"text": raw.strip(), "bbox": None}],
+            "ui_elements": [],
+            "subjects": ["unparsed"],
+            "confidence": 0.5,
+        }
+    return format_vision_for_cloud(payload)
+
+
+async def _invoke_vision_vlm(image_url: str) -> str:
+    vlm_messages = [
+        SystemMessage(content=VISION_OCR_SYSTEM),
+        HumanMessage(
+            content=[
+                {"type": "text", "text": VISION_OCR_USER},
+                {"type": "image_url", "image_url": {"url": image_url}},
+            ]
+        ),
+    ]
+    vlm_llm = await get_vision_llm()
+    response = await vlm_llm.ainvoke(vlm_messages)
+    raw = str(response.content).strip()
+    if not raw:
+        raise ValueError("empty transcription from local VLM")
+    return _raw_to_cloud_text(raw)
+
+
+async def transcribe_image_url(image_url: str) -> str:
+    """Transcribe a data URL or remote image URL to cloud-ready text."""
+    cache_key = _image_cache_key(image_url)
+    cached = _get_cached_transcription(cache_key)
+    if cached is not None:
+        return cached
+    text = await _invoke_vision_vlm(image_url)
+    _store_transcription(cache_key, text)
+    return text
+
+
+async def transcribe_crop(
+    image_bytes: bytes,
+    *,
+    mime_type: str = "image/png",
+) -> str:
+    """Transcribe a screen-assist crop (Phase 3 hook)."""
+    cache_key = _bytes_cache_key(image_bytes)
+    cached = _get_cached_transcription(cache_key)
+    if cached is not None:
+        return cached
+    b64 = base64.b64encode(image_bytes).decode("ascii")
+    image_url = f"data:{mime_type};base64,{b64}"
+    text = await _invoke_vision_vlm(image_url)
+    _store_transcription(cache_key, text)
+    return text
+
+
 async def process_vision_messages(
     messages: list,
     *,
@@ -44,16 +113,7 @@ async def process_vision_messages(
     """
     Scan messages for ``image_url`` blocks and transcribe via local VLM.
 
-    Parameters
-    ----------
-    reanonymize
-        Optional ``(text) -> (text, mapping)`` hook applied to each transcription
-        before it is merged into the cloud prompt.
-
-    Returns
-    -------
-    tuple[list, bool]
-        Processed messages and whether every image was transcribed successfully.
+    Returns processed messages and whether every image was transcribed successfully.
     """
     processed_messages = []
     proxy_ok = True
@@ -75,32 +135,10 @@ async def process_vision_messages(
 
                 if transcription is None:
                     logger.info(
-                        "[vision_proxy] Intercepted image. Sending to local VLM for transcription."
+                        "[vision_proxy] Intercepted image. Sending to local VLM (JSON OCR)."
                     )
                     try:
-                        vlm_messages = [
-                            HumanMessage(
-                                content=[
-                                    {
-                                        "type": "text",
-                                        "text": "Please describe this image in extreme detail, transcribing any text, code, or UI elements exactly as they appear. You are acting as the eyes for a blind, text-only AI model.",
-                                    },
-                                    {
-                                        "type": "image_url",
-                                        "image_url": {"url": image_url},
-                                    },
-                                ]
-                            )
-                        ]
-
-                        vlm_llm = await get_medium_llm("vision")
-                        response = await vlm_llm.ainvoke(vlm_messages)
-
-                        transcription = str(response.content).strip()
-                        if not transcription:
-                            raise ValueError("empty transcription from local VLM")
-
-                        _store_transcription(cache_key, transcription)
+                        transcription = await transcribe_image_url(image_url)
                         logger.info(
                             "[vision_proxy] VLM transcription complete (%d chars).",
                             len(transcription),
@@ -124,7 +162,7 @@ async def process_vision_messages(
                 new_content.append(
                     {
                         "type": "text",
-                        "text": f"\n\n[System Note: The user attached an image here. A local Vision Model transcribed it as follows:\n{transcription}\n]\n\n",
+                        "text": f"\n\n{transcription}\n\n",
                     }
                 )
             else:

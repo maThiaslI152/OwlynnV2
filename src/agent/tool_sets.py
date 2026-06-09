@@ -20,6 +20,7 @@ from src.tools.todo import todo_add, todo_list, todo_complete
 from src.tools.ask_user import ask_user
 from src.tools.skills import list_skills, invoke_skill
 from src.tools.rag_tools import search_workspace_docs
+from src.tools.screen_assist.tools import SCREEN_ASSIST_TOOLS
 
 # Full tool set with web search enabled
 COMPLEX_TOOLS_WITH_WEB: list = [
@@ -108,6 +109,7 @@ TOOLBOX_REGISTRY: dict[str, list] = {
         forget_memory,
         search_workspace_docs,
     ],
+    "screen_assist": list(SCREEN_ASSIST_TOOLS),
 }
 
 ALWAYS_INCLUDED_TOOLS: list = [ask_user]

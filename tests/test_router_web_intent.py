@@ -68,6 +68,51 @@ async def test_web_query_includes_web_search_toolbox():
 
 
 @pytest.mark.anyio
+async def test_web_intent_skipped_when_knowledge_cache_covers_query():
+    """Deterministic web hints should not force web_search when cache answers."""
+    state: AgentState = {
+        "messages": [
+            HumanMessage(content="What is the price for our production deploy package?")
+        ],
+        "web_search_enabled": True,
+        "knowledge_context": (
+            "- Production deploy package price is $500/month in ap-southeast-1.\n"
+            "- The package includes staging and production environments."
+        ),
+    }
+    out = await router_node(state)
+    assert out["route"].startswith("complex")
+    assert "web_search" not in out.get("selected_toolboxes", [])
+    assert out["router_metadata"]["reasoning"] == "knowledge_cache_sufficient"
+
+
+@pytest.mark.anyio
+async def test_web_intent_still_fires_for_weather_despite_cache():
+    """Time-sensitive web hints must still bind web_search even with cache."""
+    state: AgentState = {
+        "messages": [HumanMessage(content="What's the weather in Tokyo right now?")],
+        "web_search_enabled": True,
+        "knowledge_context": "- Tokyo weather yesterday was sunny and 22C.",
+    }
+    out = await router_node(state)
+    assert out["route"].startswith("complex")
+    assert "web_search" in out.get("selected_toolboxes", [])
+
+
+@pytest.mark.anyio
+async def test_web_query_routes_cloud_when_available():
+    """Web-search toolbox should use complex-cloud when escalation is on."""
+    state: AgentState = {
+        "messages": [HumanMessage(content="Search the web for Python tutorials")],
+        "web_search_enabled": True,
+    }
+    with patch("src.agent.nodes.router._check_cloud_available", return_value=True):
+        out = await router_node(state)
+    assert out["route"] == "complex-cloud"
+    assert "web_search" in out.get("selected_toolboxes", [])
+
+
+@pytest.mark.anyio
 async def test_selected_toolboxes_always_present():
     """Every routing result should include selected_toolboxes."""
     state: AgentState = {

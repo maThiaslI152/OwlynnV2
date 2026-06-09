@@ -150,14 +150,20 @@ class MemoryContextCache:
 
 
 async def _build_memory_context_async(
-    thread_id: str, project_id: str, persona_id: str, user_message: str, state: dict
+    thread_id: str,
+    project_id: str,
+    persona_id: str,
+    user_message: str,
+    state: dict,
+    *,
+    vector_search: bool = True,
 ) -> tuple[str, str]:
     from src.memory.long_term import memory
 
     mem0_uid = _get_mem0_user_id(state)
 
     results = []
-    if memory is not None:
+    if vector_search and memory is not None:
         try:
             results_dict = await asyncio.to_thread(
                 lambda: memory.search(
@@ -274,47 +280,121 @@ async def background_prefetch_memory(
     )
 
 
-@log_node("memory_inject")
-async def memory_inject_node(state: AgentState) -> AgentState:
-    """Pre-reasoning node: build memory context for the LLM system prompt."""
+def _persona_summary(persona_id: str) -> str:
+    persona = get_persona_by_id(persona_id)
+    return (
+        f"You are {persona['name']}, a {persona['role']}. "
+        f"Tone: {persona['tone']}. {persona['instructions']}"
+    )
+
+
+def _last_user_message_content(state: AgentState) -> str:
+    messages = state.get("messages") or []
+    if not messages:
+        return ""
+    raw = messages[-1].content
+    if isinstance(raw, str):
+        return raw
+    if isinstance(raw, list):
+        parts = []
+        for block in raw:
+            if isinstance(block, dict) and block.get("type") == "text":
+                parts.append(str(block.get("text", "")))
+        return "\n".join(parts)
+    return str(raw)
+
+
+@log_node("memory_inject_lite")
+async def memory_inject_lite_node(state: AgentState) -> AgentState:
+    """Fast pre-router inject: profile, persona, topics — no vector search."""
     thread_id = state.get("thread_id", "default")
-    user_message = state["messages"][-1].content if state.get("messages") else ""
+    user_message = _last_user_message_content(state)
     project_id = state.get("project_id") or "default"
     persona_id = state.get("persona_id") or "default"
 
-    cached_tuple = MemoryContextCache.get(thread_id, project_id)
-    if cached_tuple:
-        cached_context, cached_knowledge = cached_tuple
-        persona = get_persona_by_id(persona_id)
-        persona_summary = f"You are {persona['name']}, a {persona['role']}. Tone: {persona['tone']}. {persona['instructions']}"
-        audit_debug(
-            "memory.inject", "context_from_cache", context_chars=len(cached_context)
-        )
-        return {
-            "memory_context": cached_context,
-            "knowledge_context": cached_knowledge,
-            "persona": persona_summary,
-        }
-
-    memory_context, knowledge_context = await _build_memory_context_async(
-        thread_id, project_id, persona_id, user_message, state
+    memory_context, _knowledge = await _build_memory_context_async(
+        thread_id,
+        project_id,
+        persona_id,
+        user_message,
+        state,
+        vector_search=False,
     )
-
-    MemoryContextCache.set(thread_id, project_id, (memory_context, knowledge_context))
     audit_info(
         "memory.inject",
-        "context_assembled",
+        "lite_context_assembled",
         context_chars=len(memory_context),
-        knowledge_chars=len(knowledge_context),
     )
-
-    persona = get_persona_by_id(persona_id)
-    persona_summary = f"You are {persona['name']}, a {persona['role']}. Tone: {persona['tone']}. {persona['instructions']}"
     return {
         "memory_context": memory_context,
-        "knowledge_context": knowledge_context,
-        "persona": persona_summary,
+        "knowledge_context": "",
+        "persona": _persona_summary(persona_id),
     }
+
+
+@log_node("memory_retrieve")
+async def memory_retrieve_node(state: AgentState) -> AgentState:
+    """Post-router vector retrieval and scenario markdown (gated)."""
+    from src.memory.scenarios import format_scenario_context
+
+    thread_id = state.get("thread_id", "default")
+    project_id = state.get("project_id") or "default"
+    persona_id = state.get("persona_id") or "default"
+    user_message = _last_user_message_content(state)
+    scenario_id = state.get("scenario_id")
+    scenario_block = format_scenario_context(scenario_id)
+
+    needs = state.get("needs_memory_retrieval")
+    if needs is None:
+        route = state.get("route") or ""
+        needs = route.startswith("complex")
+
+    base_context = state.get("memory_context") or ""
+    knowledge_context = state.get("knowledge_context") or ""
+
+    if needs:
+        cached_tuple = MemoryContextCache.get(thread_id, project_id)
+        if cached_tuple:
+            base_context, knowledge_context = cached_tuple
+            audit_debug("memory.retrieve", "cache_hit", context_chars=len(base_context))
+        else:
+            full_context, knowledge_context = await _build_memory_context_async(
+                thread_id,
+                project_id,
+                persona_id,
+                user_message,
+                state,
+                vector_search=True,
+            )
+            base_context = full_context
+            MemoryContextCache.set(
+                thread_id, project_id, (base_context, knowledge_context)
+            )
+            audit_info(
+                "memory.retrieve",
+                "vector_context_assembled",
+                context_chars=len(base_context),
+                knowledge_chars=len(knowledge_context),
+            )
+
+    merged_context = base_context
+    if scenario_block:
+        merged_context = f"{merged_context}\n\n{scenario_block}".strip()
+
+    return {
+        "memory_context": merged_context,
+        "knowledge_context": knowledge_context,
+        "scenario_context": scenario_block or None,
+    }
+
+
+@log_node("memory_inject")
+async def memory_inject_node(state: AgentState) -> AgentState:
+    """Full inject (lite + vector) — used in tests and legacy callers."""
+    lite = await memory_inject_lite_node(state)
+    merged = {**state, **lite, "needs_memory_retrieval": True}
+    retrieved = await memory_retrieve_node(merged)
+    return {**lite, **retrieved}
 
 
 def format_memory_context(
@@ -629,37 +709,28 @@ async def memory_write_node(state: AgentState) -> AgentState:
             topics = TopicExtractor.extract_topics(conversation_text)
             interests = TopicExtractor.extract_interests(conversation_text)
 
-            # Create enriched fact
             fact_text = f"User asked: {last_human}. AI answered: {last_ai}"
-            enriched_fact = MemoryEnricher.enrich_memory(fact_text, topics, interests)
+            from src.agent.pii_scrubber import scrub_for_storage
+            from src.memory.extraction import queue as extraction_queue
 
-            # --- Dedup check ---
-            # Only use the fact_text for dedup (not the enriched version which includes topics)
-            is_dup = await _is_semantically_similar(memory, fact_text, mem0_uid)
-            if is_dup:
-                logger.debug(
-                    "[Memory] Skipping memory save (semantically similar exists)"
-                )
-                audit_debug(
-                    "memory.write",
-                    "dedup_skip",
-                    reason="semantically_similar",
-                    user_id=mem0_uid,
-                )
-            else:
-                await asyncio.to_thread(
-                    memory.add,
-                    fact_text,
-                    user_id=mem0_uid,
-                    infer=False,
-                )
-                audit_info(
-                    "memory.write",
-                    "mem0_saved",
-                    user_id=mem0_uid,
-                    fact_chars=len(fact_text),
-                    topic_count=len(topics),
-                )
+            scrubbed, redactions = scrub_for_storage(fact_text)
+            queued = await extraction_queue.enqueue_extraction(
+                {
+                    "turn_text": scrubbed,
+                    "mem0_uid": mem0_uid,
+                    "project_id": state.get("project_id") or "default",
+                    "scenario_id": state.get("scenario_id"),
+                    "thread_id": thread_id,
+                }
+            )
+            audit_info(
+                "memory.write",
+                "extract_queued",
+                user_id=mem0_uid,
+                queued=queued,
+                redactions=redactions,
+                topic_count=len(topics),
+            )
 
             # Invalidate memory context cache since memory was updated (M4 optimization)
             # Uses invalidate_on_write to signal WebSocket forwarder

@@ -105,6 +105,22 @@ async def lifespan(app: FastAPI):
     await _preload_llms()
     app.state.llms_ready = True
 
+    from src.memory.extraction.worker import (
+        start_extraction_worker,
+        stop_extraction_worker,
+    )
+
+    await start_extraction_worker()
+    app.state.memory_extraction_worker = True
+
+    from src.agent.nodes.complex_utils.vision_model_manager import (
+        start_vision_manager,
+        stop_vision_manager,
+    )
+
+    await start_vision_manager()
+    app.state.vision_manager = True
+
     # Embedding models are pre-pulled manually via `ollama pull` or LM Studio UI.
     # The app relies on them being already available; no auto-load at startup.
 
@@ -118,6 +134,10 @@ async def lifespan(app: FastAPI):
         app.state.file_watcher = None
 
     yield
+    if getattr(app.state, "memory_extraction_worker", False):
+        await stop_extraction_worker()
+    if getattr(app.state, "vision_manager", False):
+        await stop_vision_manager()
     # Cleanup: cancel all background tasks
     if getattr(app.state, "file_watcher", None):
         try:

@@ -170,10 +170,11 @@ Toolbox categories (pick one or more, or "all" if unsure):
 - data_viz: create documents/spreadsheets/presentations/PDFs, run code, data analysis, charts
 - productivity: task management, todos, skills, workflow templates
 - memory: recall past conversations, user preferences, stored facts
+- screen_assist: local tmux terminal, macOS UI context, browser tab, remote Kali SSH tmux
 - all: when unsure or multiple categories needed
 
-Reply with exactly one JSON object (nothing else). The execution_plan should briefly break down the steps required to solve the user's request (e.g. 1. search for X, 2. write to file Y). If simple routing, leave execution_plan empty:
-{{"routing":"simple"|"complex","confidence":0.0-1.0,"toolbox":["name1","name2"],"execution_plan":"Step 1... Step 2..."}}
+Reply with exactly one JSON object (nothing else). The execution_plan should briefly break down the steps required to solve the user's request (e.g. 1. search for X, 2. write to file Y). If simple routing, leave execution_plan empty and set needs_memory_retrieval to false. If the Knowledge Cache fully answers the question, set needs_memory_retrieval to false and omit web_search from toolbox:
+{{"routing":"simple"|"complex","confidence":0.0-1.0,"toolbox":["name1","name2"],"execution_plan":"Step 1... Step 2...","needs_memory_retrieval":true|false,"scenario_id":"pentest"|"research"|null}}
 
 Knowledge Cache:
 {knowledge_context}
@@ -203,8 +204,10 @@ def _last_user_text(state: AgentState) -> str:
     return str(raw)
 
 
-def parse_routing(content: str) -> tuple[str, float, list[str], str | None]:
-    """Extract routing decision, confidence, toolbox, and execution plan from LLM response."""
+def parse_routing(
+    content: str,
+) -> tuple[str, float, list[str], str | None, bool | None, str | None]:
+    """Extract routing decision, confidence, toolbox, plan, memory gate, and scenario."""
     # MiniCPM5 hybrid-think safety: strip any <think>...</think> blocks that may
     # leak through even when enable_thinking=false is set via chat_template_kwargs.
     content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
@@ -220,11 +223,80 @@ def parse_routing(content: str) -> tuple[str, float, list[str], str | None]:
             if isinstance(toolbox, str):
                 toolbox = [toolbox]
             execution_plan = parsed.get("execution_plan")
-            return decision, confidence, toolbox, execution_plan
+            needs_memory = parsed.get("needs_memory_retrieval")
+            if needs_memory is not None:
+                needs_memory = bool(needs_memory)
+            scenario_id = parsed.get("scenario_id")
+            if scenario_id is not None and str(scenario_id).lower() in {
+                "null",
+                "none",
+                "",
+            }:
+                scenario_id = None
+            elif scenario_id is not None:
+                scenario_id = str(scenario_id).strip().lower() or None
+            return (
+                decision,
+                confidence,
+                toolbox,
+                execution_plan,
+                needs_memory,
+                scenario_id,
+            )
     except Exception as e:
         logger.warning("Error suppressed: %s", e)
         pass
-    return "complex", 0.5, ["all"], None
+    return "complex", 0.5, ["all"], None, None, None
+
+
+def _resolve_memory_gate(
+    decision: str,
+    *,
+    parsed_needs: bool | None,
+    user_text: str,
+    knowledge_context: str | None,
+) -> bool:
+    """Resolve whether vector memory retrieval should run this turn."""
+    if decision == "simple":
+        return False
+    if parsed_needs is not None:
+        return bool(parsed_needs)
+    if _knowledge_cache_likely_answers(user_text, knowledge_context):
+        return False
+    return True
+
+
+def _resolve_scenario_id(parsed_scenario: str | None, user_text: str) -> str | None:
+    if parsed_scenario in ("pentest", "research"):
+        return parsed_scenario
+    from src.memory.scenarios import detect_scenario_id
+
+    return detect_scenario_id(user_text)
+
+
+def _memory_gate_fields(
+    state: AgentState,
+    user_text: str,
+    decision: str,
+    *,
+    parsed_needs: bool | None = None,
+    parsed_scenario: str | None = None,
+    force_needs: bool | None = None,
+) -> dict:
+    needs = (
+        force_needs
+        if force_needs is not None
+        else _resolve_memory_gate(
+            decision,
+            parsed_needs=parsed_needs,
+            user_text=user_text,
+            knowledge_context=state.get("knowledge_context"),
+        )
+    )
+    return {
+        "needs_memory_retrieval": needs,
+        "scenario_id": _resolve_scenario_id(parsed_scenario, user_text),
+    }
 
 
 # ── Image / frontier detection helpers ───────────────────────────────────
@@ -292,6 +364,87 @@ _WEBISH_HINTS = (
     "live score",
 )
 
+# User explicitly asked for a web lookup — never skip web_search for cache alone.
+_EXPLICIT_WEB_REQUESTS = (
+    "search the web",
+    "search for",
+    "look up",
+    "google ",
+)
+
+# Live or fast-moving topics — knowledge cache cannot replace web_search.
+_TIME_SENSITIVE_WEB_HINTS = (
+    "weather",
+    "forecast",
+    "temperature in",
+    "humidity in",
+    "stock price",
+    "crypto price",
+    "news ",
+    "breaking",
+    "current price",
+    "price in ",
+    "today's ",
+    "right now",
+    "live score",
+)
+
+_KNOWLEDGE_CACHE_STOP_WORDS = frozenset(
+    {
+        "what",
+        "who",
+        "where",
+        "when",
+        "why",
+        "how",
+        "the",
+        "and",
+        "for",
+        "are",
+        "was",
+        "were",
+        "with",
+        "from",
+        "that",
+        "this",
+        "about",
+        "your",
+        "you",
+        "our",
+        "can",
+        "could",
+        "would",
+        "should",
+        "tell",
+        "give",
+        "please",
+    }
+)
+
+
+def _knowledge_cache_likely_answers(
+    user_text: str, knowledge_context: str | None
+) -> bool:
+    """Heuristic: injected knowledge cache overlaps the user's question."""
+    kc = (knowledge_context or "").strip()
+    if not kc or kc.lower() in {"none", "n/a"}:
+        return False
+    if len(kc) < 20:
+        return False
+
+    keywords = [
+        w
+        for w in re.findall(r"[a-z0-9]{3,}", user_text.lower())
+        if w not in _KNOWLEDGE_CACHE_STOP_WORDS
+    ]
+    if len(keywords) < 2:
+        return False
+
+    kc_lower = kc.lower()
+    hits = sum(1 for w in keywords if w in kc_lower)
+    return hits >= max(2, len(keywords) // 3)
+
+
 _FILE_WORK_HINTS = (
     "workspace",
     "uploaded",
@@ -301,6 +454,21 @@ _FILE_WORK_HINTS = (
     "local file",
     "in my project",
     "in the repo",
+)
+
+_SCREEN_ASSIST_HINTS = (
+    "tmux",
+    "my terminal",
+    "terminal output",
+    "shell output",
+    "what's on screen",
+    "on my screen",
+    "browser tab",
+    "active tab",
+    "kali vm",
+    "kali terminal",
+    "capture pane",
+    "iterm",
 )
 
 _DATA_VIZ_HINTS = (
@@ -337,6 +505,26 @@ def _user_wants_file_work(text: str) -> bool:
 def _user_wants_data_viz(text: str) -> bool:
     lower = text.lower()
     return any(h in lower for h in _DATA_VIZ_HINTS)
+
+
+def _user_wants_screen_assist(text: str) -> bool:
+    lower = text.lower()
+    return any(h in lower for h in _SCREEN_ASSIST_HINTS)
+
+
+def _augment_toolbox_for_scenario(
+    toolbox: list[str],
+    scenario_id: str | None,
+    user_text: str,
+) -> list[str]:
+    """Add screen_assist when pentest scenario or explicit terminal/screen intent."""
+    if "all" in toolbox:
+        return toolbox
+    if scenario_id != "pentest" and not _user_wants_screen_assist(user_text):
+        return toolbox
+    if "screen_assist" in toolbox:
+        return toolbox
+    return [*toolbox, "screen_assist"]
 
 
 def _is_simple_informational_query(text: str) -> bool:
@@ -381,6 +569,14 @@ def _build_low_confidence_router_choices(
                 "toolbox": ["data_viz"],
             }
         )
+    if _user_wants_screen_assist(user_text):
+        choices.append(
+            {
+                "label": "Read terminal or screen context",
+                "route": route,
+                "toolbox": ["screen_assist"],
+            }
+        )
     choices.append(
         {
             "label": "Just answer directly",
@@ -415,25 +611,29 @@ def _resolve_complex_route(
             return "complex-cloud", toolbox
         return "complex-default", toolbox
 
-    # 2. Exceeds Medium_LongCtx → cloud when available
+    # 2. Web-search toolbox — cloud orchestration (DeepSeek) when escalation is on
+    if cloud_available and "web_search" in toolbox:
+        return "complex-cloud", toolbox
+
+    # 3. Exceeds Medium_LongCtx → cloud when available
     if estimated_input > _MEDIUM_LONGCTX_CONTEXT * 0.80:
         if cloud_available:
             return "complex-cloud", toolbox
         return "complex-default", toolbox
 
-    # 3. Exceeds 80% of Medium_Default → cloud when available, else local default
+    # 4. Exceeds 80% of Medium_Default → cloud when available, else local default
     if estimated_input > _MEDIUM_DEFAULT_CONTEXT * 0.80:
         if cloud_available:
             return "complex-cloud", toolbox
         return "complex-default", toolbox
 
-    # 4. Frontier-quality indicators → cloud when available
+    # 5. Frontier-quality indicators → cloud when available
     if _needs_frontier_quality(user_text):
         if cloud_available:
             return "complex-cloud", toolbox
         return "complex-default", toolbox
 
-    # 5. Default — cloud-first when escalation is available
+    # 6. Default — cloud-first when escalation is available
     if cloud_available:
         return "complex-cloud", toolbox
     return "complex-default", toolbox
@@ -568,8 +768,57 @@ async def router_node(state: AgentState) -> AgentState:
             }
 
     if web_on and any(h in user_lower for h in _WEBISH_HINTS):
+        knowledge_context = state.get("knowledge_context") or ""
+        explicit_web = any(p in user_lower for p in _EXPLICIT_WEB_REQUESTS)
+        time_sensitive = any(p in user_lower for p in _TIME_SENSITIVE_WEB_HINTS)
+        cache_sufficient = (
+            not explicit_web
+            and not time_sensitive
+            and _knowledge_cache_likely_answers(user_text, knowledge_context)
+        )
+
+        if cache_sufficient:
+            logger.info(
+                "[router] Web hints matched but knowledge cache likely sufficient — "
+                "skipping web_search toolbox"
+            )
+            route, toolbox = _resolve_complex_route(
+                user_text, state, ["memory"], cloud_available=cloud_available
+            )
+            budget = estimate_token_budget(user_text, route)
+            metadata = _build_router_metadata(
+                route,
+                confidence=0.85,
+                reasoning="knowledge_cache_sufficient",
+                classification_source="deterministic",
+                cloud_available=cloud_available,
+                has_images=has_images,
+                task_category="general",
+                estimated_tokens=budget,
+                web_on=web_on,
+            )
+            audit_info(
+                "agent.lifecycle",
+                "router_decision",
+                route=route,
+                confidence=0.85,
+                source="knowledge_cache_bypass",
+                task_category="general",
+            )
+            return {
+                "route": route,
+                "token_budget": budget,
+                "selected_toolboxes": toolbox,
+                "router_clarification_used": False,
+                "skill_matched": None,
+                "router_metadata": metadata,
+                **_memory_gate_fields(state, user_text, "complex", force_needs=False),
+            }
+
         logger.info("[router] Complex path — web/live-data intent (web_search enabled)")
-        route, toolbox = _resolve_complex_route(user_text, state, ["web_search"])
+        route, toolbox = _resolve_complex_route(
+            user_text, state, ["web_search"], cloud_available=cloud_available
+        )
         budget = estimate_token_budget(user_text, route)
         metadata = _build_router_metadata(
             route,
@@ -597,6 +846,7 @@ async def router_node(state: AgentState) -> AgentState:
             "router_clarification_used": False,
             "skill_matched": None,
             "router_metadata": metadata,
+            **_memory_gate_fields(state, user_text, "complex", force_needs=True),
         }
 
     # Attachments saved to workspace need the large model + tools.
@@ -674,6 +924,7 @@ async def router_node(state: AgentState) -> AgentState:
             "router_clarification_used": False,
             "skill_matched": None,
             "router_metadata": metadata,
+            **_memory_gate_fields(state, user_text, "simple", force_needs=False),
         }
 
     # ── Deterministic complex-route bypasses ──────────────────────────
@@ -812,6 +1063,9 @@ async def router_node(state: AgentState) -> AgentState:
     decision = "complex"
     confidence = 0.5
     toolbox = ["all"]
+    parsed_needs: bool | None = None
+    parsed_scenario: str | None = None
+    execution_plan: str | None = None
 
     try:
         router_llm = small_llm.bind(
@@ -830,8 +1084,8 @@ async def router_node(state: AgentState) -> AgentState:
                 )
             ]
         )
-        decision, confidence, toolbox, execution_plan = parse_routing(
-            str(response.content)
+        decision, confidence, toolbox, execution_plan, parsed_needs, parsed_scenario = (
+            parse_routing(str(response.content))
         )
         classification_source = "llm_classifier"
 
@@ -1248,6 +1502,14 @@ async def router_node(state: AgentState) -> AgentState:
             "router_clarification_used": router_clarification_used,
             "skill_matched": skill_matched,
             "router_metadata": metadata,
+            **_memory_gate_fields(
+                state,
+                user_text,
+                "simple",
+                parsed_needs=parsed_needs,
+                parsed_scenario=parsed_scenario,
+                force_needs=False,
+            ),
         }
 
     # Stage 2: complex variant selection
@@ -1287,6 +1549,17 @@ async def router_node(state: AgentState) -> AgentState:
         swap_to=swap_to,
     )
 
+    gate_fields = _memory_gate_fields(
+        state,
+        user_text,
+        "complex",
+        parsed_needs=parsed_needs,
+        parsed_scenario=parsed_scenario,
+    )
+    toolbox = _augment_toolbox_for_scenario(
+        toolbox, gate_fields.get("scenario_id"), user_text
+    )
+
     logger.info(f"[router] → {route} (confidence={confidence:.2f}, toolbox={toolbox})")
     audit_info(
         "agent.lifecycle",
@@ -1304,7 +1577,8 @@ async def router_node(state: AgentState) -> AgentState:
         "router_clarification_used": router_clarification_used,
         "skill_matched": skill_matched,
         "router_metadata": metadata,
-        "execution_plan": execution_plan if "execution_plan" in locals() else None,
+        "execution_plan": execution_plan,
+        **gate_fields,
     }
 
 
@@ -1357,6 +1631,14 @@ def _toolbox_for_skill(skill) -> list[str]:
             for t in tools
         ):
             toolbox.append("data_viz")
+        if any(
+            "capture_local_terminal" in t
+            or "capture_kali" in t
+            or "screen_element" in t
+            or "browser_context" in t
+            for t in tools
+        ):
+            toolbox.append("screen_assist")
         if any(
             "terminal" in t
             or "shell" in t

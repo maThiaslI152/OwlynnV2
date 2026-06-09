@@ -57,6 +57,9 @@ class AgentState(TypedDict):
     model_used: str | None
     memory_context: str | None  # Formatted context string
     knowledge_context: str | None  # Synthesized facts from previous web searches
+    needs_memory_retrieval: bool | None  # Router gate: run vector retrieval when True
+    scenario_id: str | None  # L2/L3 scenario: pentest | research
+    scenario_context: str | None  # Loaded scenario markdown block
     persona: str | None  # Persona summary string
     persona_id: str | None  # Active persona ID (e.g. 'coder', 'writer', 'default')
 

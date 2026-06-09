@@ -1,31 +1,37 @@
 # Memory System — Short-Term, Long-Term, and Personal
 
-> **Last updated:** 2026-06-04
+> **Last updated:** 2026-06-09
 
 ## Overview
 
-Owlynn uses a three-tier memory system to maintain conversation context across sessions:
+Owlynn uses layered memory (STM, LTM, personal context, scenarios) with a **split inject path** so the router stays under ~300ms.
 
 | Tier | Storage | What It Stores | Retrieval |
 |------|---------|---------------|-----------|
 | **Short-Term (STM)** | `data/memories.json` | Important facts from recent conversations | Keyword search via `memory_manager.py` |
-| **Long-Term (LTM)** | Qdrant via Mem0 | Embedding-indexed facts | Semantic search via Mem0 API |
+| **Long-Term (LTM)** | Qdrant via Mem0 | Embedding-indexed facts + L1 atoms | Semantic search (gated) |
 | **Personal** | `data/topics.json`, `data/interests.json`, `data/conversations.json` | User topics, interests, conversation history | Time-decay-weighted relevance |
+| **L2/L3 scenarios** | `scenarios/*/playbook.md`, `constraints.md` | Pentest / research workflows | Router `scenario_id` + markdown loader |
 
-## Memory Injection Flow
+## Memory Injection Flow (Phase 1)
 
-Every user message triggers `memory_inject_node` which:
-1. Searches Mem0/Qdrant for semantically relevant past facts
-2. Loads user profile, persona, project instructions
-3. Retrieves enhanced context (topics, interests, recent conversations)
-4. Formats everything into a `memory_context` string injected before the router
-5. Caches the result for 5 minutes (TTL configurable)
+```text
+memory_inject_lite → router → memory_retrieve → …
+```
+
+1. **`memory_inject_lite`** — profile, persona, topics (no vector search)
+2. **Router** — sets `needs_memory_retrieval`, optional `scenario_id`
+3. **`memory_retrieve`** — Qdrant/Mem0 only when gated; loads scenario markdown; compresses for cloud brief
+
+Caches the lite bundle for 5 minutes (TTL configurable).
+
+See [memory-vision-screen-roadmap.md](guides/memory-vision-screen-roadmap.md) for the full 3-phase arc (memory, vision proxy, screen assist).
 
 ## Memory Write Flow
 
 After the agent responds, `memory_write_node`:
-1. Extracts key facts from the conversation turn
-2. Saves facts to Mem0 for future semantic retrieval
+1. PII-scrubs content before persistence
+2. Enqueues custom 8B extraction (Redis stream → worker → L1 atoms in Qdrant)
 3. Extracts topics and updates topic/interests tracking
 4. Records the conversation in `conversations.json`
 5. Invalidates the memory cache for the next turn
@@ -68,7 +74,11 @@ The `VectorLifecycleManager` orchestrates the insertion and deletion of vector d
 
 ## Related Files
 
-- `src/agent/nodes/memory.py` — Memory injection and write nodes
+- `src/agent/nodes/memory.py` — `memory_inject_lite`, `memory_retrieve`, `memory_write`
+- `src/memory/extraction/` — Custom extractor worker + schema
+- `src/memory/scenarios.py` — L2/L3 scenario markdown
+- `src/memory/compression.py` — Cloud brief memory block
+- `src/agent/pii_scrubber.py` — PII scrub before LTM writes
 - `src/memory/memory_manager.py` — STM (memories.json)
 - `src/memory/long_term.py` — LTM (Mem0 + Qdrant)
 - `src/memory/personal_assistant.py` — Topic/interest tracking

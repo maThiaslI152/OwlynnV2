@@ -1,0 +1,1 @@
+"""Async memory extraction pipeline."""

@@ -132,7 +132,7 @@ Frontend should send `type` (MIME) on each file; Composer infers from `file.type
 | Other UTF-8 text/code | Inlined in prompt as fenced block |
 | Other binary | Saved to workspace; agent instructed to call `read_workspace_file` |
 
-Cloud route (`complex-cloud`) with images: local Qwen transcribes via `vision_proxy` before DeepSeek; on proxy failure, route falls back to `complex-default` direct multimodal (legacy `complex-vision` route removed).
+Cloud route (`complex-cloud`) with images: lazy-loaded local VLM returns JSON OCR via `vision_proxy` → formatted text block for DeepSeek; on proxy failure, route falls back to `complex-default` direct multimodal (legacy `complex-vision` route removed).
 
 ### Server → Client: Event Types
 

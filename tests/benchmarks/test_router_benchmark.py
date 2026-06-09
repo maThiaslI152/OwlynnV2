@@ -220,7 +220,9 @@ class TestHITLInterceptRate:
 
         for conf in confidences:
             content = '{"routing":"complex","confidence":%.2f,"toolbox":"all"}' % conf
-            decision, confidence, toolbox, _execution_plan = parse_routing(content)
+            decision, confidence, toolbox, _execution_plan, _, _ = parse_routing(
+                content
+            )
             # HITL fires if confidence < threshold AND HITL enabled
             if confidence < confidence_threshold:
                 hitl_count += 1
