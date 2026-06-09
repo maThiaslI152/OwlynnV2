@@ -1,7 +1,7 @@
 # Architecture Overview — OwlynnV2
 
 > **System context, modules, data flow, and key entrypoints.**
-> Last updated: 2026-06-07
+> Last updated: 2026-06-10
 
 ## System Context
 
@@ -40,7 +40,7 @@ Browser (http://127.0.0.1:5173)
 | **Complex Node** | `src/agent/nodes/complex.py` | Tool-augmented reasoning — local Qwen or cloud DeepSeek V4 |
 | **Cloud payload** | `src/agent/nodes/complex_utils/cloud_payload.py` | Anonymization, brief gate, stable/volatile prompt layers, cache metrics |
 | **Cloud invoke** | `src/agent/nodes/complex_utils/cloud_invoke.py` | Raw DeepSeek client, tool strict mode, reasoning replay |
-| **Vision proxy** | `vision_proxy.py`, `vision_schema.py`, `vision_model_manager.py` | Lazy VLM → JSON OCR → text for DeepSeek cloud path |
+| **Vision proxy** | `src/agent/nodes/complex_utils/vision_*.py` | Lazy VLM → JSON OCR → text for DeepSeek cloud path |
 | **Screen assist** | `src/tools/screen_assist/` | tmux, macOS AX, browser, Kali SSH tools |
 | **Memory** | `src/agent/nodes/memory.py` | Memory injection + write: STM, LTM (Mem0/Qdrant), personal context |
 | **Summarizer** | `src/agent/nodes/summarize.py` | Auto-compress older turns when context >85% of window |
@@ -123,4 +123,4 @@ Context budget: memory capped at 6000 chars (~1500 tokens) to stay within model 
 - `docs/architecture/DEEPSEEK_V4_INTEGRATION.md` — DeepSeek V4 API + optimization reference
 - `docs/guides/dev-startup.md` — Dev setup and config reference
 - `src/config/defaults.yaml` — Centralized configuration
-- `specs/memory/constitution.md` — Non-negotiable constraints
+- `docs/standards/coding-style.md` — Code conventions

@@ -1,8 +1,9 @@
 ---
 status: active
 category: reference
-last_updated: 2026-06-07
-owner: human
+last_updated: 2026-06-10
+owner: ai-agent
+audience: agent
 ---
 
 # Chat & Events Protocol
@@ -22,7 +23,7 @@ frontend-v2/src/App.tsx             # Event handler wiring
 src/agent/nodes/simple.py           # Simple node streaming source
 src/agent/nodes/complex.py          # Complex node streaming source
 src/agent/nodes/router.py           # router_node() — router_metadata source
-src-tauri/src/main.rs               # TTS runtime events
+frontend-v2/electron/main.ts        # Desktop runtime events (TTS, etc.)
 ```
 
 ## Architecture
@@ -418,7 +419,7 @@ Enriched fields now include `conversation_snippet`, `stated_intent`, `affected_r
 
 ### TTS Runtime Event (Desktop Channel)
 
-Desktop shell emits on `owlynn://runtime-event` from `src-tauri/src/main.rs`:
+Electron main process emits `runtime-event` IPC from `frontend-v2/electron/main.ts` (consumed as `owlynn://runtime-event` in `App.tsx`):
 
 ```json
 { "type": "voice.tts_state", "speaking": true | false, "utterance_id": "string" }
@@ -501,7 +502,7 @@ cd frontend-v2 && npx vitest run
 ## Related
 
 - [`docs/API_REFERENCE.md`](API_REFERENCE.md) — REST endpoint reference
-- [`docs/ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) — system architecture
+- [`docs/architecture/overview.md`](architecture/overview.md) — system architecture
 - [`src/api/ws/handler.py`](../src/api/ws/handler.py) — WebSocket handler implementation
 
 ## Last updated

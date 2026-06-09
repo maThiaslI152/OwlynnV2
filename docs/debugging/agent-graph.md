@@ -260,7 +260,7 @@ INFO:src.agent.nodes.summarize:Active tokens 3200/10000 (32%), skipping summariz
 - **Bare `raise` in complex.py**: Replaced with graceful error message. See [STATUS.md](../STATUS.md).
 - **Denied tools tracking**: Denied tool names accumulate in `AgentState.denied_tools` to prevent LLM retries. See [AGENT_FLOW.md](../AGENT_FLOW.md) for details.
 - **Auto-summarize**: Wired between `memory_inject` and `router` with 85% threshold. See [AGENT_FLOW.md](../AGENT_FLOW.md).
-- See also: [ARCHITECTURE_OVERVIEW.md](../ARCHITECTURE_OVERVIEW.md) section 1 for full graph flow.
+- See also: [architecture/overview.md](../architecture/overview.md) and [AGENT_FLOW.md](../AGENT_FLOW.md) for full graph flow.
 
 ## Related
 

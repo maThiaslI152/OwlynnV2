@@ -1,6 +1,14 @@
+---
+status: active
+category: architecture
+last_updated: 2026-06-10
+owner: ai-agent
+audience: agent
+---
+
 # Memory System — Short-Term, Long-Term, and Personal
 
-> **Last updated:** 2026-06-09
+> **Purpose:** Three-tier memory, inject/retrieve/write pipeline, and project scoping.
 
 ## Overview
 

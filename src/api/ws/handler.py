@@ -1,3 +1,13 @@
+"""WebSocket chat handler — streams LangGraph events to the frontend.
+
+See docs/CHAT_PROTOCOL.md for event types and serialization contract.
+"""
+
+"""WebSocket chat handler — streaming events and HITL resume.
+
+See docs/CHAT_PROTOCOL.md for the frontend event contract.
+"""
+
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 router = APIRouter()

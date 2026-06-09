@@ -1,9 +1,6 @@
-"""
-Router Node — 5-way routing with toolbox selection and HITL clarification.
---------------------------------------------------------------------------
-Uses the Small LLM to classify: simple vs complex, then selects the
-appropriate M-tier variant or cloud escalation for complex tasks.
-Also selects toolbox categories for dynamic tool loading.
+"""Router node — classification, toolbox selection, HITL clarification.
+
+See docs/EXTENDING_AGENT.md for routing change points and tests/test_router_*.py.
 """
 
 from langchain_core.messages import HumanMessage

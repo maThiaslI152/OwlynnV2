@@ -1,8 +1,9 @@
 ---
 status: active
 category: standards
-last_updated: 2026-06-04
-owner: human
+last_updated: 2026-06-10
+owner: ai-agent
+audience: agent
 ---
 
 # Owlynn Status
@@ -11,7 +12,7 @@ owner: human
 
 ## Overview
 
-Project status tracker. Last updated: 2026-06-05 — DeepSeek V4 integration, SwapManager removal, and security hardening.
+Project status tracker. Last updated: 2026-06-10 — MiniCPM5 router, agent-first docs, Electron frontend.
 
 ## Recent Changes (2026-06-04)
 
@@ -19,7 +20,7 @@ Project status tracker. Last updated: 2026-06-05 — DeepSeek V4 integration, Sw
 |--------|--------|---------|
 | **DeepSeek V4 Upgrade** | 1M Context window, extra_body config, SwapManager removal, Vision guardrail | pending |
 | **Config centralization** | ~100 settings → 1 file (`defaults.yaml`). Override chain: YAML → env → profile | `bb04b25` |
-| **Qwen3.5 model swap** | Router: qwen3.5-0.8b. Complex: qwen3.5-9b Q6_K. Author-tuned. | `dd69035` → `6367323` |
+| **MiniCPM5 router** | Router: minicpm5-1b. Complex: qwen3.5-9b Q6_K. | `dd69035` → `6367323` |
 | **14 bugs fixed** | HITL GraphInterrupt, keyword bypass, thinking budgets, request_timeout, startup race, context overflow | `2b907d2` → `acd9f8d` |
 | **Router bypasses** | Code review, creative writing, explain/compare → force complex (9B model) | `6da48bd` |
 | **Config audit** | 4 missing entries, 6 stale fallbacks synced, ConfigValidator (60+ paths) | `4011a27` |
@@ -30,7 +31,7 @@ Project status tracker. Last updated: 2026-06-05 — DeepSeek V4 integration, Sw
 
 | Slot | Model | Context | Temp | Max Tokens |
 |------|-------|---------|------|------------|
-| Router | `qwen3.5-0.8b` | 16384 | 0.2 | 1024 |
+| Router | `minicpm5-1b` | 8192 | 0.2 | 512 |
 | Complex | `qwen3.5-9b-uncensored-hauhaucs-aggressive@q6_k` | 16384 | 0.7 | 16384 |
 | Cloud | `deepseek-v4-flash` | 1048576 | 0.4 | 8192 |
 

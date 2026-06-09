@@ -1,3 +1,5 @@
+/** App shell and WebSocket lifecycle. Event contract: docs/CHAT_PROTOCOL.md */
+/** App shell — WebSocket lifecycle and HITL resume. See docs/CHAT_PROTOCOL.md */
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { listen } from './lib/electronBridge'
 import { AppShell } from './components/AppShell'

@@ -83,7 +83,7 @@ Run lint and format **before marking any task complete**.
 ## Related
 
 - [`docs/standards/documentation.md`](documentation.md) — doc structure rules
-- [`specs/memory/constitution.md`](../../specs/memory/constitution.md) — non-negotiable constraints
+- [`AGENTS.md`](../../AGENTS.md) — agent entry point and task routing
 - [`.cursor/rules/coding-style.mdc`](../../.cursor/rules/coding-style.mdc) — enforceable rule subset
 
 ## Last updated

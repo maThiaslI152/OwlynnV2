@@ -1,115 +1,55 @@
 ---
-last_verified: 2026-05-26
-auto_generated: false
+status: active
+category: guide
+audience: agent
+last_updated: 2026-06-10
+owner: ai-agent
 ---
 
-# Frontend V2 (React + TypeScript)
+# Frontend V2 (React + Electron)
 
-## Overview
-
-Active Owlynn frontend. Provides the app shell, chat UX, workspace/project switching, and inspector panels used by the FastAPI + WebSocket backend.
+> **Purpose:** Active Owlynn UI — chat, workspace switching, inspector panels, WebSocket client.
 
 ## Entry Points
 
 ```text
-frontend-v2/src/App.tsx                       # React app shell, WebSocket lifecycle
-frontend-v2/src/components/AppShell.tsx        # Shell layout, sidebar
-frontend-v2/src/state/useAppStore.ts           # Zustand store
-frontend-v2/src/lib/wsClient.ts               # WebSocket client
-frontend-v2/src/lib/tauriBridge.ts             # Tauri IPC bridge
-frontend-v2/src/appEventHandlers.ts            # Project-switch thread resolution
+frontend-v2/src/App.tsx                 # App shell, WebSocket lifecycle, HITL resume
+frontend-v2/src/components/AppShell.tsx # Layout, sidebar
+frontend-v2/src/state/useAppStore.ts    # Zustand store
+frontend-v2/src/lib/wsClient.ts       # WebSocket client
+frontend-v2/src/lib/electronBridge.ts   # Electron IPC (Safe Mode, screen assist)
+frontend-v2/electron/main.ts            # Electron main process
+frontend-v2/src/types/protocol.ts       # WS event types (mirror CHAT_PROTOCOL.md)
 ```
 
 ## Architecture
 
 | Component | Role |
 |-----------|------|
-| `AppShell` | Shell layout, sidebar Workspace and Chat sections |
-| `Composer` | Message input with file attachments |
-| `OrchestrationPanel` | Routing decisions (route, model, confidence) |
-| `SafeModePanel` | Safety level and execution policy controls |
-| `ScreenAssistPanel` | Screen capture, preview, annotation |
-| `ToolExecutionPanel` | Tool call logs with HMAC audit trail |
-| `ActionProposalQueue` | Pending security approvals |
-| `ProjectKnowledgePanel` | Indexed knowledge files per project |
+| `AppShell` | Sidebar, workspace + chat lists |
+| `Composer` | Message input, attachments |
+| `OrchestrationPanel` | Route, model, confidence display |
+| `SafeModePanel` | Safety level (requires Electron IPC) |
+| `ScreenAssistPanel` | Screen capture / annotation |
+| `ActionProposalQueue` | Pending HITL approvals |
 
-## Flow
-
-### Workspace CRUD
-
-Workspace CRUD implemented with inline actions in the left sidebar Workspace list:
-
-| Action | Trigger | API Call |
-|--------|---------|----------|
-| Create | `+ New` opens inline name input, Enter/blur saves | `POST /api/projects` |
-| Rename | Pencil action on non-default workspace row | `PUT /api/projects/{id}` |
-| Delete | `X` action on non-default workspace row with confirmation | `DELETE /api/projects/{id}` |
-| Refresh | `Refresh` in Workspace header | `GET /api/projects` |
-
-Create flow uses inline input pattern (same as rename), not `window.prompt`.
-
-### Thread and Chat Isolation
-
-| Rule | Behavior |
-|------|----------|
-| Workspace creation | Mints fresh thread id (`thread-<uuid>`) |
-| Workspace switch | Restores that workspace's current thread |
-| Active workspace deletion | Switches to `default` using existing thread (or new one if missing) |
-| New workspace chat list | Initially empty; first user message lazily registers first chat |
-
-Per-project thread mapping via `projectThreadsRef`. STM/LTM and chat history boundaries aligned with workspace context.
-
-### Memory Management UI
-
-`MemoryPanel` (`src/components/MemoryPanel.tsx`) displays three sections:
-
-| Section | Source | Behavior |
-|---------|--------|----------|
-| Tracked Topics & Interests | `GET /api/topics`, `GET /api/interests` | Auto-refresh on `memory_updated` WS event |
-| Long-Term Memories | `GET /api/mem0/search` | Searchable, deletable list. Delete (×) button calls `POST /api/mem0/delete`. Memory count in header. Auto-refresh on `memory_updated` |
-| Prompt Context | `GET /api/memory-context` | Expandable view of full memory context injected into LLM system prompt |
-
-All interactive elements inside Memory Panel use `e.stopPropagation()` to prevent parent `CollapsibleSection` toggle. Delete (×) button has 24×22px hit area.
-
-## API
-
-### Mem0 Endpoints (Backend)
-
-Added to `src/api/server.py`:
-
-| Endpoint | Description |
-|----------|-------------|
-| `GET /api/mem0/search?query=&limit=50&project_id=` | Search vector memories |
-| `GET /api/mem0/count?project_id=` | Count memories |
-| `POST /api/mem0/delete` | Delete memory by ID |
-| `POST /api/mem0/clear` | Clear all memories for a user |
-| `POST /api/mem0/reset` | Reset all memories (global) |
-
-## Key Decisions
-
-| Decision | Rationale | Trade-off |
-|----------|-----------|-----------|
-| Inline CRUD (not prompts) | More reliable in browser automation and desktop runtime | More complex UI logic |
-| Per-project thread mapping | STM/LTM isolation by workspace | Additional state management |
-| Zustand for all frontend state | Simple, no middleware nesting | Single store grows large |
-| `default` workspace protected from deletion | Always have a fallback workspace | Less flexibility |
-
-## Testing
+## Dev commands
 
 ```bash
 cd frontend-v2
-npm install
-npm run dev
-npm run build
-npx vitest run
+npm install          # first time
+npm run dev          # Vite + Electron with HMR
+npx vitest run       # component tests
+npm run build        # production + desktop bundle
 ```
 
-Current: 50 passed, build passes.
+API/WebSocket proxy: Vite dev server (`5173`) → backend (`8000`). See [`docs/CHAT_PROTOCOL.md`](../docs/CHAT_PROTOCOL.md).
 
-## Configuration
+## Related
 
-| Rule | Detail |
-|------|--------|
-| `default` workspace | Protected from deletion in backend, hidden from delete action in frontend |
-| Workspace UI | Written for v2 patterns, does not reuse legacy frontend implementation |
-| `src/index.css` | Shared styles for workspace/chat row actions |
+- [`docs/PROJECT_GUIDE.md`](../docs/PROJECT_GUIDE.md) — full file map
+- [`docs/guides/dev-startup.md`](../docs/guides/dev-startup.md) — launch stack
+
+## Last updated
+
+2026-06-10 — agent-first overhaul; electronBridge replaces tauriBridge

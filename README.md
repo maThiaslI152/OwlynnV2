@@ -251,8 +251,12 @@ Full reference: [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md) · WebSocket co
 
 ## Documentation
 
+**AI agents:** start at [`AGENTS.md`](AGENTS.md) → [`docs/PROJECT_GUIDE.md`](docs/PROJECT_GUIDE.md).
+
 | Doc | Topic |
 |-----|-------|
+| [`AGENTS.md`](AGENTS.md) | Agent onboarding and task routing |
+| [`docs/PROJECT_GUIDE.md`](docs/PROJECT_GUIDE.md) | File map by task |
 | [`docs/architecture/overview.md`](docs/architecture/overview.md) | System overview |
 | [`docs/AGENT_FLOW.md`](docs/AGENT_FLOW.md) | LangGraph nodes and edges |
 | [`docs/guides/memory-vision-screen-roadmap.md`](docs/guides/memory-vision-screen-roadmap.md) | Memory + vision + screen assist |

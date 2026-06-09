@@ -1,5 +1,6 @@
-"""
-LangGraph orchestration with a secure cyclic tool flow.
+"""LangGraph orchestration with a secure cyclic tool flow.
+
+See docs/AGENT_FLOW.md for node-by-node flow and docs/EXTENDING_AGENT.md for extension points.
 """
 
 from langgraph.graph import StateGraph, END

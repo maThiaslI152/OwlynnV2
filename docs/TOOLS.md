@@ -1,8 +1,9 @@
 ---
 status: active
 category: reference
-last_updated: 2026-05-31
-owner: human
+last_updated: 2026-06-10
+owner: ai-agent
+audience: agent
 ---
 
 # Tools Reference
@@ -124,7 +125,7 @@ All other tools auto-approve. Dangerous shell patterns (`rm -rf`, `sudo`, etc.) 
 ## Related
 
 - [`docs/API_REFERENCE.md`](API_REFERENCE.md) — REST endpoint reference
-- [`docs/ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) — system architecture
+- [`docs/architecture/overview.md`](architecture/overview.md) — system architecture
 
 ## Last updated
 

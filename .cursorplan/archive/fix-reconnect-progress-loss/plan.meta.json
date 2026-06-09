@@ -1,7 +1,0 @@
-{
-  "change": "fix-reconnect-progress-loss",
-  "specs_path": "specs/active/fix-reconnect-progress-loss",
-  "docs_changelog": "docs/changes/fix-reconnect-progress-loss/CHANGELOG.md",
-  "cursor_plan_uri": null,
-  "updated_at": "2026-05-31T04:35:00Z"
-}

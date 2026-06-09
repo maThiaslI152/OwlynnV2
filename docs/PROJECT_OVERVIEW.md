@@ -1,11 +1,14 @@
 ---
 status: active
 category: reference
-last_updated: 2026-05-31
+last_updated: 2026-06-10
 owner: human
+audience: human
 ---
 
 # OwlynnV2 Project Overview
+
+> **Agents:** use [`STATUS.md`](STATUS.md) + [`PROJECT_GUIDE.md`](PROJECT_GUIDE.md) instead of this file.
 
 > **Purpose:** High-level project overview covering goals, architecture, progress, and areas for improvement.
 

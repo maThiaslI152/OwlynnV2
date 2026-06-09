@@ -1,7 +1,8 @@
 ---
 status: active
 category: guide
-last_updated: 2026-06-07
+last_updated: 2026-06-10
+audience: agent
 owner: ai-agent
 ---
 
@@ -39,6 +40,10 @@ http://127.0.0.1:1234           # LM Studio (LLM inference)
 http://127.0.0.1:6333           # Qdrant (vector DB)
 http://127.0.0.1:6379           # Redis (session persistence)
 ```
+
+## Step 0: One-time bootstrap (optional)
+
+Fresh checkout? Run `./setup.sh` once — starts containers, creates `.venv`, installs Python + npm deps, copies `.env.example` → `.env`.
 
 ## Step 1: Environment Configuration (.env + .env.local)
 
@@ -281,5 +286,6 @@ The output will be placed in `frontend-v2/dist/`.
 - [`docs/guides/deepseek-v4-testing.md`](deepseek-v4-testing.md) — live DeepSeek V4 test matrix (flash/pro, thinking, brief regression)
 - [`docs/guides/lm_studio.md`](lm_studio.md) — LM Studio model setup
 - [`docs/guides/quickstart.md`](quickstart.md) — chat UX features (highlighting, tool cards, mobile)
-- [`AGENTS.md`](../../AGENTS.md) — SDD workflow for Cursor agents
+- [`AGENTS.md`](../../AGENTS.md) — agent onboarding for Cursor
+- [`setup.sh`](../../setup.sh) — one-time bootstrap (`./setup.sh` before first `./start.sh`)
 - [`docs/README.md`](../README.md) — full project documentation map

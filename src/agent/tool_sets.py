@@ -1,8 +1,6 @@
-"""
-Tool lists for the complex reasoning path.
+"""Toolbox registry and tool binding for the complex path.
 
-Focused on general productivity: web search, file management,
-document generation, task tracking, and skills.
+See docs/TOOLS.md; implement tools in src/tools/ and register here.
 """
 
 from src.tools.web_tools import web_search, fetch_webpage, deep_research

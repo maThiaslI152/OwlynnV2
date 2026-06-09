@@ -214,14 +214,12 @@ The Settings dialog's **Memory Tab** displays:
 
 ### Frontend API Integration
 
-**File:** `frontend/script.js`
+**Files:** `frontend-v2/src/components/MemoryPanel.tsx`, `frontend-v2/src/state/useAppStore.ts`
 
-Key functions:
-- `loadSettingsData()` - Fetches all settings + topics + interests + conversations
-- `loadMemoryTabData()` - Refreshes memory tab data when tab is opened
-- `renderTrackedTopics()` - Renders topic badges
-- `renderDetectedInterests()` - Renders interest chips
-- `renderRecentConversations()` - Renders conversation cards
+Key integration points:
+- Zustand store fetches profile, topics, interests, and conversation history via REST
+- `MemoryPanel.tsx` renders tracked topics, interests, and memory facts
+- Settings and memory tabs refresh on panel open via store actions
 
 The Memory tab automatically refreshes when opened to show latest data.
 

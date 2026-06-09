@@ -1,14 +1,6 @@
-"""
-LLM Client Initialization with Instance Pooling for Mac M4 Optimization.
+"""LLM pool — small (router), medium (complex), cloud (DeepSeek).
 
-This module provides helpers to initialize the LangChain ChatOpenAI client
-configured to connect to a local LM Studio server, with pooling to avoid
-re-initialization overhead on Mac M4.
-
-Three-slot pool: small (always loaded) + medium (swappable) + cloud (DeepSeek API).
-
-All model parameters (names, base URLs, temperatures, max_tokens, timeouts)
-are sourced from the centralized config (src/config/defaults.yaml).
+Model names and endpoints: src/config/defaults.yaml. See docs/architecture/overview.md.
 """
 
 import asyncio

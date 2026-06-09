@@ -8,7 +8,7 @@
 - Node.js 18+ (for frontend tests)
 - Docker/Podman (for Qdrant, SearXNG, Redis)
 - LM Studio with models loaded on port 1234
-- Rust & Cargo (only if building the Tauri desktop app)
+- Electron (optional — for desktop packaging via `frontend-v2`)
 
 ### Backend Setup
 
@@ -46,10 +46,6 @@ npm run dev
 ```
 
 The Vite dev server runs on `http://127.0.0.1:5173` with API/WebSocket proxied to the backend.
-
-### Legacy Frontend (v1 — end of life)
-
-The old `frontend/` directory contains the original HTML/CSS/JS frontend. It is no longer actively developed.
 
 ## Code Style
 
@@ -105,15 +101,27 @@ npx vitest run
 
 ### Before Submitting
 
-1. All existing tests pass: `pytest tests/ -v -m "not network"` and `cd frontend-v2 && npx vitest run`
-2. New features include tests.
-3. No lint errors in modified files.
+```bash
+./scripts/ci.sh --quick
+```
+
+Or individually:
+
+```bash
+pytest -q -m "not network and not benchmark" --tb=short
+pytest -q tests/test_verify_report_fixture.py tests/test_websocket_event_contract.py tests/test_frontend_cutover_serving.py --tb=short
+cd frontend-v2 && npx vitest run
+```
+
+1. All checks above pass
+2. New features include tests where behavior changes
+3. No lint errors in modified files
 
 ## Architecture Notes
 
-- **Agent nodes** are pure functions `(AgentState) → AgentState` — no side effects except LLM calls and tool execution.
+- **Agent nodes** are LangGraph callables over `AgentState` — side effects limited to LLM calls, tools, and memory I/O.
 - **Memory scoping**: Non-default projects isolate memories via `project:<id>` user IDs in Mem0.
-- **Security proxy**: All tool calls pass through `security_proxy_node` before execution. Sensitive tools require human approval via HITL interrupt.
-- **Model swapping**: Only one M-tier model is loaded at a time. The `SwapManager` handles unload → load → poll via the LM Studio API.
+- **Security proxy**: Sensitive tool calls pass through `security_proxy_node` / `plan_review_node` with HITL interrupts.
+- **Models**: Router `minicpm5-1b`, complex `qwen3.5-9b-uncensored-hauhaucs-aggressive@q6_k` — see `src/config/defaults.yaml`.
 
-See [docs/ARCHITECTURE_OVERVIEW.md](docs/ARCHITECTURE_OVERVIEW.md) for the full architecture reference.
+See [`docs/architecture/overview.md`](docs/architecture/overview.md) and [`AGENTS.md`](AGENTS.md).

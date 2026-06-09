@@ -246,7 +246,7 @@ Both nodes run **locally only** (Small/Medium LLM, no cloud). When the eventual 
 
 ## Related
 
-- [`docs/ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) — system architecture
+- [`docs/architecture/overview.md`](architecture/overview.md) — system architecture
 - [`docs/README.md`](README.md) — project documentation map
 
 ## Last updated

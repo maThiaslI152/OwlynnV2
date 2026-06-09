@@ -1,215 +1,184 @@
 ---
-last_verified: 2026-05-26
-auto_generated: false
-purpose: "Single entry point for AI agents and human developers. Combines navigation index, architecture quick-reference, and development rules."
+status: active
+category: reference
+audience: agent
+last_updated: 2026-06-10
+owner: ai-agent
 ---
 
 # Owlynn Project Guide
 
-Single merged guide replacing `AI_AGENT_INDEX.md`, `AI_AGENT_PROJECT_GUIDE.md`, and `HUMAN_PROJECT_GUIDE.md`. Provides navigation, architecture overview, and development rules in one document.
+> **Purpose:** Canonical file map for AI agents. Use this to locate source files, contracts, and tests before making changes.
 
-Related documents: `docs/ARCHITECTURE_OVERVIEW.md` (full architecture), `docs/STATUS.md` (active status and risks), `docs/ADR.md` (architecture decisions), `docs/BUG-ANALYSIS.md` (bug inventory).
+Related: [`architecture/overview.md`](architecture/overview.md) (system shape), [`STATUS.md`](STATUS.md) (bugs/risks), [`ADR.md`](ADR.md) (decisions).
 
 ---
 
-## Section 1: Navigation Index
-
-Fastest entry point for locating source files, contracts, and tests before making changes.
-
-### Routing and Model Behavior
+## Routing and model behavior
 
 | File | Role |
 |------|------|
-| `src/agent/nodes/router.py` | Router node implementation |
-| `src/agent/llm.py` | LLMPool singleton |
-| `src/agent/swap_manager.py` | M-tier model hot-swap |
-| `src/agent/nodes/complex.py` | Complex reasoning node |
+| `src/agent/nodes/router.py` | `router_node()` — classification, keyword bypass, HITL clarification |
+| `src/agent/router/classifier.py` | LLM JSON routing classifier |
+| `src/agent/router/budget.py` | Token budget tiers and input reserves |
+| `src/agent/router/selector.py` | Model/toolbox selection |
+| `src/agent/llm.py` | `LLMPool` singleton — small + medium + cloud slots |
+| `src/agent/nodes/simple.py` | Fast simple-path answers (no tools) |
+| `src/agent/nodes/complex.py` | Tool-calling cycle, local + cloud paths |
+| `src/agent/nodes/complex_utils/cloud_payload.py` | Cloud prompt layers, anonymization |
+| `src/agent/nodes/complex_utils/cloud_invoke.py` | DeepSeek client, tool strict mode |
+| `src/agent/nodes/complex_utils/vision_*.py` | Vision proxy for cloud image path |
+| `src/config/defaults.yaml` | Model names, routing thresholds (source of truth) |
 | `tests/test_router_properties.py` | Router property tests |
+| `tests/test_router_web_intent.py` | Web-intent forcing tests |
 | `tests/test_llm_pool.py` | LLM pool tests |
-| `tests/test_swap_manager.py` | Swap manager tests |
 
-### WebSocket/API Contract
+**Current models** (`defaults.yaml`): router `minicpm5-1b`, complex `qwen3.5-9b-uncensored-hauhaucs-aggressive@q6_k`, cloud `deepseek-v4-flash`.
+
+## Complex / cloud path
 
 | File | Role |
 |------|------|
-| `src/api/routes/` & `src/api/ws/` | Backend REST + WebSocket |
+| `src/agent/nodes/complex.py` | `complex_llm_node()`, `complex_tool_action_node()` |
+| `src/agent/nodes/complex_utils/cloud_payload.py` | Brief gate, PII scrub, cache metrics |
+| `src/agent/nodes/complex_utils/cloud_invoke.py` | Raw API invoke + retries |
+| `src/agent/anonymization.py` | PII scrubbing for cloud escalation |
+| `tests/test_complex_node_properties.py` | Complex node behavior |
+| `tests/test_anonymization*.py` | Anonymization leak tests |
+| `tests/test_cloud_*.py` | Cloud payload, circuit breaker, cost |
+
+## HITL (human-in-the-loop)
+
+| File | Role |
+|------|------|
+| `src/agent/hitl/policy.py` | `is_sensitive_call()`, shared policy |
+| `src/agent/hitl/context.py` | Interrupt context enrichment |
+| `src/agent/nodes/scope_clarify.py` | Vague build/create clarification |
+| `src/agent/nodes/plan_review.py` | Sensitive tool plan review |
+| `src/agent/nodes/security_proxy.py` | Execution approval gate |
+| `tests/test_scope_clarify.py` | Scope clarify tests |
+| `tests/test_plan_review.py` | Plan review tests |
+| `tests/test_security_proxy.py` | Security proxy tests |
+
+## API / WebSocket
+
+| File | Role |
+|------|------|
+| `src/api/server.py` | FastAPI app entry |
+| `src/api/routes/*.py` | REST endpoints |
+| `src/api/ws/handler.py` | WebSocket streaming, event serialization |
 | `docs/CHAT_PROTOCOL.md` | WS event contract |
-| `docs/API_REFERENCE.md` | REST endpoint reference |
-| `frontend-v2/src/App.tsx` | Frontend WS consumer |
-| `frontend-v2/src/lib/tauriBridge.ts` | Tauri IPC bridge |
+| `docs/API_REFERENCE.md` | REST reference |
 | `tests/test_websocket_event_contract.py` | WS contract tests |
-| `tests/test_websocket_model_key_updates.py` | Model key update tests |
 | `tests/test_frontend_backend_alignment.py` | Frontend/backend alignment |
 
-### Project/Workspace State and CRUD
+## Frontend
 
 | File | Role |
 |------|------|
-| `src/memory/project.py` | Project CRUD manager |
-| `src/config/settings.py` | Workspace roots, project path rules |
+| `frontend-v2/src/App.tsx` | App shell, WebSocket lifecycle, HITL resume |
+| `frontend-v2/src/lib/electronBridge.ts` | Electron IPC (Safe Mode, screen assist) |
+| `frontend-v2/src/lib/wsClient.ts` | WebSocket client |
 | `frontend-v2/src/state/useAppStore.ts` | Zustand store |
-| `frontend-v2/src/components/MemoryPanel.tsx` | Memory panel |
-| `frontend-v2/src/components/AppShell.tsx` | App shell layout |
-| `docs/BUG-ANALYSIS.md` | Bug inventory |
-| `tests/test_crud_operations.py` | CRUD tests |
-| `tests/test_crud_properties.py` | CRUD property tests |
-| `tests/test_project_context_isolation_properties.py` | Project isolation tests |
-| `frontend-v2/src/components/__tests__/components.extended.test.tsx` | Component tests |
+| `frontend-v2/electron/main.ts` | Electron main process |
+| `frontend-v2/src/components/AppShell.tsx` | Layout shell |
 
-### Cloud Fallback and Anonymization
+## Memory
 
 | File | Role |
 |------|------|
-| `src/agent/anonymization.py` | PII scrubbing engine |
-| `src/agent/nodes/complex.py` | Cloud path fallback |
-| `tests/test_cloud_fallback_anonymization_leak.py` | Anonymization leak tests |
-| `tests/test_anonymization_properties.py` | Anonymization property tests |
-| `tests/test_complex_node_properties.py` | Complex node tests |
+| `src/agent/nodes/memory.py` | `memory_inject_lite`, `memory_retrieve`, `memory_write` |
+| `src/memory/` | STM/LTM/personal managers, Mem0/Qdrant |
+| `data/topics.json` | Personal topic decay (runtime data) |
+| `docs/MEMORY.md` | Memory tier contract |
+| `tests/test_memory_nodes.py` | Memory node tests |
+| `tests/test_memory_retrieve_gate.py` | Gated retrieval tests |
 
-### Tooling and Security Gating
+## Tools
 
 | File | Role |
 |------|------|
-| `src/agent/tool_sets.py` | ToolboxRegistry |
-| `src/agent/nodes/security_proxy.py` | HITL gate |
-| `src/tools/` | Tool implementations |
+| `src/agent/tool_sets.py` | `ToolboxRegistry`, tool list resolution |
+| `src/tools/` | Tool implementations (`@tool` decorators) |
 | `docs/TOOLS.md` | Tool reference |
+| `tests/test_toolbox_registry*.py` | Toolbox tests |
+| `tests/test_web_tools.py` | Web search tools |
 
-### Bug Tracking
+## Config
 
-| ID | Severity | Description |
-|----|----------|-------------|
-| BUG-1 | CRITICAL | Persona/system prompt leaks into first assistant response |
-| BUG-2 | HIGH | Orchestration panel empty after message processing |
-| BUG-3 | HIGH | Memory panel shows "Loading..." indefinitely |
-| BUG-4 | MEDIUM | Chat auto-title defaults to "New Chat" |
-| BUG-5 | MEDIUM | Safe Mode dropdown depends on Tauri IPC, no browser fallback |
-| BUG-6 | LOW | Tool Execution panel shows permanent mock data |
-| BUG-7 | LOW | Workspace delete shows wrong operator note |
-| BUG-8 | LOW | Audit & Verify sub-panel doesn't expand |
+| File | Role |
+|------|------|
+| `src/config/defaults.yaml` | All defaults — edit here first |
+| `src/config/config_loader.py` | YAML + env + profile merge |
+| `src/config/settings.py` | Workspace roots, paths |
 
-### Canonical Documentation Map
+## Graph orchestration
 
-| Document | Purpose |
-|----------|---------|
-| `README.md` | Project overview and setup |
-| `docs/PROJECT_GUIDE.md` | This file -- navigation, architecture, rules |
-| `docs/API_REFERENCE.md` | API contract |
-| `docs/CHAT_PROTOCOL.md` | WebSocket contract |
-| `docs/STATUS.md` | Active status and risks |
-| `docs/ADR.md` | Architecture decisions |
-| `docs/PERFORMANCE_SLOS.md` | Performance & memory SLOs |
-| `docs/BUG-ANALYSIS.md` | Bug analysis and audit reports |
-| `docs/CLOUD-LLM-ARCHITECTURE.md` | Cloud LLM connection architecture, security, retry/fallback |
-| `docs/ENGINEERING_IMPROVEMENTS.md` | Engineering improvement backlog |
-
----
-
-## Section 2: Architecture Quick-Reference
-
-Owlynn is a local-first AI coworker that runs a LangGraph agent backend with a Tauri frontend. Keeps most reasoning and data on your machine while supporting optional cloud escalation and external tools.
-
-### Tech Stack
-
-| Layer | Technology | Location |
-|-------|-----------|----------|
-| Frontend | Tauri + React/TypeScript | `frontend-v2/` |
-| Backend | FastAPI + WebSocket streaming | `src/api/routes/` & `src/api/ws/` |
-| Agent orchestration | LangGraph nodes | `src/agent/` |
-| Memory | JSON + Mem0/Qdrant | `src/memory/` |
-| Tools | File ops, web, notebook, docs, skills, MCP | `src/tools/` |
-
-### Data Flow
-
-1. User message enters WebSocket chat endpoint
-2. Memory context is injected
-3. Router chooses simple vs complex model path
-4. Complex path may call tools through security proxy approval
-5. Response is streamed back and memory is updated
-
-### Graph Topology
+| File | Role |
+|------|------|
+| `src/agent/graph.py` | `build_graph()`, conditional edges, HITL routing |
+| `docs/AGENT_FLOW.md` | Node-by-node flow reference |
+| `tests/test_graph.py` | Graph wiring tests |
+| `tests/test_graph_summarize_wiring.py` | Summarize gate tests |
 
 ```
-START -> memory_inject -> router -> simple -> memory_write -> END
-                               -> complex_llm <..........................+
-                                    |                                |
-                               security_proxy                       |
-                                    |                                |
-                               tool_action ---------------------------+
-                                    |
-                               memory_write -> END
+START → memory_inject_lite → router → memory_retrieve → auto_summarize? → simple → memory_write → END
+                                                                              → scope_clarify → complex_llm ◄─┐
+                                                                                    → plan_review            │
+                                                                                    → security_proxy         │
+                                                                                    → tool_action ───────────┘
+                                                                                    → memory_write → END
 ```
 
-### Entry Points
+## Common agent tasks
 
-| Component | Path |
-|-----------|------|
-| Backend entry | `src/api/server.py` |
-| Frontend entry | `frontend-v2/src/App.tsx` |
-| Full architecture | `docs/ARCHITECTURE_OVERVIEW.md` |
-| LangGraph node details | `docs/AGENT_FLOW.md` |
-| Tool reference | `docs/TOOLS.md` |
-| REST/WS endpoints | `docs/API_REFERENCE.md` |
+### Add router keyword bypass
 
----
+1. Edit `src/agent/nodes/router.py` — `simple_keywords` or `_WEBISH_HINTS`
+2. Run `pytest tests/test_router_properties.py tests/test_router_web_intent.py -q`
+3. Update [`EXTENDING_AGENT.md`](EXTENDING_AGENT.md) if behavior contract changes
 
-## Section 3: Development Rules
+### Add a new tool
 
-Prioritize reliability, traceability, and safe tool usage over novelty. Keep changes explainable and compatible with local runtime constraints.
+1. Implement in `src/tools/<module>.py` with `@tool` decorator
+2. Register in `src/agent/tool_sets.py` (`COMPLEX_TOOLS_*` or `ToolboxRegistry`)
+3. Run `pytest tests/test_toolbox_registry.py -q`
+4. Update [`TOOLS.md`](TOOLS.md) entry points block
 
-### Execution Rules
+### Change a WebSocket event
+
+1. Edit `src/api/ws/handler.py` — `serialize_message()` / emit helpers
+2. Update `frontend-v2/src/types/protocol.ts` and consumers in `App.tsx`
+3. Run `pytest tests/test_websocket_event_contract.py -q`
+4. Update [`CHAT_PROTOCOL.md`](CHAT_PROTOCOL.md)
+
+### Fix memory panel / context
+
+1. Trace `src/agent/nodes/memory.py` → `src/memory/`
+2. Run `pytest tests/test_memory_nodes.py tests/test_crud_operations.py -q`
+3. Check [`debugging/memory.md`](debugging/memory.md) for symptom hints
+
+### Swap a model
+
+1. Edit `src/config/defaults.yaml` — `models.small.model_name` or `models.medium.model_name`
+2. Match LM Studio loaded name exactly
+3. Run `pytest tests/test_llm_pool.py -q`
+
+## Development rules
 
 1. Keep diffs focused to the user request
-2. Preserve security proxy behavior around tool execution
-3. When touching routing/model behavior, update or add targeted tests
-4. Avoid mixing unrelated frontend/backend/docs changes in one commit
-5. Prefer deterministic fallbacks over silent failure paths
+2. Preserve security proxy / plan_review behavior around tool execution
+3. When touching routing, add or update targeted tests
+4. Run `./scripts/ci.sh --quick` before push
+5. Update the relevant task doc when API/WS/tool contracts change
 
-### Model-Routing Expectations
+## Related
 
-| Concern | Requirement |
-|---------|-------------|
-| Router | Decides among: simple, complex-default, vision, long-context, cloud |
-| Complex node | Must preserve safe tool binding, fallback chain visibility, blank-response fallback, anonymization/deanonymization correctness for cloud paths |
+- [`AGENTS.md`](../AGENTS.md) — agent entry point
+- [`architecture/overview.md`](architecture/overview.md) — architecture overview
+- [`debugging/README.md`](debugging/README.md) — symptom index
+- [`standards/coding-style.md`](standards/coding-style.md) — code conventions
 
-### Minimum Coverage by Area
+## Last updated
 
-| Change Area | Required Tests |
-|-------------|---------------|
-| Model/routing | `tests/test_llm_pool.py`, `tests/test_swap_manager.py`, `tests/test_router_web_intent.py` |
-| Anonymization | `tests/test_anonymization*.py` |
-| Fallback behavior | `tests/test_complex_node_properties.py` |
-
-### Before Commit Checklist
-
-1. Scope changes to one risk/theme
-2. Update tests in the touched area
-3. Verify behavior with targeted test runs
-4. Update docs when API/WS behavior changes
-5. Confirm `docs/STATUS.md` still reflects current risk state
-
-### Local Development Quick-Start
-
-```bash
-pip install -r requirements.txt
-# Start supporting services (Redis/Qdrant via docker-compose)
-python -m uvicorn src.api.server:app --host 127.0.0.1 --port 8000
-pytest tests/ -v
-cd frontend-v2 && npx vitest run
-```
-
-### Definition of Done
-
-1. Code compiles and tests pass for changed area
-2. User-facing behavior is verified (or explicitly noted if not runnable)
-3. Documentation updated when behavior/workflow changes
-
-### Key Decisions
-
-| Decision | Rationale | Trade-off |
-|----------|-----------|-----------|
-| Local-first architecture | Data privacy, offline operation | Cloud fallback requires API keys |
-| Security proxy HITL | Safe tool execution | Approval latency for sensitive operations |
-| LangGraph orchestration | Stateful, testable graph | More complex than linear pipelines |
-| Deterministic fallbacks preferred | Predictable behavior | May not always choose optimal model |
-| Single Zustand store | Simple state management | No store segmentation |
+2026-06-10 — agent-first documentation overhaul

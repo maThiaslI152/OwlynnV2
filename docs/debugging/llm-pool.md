@@ -5,12 +5,12 @@ last_updated: 2026-05-31
 owner: human
 ---
 
-# Debugging: LLM Pool & SwapManager
+# Debugging: LLM Pool
 
 > **Purpose:** Debugging guide for LLMPool model loading and swap issues.
 
 
-**Quick Reference:** Three-tier LLM architecture managed by `src/agent/llm.py` (LLMPool) and `src/agent/swap_manager.py` (SwapManager). Models served via LM Studio on port 1234. Cloud via DeepSeek API. Key files: `src/agent/llm.py`, `src/agent/swap_manager.py`, `src/agent/router/budget.py`.
+**Quick Reference:** Three-slot LLM pool in `src/agent/llm.py` (small router + medium worker + cloud). Models served via LM Studio on port 1234. Cloud via DeepSeek API. Key files: `src/agent/llm.py`, `src/config/defaults.yaml`, `src/agent/router/budget.py`.
 
 ## Common Failure Modes
 
@@ -20,8 +20,8 @@ owner: human
 | `model_not_found` in response | Model not loaded in LM Studio | `curl http://127.0.0.1:1234/v1/models \| jq '.data[].id'` | Load model in LM Studio or update profile model keys |
 | Small LLM response is garbage | Wrong model loaded or token limit | Check response content, compare with expected model | Verify `small_llm_model_name` in profile matches loaded model |
 | Swap hangs (>120s) | LM Studio native API unresponsive | `curl http://127.0.0.1:1234/api/v1/models` (native API) | Restart LM Studio; check `docker stats` for memory pressure |
-| `ModelSwapError` on swap | Model not found in LM Studio or OOM | Check swap_manager logs for `instance_id` and target model key | Ensure target model is downloaded in LM Studio; free VRAM |
-| Swap timeout (120s) | LM Studio slow to load model | Monitor `GET /api/v1/models` during swap | Increase poll timeout in swap_manager or reduce model size |
+| Model not found | Name mismatch vs LM Studio | Check `defaults.yaml` `models.small` / `models.medium` names | Load `minicpm5-1b` and `qwen3.5-9b-uncensored-hauhaucs-aggressive@q6_k` in LM Studio |
+| Request timeout | M4 slow inference | Check `models.*.timeout` in defaults.yaml | Reduce context window or use AC power |
 | DeepSeek API 401 | Invalid or missing API key | `echo $DEEPSEEK_API_KEY` | Set `DEEPSEEK_API_KEY` env var or in User_Profile |
 | DeepSeek API 403 | Account quota exceeded or disabled | Check DeepSeek dashboard | Top up quota or disable cloud escalation |
 | DeepSeek API 429 | Rate limited | Response includes `Retry-After` header | Wait and retry; system auto-retries after 2s |
@@ -95,33 +95,6 @@ ps aux | grep python | grep -v grep | awk '{printf "PID: %s, RSS: %.1f GB, CMD: 
 ```
 
 ## Log Interpretation
-
-### SwapManager Logs
-
-Normal swap sequence:
-```
-INFO:src.agent.swap_manager:Swap requested: default -> vision
-INFO:src.agent.swap_manager:Querying loaded models at http://127.0.0.1:1234/api/v1/models
-INFO:src.agent.swap_manager:Unloading instance <instance_id> (gemma-4-e4b-uncensored-hauhaucs-aggressive)
-INFO:src.agent.swap_manager:Loading target model: gemma-4-e4b-uncensored-hauhaucs-aggressive
-INFO:src.agent.swap_manager:Waiting for model to appear in loaded_instances...
-INFO:src.agent.swap_manager:Model loaded successfully after 8s
-INFO:src.agent.swap_manager:Swap complete: default -> vision (10.2s total)
-```
-
-Swap failure (model not found):
-```
-INFO:src.agent.swap_manager:Loading target model: nonexistent-model
-ERROR:src.agent.swap_manager:Load failed: HTTP 404 — model not found
-ERROR:src.agent.swap_manager:ModelSwapError: Failed to load medium model 'nonexistent-model'
-```
-
-Swap timeout:
-```
-INFO:src.agent.swap_manager:Waiting for model to appear in loaded_instances...
-WARNING:src.agent.swap_manager:Model not loaded after 120s, giving up
-ERROR:src.agent.swap_manager:ModelSwapError: Timeout waiting for model load
-```
 
 ### LLMPool Logs
 
@@ -283,7 +256,7 @@ INFO:src.agent.llm:Cloud budget: 420000/500000 (84%) — WARNING
 ## Known Fixes
 
 - **`model_not_found` errors for legacy model IDs**: Resolved — profile update semantic now persists active model keys. `LLMPool.clear()` triggered on profile changes.
-- **Cloud fallback chain**: All cloud failures auto-retry with Medium_Default. 401/403 suggests checking key. 429 retries after 2s. See [ARCHITECTURE_OVERVIEW.md](../ARCHITECTURE_OVERVIEW.md) section 12.
+- **Cloud fallback chain**: Cloud failures may fall back to local medium. 401/403 — check API key. 429 retries after backoff. See [architecture/overview.md](../architecture/overview.md) and [CLOUD-LLM-ARCHITECTURE.md](../CLOUD-LLM-ARCHITECTURE.md).
 - See also: [PERFORMANCE_SLOS.md](../PERFORMANCE_SLOS.md) for memory budget and degradation ladder.
 
 ## Related

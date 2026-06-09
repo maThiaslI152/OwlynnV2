@@ -23,7 +23,7 @@ owner: human
 | Messages not appearing | WS event type mismatch or state not updating | Check WS messages in DevTools, check store setters | Verify event types match `protocol.ts` |
 | Orchestration panel empty (BUG-2) | `router_info` event not emitted or not processed | See dedicated section below | See dedicated section below |
 | Memory panel "Loading..." (BUG-3) | REST fetch hangs or errors | See [memory.md](memory.md) frontend section | See [memory.md](memory.md) |
-| Safe Mode dropdown errors (BUG-5) | Tauri IPC unavailable in browser | Browser Console shows `Cannot read properties of undefined (reading 'invoke')` | See [tauri-desktop.md](tauri-desktop.md) |
+| Safe Mode dropdown errors (BUG-5) | Electron IPC unavailable in browser-only mode | Console shows IPC bridge errors | Use Electron (`npm run dev`) or [`electronBridge.ts`](../../frontend-v2/src/lib/electronBridge.ts) |
 | Stale UI after workspace switch | Store not resetting on project change | Check `useAppStore` project-switch logic | Force store reset on project switch |
 | Component re-render storms | Missing useCallback/useMemo or stale closure | React DevTools Profiler | Add memoization, fix dependency arrays |
 | Zustand state desync | Multiple store updates racing | React DevTools → inspect store state | Audit action dispatch order, use middleware |

@@ -1,8 +1,9 @@
 ---
 status: active
 category: architecture
-last_updated: 2026-06-09
-owner: human
+last_updated: 2026-06-10
+owner: ai-agent
+audience: agent
 ---
 
 # Agent Flow (LangGraph)
@@ -194,7 +195,7 @@ Defined in `src/agent/tool_sets.py`:
 ```bash
 pytest tests/test_router_properties.py -v
 pytest tests/test_llm_pool.py -v
-pytest tests/test_swap_manager.py -v
+pytest tests/test_router_web_intent.py -v
 pytest tests/test_security_proxy.py -v
 pytest tests/test_memory_nodes.py -v
 ```
@@ -211,9 +212,9 @@ pytest tests/test_memory_nodes.py -v
 
 ## Related
 
-- [`docs/ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) — system architecture
+- [`docs/architecture/overview.md`](architecture/overview.md) — system architecture
 - [`docs/README.md`](README.md) — project documentation map
 
 ## Last updated
 
-2026-05-31 — `docs-standards-timeline` added frontmatter, purpose blockquote
+2026-06-10 — removed swap_manager test ref; fixed architecture link

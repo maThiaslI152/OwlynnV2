@@ -1,12 +1,9 @@
-"""
-Memory Nodes — Inject and Write Long-Term Context
-===================================================
+"""Memory inject/retrieve/write nodes for the LangGraph pipeline.
 
-Two LangGraph nodes that bookend the reasoning pipeline:
+See docs/MEMORY.md. Lite inject runs before router; retrieve after router gate.
 
-- **memory_inject_node** (runs BEFORE router): Retrieves relevant memories
-  from Mem0/Qdrant, user profile, persona, project instructions, and
-  enhanced topic/interest context. Caches results for 5 minutes (M4 optimization).
+- **memory_inject_lite** (before router): Profile, persona, topics — no vector search
+- **memory_retrieve** (after router): Gated Mem0/Qdrant when needed
 
 - **memory_write_node** (runs AFTER response): Extracts topics and interests
   from the conversation turn, records the conversation summary, and saves

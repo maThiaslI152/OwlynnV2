@@ -1,8 +1,9 @@
 ---
 status: active
 category: guide
-last_updated: 2026-05-31
-owner: human
+last_updated: 2026-06-10
+owner: ai-agent
+audience: agent
 ---
 
 # Extending the Agent (Developer Guide)
@@ -39,8 +40,10 @@ docs/CHAT_PROTOCOL.md            # WebSocket event contract
 ### Graph Topology
 
 ```
-START → memory_inject → router → simple → memory_write → END
-                               → complex_llm ↔ security_proxy ↔ tool_action → memory_write → END
+START → memory_inject_lite → router → memory_retrieve → auto_summarize? → simple → memory_write → END
+                                                                              → scope_clarify → complex_llm
+                                                                                    ↔ plan_review / security_proxy
+                                                                                    ↔ tool_action → memory_write → END
 ```
 
 ### Consistency Constraints
@@ -151,8 +154,9 @@ When changing core behavior, update:
 ## Related
 
 - [`docs/README.md`](README.md) — project documentation map
-- [`docs/AI_AGENT_INDEX.md`](AI_AGENT_INDEX.md) — navigation index
+- [`docs/AGENT_FLOW.md`](AGENT_FLOW.md) — node-by-node flow
+- [`docs/architecture/overview.md`](architecture/overview.md) — system architecture
 
 ## Last updated
 
-2026-05-31 — `docs-standards-timeline` added frontmatter, purpose blockquote
+2026-06-10 — graph topology synced with graph.py

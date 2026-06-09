@@ -287,7 +287,7 @@ INFO:langgraph.checkpoint.memory:Using in-memory checkpointer (data lost on rest
 - **Mem0 `user_id` parameter bug**: Resolved — all calls to `mem0_memory.search()` now pass `filters={"user_id": user_id}` (the old `user_id=user_id` keyword argument form was incompatible with Mem0's API). See [STATUS.md](../STATUS.md).
 - **Topics/interests not used in simple path**: Resolved — knowledge context now injected into `simple_node()` prompt. See [STATUS.md](../STATUS.md).
 - **Memory context caching**: 5-minute TTL per thread, invalidated on `memory_write`. See [AGENT_FLOW.md](../AGENT_FLOW.md).
-- See also: [ARCHITECTURE_OVERVIEW.md](../ARCHITECTURE_OVERVIEW.md) sections 6-7 for memory architecture.
+- See also: [architecture/overview.md](../architecture/overview.md) and [MEMORY.md](../MEMORY.md) for memory architecture.
 
 ## Related
 

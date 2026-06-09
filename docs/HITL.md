@@ -1,6 +1,14 @@
+---
+status: active
+category: architecture
+last_updated: 2026-06-10
+owner: ai-agent
+audience: agent
+---
+
 # HITL — Human-in-the-Loop Safety System
 
-> **Last updated:** 2026-06-04
+> **Purpose:** Safety gates (scope clarify, plan review, security proxy) and interrupt contract.
 
 ## Overview
 
