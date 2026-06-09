@@ -33,3 +33,12 @@ def pytest_configure(config):
 
     # Disable file logging in the audit module
     _audit._file_logging_enabled = False
+
+    # Hypothesis: default no deadline (avoids flaky DeadlineExceeded under xdist/CI load)
+    try:
+        from hypothesis import settings as hypothesis_settings
+
+        hypothesis_settings.register_profile("owlynn", deadline=None)
+        hypothesis_settings.load_profile("owlynn")
+    except ImportError:
+        pass
