@@ -7,8 +7,10 @@ from typing import Callable, Optional
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
+from src.agent.nodes.complex_utils.vision_florence import parse_florence_response
 from src.agent.nodes.complex_utils.vision_model_manager import get_vision_llm
 from src.agent.nodes.complex_utils.vision_schema import (
+    VISION_FLORENCE_OCR_TASK,
     VISION_OCR_SYSTEM,
     VISION_OCR_USER,
     format_vision_for_cloud,
@@ -47,8 +49,17 @@ def _store_transcription(key: str, text: str) -> None:
     _TRANSCRIPTION_CACHE[key] = (time.monotonic(), text)
 
 
+def _vision_prompt_mode() -> str:
+    return str(config.get("cloud.vision_prompt_mode", "florence")).lower()
+
+
 def _raw_to_cloud_text(raw: str) -> str:
-    payload = parse_vision_payload(raw)
+    mode = _vision_prompt_mode()
+    payload = None
+    if mode == "florence":
+        payload = parse_florence_response(raw)
+    if payload is None:
+        payload = parse_vision_payload(raw)
     if payload is None:
         payload = {
             "text_blocks": [{"text": raw.strip(), "bbox": None}],
@@ -59,8 +70,19 @@ def _raw_to_cloud_text(raw: str) -> str:
     return format_vision_for_cloud(payload)
 
 
-async def _invoke_vision_vlm(image_url: str) -> str:
-    vlm_messages = [
+def _build_vlm_messages(image_url: str) -> list:
+    """Build VLM messages for json_chat (Qwen) or florence task-token mode."""
+    if _vision_prompt_mode() == "florence":
+        task = str(config.get("cloud.vision_florence_task", VISION_FLORENCE_OCR_TASK))
+        return [
+            HumanMessage(
+                content=[
+                    {"type": "text", "text": task},
+                    {"type": "image_url", "image_url": {"url": image_url}},
+                ]
+            )
+        ]
+    return [
         SystemMessage(content=VISION_OCR_SYSTEM),
         HumanMessage(
             content=[
@@ -69,12 +91,35 @@ async def _invoke_vision_vlm(image_url: str) -> str:
             ]
         ),
     ]
+
+
+async def _invoke_vision_vlm(image_url: str) -> str:
+    vlm_messages = _build_vlm_messages(image_url)
     vlm_llm = await get_vision_llm()
     response = await vlm_llm.ainvoke(vlm_messages)
     raw = str(response.content).strip()
     if not raw:
         raise ValueError("empty transcription from local VLM")
-    return _raw_to_cloud_text(raw)
+    cloud_text = _raw_to_cloud_text(raw)
+    if (
+        _vision_prompt_mode() == "florence"
+        and "[Vision sensor output" not in cloud_text
+    ):
+        # Retry with plain OCR task if region parse yielded nothing useful
+        ocr_task = "<OCR>"
+        retry_messages = [
+            HumanMessage(
+                content=[
+                    {"type": "text", "text": ocr_task},
+                    {"type": "image_url", "image_url": {"url": image_url}},
+                ]
+            )
+        ]
+        retry_resp = await vlm_llm.ainvoke(retry_messages)
+        retry_raw = str(retry_resp.content).strip()
+        if retry_raw:
+            cloud_text = _raw_to_cloud_text(retry_raw)
+    return cloud_text
 
 
 async def transcribe_image_url(image_url: str) -> str:
@@ -135,7 +180,8 @@ async def process_vision_messages(
 
                 if transcription is None:
                     logger.info(
-                        "[vision_proxy] Intercepted image. Sending to local VLM (JSON OCR)."
+                        "[vision_proxy] Intercepted image. Sending to local VLM (%s).",
+                        _vision_prompt_mode(),
                     )
                     try:
                         transcription = await transcribe_image_url(image_url)

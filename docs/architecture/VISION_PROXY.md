@@ -42,7 +42,7 @@ Cloud-visible text is a dense bullet block — never raw `image_url` to DeepSeek
 
 ## Lazy load
 
-`VisionModelManager` holds a dedicated VLM client (medium tier config). Unloads after `cloud.vision_idle_unload_seconds` (default 300s) with no active transcriptions.
+`VisionModelManager` holds a dedicated Florence-2 client (`models.vision_proxy`). Unloads after `cloud.vision_idle_unload_seconds` (default 300s) with no active transcriptions. Qwen9B+mmproj remains for `complex-default` local multimodal fallback only.
 
 ## Screen assist hook (Phase 3)
 

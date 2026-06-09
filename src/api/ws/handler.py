@@ -478,6 +478,8 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                     route = safe_metadata.get("route", "")
                                     if route == "simple":
                                         model = "small-local"
+                                    elif route == "complex-cloud":
+                                        model = "large-cloud"
                                     elif route.startswith("complex-"):
                                         variant = route.replace("complex-", "")
                                         model = f"medium-{variant}"

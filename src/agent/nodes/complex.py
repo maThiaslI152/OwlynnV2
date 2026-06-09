@@ -56,50 +56,6 @@ MAX_CUTOFF_RETRIES = int(config.get("complex.max_cutoff_retries", 1))
 _MAX_CLOUD_RETRIES = int(config.get("complex.max_cloud_retries", 3))
 
 
-async def _invoke_with_cloud_retry(
-    bound_llm, prompt_messages, *, fallback_chain, model_label, route
-):
-    """Invoke cloud LLM with circuit breaker check, retry logic, and cost tracking.
-
-    Retries on 429 (rate limit) and 5xx (server errors) with exponential
-    backoff. Does **not** retry on 401 (auth errors).  Respects the
-    circuit breaker — raises immediately if the circuit is open.
-    """
-    from src.agent.cloud_circuit_breaker import get_circuit_breaker
-
-    breaker = get_circuit_breaker()
-    if breaker.is_open():
-        raise Exception("Circuit breaker open")
-
-    last_error = None
-
-    for attempt in range(_MAX_CLOUD_RETRIES + 1):
-        try:
-            response = await bound_llm.ainvoke(prompt_messages)
-            breaker.record_success()
-            return response
-        except Exception as e:
-            last_error = e
-            err_str = str(e)
-
-            if "401" in err_str:
-                breaker.record_failure()
-                raise
-
-            is_retryable = "429" in err_str or any(
-                code in err_str for code in ("500", "502", "503", "504")
-            )
-            if not is_retryable or attempt >= _MAX_CLOUD_RETRIES:
-                breaker.record_failure()
-                raise
-
-            wait = 2**attempt
-            await asyncio.sleep(wait)
-
-    breaker.record_failure()
-    raise last_error if last_error else Exception("Cloud retry exhausted")
-
-
 async def _invoke_cloud_path(
     *,
     llm,
@@ -112,6 +68,11 @@ async def _invoke_cloud_path(
     tools_bound: bool,
 ) -> tuple[Any, dict[str, int]]:
     """Invoke DeepSeek via raw API path with thinking config and cost tracking."""
+    from src.agent.cloud_circuit_breaker import get_circuit_breaker
+
+    if get_circuit_breaker().is_open():
+        raise CloudUnavailableError("Cloud circuit breaker open")
+
     thinking = resolve_cloud_thinking_config(
         state=state,
         profile=profile,
@@ -128,23 +89,40 @@ async def _invoke_cloud_path(
         and hasattr(getattr(client, "chat", None), "completions")
     )
 
+    thread_id = (
+        state.get("thread_id")
+        or state.get("conversation_id")
+        or (state.get("configurable") or {}).get("thread_id")
+    )
+
     if not use_raw_api:
         if tools_bound and tools:
             bound = llm.bind_tools(tools, strict=True).bind(max_tokens=budget)
         else:
             bound = llm.bind(max_tokens=budget)
-        response = await bound.ainvoke(prompt_messages)
+        try:
+            response = await bound.ainvoke(prompt_messages)
+            get_circuit_breaker().record_success()
+        except Exception as exc:
+            get_circuit_breaker().record_failure()
+            raise
         usage = extract_api_token_usage(response)
     else:
-        raw, usage = await invoke_cloud_chat(
-            llm_client=client,
-            model_name=model_name,
-            messages=prompt_messages,
-            tools=tools if tools_bound else None,
-            max_tokens=budget,
-            thinking=thinking,
-        )
-        response = response_to_ai_message(raw)
+        try:
+            raw, usage = await invoke_cloud_chat(
+                llm_client=client,
+                model_name=model_name,
+                messages=prompt_messages,
+                tools=tools if tools_bound else None,
+                max_tokens=budget,
+                thinking=thinking,
+                user_id=str(thread_id) if thread_id else None,
+            )
+            response = response_to_ai_message(raw)
+        except RuntimeError as exc:
+            if "circuit breaker" in str(exc).lower():
+                raise CloudUnavailableError(str(exc)) from exc
+            raise
     get_cost_tracker().record_usage(
         usage.get("prompt_tokens", 0),
         usage.get("completion_tokens", 0),
@@ -362,6 +340,37 @@ def _message_has_image_content(messages: list) -> bool:
 
 def _strip_web_tools(tools: list) -> list:
     return [t for t in tools if getattr(t, "name", "") not in _WEB_TOOL_NAMES]
+
+
+def _resolve_complex_tools(
+    state: dict,
+    thread_messages: list,
+    *,
+    web_on: bool,
+    vision_task: bool,
+) -> list:
+    """Resolve tool list for bind and execute — must stay in sync."""
+    selected_toolboxes = state.get("selected_toolboxes")
+    if selected_toolboxes and "all" not in selected_toolboxes:
+        tools = resolve_tools(selected_toolboxes, web_on and not vision_task)
+    else:
+        tools = list(COMPLEX_TOOLS_WITH_WEB if web_on else COMPLEX_TOOLS_NO_WEB)
+
+    if vision_task:
+        tools = _strip_web_tools(tools)
+
+    prev_tool_names: set[str] = set()
+    for msg in thread_messages:
+        if hasattr(msg, "tool_calls") and msg.tool_calls:
+            for tc in msg.tool_calls:
+                prev_tool_names.add(tc.get("name", ""))
+
+    if prev_tool_names:
+        all_tools = COMPLEX_TOOLS_WITH_WEB if web_on else COMPLEX_TOOLS_NO_WEB
+        for t in all_tools:
+            if getattr(t, "name", "") in prev_tool_names and t not in tools:
+                tools.append(t)
+    return tools
 
 
 def build_web_search_answer_nudge_messages(tool_messages: list) -> list[HumanMessage]:
@@ -616,7 +625,11 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     security_decision = state.get("security_decision")
     security_reason = state.get("security_reason")
     profile = get_profile()
-    route = state.get("route") or "complex-default"
+    from src.agent.nodes.router import _check_cloud_available
+
+    route = state.get("route") or (
+        "complex-cloud" if _check_cloud_available() else "complex-default"
+    )
     has_images = _message_has_image_content(thread_messages) or bool(
         (state.get("router_metadata") or {}).get("has_images")
     )
@@ -845,28 +858,9 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         }
 
     # ── 9.3: Dynamic tool binding ────────────────────────────────────────
-    selected_toolboxes = state.get("selected_toolboxes")
-    if selected_toolboxes and "all" not in selected_toolboxes:
-        tools = resolve_tools(selected_toolboxes, web_on and not vision_task)
-    else:
-        tools = list(COMPLEX_TOOLS_WITH_WEB if web_on else COMPLEX_TOOLS_NO_WEB)
-
-    if vision_task:
-        tools = _strip_web_tools(tools)
-
-    # Include previously-used tools from conversation history
-    # to ensure ToolMessage references remain valid
-    prev_tool_names: set[str] = set()
-    for msg in thread_messages:
-        if hasattr(msg, "tool_calls") and msg.tool_calls:
-            for tc in msg.tool_calls:
-                prev_tool_names.add(tc.get("name", ""))
-
-    if prev_tool_names:
-        all_tools = COMPLEX_TOOLS_WITH_WEB if web_on else COMPLEX_TOOLS_NO_WEB
-        for t in all_tools:
-            if getattr(t, "name", "") in prev_tool_names and t not in tools:
-                tools.append(t)
+    tools = _resolve_complex_tools(
+        state, thread_messages, web_on=web_on, vision_task=vision_task
+    )
 
     # ── 9.4: Tiered fallback — model acquisition ────────────────────────
     try:
@@ -1309,7 +1303,14 @@ async def complex_tool_action_node(state: AgentState) -> AgentState:
         web_on = True
     web_on = bool(web_on)
 
-    tools = COMPLEX_TOOLS_WITH_WEB if web_on else COMPLEX_TOOLS_NO_WEB
+    route = state.get("route") or "complex-default"
+    has_images = _message_has_image_content(current_messages) or bool(
+        (state.get("router_metadata") or {}).get("has_images")
+    )
+    vision_task = has_images and route == "complex-cloud"
+    tools = _resolve_complex_tools(
+        state, current_messages, web_on=web_on, vision_task=vision_task
+    )
     tool_node = ToolNode(tools)
     tool_payload = await tool_node.ainvoke({"messages": current_messages})
     output_messages = tool_payload.get("messages", [])

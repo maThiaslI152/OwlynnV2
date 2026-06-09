@@ -52,18 +52,25 @@ class VisionModelManager:
         self._inflight += 1
         try:
             if self._client is None:
-                model_cfg = get_model_config("medium", "vision")
+                model_cfg = get_model_config("vision_proxy")
+                if not model_cfg.get("model_name"):
+                    model_cfg = get_model_config("medium", "vision")
                 extra_body = dict(model_cfg.get("extra_body") or {})
                 extra_body["max_output_tokens"] = int(
                     config.get("cloud.vision_max_tokens", 2048)
                 )
+                temp = float(
+                    model_cfg.get("temperature")
+                    if model_cfg.get("temperature") is not None
+                    else config.get("cloud.vision_temperature", 0.0)
+                )
                 self._client = ChatOpenAI(
                     model=model_cfg.get(
-                        "model_name", "qwen3.5-9b-uncensored-hauhaucs-aggressive@q6_k"
+                        "model_name", "florence-2-base-nsfw-v2-ext-mlx"
                     ),
                     api_key="sk-local-no-key-needed",
                     base_url=model_cfg.get("base_url", "http://127.0.0.1:1234/v1"),
-                    temperature=float(config.get("cloud.vision_temperature", 0.1)),
+                    temperature=temp,
                     max_tokens=int(config.get("cloud.vision_max_tokens", 2048)),
                     extra_body=extra_body,
                     request_timeout=model_cfg.get("request_timeout")

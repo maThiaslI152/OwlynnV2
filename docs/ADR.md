@@ -242,7 +242,7 @@ Both nodes run **locally only** (Small/Medium LLM, no cloud). When the eventual 
 
 3. **Small LLM could override the heuristic** — The Small LLM classifier's `needs_clarification` field could return `false`, silently skipping the interrupt even when the heuristic correctly identified 2+ missing dimensions. Fixed by removing the LLM's gating authority: the heuristic is the authoritative gate; the Small LLM only generates questions. Fallback generic questions are used if the LLM is unavailable or returns empty.
 
-4. **Medium LLM preloaded at startup** — `get_medium_llm("default")` is loaded in a background task during the server lifespan. Eliminates cold-start model swap latency on the first complex request. The embedding model (`text-embedding-nomic-embed-text-v1.5-embedding`) must be manually pre-pulled in LM Studio before use; auto-preload was removed to avoid unnecessary LM Studio state manipulation.
+4. **Medium LLM preload at startup** — When cloud is unavailable, `get_medium_llm("default")` loads during server lifespan. When cloud is available, medium is **lazy** on fallback only. Router + nomic embedding always preload. Vision proxy (Florence-2) loads on first image.
 
 ## Related
 

@@ -52,55 +52,95 @@ async def lifespan(app: FastAPI):
     app.state.agent = await init_agent()
     app.state.sessions = {}  # thread_id -> GraphSession
 
-    # Preload both LLM tiers at startup + warmup inference calls.
-    # Avoids cold-start swap latency and 0-second failures on first request.
+    # Preload router + embedding at startup; medium only when cloud unavailable.
     async def _preload_llms():
         if os.getenv("OWLYNN_NO_PRELOAD") == "1":
             return
         import asyncio as _asyncio
 
-        # 1. Preload medium (triggers LM Studio swap if needed)
-        try:
-            await LLMPool.get_medium_llm("default")
-            logger.info("[startup] Medium LLM client created")
-        except Exception as e:
-            logger.warning("[startup] Medium LLM preload skipped: %s", e)
-            return  # don't continue if medium fails
+        from src.config.config_loader import config
+        from src.config.secret_store import resolve_deepseek_api_key
 
-        # 2. Preload small — separate slot, not affected by medium swap
+        profile = get_profile()
+        cloud_key = resolve_deepseek_api_key()
+        cloud_on = bool(cloud_key) and profile.get("cloud_escalation_enabled", True)
+        require_medium = (
+            bool(config.get("startup.require_medium_when_cloud_unavailable", True))
+            and not cloud_on
+        )
+
+        preload_slots = config.get("startup.preload") or ["small", "embedding"]
+        warmup = bool(config.get("startup.warmup", True))
+
+        # 1. Router (small) — always required
         try:
             await LLMPool.get_small_llm()
             logger.info("[startup] Small LLM client created")
         except Exception as e:
-            logger.warning("[startup] Small LLM preload skipped: %s", e)
+            logger.warning("[startup] Small LLM preload failed: %s", e)
+            return
 
-        # 3. Let LM Studio settle after model load/unload operations
-        await _asyncio.sleep(3)
+        # 2. Embedding — lightweight ping (no LM Studio model swap)
+        if "embedding" in preload_slots:
+            try:
+                import httpx
 
-        # 4. Warmup inference — send a trivial prompt through each model
-        #    so LM Studio has them fully loaded and ready before first user request.
-        warmup_text = [HumanMessage(content="hi")]
-        try:
-            small_llm = await LLMPool.get_small_llm()
-            await _asyncio.wait_for(
-                small_llm.ainvoke(warmup_text),
-                timeout=30,
+                embed_url = config.get(
+                    "models.embedding.base_url", "http://127.0.0.1:1234/v1"
+                ).rstrip("/")
+                embed_model = config.get(
+                    "models.embedding.model_name",
+                    "text-embedding-nomic-embed-text-v1.5-embedding",
+                )
+                timeout = float(config.get("models.embedding.timeout", 30.0))
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    resp = await client.post(
+                        f"{embed_url}/embeddings",
+                        json={"model": embed_model, "input": "warmup"},
+                    )
+                    resp.raise_for_status()
+                logger.info("[startup] Embedding endpoint warmup complete")
+            except Exception as e:
+                logger.warning("[startup] Embedding warmup skipped: %s", e)
+
+        # 3. Medium — only when cloud unavailable (local fallback path)
+        if require_medium:
+            try:
+                await LLMPool.get_medium_llm("default")
+                logger.info("[startup] Medium LLM client created (cloud unavailable)")
+            except Exception as e:
+                logger.warning("[startup] Medium LLM preload failed: %s", e)
+                return
+        else:
+            logger.info(
+                "[startup] Skipping medium preload (cloud available); lazy on fallback"
             )
-            logger.info("[startup] Small LLM warmup complete")
-        except Exception as e:
-            logger.warning("[startup] Small LLM warmup failed: %s", e)
 
-        try:
-            med_llm = await LLMPool.get_medium_llm("default")
-            await _asyncio.wait_for(
-                med_llm.ainvoke(warmup_text),
-                timeout=120,
-            )
-            logger.info("[startup] Medium LLM warmup complete")
-        except Exception as e:
-            logger.warning("[startup] Medium LLM warmup failed: %s", e)
+        if warmup:
+            await _asyncio.sleep(2)
+            warmup_text = [HumanMessage(content="hi")]
+            try:
+                small_llm = await LLMPool.get_small_llm()
+                await _asyncio.wait_for(
+                    small_llm.ainvoke(warmup_text),
+                    timeout=30,
+                )
+                logger.info("[startup] Small LLM warmup complete")
+            except Exception as e:
+                logger.warning("[startup] Small LLM warmup failed: %s", e)
 
-        logger.info("[startup] All LLMs preloaded and warmed up")
+            if require_medium:
+                try:
+                    med_llm = await LLMPool.get_medium_llm("default")
+                    await _asyncio.wait_for(
+                        med_llm.ainvoke(warmup_text),
+                        timeout=120,
+                    )
+                    logger.info("[startup] Medium LLM warmup complete")
+                except Exception as e:
+                    logger.warning("[startup] Medium LLM warmup failed: %s", e)
+
+        logger.info("[startup] LLM preload complete (cloud_on=%s)", cloud_on)
 
     await _preload_llms()
     app.state.llms_ready = True

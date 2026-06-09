@@ -26,6 +26,10 @@ Rules:
 
 VISION_OCR_USER = "Extract all visible text and UI structure from this image."
 
+# Florence-2 task tokens (see cloud.vision_florence_* in defaults.yaml)
+VISION_FLORENCE_OCR_TASK = "<OCR_WITH_REGION>"
+VISION_FLORENCE_CAPTION_TASK = "<DETAILED_CAPTION>"
+
 
 def _strip_fences(raw: str) -> str:
     text = raw.strip()

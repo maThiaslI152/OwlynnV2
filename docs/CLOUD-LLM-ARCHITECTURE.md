@@ -39,7 +39,8 @@ complex_llm_node
 |--------|---------|
 | [`cloud_payload.py`](src/agent/nodes/complex_utils/cloud_payload.py) | Stable/volatile prompt layers, brief cache (300s TTL), thinking config, cache metrics extraction |
 | [`cloud_invoke.py`](src/agent/nodes/complex_utils/cloud_invoke.py) | Raw OpenAI client, `/v1` + `/beta` fallback, `reasoning_content` on tool loops |
-| [`vision_proxy.py`](src/agent/nodes/complex_utils/vision_proxy.py) | Lazy VLM → JSON OCR → text for DeepSeek; hash cache + idle unload |
+| [`vision_proxy.py`](src/agent/nodes/complex_utils/vision_proxy.py) | Lazy Florence-2 VLM (`models.vision_proxy`) → OCR/layout text for DeepSeek; hash cache + idle unload |
+| [`vision_florence.py`](src/agent/nodes/complex_utils/vision_florence.py) | Parse Florence task-token OCR / OCR_WITH_REGION output |
 | [`vision_schema.py`](src/agent/nodes/complex_utils/vision_schema.py) | OCR/layout JSON parse + cloud formatting |
 | [`vision_model_manager.py`](src/agent/nodes/complex_utils/vision_model_manager.py) | Lazy load / idle unload of local VLM client |
 | [`cloud_cost_tracker.py`](src/agent/cloud_cost_tracker.py) | Per-session tokens, cache hit ratio, USD estimate |
@@ -86,12 +87,15 @@ Supporting modules: [`secret_store.py`](src/config/secret_store.py), [`cloud_cir
 
 ### Retry & Fallback
 
-Cloud LLM calls use `_invoke_with_cloud_retry()` in [`complex.py`](src/agent/nodes/complex.py):
+Cloud LLM calls use `_invoke_cloud_path()` → [`invoke_cloud_chat()`](src/agent/nodes/complex_utils/cloud_invoke.py) in [`complex.py`](src/agent/nodes/complex.py):
 
-- Retries on 429, 500, 502, 503, 504 with jittered exponential backoff
+- Circuit breaker checked before invoke; `record_success` / `record_failure` on raw API path
+- Retries on 429, 500, 502, 503, 504 with jittered exponential backoff (inside `invoke_cloud_chat`)
 - No retry on 401/403 — immediate fallback to local with auth warning
-- Circuit breaker skips cloud after 3 consecutive failures for 60s
-- Fallback to `complex-default` (medium local model)
+- Circuit breaker opens after 3 consecutive failures for 60s; reset when cloud settings or API key change ([`settings.py`](src/api/routes/settings.py))
+- Router `_check_cloud_available()` treats open breaker as cloud unavailable → avoids routing to `complex-cloud`
+- Fallback to `complex-default` (medium local Qwen9B)
+- `thread_id` passed as OpenAI `user` param for per-conversation KV cache isolation
 
 ### Related
 
@@ -101,4 +105,4 @@ Cloud LLM calls use `_invoke_with_cloud_retry()` in [`complex.py`](src/agent/nod
 
 ### Last updated
 
-2026-06-07 — Phases 0–4 sync; Phase 5 output cache deferral; `.env.local` secrets workflow
+2026-06-10 — Cloud-primary startup (router + embedding preload); breaker on `invoke_cloud_chat`; Florence vision proxy; settings breaker reset; `user` KV cache param

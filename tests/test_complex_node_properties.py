@@ -99,11 +99,24 @@ def _make_mock_llm():
     return mock_llm
 
 
-async def _passthrough_cloud_retry(
-    bound_llm, prompt_messages, *, fallback_chain, model_label, route
+async def _passthrough_cloud_path(
+    *,
+    llm,
+    prompt_messages,
+    tools,
+    budget,
+    state,
+    profile,
+    mode,
+    tools_bound,
 ):
-    """Bypass circuit breaker / cost tracker — just call ainvoke directly."""
-    return await bound_llm.ainvoke(prompt_messages)
+    """Bypass circuit breaker / raw API — invoke bound LLM directly."""
+    if tools_bound and tools:
+        bound = llm.bind_tools(tools, strict=True).bind(max_tokens=budget)
+    else:
+        bound = llm.bind(max_tokens=budget)
+    response = await bound.ainvoke(prompt_messages)
+    return response, {"prompt_tokens": 0, "completion_tokens": 0}
 
 
 # ═════════════════════════════════════════════════════════════════════════
@@ -140,8 +153,8 @@ class TestModelProvenanceMatchesRoute:
             ),
             patch("src.agent.nodes.complex.get_profile", return_value=profile),
             patch(
-                "src.agent.nodes.complex._invoke_with_cloud_retry",
-                side_effect=_passthrough_cloud_retry,
+                "src.agent.nodes.complex._invoke_cloud_path",
+                side_effect=_passthrough_cloud_path,
             ),
         ):
             from src.agent.nodes.complex import complex_llm_node
@@ -203,8 +216,8 @@ class TestModelProvenanceMatchesRoute:
             ),
             patch("src.agent.nodes.complex.get_profile", return_value=profile),
             patch(
-                "src.agent.nodes.complex._invoke_with_cloud_retry",
-                side_effect=_passthrough_cloud_retry,
+                "src.agent.nodes.complex._invoke_cloud_path",
+                side_effect=_passthrough_cloud_path,
             ),
         ):
             from src.agent.nodes.complex import complex_llm_node

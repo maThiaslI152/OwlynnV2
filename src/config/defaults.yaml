@@ -34,9 +34,19 @@ external_services:
     base_url: "http://127.0.0.1:1234/v1"   # SMALL_LLM_BASE_URL / MEDIUM_LLM_BASE_URL env
     management_url: "http://127.0.0.1:1234"  # For SwapManager API calls
 
+# ── Startup preload ──────────────────────────────────────────────────────────
+startup:
+  preload:
+    - small      # MiniCPM5 router — always
+    - embedding  # nomic embed — always; Florence VLM is lazy on first image
+  warmup: true
+  require_medium_when_cloud_unavailable: true
+
 # ── Models — AI/LLM Configuration ────────────────────────────────────────────
-# Router: MiniCPM5-1B (openbmb) — SOTA 1B for routing/classification, MLX 8-bit
-# Worker: Qwen3.5-9B-Uncensored (HauhauCS) — local complex task execution
+# Router: MiniCPM5-1B — routing/classification
+# Medium: Qwen3.5-9B — local fallback when cloud unavailable
+# Cloud: DeepSeek V4 — primary complex workhorse (route complex-cloud)
+# Vision proxy: Florence-2 — lazy OCR for cloud+image path only
 # See: https://huggingface.co/mlx-community/MiniCPM5-1B-8bit
 #      https://huggingface.co/openbmb/MiniCPM5-1B
 #      https://huggingface.co/HauhauCS/Qwen3.5-9B-Uncensored-HauhauCS-Aggressive
@@ -94,6 +104,25 @@ models:
       flash: "deepseek-v4-flash"
       pro: "deepseek-v4-pro"
 
+  vision_proxy:
+    base_url: "http://127.0.0.1:1234/v1"
+    model_name: "florence-2-base-nsfw-v2-ext-mlx"
+    temperature: 0.0
+    max_tokens: 2048
+    max_output_tokens: 2048
+    timeout: 120
+    request_timeout: 120
+    context_window: 4096
+    extra_body:
+      top_p: 1.0
+      keep_alive: -1
+
+  embedding:
+    base_url: "http://127.0.0.1:1234/v1"
+    model_name: "text-embedding-nomic-embed-text-v1.5-embedding"
+    dims: 768
+    timeout: 30.0
+
   # Standard (non-M4) overrides — used when OPTIMIZE_FOR_M4 is false
   standard:
     small:
@@ -104,23 +133,6 @@ models:
       timeout: 90
       max_tokens: 16384
       max_output_tokens: 16384
-
-# ── Cloud behavior ───────────────────────────────────────────────────────────
-cloud:
-  thinking_mode: auto                        # auto | always | never
-  reasoning_effort: high                       # high | max (when thinking enabled)
-  thinking_min_budget: 8192
-  tool_loop_force_thinking: true
-  vision_transcription_cache_ttl: 3600
-  vision_idle_unload_seconds: 300          # Drop lazy VLM client after idle
-  vision_max_tokens: 2048
-  vision_temperature: 0.1
-
-  embedding:
-    base_url: "http://127.0.0.1:1234/v1"
-    model_name: "text-embedding-nomic-embed-text-v1.5-embedding"
-    dims: 768
-    timeout: 30.0
 
 # ── Routing ──────────────────────────────────────────────────────────────────
 routing:
@@ -253,6 +265,17 @@ complex:
 cloud:
   escalation_enabled: true
   anonymization_enabled: true
+  thinking_mode: auto                        # auto | always | never
+  reasoning_effort: high                     # high | max (when thinking enabled)
+  thinking_min_budget: 8192
+  tool_loop_force_thinking: true
+  vision_transcription_cache_ttl: 3600
+  vision_idle_unload_seconds: 300            # Drop lazy VLM client after idle
+  vision_max_tokens: 2048
+  vision_temperature: 0.0                      # Florence OCR: deterministic
+  vision_prompt_mode: florence                 # florence | json_chat (legacy Qwen JSON)
+  vision_florence_task: "<OCR_WITH_REGION>"
+  vision_florence_caption_task: "<DETAILED_CAPTION>"
   circuit_breaker:
     failure_threshold: 3
     cooldown_seconds: 60

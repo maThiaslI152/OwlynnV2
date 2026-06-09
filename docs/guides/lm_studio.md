@@ -18,12 +18,15 @@ Owlynn uses a **router** (always loaded) plus one **medium** model for complex l
 
 - `minicpm5-1b` (or `mlx-community/MiniCPM5-1B-8bit`) — routing, simple answers, chat titles
 
-### Medium (Complex Local Tasks + Vision)
+### Medium (Local fallback when cloud unavailable)
 
 - **Main weights:** `HauhauCS/Qwen3.5-9B-Uncensored-HauhauCS-Aggressive` — load the **Q6_K** GGUF in LM Studio
-- **Vision encoder (required for image chat):** `mmproj-Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-BF16.gguf` — load alongside the main GGUF so image attachments work
+- **Vision encoder (mmproj):** required only for **`complex-default`** local multimodal fallback — not for cloud+image (uses Florence proxy below)
 
-Without the `mmproj` file, text chat works but **image uploads will fail** at the local VLM step.
+### Vision proxy (Cloud + image path)
+
+- **`florence-2-base-nsfw-v2-ext-mlx`** — lazy-loaded on first image; OCR via task tokens (`<OCR_WITH_REGION>`)
+- Config: `models.vision_proxy.model_name` in [`defaults.yaml`](../../src/config/defaults.yaml)
 
 ### Embeddings (RAG / Memory Only)
 

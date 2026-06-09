@@ -637,11 +637,14 @@ def _resolve_complex_route(
 
 
 def _check_cloud_available() -> bool:
-    """Check if cloud escalation is possible (API key + enabled)."""
+    """Check if cloud escalation is possible (API key + enabled + circuit breaker)."""
+    from src.agent.cloud_circuit_breaker import get_circuit_breaker
+
     profile = get_profile()
     if not profile.get("cloud_escalation_enabled", True):
         return False
-    # Check API key via secret store resolution (Keychain → env var → profile)
+    if get_circuit_breaker().is_open():
+        return False
     api_key = resolve_deepseek_api_key()
     return bool(api_key)
 

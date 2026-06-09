@@ -52,10 +52,11 @@ Reply with exactly one JSON object (no markdown, no extra text):
 # ── Default classification (safe fallback) ───────────────────────────────
 
 
-def _default_classification() -> RouteClassification:
+def _default_classification(*, cloud_available: bool = False) -> RouteClassification:
     """Return safe default classification on any failure."""
+    default_route = "complex-cloud" if cloud_available else "complex-default"
     return RouteClassification(
-        route="complex-default",
+        route=default_route,
         confidence=0.5,
         toolbox=["all"],
         reasoning="fallback-default",
@@ -159,4 +160,6 @@ class RouteClassifier:
             return parse_classification(response.content)
         except Exception as exc:
             logger.error("[classifier] Classification failed: %s", exc)
-            return _default_classification()
+            from src.agent.nodes.router import _check_cloud_available
+
+            return _default_classification(cloud_available=_check_cloud_available())

@@ -189,11 +189,14 @@ async def api_update_unified_settings(body: dict):
                 "cloud_thinking_mode",
                 "cloud_reasoning_effort",
                 "cloud_escalation_enabled",
+                "deepseek_api_key",
             )
         ):
             from src.agent.llm import LLMPool
+            from src.agent.cloud_circuit_breaker import reset_circuit_breaker
 
             LLMPool.clear()
+            reset_circuit_breaker()
         return {"status": "ok", "updated": updated}
     except Exception as e:
         logger.warning("Error suppressed: %s", e)

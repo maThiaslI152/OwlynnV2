@@ -7,6 +7,7 @@ messages is preserved on tool-loop round-trips (LangChain serializers drop it).
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import Any, Optional
@@ -24,6 +25,8 @@ from src.config.config_loader import config
 
 logger = logging.getLogger(__name__)
 
+_MAX_CLOUD_RETRIES = int(config.get("complex.max_cloud_retries", 3))
+
 
 async def invoke_cloud_chat(
     *,
@@ -34,12 +37,19 @@ async def invoke_cloud_chat(
     max_tokens: int,
     thinking: CloudThinkingConfig,
     strict_tools: bool = True,
+    user_id: Optional[str] = None,
 ) -> tuple[Any, dict[str, int]]:
     """
     Invoke DeepSeek chat completions with custom message serialization.
 
     Returns the raw API response object and normalized token usage dict.
     """
+    from src.agent.cloud_circuit_breaker import get_circuit_breaker
+
+    breaker = get_circuit_breaker()
+    if breaker.is_open():
+        raise RuntimeError("Circuit breaker open")
+
     api_messages = messages_to_deepseek_api(messages)
     create_kwargs: dict[str, Any] = {
         "model": model_name,
@@ -50,6 +60,9 @@ async def invoke_cloud_chat(
     create_kwargs.update(thinking.extra_body or {})
     if thinking.reasoning_effort and thinking.thinking_enabled:
         create_kwargs["reasoning_effort"] = thinking.reasoning_effort
+
+    if user_id:
+        create_kwargs["user"] = str(user_id)
 
     if tools:
         create_kwargs["tools"] = [convert_to_openai_tool(t) for t in tools]
@@ -62,11 +75,31 @@ async def invoke_cloud_chat(
     ).rstrip("/")
     beta_url = base_url.replace("/v1", "/beta") if "/v1" in base_url else base_url
 
-    response = await _create_with_fallback(
-        llm_client, create_kwargs, primary_url=base_url, fallback_url=beta_url
-    )
-    usage = extract_api_token_usage(response)
-    return response, usage
+    last_error: Exception | None = None
+    for attempt in range(_MAX_CLOUD_RETRIES + 1):
+        try:
+            response = await _create_with_fallback(
+                llm_client, create_kwargs, primary_url=base_url, fallback_url=beta_url
+            )
+            breaker.record_success()
+            usage = extract_api_token_usage(response)
+            return response, usage
+        except Exception as exc:
+            last_error = exc
+            err_str = str(exc).lower()
+            if "401" in err_str or "403" in err_str:
+                breaker.record_failure()
+                raise
+            is_retryable = "429" in err_str or any(
+                code in err_str for code in ("500", "502", "503", "504")
+            )
+            if not is_retryable or attempt >= _MAX_CLOUD_RETRIES:
+                breaker.record_failure()
+                raise
+            await asyncio.sleep(2**attempt)
+
+    breaker.record_failure()
+    raise last_error if last_error else RuntimeError("Cloud retry exhausted")
 
 
 async def _create_with_fallback(

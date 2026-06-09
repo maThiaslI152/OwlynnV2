@@ -1,9 +1,8 @@
 """
 Swap-aware route selector for the Multi-LLM Router.
 
-Makes the final routing decision, stripping out obsolete variant swaps and downgrading
-cloud routes back to the local default if image inputs are detected (as DeepSeek V4 does
-not support vision, but Qwen does).
+Makes the final routing decision. Cloud routes pass through; images on
+complex-cloud use the local vision_proxy (Florence) before DeepSeek.
 """
 
 from __future__ import annotations
@@ -23,11 +22,14 @@ def _check_cloud_available() -> bool:
     cloud availability is re-evaluated each time (Requirement 6.3).
     """
     try:
+        from src.agent.cloud_circuit_breaker import get_circuit_breaker
         from src.memory.user_profile import get_profile
         from src.config.secret_store import resolve_deepseek_api_key
 
         profile = get_profile()
         if not profile.get("cloud_escalation_enabled", True):
+            return False
+        if get_circuit_breaker().is_open():
             return False
         api_key = resolve_deepseek_api_key()
         return bool(api_key)
@@ -50,8 +52,8 @@ class RouteSelector:
 
         Postconditions:
         - Returns ``(route, toolbox)`` where route is a valid route string
-        - ``"simple"`` and ``"complex-cloud"`` routes pass through
-        - If ``"complex-cloud"`` but task has images, downgrades to ``"complex-default"``
+        - ``"simple"`` and ``"complex-cloud"`` routes pass through unchanged
+        - Images on ``complex-cloud`` use vision_proxy; no downgrade to ``complex-default``
         - All other complex routes map to ``"complex-default"``
         """
         target_route = classification.route

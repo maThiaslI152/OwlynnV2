@@ -27,19 +27,20 @@ Related: [`architecture/overview.md`](architecture/overview.md) (system shape), 
 | `src/agent/nodes/complex.py` | Tool-calling cycle, local + cloud paths |
 | `src/agent/nodes/complex_utils/cloud_payload.py` | Cloud prompt layers, anonymization |
 | `src/agent/nodes/complex_utils/cloud_invoke.py` | DeepSeek client, tool strict mode |
-| `src/agent/nodes/complex_utils/vision_*.py` | Vision proxy for cloud image path |
-| `src/config/defaults.yaml` | Model names, routing thresholds (source of truth) |
+| `src/agent/nodes/complex_utils/vision_florence.py` | Florence OCR parser |
+| `src/agent/nodes/complex_utils/vision_*.py` | Vision proxy for cloud image path (Florence default) |
+| `src/config/defaults.yaml` | Model names, routing thresholds, `startup.preload`, `models.vision_proxy` (source of truth) |
 | `tests/test_router_properties.py` | Router property tests |
 | `tests/test_router_web_intent.py` | Web-intent forcing tests |
 | `tests/test_llm_pool.py` | LLM pool tests |
 
-**Current models** (`defaults.yaml`): router `minicpm5-1b`, complex `qwen3.5-9b-uncensored-hauhaucs-aggressive@q6_k`, cloud `deepseek-v4-flash`.
+**Current models** (`defaults.yaml`): router `minicpm5-1b`, fallback complex `qwen3.5-9b-uncensored-hauhaucs-aggressive@q6_k`, vision proxy `florence-2-base-nsfw-v2-ext-mlx`, cloud `deepseek-v4-flash`. Startup preloads router + embedding only when cloud escalation is enabled.
 
 ## Complex / cloud path
 
 | File | Role |
 |------|------|
-| `src/agent/nodes/complex.py` | `complex_llm_node()`, `complex_tool_action_node()` |
+| `src/agent/nodes/complex.py` | `complex_llm_node()`, `complex_tool_action_node()`, `_resolve_complex_tools()` |
 | `src/agent/nodes/complex_utils/cloud_payload.py` | Brief gate, PII scrub, cache metrics |
 | `src/agent/nodes/complex_utils/cloud_invoke.py` | Raw API invoke + retries |
 | `src/agent/anonymization.py` | PII scrubbing for cloud escalation |

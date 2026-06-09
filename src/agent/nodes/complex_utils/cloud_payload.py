@@ -103,6 +103,75 @@ class CloudPayload:
     vision_proxy_ok: bool = True
 
 
+def _anonymize_tool_calls(
+    tool_calls: list, anon_ctx: dict, anon_mapping: dict | None
+) -> tuple[list, dict | None]:
+    """Anonymize tool call argument dicts in place."""
+    if not tool_calls:
+        return tool_calls, anon_mapping
+    out = []
+    for tc in tool_calls:
+        tc_copy = dict(tc)
+        args = tc_copy.get("args")
+        if isinstance(args, dict) and args:
+            args_str = json.dumps(args)
+            args_str, m = anonymize(args_str, anon_ctx)
+            if m:
+                anon_mapping = {**(anon_mapping or {}), **m}
+            tc_copy["args"] = json.loads(args_str)
+        out.append(tc_copy)
+    return out, anon_mapping
+
+
+def _anonymize_message_for_cloud(
+    msg: BaseMessage, anon_ctx: dict, enabled: bool
+) -> tuple[BaseMessage, dict | None]:
+    """Return anonymized copy of a thread message for cloud replay."""
+    if not enabled:
+        return msg, None
+    anon_mapping: dict | None = None
+    new_msg = copy.copy(msg)
+
+    if isinstance(msg, ToolMessage):
+        content = _content_to_str(msg.content)
+        content, msg_mapping = anonymize(content, anon_ctx)
+        if msg_mapping:
+            anon_mapping = msg_mapping
+        new_msg.content = content
+        return new_msg, anon_mapping
+
+    if isinstance(msg, AIMessage):
+        content = _content_to_str(msg.content)
+        if content:
+            content, msg_mapping = anonymize(content, anon_ctx)
+            if msg_mapping:
+                anon_mapping = {**(anon_mapping or {}), **msg_mapping}
+            new_msg.content = content
+        reasoning = _extract_reasoning_content(msg)
+        if reasoning:
+            reasoning, rmap = anonymize(reasoning, anon_ctx)
+            if rmap:
+                anon_mapping = {**(anon_mapping or {}), **rmap}
+            kwargs = dict(getattr(new_msg, "additional_kwargs", None) or {})
+            kwargs["reasoning_content"] = reasoning
+            new_msg.additional_kwargs = kwargs
+        if msg.tool_calls:
+            tool_calls, anon_mapping = _anonymize_tool_calls(
+                list(msg.tool_calls), anon_ctx, anon_mapping
+            )
+            new_msg.tool_calls = tool_calls
+        return new_msg, anon_mapping
+
+    if isinstance(msg.content, str):
+        content, msg_mapping = anonymize(msg.content, anon_ctx)
+        if msg_mapping:
+            anon_mapping = msg_mapping
+        new_msg.content = content
+        return new_msg, anon_mapping
+
+    return new_msg, anon_mapping
+
+
 def has_tool_history(messages: list[BaseMessage]) -> bool:
     """Return True when thread contains tool calls or tool results."""
     for msg in messages:
@@ -369,20 +438,12 @@ async def prepare_cloud_payload(
             anon_mapping = {**(anon_mapping or {}), **m2}
 
     anon_messages: list[BaseMessage] = []
+    anon_enabled = bool(profile.get("cloud_anonymization_enabled", True))
     for msg in trimmed_messages:
-        if isinstance(msg.content, str) and profile.get(
-            "cloud_anonymization_enabled", True
-        ):
-            content, msg_mapping = anonymize(msg.content, anon_ctx)
-            if msg_mapping:
-                anon_mapping = {**(anon_mapping or {}), **msg_mapping}
-            new_msg = copy.copy(msg)
-            new_msg.content = content
-            if isinstance(msg, AIMessage) and msg.tool_calls:
-                new_msg.tool_calls = msg.tool_calls
-            anon_messages.append(new_msg)
-        else:
-            anon_messages.append(msg)
+        new_msg, msg_mapping = _anonymize_message_for_cloud(msg, anon_ctx, anon_enabled)
+        if msg_mapping:
+            anon_mapping = {**(anon_mapping or {}), **msg_mapping}
+        anon_messages.append(new_msg)
 
     cloud_brief_tokens_est = 0
     placeholder_count = len(anon_mapping) if anon_mapping else 0

@@ -6,7 +6,7 @@
 [![Frontend](https://img.shields.io/badge/frontend-React_19_%2B_Vite_8-61DAFB)](frontend-v2/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-A private, local-first AI productivity agent. LangGraph orchestration, three-tier LLM routing (local + optional DeepSeek V4 cloud), semantic memory, and an Electron desktop UI. Optimized for Apple Silicon (M4 Air 24GB).
+A private AI productivity agent with **cloud-primary DeepSeek V4** routing and local fallback. LangGraph orchestration, MiniCPM5 router + optional local Qwen9B fallback, Florence-2 vision proxy for images, semantic memory, and an Electron desktop UI. Optimized for Apple Silicon (M4 Air 24GB).
 
 ## Goal
 

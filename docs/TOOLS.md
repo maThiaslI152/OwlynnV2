@@ -90,6 +90,10 @@ src/api/routes/files.py            # Tool discovery (GET /api/tools)
 | `forget_memory` | Delete specific memories by their ID (hash). Use `recall_all_memories` first to find IDs |
 | `search_workspace_docs` | Semantic search over workspace documentation indexed in Qdrant. Queries project-specific knowledge base and returns relevant document excerpts |
 
+## Tool loop parity
+
+`complex_llm_node` and `complex_tool_action_node` both resolve tools via `_resolve_complex_tools()` in [`complex.py`](../../src/agent/nodes/complex.py), honoring `selected_toolboxes`, `web_search_enabled`, and vision web-tool stripping. This keeps bound tools aligned with the `ToolNode` executor on multi-turn tool loops.
+
 ## Key Decisions
 
 | Decision | Rationale | Trade-off |
@@ -129,4 +133,4 @@ All other tools auto-approve. Dangerous shell patterns (`rm -rf`, `sudo`, etc.) 
 
 ## Last updated
 
-2026-05-31 — `docs-standards-timeline` added search_workspace_docs to memory toolbox
+2026-06-10 — Document `_resolve_complex_tools()` parity between binder and tool executor

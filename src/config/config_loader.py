@@ -320,7 +320,7 @@ def get_model_config(tier: str, variant: str = "default") -> dict[str, Any]:
     """Return the full model config dict for a given tier and variant.
 
     Args:
-        tier: ``"small"``, ``"medium"``, ``"cloud"``, or ``"embedding"``
+        tier: ``"small"``, ``"medium"``, ``"cloud"``, ``"embedding"``, or ``"vision_proxy"``
         variant: For medium tier, one of ``"default"``, ``"vision"``, ``"longctx"``
 
     Returns a dict with keys: model_name, base_url, temperature, max_tokens,
@@ -440,6 +440,14 @@ _REQUIRED_PATHS: list[str] = [
     "models.embedding.base_url",
     "models.embedding.model_name",
     "models.embedding.timeout",
+    # Models — vision proxy
+    "models.vision_proxy.base_url",
+    "models.vision_proxy.model_name",
+    "models.vision_proxy.timeout",
+    # Startup
+    "startup.preload",
+    "startup.warmup",
+    "startup.require_medium_when_cloud_unavailable",
     # Routing
     "routing.confidence_threshold",
     "routing.swap_threshold",

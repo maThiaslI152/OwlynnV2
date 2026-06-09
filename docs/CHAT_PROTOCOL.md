@@ -133,7 +133,7 @@ Frontend should send `type` (MIME) on each file; Composer infers from `file.type
 | Other UTF-8 text/code | Inlined in prompt as fenced block |
 | Other binary | Saved to workspace; agent instructed to call `read_workspace_file` |
 
-Cloud route (`complex-cloud`) with images: lazy-loaded local VLM returns JSON OCR via `vision_proxy` → formatted text block for DeepSeek; on proxy failure, route falls back to `complex-default` direct multimodal (legacy `complex-vision` route removed).
+Cloud route (`complex-cloud`) with images: lazy-loaded Florence-2 (`models.vision_proxy`) OCR via `vision_proxy` → formatted text block for DeepSeek; on proxy failure, route falls back to `complex-default` direct multimodal (legacy `complex-vision` route removed).
 
 ### Server → Client: Event Types
 
@@ -257,7 +257,7 @@ Sent after `complex_llm` or `simple` node completes when `model_used` is present
 
 | Field | Description |
 |-------|-------------|
-| `model` | Model that produced the response (e.g. `"medium-default"`, `"large-cloud"`) |
+| `model` | Model that produced the response (e.g. `"medium-default"`, `"large-cloud"`). Route `complex-cloud` maps to `"large-cloud"` in `model_info` (not `medium-cloud`). |
 | `swapping` | Whether a model swap occurred |
 | `token_usage` | Optional prompt/completion counts; cloud turns may include `prompt_cache_hit_tokens` / `prompt_cache_miss_tokens` (DeepSeek KV prefix cache) |
 | `fallback_chain` | Optional ordered list of model attempts. Always has ≥1 entry and exactly one with `status == "success"`. Entries are chronological |
@@ -507,4 +507,4 @@ cd frontend-v2 && npx vitest run
 
 ## Last updated
 
-2026-05-31 — `docs-standards-timeline` fixed event types, annotated ghost events
+2026-06-10 — Florence vision proxy; `complex-cloud` → `large-cloud` in `model_info`

@@ -5,7 +5,7 @@
 
 ## System Context
 
-Owlynn is a local-first AI coworker for Apple Silicon (Mac M4 Air 24GB). It runs on-device using LM Studio for local inference, with optional DeepSeek V4 cloud escalation on route `complex-cloud`. No data leaves the machine unless the user opts into cloud (with anonymization).
+Owlynn is a **cloud-primary** AI coworker for Apple Silicon (Mac M4 Air 24GB). Complex work routes to **DeepSeek V4** when a key is configured; local Qwen9B is fallback only. Startup preloads **MiniCPM5 router + nomic embedding**; Florence-2 vision proxy runs lazily for cloud+image. No data leaves the machine unless the user opts into cloud (with anonymization).
 
 ```
 Browser (http://127.0.0.1:5173)
@@ -19,7 +19,10 @@ Browser (http://127.0.0.1:5173)
   │     └─► Tool execution (web search, file ops, REPL, MCP)
   │
   ├─► LM Studio (port 1234)
-  │     └─► Local LLM inference (small/medium models)
+  │     ├─► MiniCPM5 router (startup preload)
+  │     ├─► nomic embedding (startup preload)
+  │     ├─► Florence-2 vision proxy (lazy, cloud+image)
+  │     └─► Qwen9B medium (lazy fallback when cloud off)
   │
   ├─► Qdrant (port 6333)
   │     └─► Long-term memory (Mem0 embeddings)
