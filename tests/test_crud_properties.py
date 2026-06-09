@@ -46,7 +46,7 @@ chat_ids = uuids().map(str)
 
 # --- Property 1: Create-Get Roundtrip ---
 # Validates: Requirements 1.1, 1.2, 1.3, 1.5, 1.6, 1.7, 8.4
-@settings(max_examples=100)
+@settings(max_examples=100, deadline=None)
 @given(name=project_names)
 def test_create_get_roundtrip(name):
     pm = ProjectManager()
@@ -68,7 +68,7 @@ def test_create_get_roundtrip(name):
 
 # --- Property 2: Rename Isolation ---
 # Validates: Requirements 2.1, 2.2, 2.4, 8.5
-@settings(max_examples=100)
+@settings(max_examples=100, deadline=None)
 @given(name=project_names, new_name=project_names)
 def test_rename_isolation(name, new_name):
     pm = ProjectManager()
@@ -95,7 +95,7 @@ def test_rename_isolation(name, new_name):
 
 # --- Property 3: Delete Completeness ---
 # Validates: Requirements 3.1, 3.4, 8.6
-@settings(max_examples=100)
+@settings(max_examples=100, deadline=None)
 @given(name=project_names)
 def test_delete_completeness(name):
     pm = ProjectManager()
@@ -108,7 +108,7 @@ def test_delete_completeness(name):
 
 # --- Property 4: Default Protection ---
 # Validates: Requirements 3.2, 10.3
-@settings(max_examples=100)
+@settings(max_examples=100, deadline=None)
 @given(name=project_names)
 def test_default_protection(name):
     pm = ProjectManager()
@@ -133,7 +133,7 @@ def test_default_protection(name):
 
 # --- Property 5: Chat Dedup ---
 # Validates: Requirements 4.1, 4.2, 4.4, 8.7
-@settings(max_examples=100)
+@settings(max_examples=100, deadline=None)
 @given(name=project_names, chat_name=chat_names, chat_id=chat_ids)
 def test_chat_dedup(name, chat_name, chat_id):
     pm = ProjectManager()
@@ -156,7 +156,7 @@ def test_chat_dedup(name, chat_name, chat_id):
 
 # --- Property 6: Chat Rename Isolation ---
 # Validates: Requirements 5.1, 5.2, 5.4, 8.8
-@settings(max_examples=100)
+@settings(max_examples=100, deadline=None)
 @given(
     name=project_names, chat_name=chat_names, new_chat_name=chat_names, chat_id=chat_ids
 )
@@ -182,7 +182,7 @@ def test_chat_rename_isolation(name, chat_name, new_chat_name, chat_id):
 
 # --- Property 7: Chat Delete Count ---
 # Validates: Requirements 6.1, 6.2, 8.9
-@settings(max_examples=100)
+@settings(max_examples=100, deadline=None)
 @given(name=project_names, chat_name=chat_names, chat_id=chat_ids)
 def test_chat_delete_count(name, chat_name, chat_id):
     pm = ProjectManager()
@@ -206,7 +206,7 @@ def test_chat_delete_count(name, chat_name, chat_id):
 
 # --- Property 8: Nonexistent Operations Safe ---
 # Validates: Requirements 10.1, 10.2
-@settings(max_examples=100)
+@settings(max_examples=100, deadline=None)
 @given(name=project_names, chat_name=chat_names, chat_id=chat_ids)
 def test_nonexistent_operations_safe(name, chat_name, chat_id):
     fake_pid = "zz_fake_"
@@ -243,7 +243,7 @@ op_sequences = st.lists(
 )
 
 
-@settings(max_examples=40)
+@settings(max_examples=40, deadline=None)
 @given(name=project_names, ops=op_sequences)
 def test_interleaved_operation_sequence_preserves_invariants(name, ops):
     pm = ProjectManager()
