@@ -52,7 +52,7 @@ Project status tracker. Last updated: 2026-06-10 — MiniCPM5 router, agent-firs
 - **R2**: Inference latency — 105-276s vs SLO <8s (✅ Fixed via context optimization for M4 Air)
 
 ### 🟡 Medium Impact
-- **R3**: Cloud E2E with valid DeepSeek key (✅ `tests/test_cloud_e2e_network.py`, `@pytest.mark.network`)
+- **R3**: Cloud E2E with valid DeepSeek key (✅ `tests/test_cloud_e2e_network.py`, live `./scripts/ci.sh --network`, 2026-06-10)
 - **R7**: Web search aggregate timeout (✅ `tests/test_web_search_aggregate_timeout.py`)
 - **R9**: API thread_id in OpenAI compat config (✅ `tests/test_openai_thread_persistence.py`)
 - **R8**: Thermal throttling — run evals on AC power, not battery (✅ Mitigated via defaults.yaml)

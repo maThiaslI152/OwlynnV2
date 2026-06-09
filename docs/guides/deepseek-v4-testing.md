@@ -1,7 +1,7 @@
 ---
 status: active
 category: guide
-last_updated: 2026-06-07
+last_updated: 2026-06-10
 owner: ai-agent
 ---
 
@@ -59,12 +59,21 @@ PYTHONPATH=$(pwd) python -m pytest -q \
 ## Live network tests (requires API key)
 
 ```bash
-./scripts/ci.sh --network
-# or directly:
+./scripts/ci.sh --quick --network
+# or network-only:
 PYTHONPATH=$(pwd) python -m pytest -m network -v \
   tests/test_deepseek_v4_chat_matrix_network.py \
-  tests/test_deepseek_cache_network.py
+  tests/test_deepseek_cache_network.py \
+  tests/test_cloud_e2e_network.py
 ```
+
+### R3 E2E: `test_cloud_e2e_network.py`
+
+| Test | What it proves |
+|------|----------------|
+| `test_complex_cloud_e2e_with_valid_key` | Full `complex_llm_node` on `complex-cloud` with live DeepSeek: `model_used` contains `large-cloud`, arithmetic answer correct, `api_tokens_used.prompt_tokens > 0` |
+
+Uses `mode: tools_off` — the path that previously dropped token usage (BUG-12, fixed 2026-06-10).
 
 ### Matrix: `test_deepseek_v4_chat_matrix_network.py`
 
@@ -98,7 +107,7 @@ After `./start.sh`:
 |---------|----------------|
 | Generic greeting on complex question | Stale backend without brief fix; restart with `./start.sh` |
 | `cloud unavailable` in UI | Backend started without `.env` — use `./start.sh` or `source .env` before uvicorn |
-| Network tests skipped | `DEEPSEEK_API_KEY` not exported in shell |
+| Network tests skipped | `DEEPSEEK_API_KEY` not exported — put key in `.env`; `ci.sh --network` sources it automatically |
 | Empty assistant bubble, usage shows tokens | Check `reasoning_content` vs `content`; `finalize_cloud_visible_content` only fills when content is empty |
 
 ## Related docs

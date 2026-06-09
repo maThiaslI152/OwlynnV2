@@ -851,7 +851,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             "pending_tool_calls": False,
             "security_decision": None,
             "security_reason": None,
-            "api_tokens_used": None,
+            "api_tokens_used": api_tokens,
             "fallback_chain": fallback_chain,
             "cloud_brief_tokens_est": cloud_brief_tokens_est,
             "anonymization_placeholders_count": anonymization_placeholders_count,

@@ -39,6 +39,7 @@ complex_llm_node
 |--------|---------|
 | [`cloud_payload.py`](src/agent/nodes/complex_utils/cloud_payload.py) | Stable/volatile prompt layers, brief cache (300s TTL), thinking config, cache metrics extraction |
 | [`cloud_invoke.py`](src/agent/nodes/complex_utils/cloud_invoke.py) | Raw OpenAI client, `/v1` + `/beta` fallback, `reasoning_content` on tool loops |
+| [`complex.py`](src/agent/nodes/complex.py) | `api_tokens_used` populated on all cloud paths including `tools_off` (BUG-12) |
 | [`vision_proxy.py`](src/agent/nodes/complex_utils/vision_proxy.py) | Lazy Florence-2 VLM (`models.vision_proxy`) → OCR/layout text for DeepSeek; hash cache + idle unload |
 | [`vision_florence.py`](src/agent/nodes/complex_utils/vision_florence.py) | Parse Florence task-token OCR / OCR_WITH_REGION output |
 | [`vision_schema.py`](src/agent/nodes/complex_utils/vision_schema.py) | OCR/layout JSON parse + cloud formatting |
@@ -105,4 +106,4 @@ Cloud LLM calls use `_invoke_cloud_path()` → [`invoke_cloud_chat()`](src/agent
 
 ### Last updated
 
-2026-06-10 — Cloud-primary startup (router + embedding preload); breaker on `invoke_cloud_chat`; Florence vision proxy; settings breaker reset; `user` KV cache param
+2026-06-10 — BUG-12: `api_tokens_used` on cloud `tools_off` path; R3 in network CI

@@ -108,6 +108,7 @@ if ! $FRONTEND_ONLY; then
     elif python -m pytest -q -m network \
       tests/test_deepseek_v4_chat_matrix_network.py \
       tests/test_deepseek_cache_network.py \
+      tests/test_cloud_e2e_network.py \
       --tb=short; then
       pass "DeepSeek network tests passed"
     else

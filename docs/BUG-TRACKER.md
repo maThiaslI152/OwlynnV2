@@ -11,7 +11,7 @@ audience: agent
 > **Purpose:** Canonical bug fix log with root cause analysis and verification. Agents: pair with [`docs/STATUS.md`](STATUS.md) for open remaining tasks.
 
 **Created:** 2026-05-30  
-**Last Updated:** 2026-06-10 (BUG-1..11 fixed and verified)  
+**Last Updated:** 2026-06-10 (BUG-1..12 fixed and verified)  
 **Sources:** [`docs/BUG-ANALYSIS.md`](BUG-ANALYSIS.md) (browser audit 2026-05-25), [`docs/audit-file-intake-2026-05-30.md`](audit-file-intake-2026-05-30.md) (file intake 2026-05-30)  
 **Status Key:** OPEN | IN_PROGRESS | FIXED | WONT_FIX
 
@@ -238,6 +238,23 @@ audience: agent
 
 ---
 
+## BUG-12 [MEDIUM] [FIXED]: Cloud `tools_off` path omitted `api_tokens_used`
+
+**Symptom:** Cloud turns with `mode: tools_off` (no tool binding) returned `api_tokens_used: null` even when DeepSeek responded successfully. WebSocket `model_info.token_usage` and session cost UI showed no prompt/completion counts for simple cloud Q&A.
+
+**Root Cause:** `complex_llm_node()` early-return for `tools_off` hard-coded `"api_tokens_used": None` after `_invoke_cloud_path()` already populated usage from the live API response.
+
+**Fix Applied:**
+1. `complex.py` — Return `api_tokens` from `_invoke_cloud_path()` in the `tools_off` cloud branch (same as the tool-bound path).
+
+**Verification:**
+- `tests/test_cloud_e2e_network.py::test_complex_cloud_e2e_with_valid_key` — live DeepSeek (`@pytest.mark.network`): `large-cloud`, answer correct, `prompt_tokens > 0`.
+- Included in `./scripts/ci.sh --network` alongside chat matrix and prefix-cache tests.
+
+**Files Changed:** `src/agent/nodes/complex.py`, `scripts/ci.sh`, `tests/test_cloud_e2e_network.py` (R3 regression)
+
+---
+
 ## Summary
 
 | Bug | Severity | Status | Verification |
@@ -253,19 +270,20 @@ audience: agent
 | BUG-9: Auto-index cache path | CRITICAL | FIXED | Dual `.processed` path lookup |
 | BUG-10: DOCX tables | MEDIUM | FIXED | Docling + table fallback |
 | BUG-11: XLSX merged cells | LOW | FIXED | Header inference in `_process_table()` |
+| BUG-12: Cloud tools_off token usage | MEDIUM | FIXED | `tests/test_cloud_e2e_network.py` (network) |
 
 ## Test Results
 
 - **Backend pytest (BUG-1, BUG-4):** `tests/test_bugfix_persona_leak.py`, `tests/test_bugfix_chat_title.py`
 - **Frontend vitest:** full suite passes after browser-audit fixes
-- **BUG-9..11:** verified by code review (no dedicated regression tests yet)
+- **BUG-9..12:** verified by code review and/or targeted tests; BUG-12 also live network CI
 
 ## Related
 
-- [`docs/STATUS.md`](STATUS.md) — current risks and remaining tasks (R3, R5, R7, R9)
+- [`docs/STATUS.md`](STATUS.md) — current risks and remaining tasks (R5)
 - [`docs/BUG-ANALYSIS.md`](BUG-ANALYSIS.md) — historical audit symptoms (2026-05-25)
 - [`docs/audit-file-intake-2026-05-30.md`](audit-file-intake-2026-05-30.md) — file-intake audit source
 
 ## Last updated
 
-2026-06-10 — added BUG-9..11; electronBridge naming; audience agent
+2026-06-10 — BUG-12 cloud tools_off token usage; R3 live network verification
