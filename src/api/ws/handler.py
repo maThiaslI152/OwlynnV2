@@ -328,6 +328,13 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
         _stream_echo_buffer = (
             ""  # Accumulates streaming text to detect system instruction echo
         )
+        last_model_used = None
+        last_fallback_chain = None
+        last_token_usage = None
+        last_cloud_brief = None
+        last_anonymization = None
+        last_vision_intake = None
+        last_vision_proxy = None
         try:
             while True:
                 item = await q.get()
@@ -453,6 +460,57 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                     }
                                 )
 
+                        # Emit response_coherence and calibrated model_info when coherence_check completes
+                        if node == "coherence_check":
+                            if isinstance(output, dict):
+                                confidence = output.get("response_confidence")
+                                coherence = output.get("response_coherence") or {}
+                                duration_ms = output.get("turn_duration_ms") or 0
+
+                                await _send_ws(
+                                    {
+                                        "type": "response_coherence",
+                                        "coherent": coherence.get("coherent", True),
+                                        "confidence": confidence,
+                                        "duration_ms": duration_ms,
+                                        "reason": coherence.get("reason", ""),
+                                    }
+                                )
+
+                                if last_model_used:
+                                    model_info_payload = {
+                                        "type": "model_info",
+                                        "model": last_model_used,
+                                        "swapping": False,
+                                        "response_confidence": confidence,
+                                    }
+                                    if last_fallback_chain:
+                                        model_info_payload["fallback_chain"] = (
+                                            last_fallback_chain
+                                        )
+                                    if last_cloud_brief:
+                                        model_info_payload["cloud_brief_tokens_est"] = (
+                                            last_cloud_brief
+                                        )
+                                    if last_anonymization is not None:
+                                        model_info_payload[
+                                            "anonymization_placeholders_count"
+                                        ] = last_anonymization
+                                    if last_token_usage:
+                                        model_info_payload["token_usage"] = (
+                                            last_token_usage
+                                        )
+                                    if last_vision_intake:
+                                        model_info_payload["vision_intake_mode"] = (
+                                            last_vision_intake
+                                        )
+                                    if last_vision_proxy:
+                                        model_info_payload["vision_proxy_model"] = (
+                                            last_vision_proxy
+                                        )
+
+                                    await _send_ws(model_info_payload)
+
                         if isinstance(output, dict) and "__interrupt__" in output:
                             interrupts = [
                                 serialize_interrupt_item(i)
@@ -531,6 +589,26 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                 _node_model_used = output.get("model_used")
                                 _node_token_usage = output.get("api_tokens_used")
                                 _node_fallback_chain = output.get("fallback_chain")
+
+                                if _node_model_used:
+                                    last_model_used = _node_model_used
+                                if _node_fallback_chain:
+                                    last_fallback_chain = _node_fallback_chain
+                                if _node_token_usage:
+                                    last_token_usage = _node_token_usage
+                                if output.get("cloud_brief_tokens_est"):
+                                    last_cloud_brief = output["cloud_brief_tokens_est"]
+                                if (
+                                    output.get("anonymization_placeholders_count")
+                                    is not None
+                                ):
+                                    last_anonymization = output[
+                                        "anonymization_placeholders_count"
+                                    ]
+                                if output.get("vision_intake_mode"):
+                                    last_vision_intake = output["vision_intake_mode"]
+                                if output.get("vision_proxy_model"):
+                                    last_vision_proxy = output["vision_proxy_model"]
 
                                 # Send model_info event so frontend can show badge
                                 if _node_model_used:

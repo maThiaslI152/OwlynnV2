@@ -16,18 +16,23 @@ _ALT_TOOL_CALL_BLOCK_RE = re.compile(
     r"<tool_call>.*?(?:</tool_call>|$)", re.DOTALL | re.IGNORECASE
 )
 _ALT_FUNCTION_BLOCK_RE = re.compile(
-    r"<function=[^>]*>.*?(?=<tool_call>|$)", re.DOTALL | re.IGNORECASE
+    r"<function=[^>]*>.*?(?:</function>|(?=<tool_call>)|$)", re.DOTALL | re.IGNORECASE
 )
 
 
 def _content_has_dsml_tool_syntax(text: str) -> bool:
     """Return True when assistant text contains pseudo-tool-call markup."""
     t = text or ""
-    return bool(_DSML_MARKER_RE.search(t) or _ALT_TOOL_SYNTAX_RE.search(t))
+    return bool(
+        _DSML_MARKER_RE.search(t)
+        or _ALT_TOOL_SYNTAX_RE.search(t)
+        or "</tool_call>" in t
+        or "</function>" in t
+    )
 
 
 def _strip_dsml_blocks(text: str) -> str:
-    """Remove DeepSeek DSML tool-call blocks from visible assistant content."""
+    """Remove DeepSeek DSML tool-call blocks and Qwen XML blocks from visible assistant content."""
     if not text:
         return text
     cleaned = text
@@ -46,6 +51,19 @@ def _strip_dsml_blocks(text: str) -> str:
         cleaned = new
     if _ALT_TOOL_SYNTAX_RE.search(cleaned):
         cleaned = _ALT_TOOL_SYNTAX_RE.split(cleaned, maxsplit=1)[0]
+
+    # Strip any remaining orphan/partial tags to prevent eval leaks
+    orphan_tags = [
+        r"</tool_call>",
+        r"</function>",
+        r"<tool_call>",
+        r"<function=[^>]*>",
+        r"<\s*[\uFF5C|]{1,3}\s*DSML\s*[\uFF5C|]{1,3}[^>]*>",
+        r"</\s*[\uFF5C|]{1,3}\s*DSML\s*[\uFF5C|]{1,3}[^>]*>",
+    ]
+    for tag_pattern in orphan_tags:
+        cleaned = re.sub(tag_pattern, "", cleaned, flags=re.IGNORECASE)
+
     cleaned = cleaned.strip()
     return cleaned
 

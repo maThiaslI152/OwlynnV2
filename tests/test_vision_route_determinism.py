@@ -1,0 +1,76 @@
+import pytest
+from unittest.mock import MagicMock, AsyncMock, patch
+from langchain_core.messages import HumanMessage
+from src.agent.nodes.router import router_node
+from src.agent.state import AgentState
+
+
+@pytest.mark.anyio
+async def test_vision_route_with_florence_ready():
+    """If Florence is ready and cloud is available, route to complex-cloud with vision reasoning."""
+    state: AgentState = {
+        "messages": [
+            HumanMessage(
+                content=[
+                    {"type": "text", "text": "What's in this image?"},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/png;base64,abc"},
+                    },
+                ]
+            )
+        ],
+        "web_search_enabled": True,
+    }
+
+    with (
+        patch("src.agent.nodes.router._check_cloud_available", return_value=True),
+        patch(
+            "src.agent.nodes.complex_utils.lm_studio_florence.ensure_florence_loaded",
+            new_callable=AsyncMock,
+            return_value=True,
+        ) as mock_load,
+    ):
+        out = await router_node(state)
+
+    mock_load.assert_called_once()
+    assert out["route"] == "complex-cloud"
+    assert out["router_metadata"]["reasoning"] == "image_attachment_cloud_proxy"
+    assert out["router_metadata"]["features"]["task_category"] == "vision_cloud"
+
+
+@pytest.mark.anyio
+async def test_vision_route_with_florence_unavailable_falls_back():
+    """If Florence fails to load/is unavailable, fallback to complex-default vision_fallback."""
+    state: AgentState = {
+        "messages": [
+            HumanMessage(
+                content=[
+                    {"type": "text", "text": "What's in this image?"},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/png;base64,abc"},
+                    },
+                ]
+            )
+        ],
+        "web_search_enabled": True,
+    }
+
+    with (
+        patch("src.agent.nodes.router._check_cloud_available", return_value=True),
+        patch(
+            "src.agent.nodes.complex_utils.lm_studio_florence.ensure_florence_loaded",
+            new_callable=AsyncMock,
+            return_value=False,
+        ) as mock_load,
+    ):
+        out = await router_node(state)
+
+    mock_load.assert_called_once()
+    assert out["route"] == "complex-default"
+    assert (
+        out["router_metadata"]["reasoning"]
+        == "image_attachment_vision_proxy_unavailable"
+    )
+    assert out["router_metadata"]["features"]["task_category"] == "vision_fallback"

@@ -67,3 +67,22 @@ def test_needs_web_synthesis_retry_on_prose_plus_tool_markup():
         raw_visible="Plain answer with enough characters. " * 5,
         cleaned_visible="Plain answer with enough characters. " * 5,
     )
+
+
+def test_strip_qwen_xml_and_preserve_trailing_prose():
+    raw = '<function=fetch_webpage>{"url": "https://example.com"}</function> Here is the weather summary.'
+    cleaned = _strip_dsml_blocks(raw)
+    assert cleaned == "Here is the weather summary."
+    assert not _content_has_dsml_tool_syntax(cleaned)
+
+
+def test_strip_orphan_qwen_tags():
+    raw = "Hello! </tool_call> and </function> should be stripped."
+    cleaned = _strip_dsml_blocks(raw)
+    assert cleaned == "Hello!  and  should be stripped."
+    assert not _content_has_dsml_tool_syntax(cleaned)
+
+
+def test_content_has_dsml_tool_syntax_detects_orphan_closing_tags():
+    assert _content_has_dsml_tool_syntax("Some content </tool_call>")
+    assert _content_has_dsml_tool_syntax("Some content </function>")

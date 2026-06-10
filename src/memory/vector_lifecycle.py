@@ -60,7 +60,7 @@ class VectorLifecycleManager:
             handler.process_file(new_filepath)
 
     @staticmethod
-    async def index_processed_file(project_id: str, filename: str, text: str):
+    async def index_processed_file(project_id: str, filename: str, text: str) -> int:
         """Centralized indexing path. De-duplicates previous chunks before indexing."""
         from src.api.attachment_intake import is_vision_filename
 
@@ -69,7 +69,7 @@ class VectorLifecycleManager:
                 "VectorLifecycle: skipping RAG index for vision-only file %s",
                 filename,
             )
-            return
+            return 0
 
         from src.memory.project import project_manager
 
@@ -77,7 +77,7 @@ class VectorLifecycleManager:
         project_manager.remove_knowledge(project_id, filename)
 
         if not text or len(text.strip()) < 50:
-            return
+            return 0
 
         # 2. Index new chunks
         from src.config.config_loader import config
@@ -106,6 +106,7 @@ class VectorLifecycleManager:
             filename,
             project_id,
         )
+        return len(chunks[:max_chunks])
 
     @staticmethod
     def delete_project_cascade(project_id: str):

@@ -1,7 +1,7 @@
 """Router sends live-data questions to complex when web search is enabled."""
 
 import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, AsyncMock
 
 sys.modules["mem0"] = MagicMock()
 
@@ -147,7 +147,14 @@ async def test_image_attachment_routes_to_vision():
         ],
         "web_search_enabled": True,
     }
-    with patch("src.agent.nodes.router._check_cloud_available", return_value=True):
+    with (
+        patch("src.agent.nodes.router._check_cloud_available", return_value=True),
+        patch(
+            "src.agent.nodes.complex_utils.lm_studio_florence.ensure_florence_loaded",
+            new_callable=AsyncMock,
+            return_value=True,
+        ),
+    ):
         out = await router_node(state)
     assert out["route"] == "complex-cloud"
     assert out["router_clarification_used"] is False
@@ -171,7 +178,14 @@ async def test_image_only_attachment_skips_hitl():
         ],
         "web_search_enabled": True,
     }
-    with patch("src.agent.nodes.router._check_cloud_available", return_value=True):
+    with (
+        patch("src.agent.nodes.router._check_cloud_available", return_value=True),
+        patch(
+            "src.agent.nodes.complex_utils.lm_studio_florence.ensure_florence_loaded",
+            new_callable=AsyncMock,
+            return_value=True,
+        ),
+    ):
         out = await router_node(state)
     assert out["route"] == "complex-cloud"
     assert out["router_clarification_used"] is False
@@ -181,7 +195,7 @@ async def test_image_only_attachment_skips_hitl():
 @pytest.mark.anyio
 async def test_image_with_frontier_routes_cloud_for_proxy():
     """Image + frontier prompt uses complex-cloud (Qwen vision_proxy → DeepSeek)."""
-    from unittest.mock import patch
+    from unittest.mock import patch, AsyncMock
 
     state: AgentState = {
         "messages": [
@@ -200,7 +214,14 @@ async def test_image_with_frontier_routes_cloud_for_proxy():
         ],
         "web_search_enabled": True,
     }
-    with patch("src.agent.nodes.router._check_cloud_available", return_value=True):
+    with (
+        patch("src.agent.nodes.router._check_cloud_available", return_value=True),
+        patch(
+            "src.agent.nodes.complex_utils.lm_studio_florence.ensure_florence_loaded",
+            new_callable=AsyncMock,
+            return_value=True,
+        ),
+    ):
         out = await router_node(state)
     assert out["route"] == "complex-cloud"
     assert out["router_clarification_used"] is False
@@ -295,3 +316,32 @@ async def test_long_context_boundary_routes_cloud_not_default():
     ):
         out = await router_node(state)
     assert out["route"] in ("complex-cloud", "complex-default")
+
+
+@pytest.mark.anyio
+async def test_greeting_still_simple_with_tool_history():
+    """Greetings must route to simple even when the conversation has tool history."""
+    state: AgentState = {
+        "messages": [
+            HumanMessage(content="read my workspace file and summarize"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "name": "read_workspace_file",
+                        "args": {"filename": "notes.md"},
+                        "id": "call_1",
+                    }
+                ],
+            ),
+            ToolMessage(
+                content="file contents...",
+                tool_call_id="call_1",
+                name="read_workspace_file",
+            ),
+            HumanMessage(content="Hi there!"),
+        ],
+        "web_search_enabled": True,
+    }
+    out = await router_node(state)
+    assert out["route"] == "simple"

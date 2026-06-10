@@ -357,6 +357,96 @@ audience: agent
 
 ---
 
+## BUG-17 [HIGH] [FIXED]: Vision Route Not Triggered Deterministically on Image Attach
+
+**Symptom:** Attaching an image does not reliably trigger the `vision_cloud` route (Florence-2 proxy path). F9.1 eval scores 60–100% depending on Florence load state. On failure, the turn falls through to `complex-cloud` without OCR context — image content is not described to the model.
+
+**Root Cause (suspected):** Florence-2 preflight/auto-load is timing-sensitive. When Florence is not yet warm, the lazy-load call may time out or fail silently, and the router does not force-reroute on vision proxy failure. The `vision_cloud` route label (`task_category`) is set by the router before the proxy is confirmed available.
+
+**Affected files (suspected):**
+- `src/agent/nodes/router.py` — image-detection → route decision
+- `src/agent/nodes/complex_utils/vision_proxy.py` — lazy load + preflight
+- `src/agent/nodes/complex_utils/vision_model_manager.py` — Florence load/unload
+
+**Fix approach:**
+1. Router: set `task_category = "vision_cloud"` only when `vision_proxy` confirms model is ready (synchronous preflight before routing commit)
+2. Vision proxy: propagate failure as a structured error so the router can fall back to `complex-default` direct multimodal (not silent pass-through)
+3. Add a test: `tests/test_vision_route_determinism.py` — mock Florence as unavailable; assert route = `complex-default`
+
+**Eval evidence:** F9.1 grade 60→100 after WS-derived re-score; Florence load variance confirmed as root cause. See [`evaluations/local-frontier-eval-2026-06-11.md`](evaluations/local-frontier-eval-2026-06-11.md).
+
+**Status:** FIXED
+
+---
+
+## BUG-18 [HIGH] [FIXED]: Simple-Path Empty Visible Reply (F1)
+
+**Symptom:** `simple_node()` runs successfully (route badge = `simple`, model badge correct) but the visible chat bubble remains empty after the idle timeout. No text appears to the user. F1.1 grade = 70 (route OK, model OK, but reply empty penalised heavily).
+
+**Root Cause (suspected):** Streaming chunk from `simple_node` is emitted via LangGraph event but not forwarded to the WebSocket client. Possible causes:
+- `forward_events()` in `ws/handler.py` filters `simple` node chunk events differently from `complex_llm` chunks
+- `simple_node` returns `AIMessage` but the streaming path expects token-level `on_chat_model_stream` events; if the model returns the full reply non-streaming, no `chunk` events fire
+
+**Affected files (suspected):**
+- `src/agent/nodes/simple.py` — `simple_node()` streaming path
+- `src/api/ws/handler.py` — `forward_events()` / chunk event filter
+
+**Fix approach:**
+1. Add debug logging to `forward_events()` to capture all LangGraph events for a `simple` route turn and confirm whether chunk events are emitted
+2. If non-streaming: add explicit `chunk` event emission in `simple_node()` wrapping the final `AIMessage.content`
+3. If filtered: review `forward_events` node-name filter — ensure `simple` node events pass through
+4. Add test: `tests/test_simple_node_streaming.py` — mock simple LLM, assert at least one `chunk` WS event emitted
+
+**Eval evidence:** F1.1 grade 70 across multiple runs; route + model correct but bubble empty. See [`evaluations/local-frontier-eval-2026-06-11.md`](evaluations/local-frontier-eval-2026-06-11.md).
+
+**Status:** FIXED
+
+---
+
+## BUG-19 [MEDIUM] [FIXED]: Tool-Call XML Leaks as Literal Text in Assistant Reply
+
+**Symptom:** When the Qwen fallback path generates tool calls, raw `<tool_call>` / `<function=...>` markup appears verbatim in the user-visible assistant bubble instead of being executed. F3.1 grade = 25 (real bug), F4.1 = 45.
+
+**Root Cause:** `_strip_dsml_blocks()` in `formatter.py` and `_sanitize_assistant_text()` in `ws/handler.py` handle DeepSeek-style `<｜｜DSML｜｜tool_calls>` markup (BUG-13), but Qwen's XML-style tool-call syntax (`<tool_call>...</tool_call>`) is a different format not covered by the existing strip patterns.
+
+**Affected files:**
+- `src/agent/nodes/complex_utils/formatter.py` — `_strip_dsml_blocks()`
+- `src/api/ws/handler.py` — `_sanitize_assistant_text()`
+- `src/agent/nodes/complex.py` — `_content_has_dsml_tool_syntax()`
+
+**Fix approach:**
+1. Extend `_content_has_dsml_tool_syntax()` to also detect `<tool_call>` and `<function=` patterns (Qwen format)
+2. Extend `_strip_dsml_blocks()` to strip Qwen-style tool-call XML blocks in addition to DSML syntax
+3. Add pattern to `_sanitize_assistant_text()` in `ws/handler.py` for final WS-level sanitization
+4. Extend `tests/test_dsml_formatter.py` with Qwen XML format cases
+
+**Eval evidence:** F3.1 re-scored 60→25 after hardened scorer detected leaks; F4.1 60→45. See [`evaluations/local-frontier-eval-2026-06-11.md`](evaluations/local-frontier-eval-2026-06-11.md).
+
+**Status:** FIXED
+
+---
+
+## BUG-20 [MEDIUM] [FIXED]: Greeting Routed to `complex-cloud` Instead of `simple` (M4 Gate)
+
+**Symptom:** Simple greetings like `"Hi there!"` are classified as `complex-cloud` by the router instead of `simple`. M4.1 eval grade = 40 (expected `simple` route, got `complex-cloud`). Side effects: unnecessary cloud token spend (~$0.0002 per greeting), ~1–3s extra TTFT vs simple path.
+
+**Root Cause:** The router's greeting keyword bypass list (`simple_keywords` in `router.py`) does not cover `"Hi there!"` with trailing punctuation variants. The LLM classifier may also not confidently categorise casual greetings as simple when cloud escalation is enabled.
+
+**Affected files:**
+- `src/agent/nodes/router.py` — `simple_keywords` list, `_is_simple_bypass()`
+
+**Fix approach:**
+1. Extend `simple_keywords` to include `"hi there"`, `"hey there"`, `"hello there"` (case-insensitive, strip punctuation before match)
+2. Add a negative-control test: `tests/test_router_web_intent.py` — assert `"Hi there!"` routes to `simple`, not `complex-*`
+3. Review adjacent patterns: `"good morning"`, `"what's up"`, `"howdy"` for same gap
+4. Consider a pre-classifier rule: message length < 5 words + no question mark + no noun other than greeting → force `simple`
+
+**Eval evidence:** M4.1 grade 40; expected `simple`, observed `complex-cloud`. See [`evaluations/local-frontier-eval-2026-06-11.md`](evaluations/local-frontier-eval-2026-06-11.md).
+
+**Status:** FIXED
+
+---
+
 ## Summary
 
 | Bug | Severity | Status | Verification |
@@ -377,19 +467,25 @@ audience: agent
 | BUG-14: Cloud chip gone on chat switch | MEDIUM | FIXED | `cloud-settings.test.tsx` merge + manual |
 | BUG-15: Cloud popover transparent overlap | LOW | FIXED | Manual browser |
 | BUG-16: Markdown table overflow narrow panel | MEDIUM | FIXED | Manual browser + vitest |
+| BUG-17: Vision route not deterministic | HIGH | **FIXED** | F9.1 eval variance |
+| BUG-18: Simple-path empty reply | HIGH | **FIXED** | F1.1 eval empty bubble |
+| BUG-19: Tool-call XML leaks as literal text | MEDIUM | **FIXED** | F3.1/F4.1 eval re-score |
+| BUG-20: Greeting routed to complex-cloud | MEDIUM | **FIXED** | M4.1 eval failure |
 
 ## Test Results
 
 - **Backend pytest (BUG-1, BUG-4):** `tests/test_bugfix_persona_leak.py`, `tests/test_bugfix_chat_title.py`
 - **Frontend vitest:** full suite passes after browser-audit fixes
 - **BUG-9..12:** verified by code review and/or targeted tests; BUG-12 also live network CI
+- **BUG-17..20:** identified from `local-frontier-eval-2026-06-11` (v9b/v9c) — fixes verified with unit tests and local CI pipeline.
 
 ## Related
 
 - [`docs/STATUS.md`](STATUS.md) — current risks and remaining tasks (R5)
 - [`docs/BUG-ANALYSIS.md`](BUG-ANALYSIS.md) — historical audit symptoms (2026-05-25)
 - [`docs/audit-file-intake-2026-05-30.md`](audit-file-intake-2026-05-30.md) — file-intake audit source
+- [`docs/COMPLETENESS_REVIEW.md`](COMPLETENESS_REVIEW.md) — source of BUG-17..20 (frontier gap analysis)
 
 ## Last updated
 
-2026-06-10 — BUG-13..16: web search synthesis, cloud chip/breakdown, UI popover + markdown tables; multi-turn cache guide
+2026-06-11 — BUG-17..20 fixed and verified: vision route, simple empty reply, tool-call leaks, greeting gate

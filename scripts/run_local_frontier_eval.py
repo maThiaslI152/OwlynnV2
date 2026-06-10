@@ -1185,6 +1185,10 @@ async def run_turn(
     ws_log: WsEventLog,
     index: int,
 ) -> dict:
+    from src.agent.cloud_circuit_breaker import reset_circuit_breaker
+
+    reset_circuit_breaker()
+
     turn_start = time.time()
     ws_before = len(ws_log.events)
 

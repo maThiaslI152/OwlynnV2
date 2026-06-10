@@ -85,12 +85,29 @@ def notify_file_processed(filepath_or_name, status="processed"):
 
                         async def index_task():
                             try:
+                                # Broadcast indexing status
+                                for ws in list(connected_websockets):
+                                    try:
+                                        coro = ws.send_json(
+                                            {
+                                                "type": "file_status",
+                                                "name": filename,
+                                                "status": "indexing",
+                                            }
+                                        )
+                                        asyncio.run_coroutine_threadsafe(coro, loop)
+                                    except Exception as e:
+                                        logger.warning("Error suppressed: %s", e)
+                                        pass
+
                                 from src.memory.vector_lifecycle import (
                                     VectorLifecycleManager,
                                 )
 
-                                await VectorLifecycleManager.index_processed_file(
-                                    project_id, filename, text
+                                num_chunks = (
+                                    await VectorLifecycleManager.index_processed_file(
+                                        project_id, filename, text
+                                    )
                                 )
 
                                 # Broadcast index success
@@ -101,6 +118,7 @@ def notify_file_processed(filepath_or_name, status="processed"):
                                                 "type": "file_status",
                                                 "name": filename,
                                                 "status": "indexed",
+                                                "chunks": num_chunks,
                                             }
                                         )
                                         asyncio.run_coroutine_threadsafe(coro, loop)

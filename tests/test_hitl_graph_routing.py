@@ -25,12 +25,12 @@ class TestGraphRouting:
 
         assert scope_clarify_next({}) == "complex_llm"
 
-    def test_no_tool_calls_goes_to_memory_write(self):
+    def test_no_tool_calls_goes_to_coherence_check(self):
         from src.agent.graph import llm_next_step
 
         assert (
             llm_next_step({"pending_tool_calls": False, "messages": []})
-            == "memory_write"
+            == "coherence_check"
         )
 
     def test_plan_review_approved_goes_to_security(self):
@@ -38,10 +38,10 @@ class TestGraphRouting:
 
         assert plan_review_next({"execution_approved": True}) == "security_proxy"
 
-    def test_plan_review_denied_goes_to_memory_write(self):
+    def test_plan_review_denied_goes_to_coherence_check(self):
         from src.agent.graph import plan_review_next
 
-        assert plan_review_next({"execution_approved": False}) == "memory_write"
+        assert plan_review_next({"execution_approved": False}) == "coherence_check"
 
     def test_security_next_approved(self):
         from src.agent.graph import security_next_step
@@ -51,7 +51,7 @@ class TestGraphRouting:
     def test_security_next_denied(self):
         from src.agent.graph import security_next_step
 
-        assert security_next_step({"execution_approved": False}) == "memory_write"
+        assert security_next_step({"execution_approved": False}) == "coherence_check"
 
 
 class TestPolicyShared:

@@ -64,6 +64,12 @@ Project status tracker. Last updated: 2026-06-11 — frontier eval harness fixes
 - **R1**: One-turn lag — message correlation IDs in browser (✅ Fixed)
 - **R5**: Response coherence check — detect wrong answers, calibrate confidence
 - **R2**: Inference latency — 105-276s vs SLO <8s (✅ Fixed via context optimization for M4 Air)
+- **BUG-17**: Vision route not deterministic — image attach doesn't reliably trigger `vision_cloud` (F9.1 variance) (✅ Fixed)
+- **BUG-18**: Simple-path empty reply — streaming bubble doesn't surface even when route + model correct (F1.1) (✅ Fixed)
+- **BUG-19**: Tool-call XML leaks as literal text in assistant reply — Qwen format not stripped (F3.1/F4.1) (✅ Fixed)
+- **BUG-20**: Greeting routed to `complex-cloud` instead of `simple` — keyword bypass gap (M4.1) (✅ Fixed)
+
+> See [`docs/BUG-TRACKER.md`](BUG-TRACKER.md) for root cause analysis and fix approaches for BUG-17..20.
 
 ### 🟡 Medium Impact
 - **R10**: Frontier eval ≥97% — at **~94%** after harness fixes; F1/F6/F9 variance remains
@@ -212,11 +218,12 @@ All known Phase 8 bugs (BUG-1 through BUG-11) are fixed. Open work is remaining 
 
 ## Related
 
-- [`docs/BUG-TRACKER.md`](BUG-TRACKER.md) — canonical fix log (BUG-1..11)
+- [`docs/BUG-TRACKER.md`](BUG-TRACKER.md) — canonical fix log (BUG-1..20)
+- [`docs/COMPLETENESS_REVIEW.md`](COMPLETENESS_REVIEW.md) — frontier chat & co-work gap analysis (source of BUG-17..20)
 - [`docs/BUG-ANALYSIS.md`](BUG-ANALYSIS.md) — historical audit symptoms
 - [`docs/ADR.md`](ADR.md) — architecture decisions
 - [`docs/PERFORMANCE_SLOS.md`](PERFORMANCE_SLOS.md) — performance targets
 
 ## Last updated
 
-2026-06-10 — reconciled architectural concerns with fixed bug table; BUG-TRACKER is canonical
+2026-06-10 — BUG-17..20 OPEN added (vision route, simple empty reply, tool-call leaks, greeting gate); COMPLETENESS_REVIEW linked

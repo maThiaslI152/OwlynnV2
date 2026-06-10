@@ -119,6 +119,12 @@ class AgentState(TypedDict):
     # Payload for the context_summarized WS event
     context_summarized_event: dict | None
 
+    # ── Response Coherence & Turn Metrics ────────────────────────────────
+    turn_start_time: float | None
+    response_confidence: float | None
+    response_coherence: dict | None
+    turn_duration_ms: int | None
+
     # ── Internal Continuation Flags ───────────────────────────────────────
     _cutoff_pending: bool | None
     _cutoff_round: int | None

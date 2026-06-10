@@ -305,6 +305,8 @@ def _last_user_message_content(state: AgentState) -> str:
 @log_node("memory_inject_lite")
 async def memory_inject_lite_node(state: AgentState) -> AgentState:
     """Fast pre-router inject: profile, persona, topics — no vector search."""
+    import time
+
     thread_id = state.get("thread_id", "default")
     user_message = _last_user_message_content(state)
     project_id = state.get("project_id") or "default"
@@ -327,6 +329,7 @@ async def memory_inject_lite_node(state: AgentState) -> AgentState:
         "memory_context": memory_context,
         "knowledge_context": "",
         "persona": _persona_summary(persona_id),
+        "turn_start_time": time.time(),
     }
 
 

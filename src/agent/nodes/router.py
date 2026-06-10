@@ -693,17 +693,38 @@ async def router_node(state: AgentState) -> AgentState:
         web_on = True
 
     # Image attachments — deterministic vision route; skip LLM/HITL clarification.
+    # Image attachments — deterministic vision route; skip LLM/HITL clarification.
     if has_images:
-        route, toolbox = _resolve_complex_route(
-            user_text, state, list(_VISION_TOOLBOX), cloud_available=cloud_available
+        from src.agent.nodes.complex_utils.lm_studio_florence import (
+            ensure_florence_loaded,
         )
+
+        vision_ready = False
+        try:
+            vision_ready = await ensure_florence_loaded()
+        except Exception as e:
+            logger.warning("[router] Florence load preflight failed: %s", e)
+
+        if not vision_ready:
+            logger.warning(
+                "[router] Florence VLM is not ready. Falling back to complex-default."
+            )
+            route = "complex-default"
+            toolbox = list(_VISION_TOOLBOX)
+            task_category = "vision_fallback"
+            reasoning = "image_attachment_vision_proxy_unavailable"
+        else:
+            route, toolbox = _resolve_complex_route(
+                user_text, state, list(_VISION_TOOLBOX), cloud_available=cloud_available
+            )
+            task_category = "vision_cloud" if route == "complex-cloud" else "vision"
+            reasoning = (
+                "image_attachment_cloud_proxy"
+                if route == "complex-cloud"
+                else "image_attachment"
+            )
+
         budget = estimate_token_budget(user_text, route)
-        task_category = "vision_cloud" if route == "complex-cloud" else "vision"
-        reasoning = (
-            "image_attachment_cloud_proxy"
-            if route == "complex-cloud"
-            else "image_attachment"
-        )
         metadata = _build_router_metadata(
             route,
             confidence=0.95,
@@ -724,9 +745,10 @@ async def router_node(state: AgentState) -> AgentState:
             task_category=task_category,
         )
         logger.info(
-            "[router] → %s (image attachment — HITL skipped, toolbox=%s)",
+            "[router] → %s (image attachment — HITL skipped, toolbox=%s, reasoning=%s)",
             route,
             toolbox,
+            reasoning,
         )
         return {
             "route": route,
@@ -738,6 +760,81 @@ async def router_node(state: AgentState) -> AgentState:
         }
 
     # ── Route detection with tracking metadata ─────────────────────────────
+
+    # ── Route detection with tracking metadata ─────────────────────────────
+
+    # Quick keyword check to bypass LLM for obvious simple cases (greetings, time, etc.)
+    # Strip punctuation and normalize text to lowercase
+    cleaned_user = re.sub(r"[^\w\s]", "", user_text).lower().strip()
+    _greeting_phrases = {
+        "hi",
+        "hello",
+        "hey",
+        "howdy",
+        "good morning",
+        "good afternoon",
+        "good evening",
+        "hi there",
+        "hey there",
+        "hello there",
+        "whats up",
+        "what's up",
+        "thanks",
+        "thank you",
+        "thank you very much",
+        "bye",
+        "goodbye",
+    }
+    _greeting_pattern = re.compile(
+        r"\b(hello|hi|hey|howdy|good\s+morning|good\s+afternoon|good\s+evening|thanks|thank\s+you|bye|goodbye|whats\s+up|what's\s+up)\b",
+        re.IGNORECASE,
+    )
+    _time_date_pattern = re.compile(r"\b(what\s+time|what\s+date)\b", re.IGNORECASE)
+
+    has_web_intent = web_on and any(h in user_lower for h in _WEBISH_HINTS)
+    has_file_intent = (
+        "[file:" in user_lower
+        or "uploaded to workspace" in user_lower
+        or "workspace file" in user_lower
+        or "from the workspace" in user_lower
+        or "read the file" in user_lower
+    )
+
+    if (
+        cleaned_user in _greeting_phrases
+        or _greeting_pattern.search(user_text)
+        or _time_date_pattern.search(user_text)
+    ) and not (has_web_intent or has_file_intent):
+        logger.info("[router] Simple path - keyword match (greeting/bypass)")
+        budget = estimate_token_budget(user_text, "simple")
+        metadata = _build_router_metadata(
+            "simple",
+            confidence=0.98,
+            reasoning="keyword_match",
+            classification_source="keyword_bypass",
+            cloud_available=cloud_available,
+            has_images=has_images,
+            task_category="greeting",
+            estimated_tokens=budget,
+            web_on=web_on,
+        )
+        audit_info(
+            "agent.lifecycle",
+            "router_decision",
+            route="simple",
+            confidence=0.98,
+            source="keyword_bypass",
+            task_category="greeting",
+        )
+        return {
+            "route": "simple",
+            "token_budget": budget,
+            "selected_toolboxes": ["all"],
+            "router_clarification_used": False,
+            "skill_matched": None,
+            "router_metadata": metadata,
+            **_memory_gate_fields(state, user_text, "simple", force_needs=False),
+        }
 
     # If the conversation already used tools or the large model, stay on complex.
     if len(messages) > 2:
@@ -900,45 +997,6 @@ async def router_node(state: AgentState) -> AgentState:
             "router_clarification_used": False,
             "skill_matched": None,
             "router_metadata": metadata,
-        }
-
-    # Quick keyword check to bypass LLM for obvious simple cases.
-    # Use word-boundary matching to avoid substring false positives
-    # (e.g. "hi" matching inside "which", "this", "Chiang").
-    _greeting_pattern = re.compile(
-        r"\b(hello|hi|hey|thanks|thank\s+you|bye|goodbye)\b", re.IGNORECASE
-    )
-    _time_date_pattern = re.compile(r"\b(what\s+time|what\s+date)\b", re.IGNORECASE)
-    if _greeting_pattern.search(user_text) or _time_date_pattern.search(user_text):
-        logger.info("[router] Simple path - keyword match")
-        budget = estimate_token_budget(user_text, "simple")
-        metadata = _build_router_metadata(
-            "simple",
-            confidence=0.98,
-            reasoning="keyword_match",
-            classification_source="keyword_bypass",
-            cloud_available=cloud_available,
-            has_images=has_images,
-            task_category="greeting",
-            estimated_tokens=budget,
-            web_on=web_on,
-        )
-        audit_info(
-            "agent.lifecycle",
-            "router_decision",
-            route="simple",
-            confidence=0.98,
-            source="keyword_bypass",
-            task_category="greeting",
-        )
-        return {
-            "route": "simple",
-            "token_budget": budget,
-            "selected_toolboxes": ["all"],
-            "router_clarification_used": False,
-            "skill_matched": None,
-            "router_metadata": metadata,
-            **_memory_gate_fields(state, user_text, "simple", force_needs=False),
         }
 
     # ── Deterministic complex-route bypasses ──────────────────────────

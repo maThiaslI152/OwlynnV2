@@ -231,6 +231,111 @@ async def api_remove_project_knowledge(project_id: str, filename: str):
     return {"status": "ok"}
 
 
+@router.post("/api/projects/{project_id}/knowledge/directory")
+async def api_add_project_directory_knowledge(project_id: str, body: dict):
+    """
+    Recursively walk a directory inside the project workspace and index all supported files.
+    Body: { "directory_path": "docs" } (relative or absolute, will be validated)
+    """
+    directory_path = body.get("directory_path", "")
+    if not directory_path:
+        raise HTTPException(status_code=400, detail="directory_path is required")
+
+    import os
+    from src.config.settings import get_project_workspace
+
+    project_workspace = get_project_workspace(project_id)
+
+    # Resolve paths and validate directory is within the project workspace
+    abs_workspace = os.path.abspath(project_workspace)
+    if os.path.isabs(directory_path):
+        abs_dir = os.path.abspath(directory_path)
+    else:
+        abs_dir = os.path.abspath(os.path.join(abs_workspace, directory_path))
+
+    if not abs_dir.startswith(abs_workspace):
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied. Path must be inside project workspace.",
+        )
+    if not os.path.exists(abs_dir) or not os.path.isdir(abs_dir):
+        raise HTTPException(status_code=404, detail="Directory not found")
+
+    # Supported file extensions for processing and indexing
+    supported_exts = {
+        ".txt",
+        ".md",
+        ".py",
+        ".js",
+        ".ts",
+        ".json",
+        ".csv",
+        ".html",
+        ".xml",
+        ".yaml",
+        ".yml",
+        ".pdf",
+        ".docx",
+        ".xlsx",
+        ".pptx",
+        ".toml",
+    }
+
+    files_to_index = []
+    for root, dirs, files in os.walk(abs_dir):
+        # Skip hidden directories (.processed, .git)
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        for file in files:
+            if file.startswith("."):
+                continue
+            ext = os.path.splitext(file)[1].lower()
+            if ext in supported_exts:
+                files_to_index.append(os.path.join(root, file))
+
+    if not files_to_index:
+        return {
+            "status": "ok",
+            "message": "No supported files found in directory",
+            "count": 0,
+        }
+
+    # Process files in a background task to prevent blocking the HTTP response
+    async def index_directory_background():
+        from src.api.file_processor import FileWatcherHandler
+        from src.api.routes.files import notify_file_processed
+        import asyncio
+
+        handler = FileWatcherHandler(
+            project_workspace, on_processed_callback=notify_file_processed
+        )
+        for filepath in files_to_index:
+            try:
+                # Trigger file status "indexing" before processing
+                notify_file_processed(filepath, status="indexing")
+                # Run the processor
+                await asyncio.to_thread(handler.process_file, filepath)
+            except Exception as e:
+                logger.error(
+                    "Failed to index file %s in directory scan: %s", filepath, e
+                )
+
+    # Dispatch to the app event loop
+    from src.api.server import app
+    import asyncio
+
+    loop = getattr(app.state, "loop", None)
+    if loop:
+        asyncio.run_coroutine_threadsafe(index_directory_background(), loop)
+    else:
+        asyncio.create_task(index_directory_background())
+
+    return {
+        "status": "ok",
+        "message": f"Started indexing {len(files_to_index)} files in the background",
+        "count": len(files_to_index),
+    }
+
+
 @router.get("/api/history/{thread_id}")
 async def api_get_history(thread_id: str):
     """Retrieves full chat history for a specific thread."""

@@ -17,6 +17,8 @@ from src.agent.nodes.memory import (
     memory_write_node,
 )
 from src.agent.nodes.summarize import auto_summarize_node
+from src.agent.nodes.coherence import coherence_check_node
+
 
 import logging
 
@@ -113,7 +115,7 @@ def scope_clarify_next(state: AgentState) -> str:
 
 
 def llm_next_step(state: AgentState) -> str:
-    """After complex_llm: route to plan_review, security_proxy, memory_write, or back to complex_llm for cutoff continuation."""
+    """After complex_llm: route to plan_review, security_proxy, coherence_check, or back to complex_llm for cutoff continuation."""
     if state.get("_cutoff_pending"):
         audit_debug(
             "agent.lifecycle",
@@ -126,10 +128,10 @@ def llm_next_step(state: AgentState) -> str:
         audit_debug(
             "agent.lifecycle",
             "edge_traversal",
-            edge="complex_llm→memory_write",
+            edge="complex_llm→coherence_check",
             reason="no_pending_tool_calls",
         )
-        return "memory_write"
+        return "coherence_check"
     if _has_sensitive_pending(state):
         audit_debug(
             "agent.lifecycle",
@@ -160,15 +162,15 @@ def _has_sensitive_pending(state: AgentState) -> bool:
 
 
 def plan_review_next(state: AgentState) -> str:
-    """After plan_review: approved → security_proxy, denied → memory_write."""
+    """After plan_review: approved → security_proxy, denied → coherence_check."""
     if state.get("execution_approved") is False:
         audit_debug(
             "agent.lifecycle",
             "edge_traversal",
-            edge="plan_review→memory_write",
+            edge="plan_review→coherence_check",
             reason="plan_rejected",
         )
-        return "memory_write"
+        return "coherence_check"
     audit_debug(
         "agent.lifecycle",
         "edge_traversal",
@@ -179,7 +181,7 @@ def plan_review_next(state: AgentState) -> str:
 
 
 def security_next_step(state: AgentState) -> str:
-    go = "tool_action" if bool(state.get("execution_approved")) else "memory_write"
+    go = "tool_action" if bool(state.get("execution_approved")) else "coherence_check"
     audit_debug(
         "agent.lifecycle",
         "edge_traversal",
@@ -215,6 +217,7 @@ def build_graph():
     builder.add_node("plan_review", plan_review_node)
     builder.add_node("security_proxy", security_proxy_node)
     builder.add_node("tool_action", complex_tool_action_node)
+    builder.add_node("coherence_check", coherence_check_node)
     builder.add_node("memory_write", memory_write_node)
 
     builder.set_entry_point("memory_inject_lite")
@@ -242,40 +245,41 @@ def build_graph():
     # scope_clarify → complex_llm (always continue)
     builder.add_edge("scope_clarify", "complex_llm")
 
-    # complex_llm → plan_review | security_proxy | memory_write | complex_llm
+    # complex_llm → plan_review | security_proxy | coherence_check | complex_llm
     builder.add_conditional_edges(
         "complex_llm",
         llm_next_step,
         {
             "plan_review": "plan_review",
             "security_proxy": "security_proxy",
-            "memory_write": "memory_write",
+            "coherence_check": "coherence_check",
             "complex_llm": "complex_llm",
         },
     )
 
-    # plan_review → security_proxy (approved) | memory_write (denied)
+    # plan_review → security_proxy (approved) | coherence_check (denied)
     builder.add_conditional_edges(
         "plan_review",
         plan_review_next,
         {
             "security_proxy": "security_proxy",
-            "memory_write": "memory_write",
+            "coherence_check": "coherence_check",
         },
     )
 
-    # security_proxy → tool_action | memory_write
+    # security_proxy → tool_action | coherence_check
     builder.add_conditional_edges(
         "security_proxy",
         security_next_step,
         {
             "tool_action": "tool_action",
-            "memory_write": "memory_write",
+            "coherence_check": "coherence_check",
         },
     )
 
     builder.add_edge("tool_action", "complex_llm")
-    builder.add_edge("simple", "memory_write")
+    builder.add_edge("simple", "coherence_check")
+    builder.add_edge("coherence_check", "memory_write")
     builder.add_edge("memory_write", END)
 
     return builder

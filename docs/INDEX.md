@@ -12,8 +12,8 @@ audience: agent
 
 ```yaml
 manifest:
-  version: 6
-  generated: "2026-06-09T17:47:15Z"
+  version: 7
+  generated: "2026-06-10T23:06:00Z"
   files:
     - path: AGENTS.md
       status: active
@@ -64,6 +64,11 @@ manifest:
       status: active
       category: reference
       audience: agent
+      last_updated: 2026-06-10
+    - path: docs/COMPLETENESS_REVIEW.md
+      status: active
+      category: reference
+      audience: human
       last_updated: 2026-06-10
     - path: docs/COMPETITIVE_FEATURE_ANALYSIS.md
       status: active
@@ -720,4 +725,4 @@ manifest:
 
 ## Last updated
 
-2026-06-10 — manifest v6 with audience tags
+2026-06-10 — manifest v7; added COMPLETENESS_REVIEW.md

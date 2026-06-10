@@ -251,6 +251,7 @@ Current date and time: {current_date}
 - When a request matches a known skill, call invoke_skill to get the workflow and follow it. Use list_skills to see available skills if unsure.
 - Match your verbosity to the task: be thorough for complex work, be concise for simple questions.
 - If project instructions are provided below, they take HIGHEST PRIORITY. Tailor your tone, focus, and approach to match the project's purpose.
+- For questions asking about the history or details of this conversation (e.g. what city we looked up, what files we created, what was discussed), answer directly from your memory of the chat history. Do NOT use tools (like read_workspace_file, list_workspace_files, or search_workspace_docs) to search the workspace unless the user explicitly requests you to inspect a file's content.
 
 User memory context:
 {memory_context}
@@ -1061,7 +1062,16 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                 loop_start_time = asyncio.get_running_loop().time()
                 await asyncio.sleep(2)
                 try:
-                    response = await bound_llm.ainvoke(prompt_messages)
+                    response, api_tokens = await _invoke_cloud_path(
+                        llm=llm,
+                        prompt_messages=prompt_messages,
+                        tools=tools_for_invoke,
+                        budget=budget,
+                        state=state,
+                        profile=profile,
+                        mode=mode,
+                        tools_bound=bool(tools_for_invoke),
+                    )
                 except Exception:
                     logger.warning(
                         "[complex] Cloud retry failed, falling back to medium-default"
@@ -1093,6 +1103,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                         prompt_messages,
                         state.get("token_budget")
                         or int(config.get("complex.default_token_budget", 4096)),
+                        max_context,
                     )
                     fb_start = asyncio.get_running_loop().time()
                     response = (

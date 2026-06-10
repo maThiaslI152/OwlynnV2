@@ -46,7 +46,7 @@ class TestGraphRouting:
         from src.agent.graph import llm_next_step
 
         state = {"pending_tool_calls": False, "messages": []}
-        assert llm_next_step(state) == "memory_write"
+        assert llm_next_step(state) == "coherence_check"
 
     def test_llm_next_step_with_safe_tools(self):
         from src.agent.graph import llm_next_step

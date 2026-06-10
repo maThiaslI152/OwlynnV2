@@ -80,6 +80,16 @@ def serialize_message(msg):
     """
     if isinstance(msg, AIMessage):
         content_ui = _stringify_lc_message_content(msg.content)
+        # Strip DSML/Qwen XML tags from assistant messages
+        try:
+            from src.agent.nodes.complex_utils.formatter import (
+                _strip_dsml_blocks,
+                _strip_thinking_tags,
+            )
+
+            content_ui = _strip_dsml_blocks(_strip_thinking_tags(content_ui or ""))
+        except Exception:
+            pass
     else:
         content_ui = msg.content
 

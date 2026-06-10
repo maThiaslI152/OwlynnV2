@@ -409,6 +409,9 @@ function App() {
           })
         } else if (event.type === 'memory_updated') {
           setMemoryUpdatedAt(Date.now())
+        } else if (event.type === 'file_status') {
+          loadProjectsRef.current()
+          window.dispatchEvent(new CustomEvent('owlynn:file_status', { detail: event }))
         }
       },
     })

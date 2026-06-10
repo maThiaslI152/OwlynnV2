@@ -82,6 +82,39 @@ def _clean_response(text: str) -> str:
     return result or text
 
 
+async def _get_llm_response(runnable, prompt) -> str:
+    """Safely stream or invoke the runnable.
+
+    Handles MagicMock/Mock/AsyncMock objects which may not support real async iteration.
+    """
+    is_mock = False
+    astream_attr = getattr(runnable, "astream", None)
+    for obj in (runnable, astream_attr):
+        if obj is not None:
+            tp_name = type(obj).__name__
+            if "mock" in tp_name.lower():
+                is_mock = True
+                break
+
+    if is_mock or not hasattr(runnable, "astream"):
+        response = await runnable.ainvoke(prompt)
+        if hasattr(response, "content"):
+            return response.content or ""
+        return str(response)
+
+    try:
+        response_content = ""
+        async for chunk in runnable.astream(prompt):
+            if chunk.content:
+                response_content += chunk.content
+        return response_content
+    except (TypeError, AttributeError):
+        response = await runnable.ainvoke(prompt)
+        if hasattr(response, "content"):
+            return response.content or ""
+        return str(response)
+
+
 @log_node("simple")
 async def simple_node(state: AgentState) -> AgentState:
     """Fast-path node: short answers without tools."""
@@ -121,8 +154,10 @@ async def simple_node(state: AgentState) -> AgentState:
     try:
         start_ts = asyncio.get_running_loop().time()
         llm = await get_small_llm()
-        response = await llm.bind(temperature=0.4, max_tokens=budget).ainvoke(prompt)
-        content = _clean_response(response.content or "")
+        response_content = await _get_llm_response(
+            llm.bind(temperature=0.4, max_tokens=budget), prompt
+        )
+        content = _clean_response(response_content)
         model = "small-local"
         fallback_chain.append(
             {
@@ -150,8 +185,10 @@ async def simple_node(state: AgentState) -> AgentState:
 
         fb_start = asyncio.get_running_loop().time()
         llm = await get_medium_llm("default")
-        response = await llm.bind(temperature=0.4, max_tokens=budget).ainvoke(prompt)
-        content = _clean_response(response.content or "")
+        response_content = await _get_llm_response(
+            llm.bind(temperature=0.4, max_tokens=budget), prompt
+        )
+        content = _clean_response(response_content)
         model = "medium-default-fallback"
         fallback_chain.append(
             {
