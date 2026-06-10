@@ -234,7 +234,15 @@ Derived from `AIMessage.tool_calls` + `ToolMessage` outputs. Tool outputs normal
     "prompt_tokens": 150,
     "completion_tokens": 320,
     "prompt_cache_hit_tokens": 120,
-    "prompt_cache_miss_tokens": 30
+    "prompt_cache_miss_tokens": 30,
+    "reasoning_tokens": 0,
+    "context_breakdown": {
+      "max_context": 1048576,
+      "categories": { "system": 1200, "conversation": 8000, "tools": 35000, "output": 320, "reasoning": 0 },
+      "category_pct": { "system": 0.1, "conversation": 0.8, "tools": 3.3, "output": 0.03, "reasoning": 0 },
+      "total_used": 44620,
+      "used_pct": 4.3
+    }
   },
   "fallback_chain": [
     {
@@ -259,7 +267,7 @@ Sent after `complex_llm` or `simple` node completes when `model_used` is present
 |-------|-------------|
 | `model` | Model that produced the response (e.g. `"medium-default"`, `"large-cloud"`). Route `complex-cloud` maps to `"large-cloud"` in `model_info` (not `medium-cloud`). |
 | `swapping` | Whether a model swap occurred |
-| `token_usage` | Optional prompt/completion counts; cloud turns may include `prompt_cache_hit_tokens` / `prompt_cache_miss_tokens` (DeepSeek KV prefix cache) |
+| `token_usage` | Optional prompt/completion counts; cloud turns may include cache fields and `context_breakdown` (system/conversation/tools/output/reasoning vs `max_context`) — see [`changes/cloud-usage-context-chip/CHANGELOG.md`](changes/cloud-usage-context-chip/CHANGELOG.md) |
 | `fallback_chain` | Optional ordered list of model attempts. Always has ≥1 entry and exactly one with `status == "success"`. Entries are chronological |
 
 Populated by `complex_llm_node` and `simple_node` in every node output.

@@ -231,8 +231,11 @@ Enabled **by default** for all API users. No `cache_control` breakpoints.
 **Owlynn mitigations (implemented):**
 
 - Stable core in `COMPLEX_PROMPT_STABLE`; date/memory/persona in volatile suffix.
-- Cloud brief only on first turn; full tool history on loop turns.
+- Cloud brief when **no tool history**; full anonymized thread when tools ran (see [`guides/cloud-multi-turn-context.md`](../guides/cloud-multi-turn-context.md)).
+- `thread_id` passed as API `user` for per-conversation cache isolation.
 - Cache hit telemetry in `SessionCostTracker` and WebSocket `model_info.token_usage`.
+
+**Cache compliance (honest summary):** Owlynn is **designed for** prefix reuse (stable-first system, append-only tool threads) and **measures** hits — but volatile session text, cloud brief mode, trimming, and summarization **reduce** hit rate by design. Not every turn achieves cache hits.
 
 ### 7. Pricing snapshot (flash, 2026)
 

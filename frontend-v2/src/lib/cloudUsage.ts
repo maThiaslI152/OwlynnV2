@@ -1,4 +1,4 @@
-import type { CloudUsageState } from '../state/useAppStore'
+import type { CloudUsageState, ContextBreakdown } from '../state/useAppStore'
 
 function asNumber(value: unknown, fallback = 0): number {
   const n = Number(value)
@@ -7,7 +7,23 @@ function asNumber(value: unknown, fallback = 0): number {
 
 /** Normalize /api/usage or cloud_usage WS payload into store shape. */
 export function parseCloudUsagePayload(payload: Record<string, unknown>): CloudUsageState {
-  const sessionRaw = (payload.session ?? payload.cost ?? {}) as Record<string, unknown>
+  // /api/usage returns token counts in `session` and cost/calls in `cost` (tracker.summary).
+  // WS cloud_usage uses a full `session` from the tracker. Merge so refetches keep the chip.
+  const sessionPartial = (payload.session ?? {}) as Record<string, unknown>
+  const costPartial = (payload.cost ?? {}) as Record<string, unknown>
+  const sessionRaw = {
+    ...costPartial,
+    ...sessionPartial,
+    total_calls: costPartial.total_calls ?? sessionPartial.total_calls,
+    failed_calls: costPartial.failed_calls ?? sessionPartial.failed_calls,
+    estimated_cost_usd:
+      costPartial.estimated_cost_usd ?? sessionPartial.estimated_cost_usd,
+    elapsed_seconds: costPartial.elapsed_seconds ?? sessionPartial.elapsed_seconds,
+    cache_hit_ratio: costPartial.cache_hit_ratio ?? sessionPartial.cache_hit_ratio,
+    reasoning_tokens: costPartial.reasoning_tokens ?? sessionPartial.reasoning_tokens,
+    last_turn:
+      sessionPartial.last_turn ?? costPartial.last_turn ?? payload.last_turn ?? null,
+  } as Record<string, unknown>
   const budgetRaw = (payload.budget ?? {}) as Record<string, unknown>
   const lastTurnRaw = (sessionRaw.last_turn ?? payload.last_turn ?? null) as
     | Record<string, unknown>
@@ -52,6 +68,36 @@ export function parseCloudUsagePayload(payload: Record<string, unknown>): CloudU
       used_pct: asNumber(budgetRaw.used_pct),
     },
     lastTurn,
+  }
+}
+
+/** Parse context_breakdown from model_info token_usage or api payload. */
+export function parseContextBreakdown(raw: unknown): ContextBreakdown | null {
+  if (!raw || typeof raw !== 'object') return null
+  const bd = raw as Record<string, unknown>
+  const categories = (bd.categories ?? {}) as Record<string, unknown>
+  const categoryPct = (bd.category_pct ?? {}) as Record<string, unknown>
+  const maxContext = asNumber(bd.max_context)
+  if (maxContext <= 0) return null
+  return {
+    max_context: maxContext,
+    categories: {
+      system: asNumber(categories.system),
+      conversation: asNumber(categories.conversation),
+      tools: asNumber(categories.tools),
+      output: asNumber(categories.output),
+      reasoning: asNumber(categories.reasoning),
+    },
+    category_pct: {
+      system: asNumber(categoryPct.system),
+      conversation: asNumber(categoryPct.conversation),
+      tools: asNumber(categoryPct.tools),
+      output: asNumber(categoryPct.output),
+      reasoning: asNumber(categoryPct.reasoning),
+    },
+    input_estimated: asNumber(bd.input_estimated),
+    total_used: asNumber(bd.total_used),
+    used_pct: asNumber(bd.used_pct),
   }
 }
 

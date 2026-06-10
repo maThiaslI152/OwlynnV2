@@ -298,9 +298,10 @@ async def api_get_usage():
         or config.get("cloud.budget.daily_token_limit", 500_000)
     )
     payload = build_cloud_usage_payload()
+    summary = tracker.summary()
     return {
-        "session": _session_usage,
-        "cost": tracker.summary(),
+        "session": {**summary, **_session_usage},
+        "cost": summary,
         "budget": payload["budget"],
         "warning_thresholds": payload["warning_thresholds"],
         "last_turn": tracker.last_turn,

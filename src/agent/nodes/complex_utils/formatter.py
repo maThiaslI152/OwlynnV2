@@ -1,6 +1,36 @@
 import re
 from src.config.config_loader import config
 
+# DeepSeek V4 sometimes emits tool calls as DSML markup in ``content`` instead of
+# structured ``tool_calls`` (especially when tools are unbound on synthesis turns).
+_DSML_TAG = r"<\s*[\uFF5C|]{1,3}\s*DSML\s*[\uFF5C|]{1,3}"
+_DSML_ELEMENT_RE = re.compile(
+    _DSML_TAG + r"(\w+)[^>]*>(.*?)</\s*[\uFF5C|]{1,3}\s*DSML\s*[\uFF5C|]{1,3}\s*\1\s*>",
+    re.DOTALL | re.IGNORECASE,
+)
+_DSML_MARKER_RE = re.compile(_DSML_TAG, re.IGNORECASE)
+
+
+def _content_has_dsml_tool_syntax(text: str) -> bool:
+    """Return True when assistant text contains DeepSeek DSML pseudo-tool-call markup."""
+    return bool(_DSML_MARKER_RE.search(text or ""))
+
+
+def _strip_dsml_blocks(text: str) -> str:
+    """Remove DeepSeek DSML tool-call blocks from visible assistant content."""
+    if not text:
+        return text
+    cleaned = text
+    for _ in range(8):
+        new = _DSML_ELEMENT_RE.sub("", cleaned)
+        if new == cleaned:
+            break
+        cleaned = new
+    if _DSML_MARKER_RE.search(cleaned):
+        cleaned = _DSML_MARKER_RE.split(cleaned, maxsplit=1)[0]
+    cleaned = cleaned.strip()
+    return cleaned
+
 
 def _strip_thinking_tags(text: str) -> str:
     """Remove <think>...</think> blocks from reasoning output."""

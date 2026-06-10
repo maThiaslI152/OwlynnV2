@@ -266,6 +266,7 @@ complex:
   min_output_tokens: 512                  # Minimum output token budget
   max_cutoff_retries: 1                   # Auto-continuation rounds (reduced for faster UX)
   max_cloud_retries: 3                    # Cloud LLM retries with backoff
+  max_web_tool_rounds: 3                  # After N tool-calling turns, force synthesis (no more web tools)
   default_token_budget: 4096              # Fallback token budget
   synthetic_answer_max_chars: 4500        # Max chars for synthetic answers
 

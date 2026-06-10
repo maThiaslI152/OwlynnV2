@@ -78,13 +78,20 @@ Supporting modules: [`secret_store.py`](src/config/secret_store.py), [`cloud_cir
 |----------|---------|
 | `GET /api/cloud-status` | `{available, key_valid, model, error}` |
 | `POST /api/cloud-verify-key` | Test key without persisting |
-| `GET /api/usage` | Session cost + `prompt_cache_hit_tokens` summary |
+| `GET /api/usage` | Session cost + tokens; `session` merges `SessionCostTracker.summary()` with WS-accumulated `_session_usage` |
 
 ### Frontend
 
 - Cloud status dot in topbar (from `/api/cloud-status`)
 - [`CloudSettingsPanel.tsx`](../frontend-v2/src/components/CloudSettingsPanel.tsx) — tier (flash/pro), thinking mode, reasoning effort
-- `model_info.token_usage` may include `prompt_cache_hit_tokens` and `prompt_cache_miss_tokens` on cloud turns
+- [`CloudUsageChip.tsx`](../frontend-v2/src/components/CloudUsageChip.tsx) — clickable session cost in inspector header; popover shows in/out tokens, daily budget, and **last-request context breakdown** (system / conversation / tools / output / reasoning vs `max_context`)
+- [`CloudUsagePanel.tsx`](../frontend-v2/src/components/CloudUsagePanel.tsx) — inspector panel summary (same session data)
+- `model_info.token_usage` may include cache fields and `context_breakdown` on cloud `complex_llm` turns
+- **Session cost persists across chat switches** — `cloudUsage` is not cleared by `clearSession()`; refetched from `/api/usage` on thread change
+
+See [`docs/changes/cloud-usage-context-chip/CHANGELOG.md`](changes/cloud-usage-context-chip/CHANGELOG.md).
+
+Multi-turn history, cloud brief vs full thread, and KV cache behavior: [`docs/guides/cloud-multi-turn-context.md`](guides/cloud-multi-turn-context.md).
 
 ### Retry & Fallback
 
@@ -106,4 +113,4 @@ Cloud LLM calls use `_invoke_cloud_path()` → [`invoke_cloud_chat()`](src/agent
 
 ### Last updated
 
-2026-06-10 — BUG-12: `api_tokens_used` on cloud `tools_off` path; R3 in network CI
+2026-06-10 — cloud usage chip popover + context breakdown; chat-switch cost persistence

@@ -204,6 +204,7 @@ export interface ModelInfoEvent {
   model: string
   model_used?: string
   swapping?: boolean
+  token_usage?: Record<string, unknown>
   fallback_chain?: Array<{
     model: string
     status: string

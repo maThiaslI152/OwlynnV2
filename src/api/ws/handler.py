@@ -32,7 +32,18 @@ from src.api.shared import (
     logger,
 )
 
+from src.agent.nodes.complex_utils.formatter import (
+    _strip_dsml_blocks,
+    _strip_thinking_tags,
+)
 from src.memory.project import project_manager
+
+
+def _sanitize_assistant_text(text: str) -> str:
+    """Strip DSML pseudo-tool markup before sending assistant text to the UI."""
+    return _strip_dsml_blocks(_strip_thinking_tags(text or ""))
+
+
 from src.agent.nodes.router import generate_chat_title_router_llm
 from src.config.settings import get_project_workspace, normalize_project_id
 from src.tools.workspace_context import set_active_project_for_run, reset_active_project
@@ -384,7 +395,9 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                         chunk = event["data"]["chunk"]
                         if chunk.content:
                             # Stream deltas may be str or list[content_block]; stringify like finalize path.
-                            text = _stringify_lc_message_content(chunk.content)
+                            text = _sanitize_assistant_text(
+                                _stringify_lc_message_content(chunk.content)
+                            )
                             # Skip empty chunks and internal reminders
                             if not text or text.strip().startswith(
                                 "[Internal reminder"
@@ -501,9 +514,13 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                 msg = messages[0]
                                 tc_list = list(getattr(msg, "tool_calls", None) or [])
                                 text_for_ui = (
-                                    _stringify_lc_message_content(msg.content).strip()
+                                    _sanitize_assistant_text(
+                                        _stringify_lc_message_content(msg.content)
+                                    ).strip()
                                     if isinstance(msg, AIMessage)
-                                    else str(getattr(msg, "content", "") or "").strip()
+                                    else _sanitize_assistant_text(
+                                        str(getattr(msg, "content", "") or "")
+                                    ).strip()
                                 )
 
                                 # Extract model provenance and token usage from node output

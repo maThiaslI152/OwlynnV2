@@ -8,6 +8,7 @@ import { Composer } from './Composer'
 import { SafeModePanel } from './SafeModePanel'
 import { CloudSettingsPanel } from './CloudSettingsPanel'
 import { CloudUsagePanel } from './CloudUsagePanel'
+import { CloudUsageChip } from './CloudUsageChip'
 import { ScreenAssistPanel } from './ScreenAssistPanel'
 import { ProjectKnowledgePanel } from './ProjectKnowledgePanel'
 import { OrchestrationPanel } from './OrchestrationPanel'
@@ -130,7 +131,9 @@ function MessageContent({ content }: { content: string }) {
           )
         },
         table: ({ children, ...props }) => (
-          <table className="msg-table" {...props}>{children}</table>
+          <div className="msg-table-wrap">
+            <table className="msg-table" {...props}>{children}</table>
+          </div>
         ),
         th: ({ children, ...props }) => (
           <th {...props}>{children}</th>
@@ -208,16 +211,18 @@ function CollapsibleSection({
   defaultOpen = false,
   children,
   rightAction,
+  testId,
 }: {
   title: string
   icon?: string
   defaultOpen?: boolean
   children: ReactNode
   rightAction?: ReactNode
+  testId?: string
 }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
-    <div className="inspector-section">
+    <div className="inspector-section" data-testid={testId}>
       <div className="inspector-section-header" onClick={() => setOpen(!open)}>
         <h3>{icon ? `${icon} ${title}` : title}</h3>
         <div className="inspector-section-header-actions">
@@ -225,7 +230,12 @@ function CollapsibleSection({
           <span className={`inspector-toggle ${open ? 'inspector-toggle-open' : ''}`}>▶</span>
         </div>
       </div>
-      <div className={`inspector-section-body ${open ? 'inspector-section-body-open' : ''}`}>{children}</div>
+      <div
+        className={`inspector-section-body ${open ? 'inspector-section-body-open' : ''}`}
+        data-testid={testId ? `${testId}-body` : undefined}
+      >
+        {children}
+      </div>
     </div>
   )
 }
@@ -306,7 +316,6 @@ export function AppShell({
   const conversationItems = useAppStore((s) => s.conversationItems)
   const operatorNote = useAppStore((s) => s.operatorNote)
   const cloudStatus = useAppStore((s) => s.cloudStatus)
-  const cloudUsage = useAppStore((s) => s.cloudUsage)
   const setCloudStatus = useAppStore((s) => s.setCloudStatus)
   const windowMode = useAppStore((s) => s.windowMode)
   const setWindowMode = useAppStore((s) => s.setWindowMode)
@@ -638,15 +647,7 @@ export function AppShell({
                 <span className={`connection-dot connection-dot-${connectionState}`} />
                 <span className="connection-label">{connectionState}</span>
               </span>
-              {cloudUsage && cloudUsage.session.total_calls > 0 && (
-                <span
-                  className="cloud-usage-chip"
-                  title={`DeepSeek session: $${cloudUsage.session.estimated_cost_usd.toFixed(4)} · ${cloudUsage.session.total_tokens} tokens`}
-                  data-testid="cloud-usage-chip"
-                >
-                  ${cloudUsage.session.estimated_cost_usd.toFixed(3)}
-                </span>
-              )}
+              <CloudUsageChip />
               {cloudStatus && (
                 <span className="connection-status" title={
                   cloudStatus.available && cloudStatus.key_valid
@@ -840,15 +841,7 @@ export function AppShell({
                   <span className={`connection-dot connection-dot-${connectionState}`} />
                   <span className="connection-label">{connectionState}</span>
                 </span>
-                {cloudUsage && cloudUsage.session.total_calls > 0 && (
-                  <span
-                    className="cloud-usage-chip"
-                    title={`DeepSeek session: $${cloudUsage.session.estimated_cost_usd.toFixed(4)} · ${cloudUsage.session.total_tokens} tokens`}
-                    data-testid="cloud-usage-chip"
-                  >
-                    ${cloudUsage.session.estimated_cost_usd.toFixed(3)}
-                  </span>
-                )}
+                <CloudUsageChip />
                 <div className="safe-mode-popover-container" style={{ position: 'relative' }}>
                   <button
                     type="button"
@@ -868,7 +861,12 @@ export function AppShell({
               </div>
             </div>
           )}
-          <CollapsibleSection title="Cloud & Usage" icon="☁" defaultOpen={false}>
+          <CollapsibleSection
+            title="Cloud & Usage"
+            icon="☁"
+            defaultOpen={false}
+            testId="inspector-cloud-usage-section"
+          >
             <CloudSettingsPanel />
             <CloudUsagePanel />
           </CollapsibleSection>

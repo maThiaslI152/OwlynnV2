@@ -11,7 +11,7 @@ audience: agent
 > **Purpose:** Canonical bug fix log with root cause analysis and verification. Agents: pair with [`docs/STATUS.md`](STATUS.md) for open remaining tasks.
 
 **Created:** 2026-05-30  
-**Last Updated:** 2026-06-10 (BUG-1..12 fixed and verified)  
+**Last Updated:** 2026-06-10 (BUG-1..16 fixed and verified)  
 **Sources:** [`docs/BUG-ANALYSIS.md`](BUG-ANALYSIS.md) (browser audit 2026-05-25), [`docs/audit-file-intake-2026-05-30.md`](audit-file-intake-2026-05-30.md) (file intake 2026-05-30)  
 **Status Key:** OPEN | IN_PROGRESS | FIXED | WONT_FIX
 
@@ -255,6 +255,108 @@ audience: agent
 
 ---
 
+## BUG-13 [CRITICAL] [FIXED]: Web Search Turns Stall — No Final Answer (DeepSeek Tool Loop)
+
+**Symptom:** After HITL-approved web search (e.g. *"GAMMA or ZONA modpack"*), the UI shows many tool panels but **no final recommendation**. Variants: raw `<｜｜DSML｜｜tool_calls>` markup, excerpt dumps, or Vietnamese medical "Zona" results.
+
+**Root Cause:** Six interacting failures:
+
+1. **Parallel tool delta** — LangGraph `ToolNode` returns tool-only messages; old slice logic dropped 2/3 parallel results → DeepSeek 400 *insufficient tool messages*.
+2. **Infinite tool loop** — No round cap; stripping web tools only left `ask_user` bound → `tool_choice: auto` → endless tool calls with empty `content`.
+3. **DSML in content** — DeepSeek V4 emits pseudo-tool markup in `content` on synthesis turns; passed blank-response checks and leaked to UI.
+4. **Failed synthesis fallback** — Blank/DSML after strip triggered raw `web_search` dump instead of synthesis.
+5. **Ambiguous ZONA** — Search + fallback surfaced medical shingles pages for gaming queries.
+6. **Perceived local answer** — Qwen/MiniCPM post-turn memory work mistaken for the main answer path.
+
+**Fix Applied:**
+
+1. `_extract_tool_output_delta()` + `_count_ai_tool_rounds()` in `complex.py`.
+2. `complex.max_web_tool_rounds: 3`; on exhaustion `tools_for_invoke = None` (all tools dropped) + synthesis prompt.
+3. `_strip_dsml_blocks()` / `_content_has_dsml_tool_syntax()`; WebSocket `_sanitize_assistant_text()`; skip fetch nudges on last tool round.
+4. Cloud synthesis retry (`tools=None`); local medium LLM fallback; rewritten `fallback.py` with gaming relevance filter.
+5. Config: `src/config/defaults.yaml` → `complex.max_web_tool_rounds`.
+
+**Verification:**
+
+- `tests/test_tool_output_delta.py` — parallel tool delta (3/3 messages preserved).
+- `tests/test_dsml_formatter.py` — DSML strip.
+- Browser automation 2026-06-10: `synthesis_retry: true`, `final_len: 4323`, `memory_write` reached, GAMMA vs ZONA recommendation in UI.
+- Full write-up: [`docs/changes/web-search-synthesis-fix/CHANGELOG.md`](changes/web-search-synthesis-fix/CHANGELOG.md).
+
+**Known limitations:** DSML may still appear in one **intermediate** tool-turn bubble (final answer clean).
+
+**Files Changed:** `src/agent/nodes/complex.py`, `src/agent/nodes/complex_utils/formatter.py`, `src/agent/nodes/complex_utils/fallback.py`, `src/agent/nodes/complex_utils/cloud_payload.py`, `src/api/ws/handler.py`, `src/config/defaults.yaml`, `tests/test_tool_output_delta.py`, `tests/test_dsml_formatter.py`
+
+---
+
+## BUG-14 [MEDIUM] [FIXED]: Cloud Cost Chip Disappears on Chat Switch
+
+**Symptom:** DeepSeek session cost chip (`$0.01x`) visible during a chat vanishes after switching to another chat or starting a new one.
+
+**Root Cause:**
+
+1. `clearSession()` reset `cloudUsage` in the Zustand store on every thread change.
+2. `/api/usage` returned incomplete `session` (tokens only); `total_calls` and `estimated_cost_usd` lived in `cost`. Refetch after reconnect parsed `session` first → `total_calls: 0` → chip hidden.
+
+**Fix Applied:**
+
+1. `clearSession()` no longer clears `cloudUsage` (session-scoped, not per-thread).
+2. `parseCloudUsagePayload()` merges `session` + `cost`.
+3. `/api/usage` returns unified `session: {**tracker.summary(), **_session_usage}`.
+4. `refreshCloudUsage()` on new chat / switch chat / switch project.
+
+**Verification:** `frontend-v2/src/components/__tests__/cloud-settings.test.tsx` — `parseCloudUsagePayload` merge test; manual: chip persists across chat switches.
+
+**Files Changed:** `frontend-v2/src/state/useAppStore.ts`, `frontend-v2/src/lib/cloudUsage.ts`, `frontend-v2/src/App.tsx`, `src/api/server.py`
+
+**Related:** [`docs/changes/cloud-usage-context-chip/CHANGELOG.md`](changes/cloud-usage-context-chip/CHANGELOG.md)
+
+---
+
+## BUG-15 [LOW] [FIXED]: Cloud Usage Chip Popover Transparent Overlap
+
+**Symptom:** Clicking the session cost chip (`$0.010`) showed a popover with text bleeding through the **Cloud & Usage** inspector section underneath — unreadable overlap.
+
+**Root Cause:** `.cloud-usage-popover` used `background: var(--bg-elevated)` (`rgba(..., 0.42)`). Popover extends below the inspector header into the scrollable panel; semi-transparent background let section content show through.
+
+**Fix Applied:**
+
+1. Opaque popover surface + `backdrop-filter` (matches `topbar-popover` pattern).
+2. `inspector-header` stacking context (`z-index: 30`, `overflow: visible`).
+3. Glass-theme override at `0.98` opacity.
+
+**Verification:** Manual browser check 2026-06-10; popover text no longer overlaps section below.
+
+**Files Changed:** `frontend-v2/src/index.css`
+
+**Related:** [`docs/changes/ui-inspector-markdown-fixes/CHANGELOG.md`](changes/ui-inspector-markdown-fixes/CHANGELOG.md)
+
+---
+
+## BUG-16 [MEDIUM] [FIXED]: Markdown Tables Overflow Narrow Chat Panel
+
+**Symptom:** In a shrunk center panel, assistant markdown tables (e.g. multi-column game comparisons) clip on the right — columns like "CHECKPOINT/MANAGEMENT" cut off with no horizontal scroll or cell wrap.
+
+**Root Cause:**
+
+1. Flex children (`.message-body`, `.message-bubble`) lacked `min-width: 0` — tables could not shrink with the panel.
+2. No scroll wrapper around tables (code blocks had one; tables did not).
+3. Default `table-layout: auto` sized columns to content width beyond the bubble.
+
+**Fix Applied:**
+
+1. `msg-table-wrap` div around GFM tables in `MessageContent`.
+2. `min-width: 0` / `max-width: 100%` on message flex chain.
+3. `table-layout: fixed` + `overflow-wrap: anywhere` on cells; horizontal scroll fallback in wrapper.
+
+**Verification:** Manual browser check 2026-06-10 on narrow panel; frontend vitest 110/110 pass.
+
+**Files Changed:** `frontend-v2/src/components/AppShell.tsx`, `frontend-v2/src/index.css`
+
+**Related:** [`docs/changes/ui-inspector-markdown-fixes/CHANGELOG.md`](changes/ui-inspector-markdown-fixes/CHANGELOG.md)
+
+---
+
 ## Summary
 
 | Bug | Severity | Status | Verification |
@@ -271,6 +373,10 @@ audience: agent
 | BUG-10: DOCX tables | MEDIUM | FIXED | Docling + table fallback |
 | BUG-11: XLSX merged cells | LOW | FIXED | Header inference in `_process_table()` |
 | BUG-12: Cloud tools_off token usage | MEDIUM | FIXED | `tests/test_cloud_e2e_network.py` (network) |
+| BUG-13: Web search synthesis stall | CRITICAL | FIXED | Browser E2E + `test_tool_output_delta`, `test_dsml_formatter` |
+| BUG-14: Cloud chip gone on chat switch | MEDIUM | FIXED | `cloud-settings.test.tsx` merge + manual |
+| BUG-15: Cloud popover transparent overlap | LOW | FIXED | Manual browser |
+| BUG-16: Markdown table overflow narrow panel | MEDIUM | FIXED | Manual browser + vitest |
 
 ## Test Results
 
@@ -286,4 +392,4 @@ audience: agent
 
 ## Last updated
 
-2026-06-10 — BUG-12 cloud tools_off token usage; R3 live network verification
+2026-06-10 — BUG-13..16: web search synthesis, cloud chip/breakdown, UI popover + markdown tables; multi-turn cache guide

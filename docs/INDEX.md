@@ -330,6 +330,11 @@ manifest:
       category: reference
       audience: archive
       last_updated: 2026-06-10
+    - path: docs/changes/cloud-usage-context-chip/CHANGELOG.md
+      status: active
+      category: changelog
+      audience: agent
+      last_updated: 2026-06-10
     - path: docs/changes/cursor-sdd-enforcement-harness/CHANGELOG.md
       status: active
       category: changelog
@@ -385,6 +390,11 @@ manifest:
       category: reference
       audience: archive
       last_updated: 2026-06-10
+    - path: docs/changes/web-search-synthesis-fix/CHANGELOG.md
+      status: active
+      category: changelog
+      audience: agent
+      last_updated: 2026-06-10
     - path: docs/changes/multi-chat-hitl-test/CHANGELOG.md
       status: active
       category: reference
@@ -429,6 +439,11 @@ manifest:
       status: active
       category: reference
       audience: archive
+      last_updated: 2026-06-10
+    - path: docs/changes/ui-inspector-markdown-fixes/CHANGELOG.md
+      status: active
+      category: changelog
+      audience: agent
       last_updated: 2026-06-10
     - path: docs/changes/system-modernization/CHANGELOG.md
       status: active
@@ -579,6 +594,11 @@ manifest:
       status: active
       category: reference
       audience: archive
+      last_updated: 2026-06-10
+    - path: docs/guides/cloud-multi-turn-context.md
+      status: active
+      category: guide
+      audience: agent
       last_updated: 2026-06-10
     - path: docs/guides/deepseek-v4-testing.md
       status: active

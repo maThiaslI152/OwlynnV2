@@ -27,6 +27,10 @@ owner: ai-agent
 | Wrong route (simple vs complex) | `src/agent/nodes/router.py` | `tests/test_router_web_intent.py`, [agent-graph.md](agent-graph.md) |
 | Persona leak / wrong answer | `src/agent/nodes/simple.py`, `src/agent/nodes/complex.py` | [agent-graph.md](agent-graph.md) |
 | Infinite agent loop | `src/agent/graph.py` | [agent-graph.md](agent-graph.md) |
+| Web search: no final answer / DSML in chat / excerpt dump | `src/agent/nodes/complex.py`, `src/api/ws/handler.py` | [`changes/web-search-synthesis-fix/CHANGELOG.md`](../changes/web-search-synthesis-fix/CHANGELOG.md), `tests/test_tool_output_delta.py` |
+| Cloud cost chip missing after chat switch | `frontend-v2/src/lib/cloudUsage.ts`, `src/api/server.py` | [`changes/cloud-usage-context-chip/CHANGELOG.md`](../changes/cloud-usage-context-chip/CHANGELOG.md) |
+| Cloud chip popover overlaps inspector below | `frontend-v2/src/index.css` | [`changes/ui-inspector-markdown-fixes/CHANGELOG.md`](../changes/ui-inspector-markdown-fixes/CHANGELOG.md) |
+| Markdown table clips in narrow chat | `frontend-v2/src/components/AppShell.tsx` | [`changes/ui-inspector-markdown-fixes/CHANGELOG.md`](../changes/ui-inspector-markdown-fixes/CHANGELOG.md) |
 | HITL approval missing | `src/agent/nodes/security_proxy.py` | `tests/test_security_proxy.py`, [tools.md](tools.md) |
 | LM Studio not reachable | `src/agent/llm.py`, `src/config/defaults.yaml` | [llm-pool.md](llm-pool.md) |
 | Model name mismatch | `src/config/defaults.yaml` | [llm-pool.md](llm-pool.md) |

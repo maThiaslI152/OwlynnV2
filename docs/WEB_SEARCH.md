@@ -187,6 +187,13 @@ API-key-based providers removed from pipeline:
 
 `WEB_SEARCH_PROVIDER` env var also removed. Removals affect `src/tools/web_tools.py` and its tests only.
 
+## Troubleshooting (agent synthesis)
+
+If web search runs but the UI never gets a written answer (tool loop, DSML markup, raw excerpt dump), see the fix log:
+
+- [`docs/changes/web-search-synthesis-fix/CHANGELOG.md`](changes/web-search-synthesis-fix/CHANGELOG.md) — BUG-WS-1..6, config `complex.max_web_tool_rounds`
+- [`docs/BUG-TRACKER.md`](BUG-TRACKER.md) — BUG-13 summary
+
 ## Related
 
 - [`docs/architecture/overview.md`](architecture/overview.md) — system architecture
@@ -194,4 +201,4 @@ API-key-based providers removed from pipeline:
 
 ## Last updated
 
-2026-05-31 — `docs-standards-timeline` added frontmatter, purpose blockquote
+2026-06-10 — web-search-synthesis-fix troubleshooting link

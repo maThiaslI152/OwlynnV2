@@ -94,6 +94,27 @@ export interface CloudUsageState {
   lastTurn: CloudUsageTurn | null
 }
 
+export interface ContextBreakdown {
+  max_context: number
+  categories: {
+    system: number
+    conversation: number
+    tools: number
+    output: number
+    reasoning: number
+  }
+  category_pct: {
+    system: number
+    conversation: number
+    tools: number
+    output: number
+    reasoning: number
+  }
+  input_estimated: number
+  total_used: number
+  used_pct: number
+}
+
 export interface InterruptChoice {
   label: string
   route?: string
@@ -127,6 +148,7 @@ interface AppState {
   modelInfo: string | null
   cloudStatus: { available: boolean; key_valid: boolean; model: string; error: string } | null
   cloudUsage: CloudUsageState | null
+  contextBreakdown: ContextBreakdown | null
   contextCompression: CompressionInfo | null
   memoryUpdatedAt: number | null
   ttsSpeaking: boolean
@@ -153,6 +175,7 @@ interface AppState {
   setModelInfo: (model: string | null) => void
   setCloudStatus: (status: { available: boolean; key_valid: boolean; model: string; error: string } | null) => void
   setCloudUsage: (usage: CloudUsageState | null) => void
+  setContextBreakdown: (breakdown: ContextBreakdown | null) => void
   setContextCompression: (info: CompressionInfo | null) => void
   setMemoryUpdatedAt: (ts: number) => void
   setTtsSpeaking: (speaking: boolean) => void
@@ -187,6 +210,7 @@ export const useAppStore = create<AppState>((set) => ({
   modelInfo: null,
   cloudStatus: null,
   cloudUsage: null,
+  contextBreakdown: null,
   contextCompression: null,
   memoryUpdatedAt: null,
   ttsSpeaking: false,
@@ -279,6 +303,7 @@ export const useAppStore = create<AppState>((set) => ({
   setModelInfo: (modelInfo) => set({ modelInfo }),
   setCloudStatus: (cloudStatus) => set({ cloudStatus }),
   setCloudUsage: (cloudUsage) => set({ cloudUsage }),
+  setContextBreakdown: (contextBreakdown) => set({ contextBreakdown }),
   setContextCompression: (contextCompression) => set({ contextCompression }),
   setMemoryUpdatedAt: (memoryUpdatedAt) => set({ memoryUpdatedAt }),
   setTtsSpeaking: (ttsSpeaking) => set({ ttsSpeaking }),
@@ -311,7 +336,7 @@ export const useAppStore = create<AppState>((set) => ({
       actionProposals: [],
       routerMetadata: null,
       modelInfo: null,
-      cloudUsage: null,
+      contextBreakdown: null,
       contextCompression: null,
       operatorNote: '',
       ttsSpeaking: false,

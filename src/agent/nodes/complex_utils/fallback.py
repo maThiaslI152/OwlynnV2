@@ -1,6 +1,85 @@
-from langchain_core.messages import AIMessage, ToolMessage
-from .helpers import _web_search_tool_output_has_results
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+
 from .formatter import _synthetic_answer_from_web_search_tool
+from .helpers import _web_search_tool_output_has_results
+
+_FETCH_TOOLS = frozenset({"fetch_webpage", "fetch_webpage_dynamic", "deep_research"})
+_GAME_CONTEXT_KEYWORDS = (
+    "stalker",
+    "anomaly",
+    "modpack",
+    "gamma",
+    "game",
+    "steam",
+    "moddb",
+    "github",
+    "grokitach",
+)
+_MEDICAL_ZONA_MARKERS = (
+    "thần kinh",
+    "herpes",
+    "shingles",
+    "bệnh",
+    "triệu chứng",
+    "vinmec",
+    "bacsi",
+    "varicella",
+    "giời leo",
+)
+
+
+def _latest_user_text(messages: list) -> str:
+    for m in reversed(messages):
+        if isinstance(m, HumanMessage):
+            c = m.content
+            if isinstance(c, str) and not c.strip().startswith("[Internal reminder"):
+                return c
+    return ""
+
+
+def _user_expects_gaming_context(user_text: str) -> bool:
+    low = (user_text or "").lower()
+    return any(
+        k in low for k in ("modpack", "gamma", "stalker", "anomaly", "game", "zona")
+    )
+
+
+def _web_search_content_relevant(content: str, user_text: str) -> bool:
+    """Drop medical/ambiguous Zona hits when the user asked about a game modpack."""
+    if not _user_expects_gaming_context(user_text):
+        return True
+    c_low = (content or "").lower()
+    medical = sum(1 for m in _MEDICAL_ZONA_MARKERS if m in c_low)
+    gaming = sum(1 for g in _GAME_CONTEXT_KEYWORDS if g in c_low)
+    return gaming > 0 and gaming >= medical
+
+
+def _answer_from_fetch_excerpts(messages: list) -> AIMessage | None:
+    """Prefer fetched page excerpts over raw search listings for fallback answers."""
+    excerpts: list[str] = []
+    for m in reversed(messages):
+        if not isinstance(m, ToolMessage):
+            continue
+        name = getattr(m, "name", "") or ""
+        if name not in _FETCH_TOOLS:
+            continue
+        c = m.content if isinstance(m.content, str) else str(m.content or "")
+        if "[fetch_webpage] HTTP error" in c or c.startswith("[web_search]"):
+            continue
+        if "📄" in c or "Retrieved excerpts" in c or len(c.strip()) > 150:
+            excerpts.append(c.strip())
+    if not excerpts:
+        return None
+    body = "\n\n---\n\n".join(excerpts[:3])
+    cap = 4500
+    if len(body) > cap:
+        body = body[:cap] + "\n\n… [truncated]"
+    return AIMessage(
+        content=(
+            "I could not get a polished summary from the cloud model, but here is what "
+            "was retrieved from the relevant pages during research:\n\n" + body
+        )
+    )
 
 
 def _fallback_for_blank_response(
@@ -9,17 +88,30 @@ def _fallback_for_blank_response(
     """
     When the model returns empty assistant content, synthesize a safe user-visible reply.
 
-    Prefers context from recent ``ToolMessage`` outputs (successful or failed ``web_search``).
-    If there are no tool messages yet (first LLM turn before any tools) or no match, returns a
-    generic message so the thread does not stay blank.
+    Prefers fetch/deep_research excerpts, then filtered web_search listings.
     """
+    user_text = _latest_user_text(messages)
+
+    fetch_answer = _answer_from_fetch_excerpts(messages)
+    if fetch_answer is not None:
+        return fetch_answer
+
     for m in reversed(messages):
         if not isinstance(m, ToolMessage):
             continue
         c = m.content if isinstance(m.content, str) else str(m.content or "")
         if (getattr(m, "name", None) or "") == "web_search":
             if _web_search_tool_output_has_results(c):
-                return AIMessage(content=_synthetic_answer_from_web_search_tool(c))
+                if _web_search_content_relevant(c, user_text):
+                    return AIMessage(content=_synthetic_answer_from_web_search_tool(c))
+                return AIMessage(
+                    content=(
+                        "Web search returned mostly unrelated results (likely because "
+                        '"ZONA" matched medical pages instead of the STALKER modpack). '
+                        "Try rephrasing with full context, e.g. "
+                        '"STALKER Anomaly GAMMA vs ZONA modpack comparison".'
+                    )
+                )
             if (
                 c.startswith("[web_search]")
                 or "Unable to retrieve online results" in c

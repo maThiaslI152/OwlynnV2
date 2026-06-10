@@ -27,7 +27,12 @@ from src.agent.lm_studio_compat import (
 from src.agent.anonymization import anonymize, deanonymize
 
 from .complex_utils.fallback import _fallback_for_blank_response
-from .complex_utils.formatter import _strip_thinking_tags, _flatten_human_content
+from .complex_utils.formatter import (
+    _content_has_dsml_tool_syntax,
+    _flatten_human_content,
+    _strip_dsml_blocks,
+    _strip_thinking_tags,
+)
 from .complex_utils.cloud_payload import (
     COMPLEX_PROMPT_STABLE,
     build_volatile_suffix,
@@ -36,6 +41,7 @@ from .complex_utils.cloud_payload import (
     extract_api_token_usage,
 )
 from .complex_utils.cloud_invoke import invoke_cloud_chat, response_to_ai_message
+from .complex_utils.context_breakdown import enrich_token_usage_with_breakdown
 from src.agent.cloud_cost_tracker import get_cost_tracker
 from src.memory.user_profile import get_profile
 
@@ -328,6 +334,15 @@ from .complex_utils.helpers import _web_search_tool_output_has_results
 _WEB_TOOL_NAMES = frozenset({"web_search", "fetch_webpage", "deep_research"})
 
 
+def _count_ai_tool_rounds(messages: list) -> int:
+    """Count assistant turns that emitted tool calls (each counts as one tool round)."""
+    return sum(
+        1
+        for m in messages
+        if isinstance(m, AIMessage) and getattr(m, "tool_calls", None)
+    )
+
+
 def _message_has_image_content(messages: list) -> bool:
     if not messages:
         return False
@@ -618,6 +633,9 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     persona = state.get("persona", "No persona available")
     mode = state.get("mode") or "tools_on"
     thread_messages = list(state.get("messages") or [])
+    tool_round = _count_ai_tool_rounds(thread_messages)
+    max_web_tool_rounds = int(config.get("complex.max_web_tool_rounds", 3))
+    force_web_synthesis = False
 
     web_on = state.get("web_search_enabled")
     if web_on is None:
@@ -638,6 +656,9 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     )
     vision_task = has_images and route == "complex-cloud"
     knowledge_context = state.get("knowledge_context") or "None"
+    force_web_synthesis = (
+        web_on and not vision_task and tool_round >= max_web_tool_rounds
+    )
 
     volatile_extra = ""
     if security_decision == "denied":
@@ -674,7 +695,16 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                 scope_lines.append(f"- {key}: {value}")
         volatile_extra += "\n".join(scope_lines)
 
-    if state.get("web_search_suggested") and web_on and not vision_task:
+    if force_web_synthesis:
+        volatile_extra += (
+            "\n\n[TOOL BUDGET EXHAUSTED] You already ran multiple web tool rounds. "
+            "Do NOT call web_search, fetch_webpage, or deep_research again. "
+            "Write a complete, direct answer for the user NOW using the search and "
+            "page excerpts already in this thread. Include a clear recommendation "
+            "when the user asked you to choose between options. "
+            "Output plain-language prose only — never DSML, tool_calls, or tool syntax."
+        )
+    elif state.get("web_search_suggested") and web_on and not vision_task:
         volatile_extra += (
             "\n\nThe user's question is informational and may require current web data. "
             "Use web_search to find relevant information before answering. "
@@ -864,6 +894,19 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     tools = _resolve_complex_tools(
         state, thread_messages, web_on=web_on, vision_task=vision_task
     )
+    tools_for_invoke: list | None = list(tools)
+    if force_web_synthesis:
+        # DeepSeek V4 keeps emitting tool calls under tool_choice="auto" even when web
+        # tools are stripped (it pattern-copies prior calls + obeys the aggressive
+        # "exhaustive search" prompt). Dropping ALL tools removes the tools param from
+        # the request, so the API cannot return tool_calls and the model MUST synthesize
+        # a text answer. This is the compliant way to force a final response.
+        tools_for_invoke = None
+        logger.info(
+            "[complex] Web tool budget exhausted (round=%d, max=%d); synthesis-only turn",
+            tool_round,
+            max_web_tool_rounds,
+        )
 
     # ── 9.4: Tiered fallback — model acquisition ────────────────────────
     try:
@@ -916,10 +959,15 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         or int(config.get("complex.default_token_budget", 4096)),
         max_context,
     )
-    if route == "complex-cloud":
-        bound_llm = llm.bind_tools(tools, strict=True).bind(max_tokens=budget)
+    if tools_for_invoke:
+        if route == "complex-cloud":
+            bound_llm = llm.bind_tools(tools_for_invoke, strict=True).bind(
+                max_tokens=budget
+            )
+        else:
+            bound_llm = llm.bind_tools(tools_for_invoke).bind(max_tokens=budget)
     else:
-        bound_llm = llm.bind_tools(tools).bind(max_tokens=budget)
+        bound_llm = llm.bind(max_tokens=budget)
     audit_debug("agent.token", "budget_computed", token_budget=budget, route=route)
 
     # ── 9.4: Tiered fallback — LLM invocation with error handling ────────
@@ -928,12 +976,12 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             response, api_tokens = await _invoke_cloud_path(
                 llm=llm,
                 prompt_messages=prompt_messages,
-                tools=tools,
+                tools=tools_for_invoke,
                 budget=budget,
                 state=state,
                 profile=profile,
                 mode=mode,
-                tools_bound=True,
+                tools_bound=bool(tools_for_invoke),
             )
         else:
             response = await bound_llm.ainvoke(prompt_messages)
@@ -1175,10 +1223,104 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                 "completion_tokens": usage["completion_tokens"],
                 "prompt_cache_hit_tokens": usage.get("prompt_cache_hit_tokens", 0),
                 "prompt_cache_miss_tokens": usage.get("prompt_cache_miss_tokens", 0),
+                "reasoning_tokens": usage.get("reasoning_tokens", 0),
             }
 
     has_tool_calls = bool(getattr(response, "tool_calls", None))
-    if not has_tool_calls and not str(getattr(response, "content", "") or "").strip():
+    raw_visible = str(getattr(response, "content", "") or "")
+    has_dsml_in_content = _content_has_dsml_tool_syntax(raw_visible)
+    dsml_stall = not has_tool_calls and has_dsml_in_content
+    cleaned_visible = _strip_dsml_blocks(_strip_thinking_tags(raw_visible))
+    if cleaned_visible != raw_visible or has_dsml_in_content:
+        response = AIMessage(
+            content=cleaned_visible,
+            tool_calls=list(getattr(response, "tool_calls", None) or []),
+            additional_kwargs=dict(getattr(response, "additional_kwargs", None) or {}),
+        )
+    synthesis_retry = False
+    retry_still_dsml = False
+    local_synthesis = False
+    if (
+        force_web_synthesis
+        and route == "complex-cloud"
+        and "fallback" not in model_label
+        and not has_tool_calls
+        and (dsml_stall or len(cleaned_visible.strip()) < 80)
+    ):
+        retry_nudge = HumanMessage(
+            content=(
+                "[FINAL ANSWER REQUIRED] Use the search results and page excerpts already "
+                "in this thread. Write a complete comparison and a clear recommendation in "
+                "plain English. Do NOT output DSML, tool_calls, or any tool invocation syntax."
+            )
+        )
+        try:
+            retry_resp, retry_usage = await _invoke_cloud_path(
+                llm=llm,
+                prompt_messages=[*prompt_messages, retry_nudge],
+                tools=None,
+                budget=budget,
+                state=state,
+                profile=profile,
+                mode=mode,
+                tools_bound=False,
+            )
+            if anon_mapping:
+                retry_resp = _deanonymize_ai_message(retry_resp, anon_mapping)
+            retry_raw = str(getattr(retry_resp, "content", "") or "")
+            retry_clean = _strip_dsml_blocks(_strip_thinking_tags(retry_raw))
+            retry_still_dsml = _content_has_dsml_tool_syntax(retry_raw)
+            if len(retry_clean.strip()) >= 80 and not retry_still_dsml:
+                response = AIMessage(
+                    content=retry_clean,
+                    tool_calls=[],
+                    additional_kwargs=dict(
+                        getattr(retry_resp, "additional_kwargs", None) or {}
+                    ),
+                )
+                synthesis_retry = True
+                dsml_stall = False
+                cleaned_visible = retry_clean
+                if retry_usage:
+                    api_tokens = retry_usage
+        except Exception as exc:
+            logger.warning("[complex] Cloud synthesis retry failed: %s", exc)
+
+    if (
+        force_web_synthesis
+        and not synthesis_retry
+        and not has_tool_calls
+        and (dsml_stall or len(cleaned_visible.strip()) < 80)
+    ):
+        synth_nudge = HumanMessage(
+            content=(
+                "Write the final answer for the user using the search results and page "
+                "excerpts above. Include a clear GAMMA vs ZONA recommendation in plain "
+                "English. No tool syntax."
+            )
+        )
+        try:
+            local_prompt = strip_image_blocks_from_messages(
+                with_system_for_local_server(system, thread_messages + [synth_nudge])
+            )
+            local_budget = _cap_budget_to_context(local_prompt, budget, max_context)
+            local_llm = await get_medium_llm("default")
+            local_resp = await local_llm.bind(max_tokens=local_budget).ainvoke(
+                local_prompt
+            )
+            local_text = _strip_dsml_blocks(
+                _strip_thinking_tags(str(getattr(local_resp, "content", "") or ""))
+            )
+            if len(local_text.strip()) >= 80:
+                response = AIMessage(content=local_text)
+                local_synthesis = True
+                model_label = "medium-default-synthesis"
+                dsml_stall = False
+                cleaned_visible = local_text
+        except Exception as exc:
+            logger.warning("[complex] Local synthesis fallback failed: %s", exc)
+
+    if not has_tool_calls and (dsml_stall or not cleaned_visible.strip()):
         response = _fallback_for_blank_response(
             thread_messages, web_search_enabled=web_on
         )
@@ -1222,12 +1364,18 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                     has_tool_calls = bool(getattr(response, "tool_calls", None))
                 out_messages = [nudge, response]
 
-    # Strip <think> tags from all assistant responses before returning
+    # Strip thinking tags and DSML pseudo-tool markup from assistant responses
     for i, msg in enumerate(out_messages):
         if isinstance(msg, AIMessage) and msg.content:
-            cleaned = _strip_thinking_tags(msg.content)
+            cleaned = _strip_dsml_blocks(_strip_thinking_tags(str(msg.content)))
             if cleaned != msg.content:
-                out_messages[i] = AIMessage(content=cleaned)
+                out_messages[i] = AIMessage(
+                    content=cleaned,
+                    tool_calls=list(getattr(msg, "tool_calls", None) or []),
+                    additional_kwargs=dict(
+                        getattr(msg, "additional_kwargs", None) or {}
+                    ),
+                )
 
     # ── Cutoff detection: auto-continue if LLM hit token budget ────────────
     _cutoff_round = state.get("_cutoff_round", 0)
@@ -1258,6 +1406,9 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             _cutoff_round + 1,
             MAX_CUTOFF_RETRIES,
         )
+        api_tokens = enrich_token_usage_with_breakdown(
+            api_tokens, prompt_messages, max_context=max_context
+        )
         return {
             "messages": out_messages,
             "model_used": model_label,
@@ -1272,6 +1423,9 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             "anonymization_placeholders_count": anonymization_placeholders_count,
         }
 
+    api_tokens = enrich_token_usage_with_breakdown(
+        api_tokens, prompt_messages, max_context=max_context
+    )
     return {
         "messages": out_messages,
         "model_used": model_label,
@@ -1285,6 +1439,25 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         "cloud_brief_tokens_est": cloud_brief_tokens_est,
         "anonymization_placeholders_count": anonymization_placeholders_count,
     }
+
+
+def _extract_tool_output_delta(
+    current_messages: list,
+    output_messages: list,
+) -> list:
+    """
+    Extract new messages from ToolNode output.
+
+    LangGraph >=0.3 ToolNode returns only new ToolMessages, not input+output.
+    Legacy paths returned the full message list; support both shapes.
+    """
+    if not output_messages:
+        return []
+    if all(isinstance(m, ToolMessage) for m in output_messages):
+        return list(output_messages)
+    if len(output_messages) > len(current_messages):
+        return list(output_messages[len(current_messages) :])
+    return list(output_messages)
 
 
 @log_node("tool_action")
@@ -1317,11 +1490,7 @@ async def complex_tool_action_node(state: AgentState) -> AgentState:
     tool_node = ToolNode(tools)
     tool_payload = await tool_node.ainvoke({"messages": current_messages})
     output_messages = tool_payload.get("messages", [])
-
-    if len(output_messages) >= len(current_messages):
-        delta = output_messages[len(current_messages) :]
-    else:
-        delta = output_messages
+    delta = _extract_tool_output_delta(current_messages, output_messages)
 
     # Truncate large tool outputs to stay within context window.
     _MAX_TOOL_OUTPUT_CHARS = int(config.get("tool_output.max_tool_output_chars", 20000))
@@ -1344,8 +1513,21 @@ async def complex_tool_action_node(state: AgentState) -> AgentState:
         truncated_delta.append(msg)
     delta = truncated_delta
 
-    nudge = build_fetch_retry_nudge_messages(delta) if web_on else []
-    ws_nudge = build_web_search_answer_nudge_messages(delta) if web_on else []
+    tool_round = _count_ai_tool_rounds(current_messages)
+    max_web_tool_rounds = int(config.get("complex.max_web_tool_rounds", 3))
+    # On the last tool round, the next complex_llm turn forces synthesis (no tools).
+    # Skip fetch-retry nudges that would push DeepSeek to emit DSML pseudo-calls.
+    skip_pre_synthesis_nudges = web_on and tool_round >= max_web_tool_rounds
+    nudge = (
+        []
+        if skip_pre_synthesis_nudges
+        else (build_fetch_retry_nudge_messages(delta) if web_on else [])
+    )
+    ws_nudge = (
+        []
+        if skip_pre_synthesis_nudges
+        else (build_web_search_answer_nudge_messages(delta) if web_on else [])
+    )
 
     # Nudge the model to retry if a tool call failed with an error
     error_nudge = []

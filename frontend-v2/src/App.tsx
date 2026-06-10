@@ -15,7 +15,11 @@ import {
   type ConversationToolActivity,
 } from './appEventHandlers'
 import { parseHitlPrompt } from './components/HitlPromptCard'
-import { fetchCloudUsage, parseCloudUsagePayload } from './lib/cloudUsage'
+import {
+  fetchCloudUsage,
+  parseCloudUsagePayload,
+  parseContextBreakdown,
+} from './lib/cloudUsage'
 import { toWsFilePayload, type AttachedFile, isWorkspaceRef } from './lib/attachments'
 import type { ChatMessage, ServerEvent } from './types/protocol'
 
@@ -59,6 +63,12 @@ function App() {
   const setModelInfo = useAppStore((s) => s.setModelInfo)
   const setContextCompression = useAppStore((s) => s.setContextCompression)
   const setCloudUsage = useAppStore((s) => s.setCloudUsage)
+  const setContextBreakdown = useAppStore((s) => s.setContextBreakdown)
+  const refreshCloudUsage = useCallback(() => {
+    void fetchCloudUsage().then((usage) => {
+      if (usage) setCloudUsage(usage)
+    })
+  }, [setCloudUsage])
   const setMemoryUpdatedAt = useAppStore((s) => s.setMemoryUpdatedAt)
   const setTtsSpeaking = useAppStore((s) => s.setTtsSpeaking)
   const appendStreamChunk = useAppStore((s) => s.appendStreamChunk)
@@ -374,6 +384,9 @@ function App() {
           }
         } else if (event.type === 'model_info') {
           setModelInfo(event.model as string)
+          const tokenUsage = (event as { token_usage?: Record<string, unknown> }).token_usage
+          const breakdown = parseContextBreakdown(tokenUsage?.context_breakdown)
+          if (breakdown) setContextBreakdown(breakdown)
         } else if (event.type === 'cloud_usage') {
           setCloudUsage(parseCloudUsagePayload(event as unknown as Record<string, unknown>))
         } else if (event.type === 'cloud_budget_warning') {
@@ -405,7 +418,7 @@ function App() {
       disconnect()
       wsClientRef.current = null
     }
-  }, [activeProjectId, addMessage, appendStreamChunk, currentThreadId, executionPolicy, pushToolExecution, setConnection, setLatestToolExecution, setPendingCorrelationId, setMemoryUpdatedAt, setModelInfo, setContextCompression, setCloudUsage, setOperatorNote, setRouterMetadata, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setTtsSpeaking, upsertActionProposal, updateActionProposalStatus, isTauriRuntime, wsBaseUrl])
+  }, [activeProjectId, addMessage, appendStreamChunk, currentThreadId, executionPolicy, pushToolExecution, setConnection, setLatestToolExecution, setPendingCorrelationId, setMemoryUpdatedAt, setModelInfo, setContextCompression, setContextBreakdown, setCloudUsage, setOperatorNote, setRouterMetadata, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setTtsSpeaking, upsertActionProposal, updateActionProposalStatus, isTauriRuntime, wsBaseUrl])
 
   // Listen for Tauri runtime events (TTS state, screen assist, etc.)
   useEffect(() => {
@@ -609,7 +622,8 @@ function App() {
     setCurrentThreadId(next.nextCurrentThreadId)
     setActiveChatId(next.nextCurrentThreadId)
     setOperatorNote(next.operatorNote)
-  }, [activeProjectId, currentThreadId, clearSession])
+    refreshCloudUsage()
+  }, [activeProjectId, currentThreadId, clearSession, refreshCloudUsage])
 
   const handleNewChat = useCallback(() => {
     const newThreadId = makeThreadId()
@@ -619,7 +633,8 @@ function App() {
     setCurrentThreadId(newThreadId)
     setActiveChatId(newThreadId)
     setOperatorNote('New conversation started.')
-  }, [activeProjectId, clearSession])
+    refreshCloudUsage()
+  }, [activeProjectId, clearSession, refreshCloudUsage])
 
   const handleDeleteChat = useCallback(async (chatId: string) => {
     try {
@@ -660,7 +675,8 @@ function App() {
     setCurrentThreadId(chatId)
     setActiveChatId(chatId)
     setOperatorNote(`Switched to chat.`)
-  }, [activeProjectId, activeChatId, clearSession])
+    refreshCloudUsage()
+  }, [activeProjectId, activeChatId, clearSession, refreshCloudUsage])
 
   const handleCreateProject = useCallback(async (projectName: string) => {
     const trimmedName = projectName.trim()

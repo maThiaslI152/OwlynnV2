@@ -49,6 +49,7 @@ Related: [`architecture/overview.md`](architecture/overview.md) (system shape), 
 | `tests/test_complex_node_properties.py` | Complex node behavior |
 | `tests/test_anonymization*.py` | Anonymization leak tests |
 | `tests/test_cloud_*.py` | Cloud payload, circuit breaker, cost |
+| `docs/guides/cloud-multi-turn-context.md` | Multi-turn payload + DeepSeek KV cache behavior |
 
 ## HITL (human-in-the-loop)
 

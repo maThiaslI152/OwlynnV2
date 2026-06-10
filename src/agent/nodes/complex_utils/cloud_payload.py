@@ -347,8 +347,10 @@ def capture_cloud_response(response: Any) -> AIMessage:
 
 def finalize_cloud_visible_content(content: str, reasoning: str | None = None) -> str:
     """Use visible answer text; fall back to reasoning only when content is empty."""
-    text = (content or "").strip()
-    chain = (reasoning or "").strip()
+    from src.agent.nodes.complex_utils.formatter import _strip_dsml_blocks
+
+    text = _strip_dsml_blocks((content or "").strip())
+    chain = _strip_dsml_blocks((reasoning or "").strip())
     if not text and chain:
         return chain
     return text

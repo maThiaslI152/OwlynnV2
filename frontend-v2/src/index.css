@@ -500,6 +500,7 @@ body.tauri-glass .window-drag-strip {
   display: flex;
   gap: 10px;
   align-items: flex-start;
+  min-width: 0;
 }
 
 .message-user {
@@ -536,6 +537,7 @@ body.tauri-glass .window-drag-strip {
   flex-direction: column;
   gap: 4px;
   max-width: 75%;
+  min-width: 0;
 }
 
 .message-user .message-body {
@@ -550,6 +552,8 @@ body.tauri-glass .window-drag-strip {
   word-wrap: break-word;
   overflow-wrap: break-word;
   white-space: normal;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .message-user .message-bubble {
@@ -632,10 +636,20 @@ body.tauri-glass .window-drag-strip {
 
 /* ── Markdown Tables ───────────────────────────────────── */
 
-.msg-table {
+.msg-table-wrap {
   margin: 8px 0;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: var(--radius-sm);
+}
+
+.msg-table {
+  margin: 0;
   border-collapse: collapse;
   width: 100%;
+  min-width: 0;
+  table-layout: fixed;
   font-size: 0.8rem;
   white-space: normal;
 }
@@ -643,9 +657,13 @@ body.tauri-glass .window-drag-strip {
 .msg-table th,
 .msg-table td {
   border: 1px solid var(--border-subtle);
-  padding: 6px 10px;
+  padding: 6px 8px;
   text-align: left;
   white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  hyphens: auto;
+  vertical-align: top;
 }
 
 .msg-table th {
@@ -1074,6 +1092,9 @@ body.tauri-glass .window-drag-strip {
 }
 
 .inspector-header {
+  position: relative;
+  z-index: 30;
+  overflow: visible;
   padding: 14px 14px 10px;
   border-bottom: 1px solid var(--border-subtle);
   display: flex;
@@ -1426,6 +1447,12 @@ body.tauri-glass .window-drag-strip {
   color: var(--text-secondary);
 }
 
+.cloud-usage-chip-wrap {
+  position: relative;
+  display: inline-flex;
+  overflow: visible;
+}
+
 .cloud-usage-chip {
   font-family: var(--font-mono);
   font-size: 0.68rem;
@@ -1434,6 +1461,142 @@ body.tauri-glass .window-drag-strip {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   padding: 2px 6px;
+  cursor: pointer;
+}
+
+.cloud-usage-chip:hover {
+  border-color: var(--accent);
+}
+
+.cloud-usage-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 260px;
+  max-width: 320px;
+  padding: 10px 12px;
+  background: rgba(8, 16, 30, 0.97);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(148, 196, 255, 0.06);
+  font-size: 0.72rem;
+  line-height: 1.45;
+  isolation: isolate;
+  pointer-events: auto;
+}
+
+.cloud-usage-popover-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.cloud-usage-popover-title {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.cloud-usage-popover-cost {
+  font-family: var(--font-mono);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.cloud-usage-popover-meta,
+.cloud-usage-popover-daily,
+.cloud-usage-popover-empty {
+  color: var(--text-muted);
+  margin: 0 0 6px;
+}
+
+.cloud-usage-popover > :last-child {
+  margin-bottom: 0;
+}
+
+.cloud-usage-popover-subtitle {
+  margin: 8px 0 6px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.cloud-usage-popover-headline {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  margin-bottom: 6px;
+}
+
+.cloud-usage-popover-pct {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.cloud-usage-context-bar {
+  display: flex;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--bg-base);
+  border: 1px solid var(--border-subtle);
+  margin-bottom: 8px;
+}
+
+.cloud-usage-context-segment {
+  height: 100%;
+  min-width: 2px;
+}
+
+.cloud-usage-context-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cloud-usage-context-row {
+  display: grid;
+  grid-template-columns: 10px 1fr auto auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.cloud-usage-context-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.cloud-usage-context-label {
+  color: var(--text-secondary);
+}
+
+.cloud-usage-context-value {
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  text-align: right;
+}
+
+.cloud-usage-context-pct {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  min-width: 42px;
+  text-align: right;
 }
 
 /* ── Buttons (right panel) ─────────────────────────────── */
@@ -2060,6 +2223,12 @@ body.tauri-glass .workspace-section,
 body.tauri-glass .inspector-header,
 body.tauri-glass .composer-wrapper {
   background: rgba(13, 28, 49, 0.15);
+}
+
+body.tauri-glass .cloud-usage-popover {
+  background: rgba(6, 12, 24, 0.98);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
 }
 
 /* Slightly brighter glass surface for focused interactive areas */

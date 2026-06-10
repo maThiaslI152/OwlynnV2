@@ -107,10 +107,12 @@ def test_blank_response_fallback_when_web_search_failed():
     assert "verify this online" in fb.content
 
 
-def test_blank_response_fallback_generic_when_no_search_error_context():
+def test_blank_response_fallback_prefers_fetch_excerpts_over_generic_empty():
     msg = _fetch_tool("📄 Content from https://example.com:\n\nGood content")
     fb = _fallback_for_blank_response([msg], web_search_enabled=True)
-    assert "empty response" in fb.content
+    assert "polished summary" in fb.content
+    assert "Good content" in fb.content
+    assert "empty response" not in fb.content
 
 
 def test_blank_response_fallback_generic_no_web_first_turn_style():
