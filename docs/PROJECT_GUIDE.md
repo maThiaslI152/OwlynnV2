@@ -12,6 +12,22 @@ owner: ai-agent
 
 Related: [`architecture/overview.md`](architecture/overview.md) (system shape), [`STATUS.md`](STATUS.md) (bugs/risks), [`ADR.md`](ADR.md) (decisions).
 
+## Root directory (what belongs here)
+
+| Keep at root | Move elsewhere |
+|--------------|----------------|
+| `AGENTS.md`, `README.md`, `LICENSE`, `CONTRIBUTING.md` | — |
+| `start.sh`, `setup.sh`, `docker-compose.yml` | — |
+| `pyproject.toml`, `pytest.ini`, `mypy.ini`, `.ruff.toml`, `requirements-dev.txt`, `uv.lock` | — |
+| `mcp_config.json` (+ `.example`) | — |
+| `src/`, `tests/`, `frontend-v2/`, `docs/`, `scripts/`, `skills/` | — |
+| — | One-off patches → `scripts/archive/` |
+| — | Manual live smokes → `scripts/manual/` |
+| — | Audit exports → `docs/archive/audits/` |
+| — | Eval JSON → `data/` (gitignored) |
+
+Do **not** add new `.py` test or patch scripts at repo root.
+
 ---
 
 ## Routing and model behavior
@@ -169,6 +185,29 @@ START → memory_inject_lite → router → memory_retrieve → auto_summarize? 
 2. Match LM Studio loaded name exactly
 3. Run `pytest tests/test_llm_pool.py -q`
 
+## CI, tests, and evaluation
+
+| Command | Scope |
+|---------|--------|
+| `./scripts/ci.sh --quick` | Ruff, mypy, **919** pytest (excl. network/benchmark), contract tests, **111** vitest — pre-push default |
+| `./scripts/ci.sh` | Above + frontend production build |
+| `./scripts/ci.sh --network` | Live DeepSeek tests (`DEEPSEEK_API_KEY` required) |
+| `./scripts/ci.sh --benchmarks` | Router/complex/memory benchmarks → `tests/benchmarks/benchmark_report.json` |
+| `python scripts/run_local_frontier_eval.py` | 6-turn scored eval — `--profile auto\|local\|cloud`, `--cloud-off` |
+| `python scripts/run_browser_eval.py` | 12-turn conversation eval — needs stack + LM Studio |
+
+**Coverage (unit pytest):** ~57% `src/` (contract-only pass ~22% — subset). **GHA** (`.github/workflows/ci.yml`): Python lint/tests + frontend vitest; Electron build on main push only. Contract/cutover tests are **local-only** per `scripts/ci.sh`.
+
+**Eval artifacts:** `data/frontier_eval_run_data.json`, `data/eval_run_data.json`, report in `docs/evaluations/`. Standard: [`docs/standards/EVALUATION.md`](standards/EVALUATION.md).
+
+### Key test files (post BUG-13..16)
+
+| Area | Tests |
+|------|-------|
+| Web search synthesis | `tests/test_tool_output_delta.py`, `tests/test_dsml_formatter.py`, `tests/test_fetch_retry_nudge.py` |
+| Cloud usage / breakdown | `tests/test_context_breakdown.py`, `tests/test_cloud_*.py` |
+| Cloud chip (frontend) | `frontend-v2/src/components/__tests__/cloud-usage-chip.test.tsx`, `cloud-settings.test.tsx` |
+
 ## Development rules
 
 1. Keep diffs focused to the user request
@@ -176,6 +215,7 @@ START → memory_inject_lite → router → memory_retrieve → auto_summarize? 
 3. When touching routing, add or update targeted tests
 4. Run `./scripts/ci.sh --quick` before push
 5. Update the relevant task doc when API/WS/tool contracts change
+6. After significant eval runs, add `docs/evaluations/<name>-YYYY-MM-DD.md` and index in `docs/INDEX.md`
 
 ## Related
 
@@ -186,4 +226,4 @@ START → memory_inject_lite → router → memory_retrieve → auto_summarize? 
 
 ## Last updated
 
-2026-06-10 — agent-first documentation overhaul
+2026-06-10 — CI/eval map; BUG-13..16 test references

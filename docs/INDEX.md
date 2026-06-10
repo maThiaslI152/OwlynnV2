@@ -540,6 +540,16 @@ manifest:
       category: evaluation
       audience: archive
       last_updated: 2026-06-05
+    - path: docs/evaluations/local-frontier-eval-2026-06-10.md
+      status: superseded
+      category: evaluation
+      audience: agent
+      last_updated: 2026-06-10
+    - path: docs/evaluations/local-frontier-eval-2026-06-10-v2.md
+      status: completed
+      category: evaluation
+      audience: agent
+      last_updated: 2026-06-10
     - path: docs/evaluations/long-conversation-2026-06-04.md
       status: active
       category: reference

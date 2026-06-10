@@ -22,8 +22,13 @@
 | `src/memory/` | STM/LTM/personal memory managers |
 | `src/tools/` | Agent tool implementations |
 | `frontend-v2/` | React + Electron UI |
-| `tests/` | Python unit, property, and contract tests |
+| `tests/` | Python unit, property, contract, and benchmark tests |
 | `scripts/ci.sh` | Local CI (run before push) |
+| `scripts/run_browser_eval.py` | Playwright conversation eval (12 prompts) |
+| `scripts/run_local_frontier_eval.py` | Frontier eval — `--profile auto/local/cloud`, `--cloud-off` |
+| `scripts/archive/` | Retired one-off patch scripts (not CI) |
+| `scripts/manual/` | Live tool smoke scripts (not pytest) |
+| `docs/evaluations/` | Evaluation run reports (write after significant evals) |
 
 ## Task routing
 
@@ -37,6 +42,7 @@
 | Debug a symptom | [`docs/debugging/README.md`](docs/debugging/README.md) | Follow symptom → file table |
 | Change cloud / anonymization | [`docs/CLOUD-LLM-ARCHITECTURE.md`](docs/CLOUD-LLM-ARCHITECTURE.md) | `src/agent/nodes/complex.py`, `src/agent/nodes/complex_utils/` |
 | Run or configure the app | [`docs/guides/dev-startup.md`](docs/guides/dev-startup.md) | `start.sh`, `setup.sh`, `.env` |
+| Run CI / tests / evaluation | [`docs/standards/EVALUATION.md`](docs/standards/EVALUATION.md) | `scripts/ci.sh`, `scripts/run_*_eval.py` |
 
 ## Skip unless asked
 
@@ -59,4 +65,4 @@ Pre-push hook runs this automatically. Skip only when intentional: `git push -o 
 
 ## Last updated
 
-2026-06-10 — agent-first documentation overhaul
+2026-06-10 — CI/eval routing; BUG-13..16 fixes committed

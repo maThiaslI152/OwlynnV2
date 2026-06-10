@@ -43,6 +43,7 @@ Project status tracker. Last updated: 2026-06-10 — MiniCPM5 router, agent-firs
 | v5 (Qwen3.5 initial) | 2.44 | 33% error rate, 9/12 misrouted |
 | v6 (HITL + budgets) | 3.67 | 0 errors, medium model working |
 | v7-final | ~4.0 est. | Bypasses confirmed, preload working |
+| v8 (2026-06-10) | **75.8%** cloud profile | Updated scorer; F1 simple empty reply, F3–F6 DSML/HITL gaps — [`evaluations/local-frontier-eval-2026-06-10-v2.md`](evaluations/local-frontier-eval-2026-06-10-v2.md) |
 
 ## Remaining Tasks
 
@@ -65,7 +66,7 @@ Project status tracker. Last updated: 2026-06-10 — MiniCPM5 router, agent-firs
 
 ```text
 docs/STATUS.md                # This file
-docs/BUG-TRACKER.md           # Canonical bug fix log (BUG-1..11)
+docs/BUG-TRACKER.md           # Canonical bug fix log (BUG-1..16)
 docs/BUG-ANALYSIS.md          # Historical audit symptoms (2026-05-25)
 docs/ADR.md                   # Architecture decisions
 docs/PERFORMANCE_SLOS.md      # Performance targets

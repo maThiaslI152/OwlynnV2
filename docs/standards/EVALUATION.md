@@ -1,54 +1,101 @@
 ---
 status: active
 category: standards
-last_updated: 2026-06-04
+last_updated: 2026-06-10
 owner: ai-agent
+audience: agent
 ---
 
-# Local Frontier Evaluation Standard
+# Evaluation Standard
 
-> **Purpose:** Document the automated evaluation framework used to test the 3-tier local LLM router and deep tool usage constraints on an Apple Silicon M4 environment.
+> **Purpose:** How to run automated browser evaluations against the **current** Owlynn stack (cloud-primary routing, ToolActivityCard UI, BUG-13..16 behavior).
 
-## Overview
+## CI vs evaluation
 
-The `run_local_frontier_eval.py` script replaces manual testing with an automated, browser-based evaluation. The suite is specifically designed to simulate heavy-duty "Frontier" user workloads while adhering to the hardware constraints (24GB RAM, thermal throttling) of a fanless M4 MacBook Air.
+| Layer | Command | Purpose |
+|-------|---------|---------|
+| Pre-push | `./scripts/ci.sh --quick` | 919 pytest + 111 vitest + ruff/mypy (~57% `src/` cov) |
+| Live cloud | `./scripts/ci.sh --network` | DeepSeek E2E, KV cache, chat matrix (`DEEPSEEK_API_KEY`) |
+| Benchmarks | `./scripts/ci.sh --benchmarks` | Router/complex/memory latency → `tests/benchmarks/benchmark_report.json` |
+| **Frontier eval** | `python scripts/run_local_frontier_eval.py` | 6-turn scored routing + tools + response quality |
+| **Conversation eval** | `python scripts/run_browser_eval.py` | 12-prompt multi-topic run (qualitative) |
 
-## Test Topics
+Eval scripts are **not** in the CI gate — they need LM Studio + running stack (+ optional DeepSeek key).
 
-The evaluation script runs 5 core topics to stress-test the local inference architecture:
+## Architecture assumptions (2026-06-10)
 
-1. **Router Precision (Simple):** Verifies the `0.8b` small model correctly intercepts greetings and bypasses the complex tools path.
-2. **Router Precision (Complex):** Verifies requests like code reviews trigger the deterministic bypass to the `9b` medium model.
-3. **Massive Context Ingestion:** Tests the system's ability to read and analyze massive local files without breaching the `16k` context limit.
-4. **Sustained Multi-step Reasoning:** Requires the generation of complex, multi-file code (React + CSS) to test token budget tracking and cutoff continuation.
-5. **Deep Tool Iteration:** Validates that the local model can correctly chain tools (e.g., `web_search` -> `write_workspace_file`) instead of just outputting prose.
-
-## Evaluation Mechanism
-
-Because cloud escalation (DeepSeek API) is often disabled, this evaluation does **not** rely on an LLM-as-a-judge approach. Instead, it relies on strict rule-based grading:
-
-1. **DOM Orchestration Scraping:** Playwright scrapes the `.model-badge`, `.route-badge`, `.orchestration-gauge-value`, and `.tool-name` UI elements during execution.
-2. **Rule-based Assertions:** The script checks the scraped data against expected routing paths and expected tools. For example, if a web search prompt does not invoke `web_search`, the turn fails.
-3. **Turn Grading:** Each turn is graded out of 100 points (50 points for correct route, 50 points for correct tool invocation).
-
-## Hardware Monitoring (TPS)
-
-The script calculates an **Approximate Tokens Per Second (TPS)** value for each interaction.
-- *Calculation:* `(Response Length / 4 chars per token) / Total Duration`
-- *Purpose:* Over the 30+ minute evaluation window, developers must monitor the TPS score. A drastic drop in TPS during later turns indicates severe thermal throttling on the M4 chassis, indicating that the `max_tokens` or `context_window` configurations in `defaults.yaml` may need tightening.
-
-## Running the Evaluation
-
-**Prerequisites:**
-- LM Studio must be running with both the `0.8b` and `9b` models loaded.
-- The FastAPI backend (`python -m src.api.server`) and Vite frontend (`npm run dev`) must be running.
-
-**Execution:**
-```bash
-python3 scripts/run_local_frontier_eval.py
+```text
+router → simple | complex-default (local Qwen) | complex-cloud (DeepSeek)
+complex_llm → tool loops, HITL, web synthesis cap (max_web_tool_rounds: 3)
+UI → ToolActivityCard in chat (not sidebar tool-name badges)
 ```
 
-**Artifacts Produced:**
-- `data/frontier_eval_run_data.json`: Raw telemetry, latency, TPS, and automated grading scores.
-- `assets/frontier_eval_screenshots/`: Step-by-step UI screenshots.
-- **MANDATORY:** After every significant evaluation run, the results must be summarized and permanently recorded as a markdown file in the `docs/evaluations/` directory (e.g., `docs/evaluations/local-frontier-eval-YYYY-MM-DD.md`) and indexed in `docs/INDEX.md`.
+**Profiles:**
+
+| Profile | When | Complex route expected |
+|---------|------|----------------------|
+| `cloud` | `cloud_escalation_enabled` + valid key | `complex-cloud` |
+| `local` | Escalation off or no key | `complex-default` |
+| `auto` | Read from `/api/unified-settings` + `/api/cloud-status` | Resolved at run start |
+
+## Frontier evaluation (`run_local_frontier_eval.py`)
+
+### Topics (6 turns)
+
+1. **F1.1** — Simple greeting → `simple`, local small model, &lt;180s
+2. **F2.1** — Code review → `complex` tier
+3. **F3.1** — Web search + `write_workspace_file` (HITL on write)
+4. **F4.1** — `read_workspace_file` on `docs/STATUS.md`
+5. **F5.1** — Multi-file React + CSS generation
+6. **F6.1** — Memory recall (no tools)
+
+### Scoring (per turn, /100)
+
+| Criterion | Points |
+|-----------|--------|
+| Route match (tier-aware) | 40 (30 if complex but wrong tier) |
+| Non-empty response (min chars) | 20 |
+| Expected tools (ToolActivityCard scrape) | 40 |
+| DSML leak in assistant bubble | −15 |
+
+### Prerequisites
+
+- `./start.sh` (backend `:8000`, frontend `:5173`)
+- LM Studio with models from `defaults.yaml`
+- Playwright: `pip install playwright && playwright install chromium`
+
+### Commands
+
+```bash
+# Production-like (cloud-first):
+python scripts/run_local_frontier_eval.py --profile auto
+
+# Local-only regression (compare to 2026-06-05 baseline):
+python scripts/run_local_frontier_eval.py --cloud-off --profile local
+```
+
+### Artifacts
+
+| Path | Content |
+|------|---------|
+| `data/frontier_eval_run_data.json` | Telemetry, grades, `eval_version`, profile |
+| `assets/frontier_eval_screenshots/` | Per-turn PNGs |
+| `docs/evaluations/local-frontier-eval-YYYY-MM-DD.md` | Human summary (required after significant runs) |
+
+## Conversation evaluation (`run_browser_eval.py`)
+
+12 curated prompts (technical, code review, creative, continuity, web search). Qualitative — no strict route grades. Output: `data/eval_run_data.json`, `assets/eval_screenshots/`.
+
+## Reporting
+
+After each significant frontier run:
+
+1. Write `docs/evaluations/local-frontier-eval-YYYY-MM-DD.md`
+2. Add entry to `docs/INDEX.md`
+3. Note `runtime_profile`, score, and regressions vs prior baseline
+
+## Related
+
+- [`docs/PROJECT_GUIDE.md`](../PROJECT_GUIDE.md) — CI table + root layout
+- [`docs/BUG-TRACKER.md`](../BUG-TRACKER.md) — BUG-13..16
+- [`local-frontier-eval-2026-06-05.md`](../evaluations/local-frontier-eval-2026-06-05.md) — 600/600 local baseline

@@ -12,10 +12,11 @@ import httpx
 from pathlib import Path
 from playwright.async_api import async_playwright
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
 BASE_URL = "http://127.0.0.1:5173"
 API_URL = "http://127.0.0.1:8000"
-SCREENSHOT_DIR = Path("/Users/tim/Works/OwlynnV2/assets/eval_screenshots")
-OUTPUT_DATA_FILE = Path("/Users/tim/Works/OwlynnV2/data/eval_run_data.json")
+SCREENSHOT_DIR = REPO_ROOT / "assets" / "eval_screenshots"
+OUTPUT_DATA_FILE = REPO_ROOT / "data" / "eval_run_data.json"
 
 # 5 Curated topics with exact user prompts
 TEST_PROMPTS = [
@@ -408,7 +409,7 @@ async def main():
                 ("interests.json", "json_interests"),
                 ("conversations.json", "json_conversations"),
             ]:
-                filepath = Path("/Users/tim/Works/OwlynnV2/data") / filename
+                filepath = REPO_ROOT / "data" / filename
                 if filepath.exists():
                     try:
                         with open(filepath, "r") as f:
