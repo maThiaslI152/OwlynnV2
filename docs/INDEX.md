@@ -1,7 +1,7 @@
 ---
 status: active
 category: reference
-last_updated: 2026-06-10
+last_updated: 2026-06-11
 owner: ai-agent
 audience: agent
 ---
@@ -13,7 +13,7 @@ audience: agent
 ```yaml
 manifest:
   version: 7
-  generated: "2026-06-10T23:06:00Z"
+  generated: "2026-06-11T00:43:00Z"
   files:
     - path: AGENTS.md
       status: active
@@ -94,7 +94,7 @@ manifest:
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-06-10
+      last_updated: 2026-06-11
     - path: docs/MEMORY.md
       status: active
       category: architecture
@@ -144,7 +144,7 @@ manifest:
       status: active
       category: architecture
       audience: agent
-      last_updated: 2026-05-31
+      last_updated: 2026-06-11
     - path: docs/architecture/DEEPSEEK_V4_INTEGRATION.md
       status: active
       category: architecture
@@ -320,6 +320,11 @@ manifest:
       category: reference
       audience: archive
       last_updated: 2026-06-10
+    - path: docs/changes/browser-extension-search-bridge/CHANGELOG.md
+      status: active
+      category: changelog
+      audience: agent
+      last_updated: 2026-06-11
     - path: docs/changes/browser-only-startup/CHANGELOG.md
       status: active
       category: reference
@@ -725,4 +730,4 @@ manifest:
 
 ## Last updated
 
-2026-06-10 — manifest v7; added COMPLETENESS_REVIEW.md
+2026-06-11 — manifest v7; updated WEB_SEARCH.md for Chrome Search Bridge

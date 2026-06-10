@@ -748,6 +748,51 @@ async def web_search(
         aggregate_timeout = float(config.get("web_search.timeouts.aggregate", 60.0))
 
         async def _search_pipeline():
+            # Browser extension path (Tier 0.2)
+            from src.api.routes.browser_extension import (
+                is_extension_connected,
+                dispatch_extension_search,
+            )
+
+            if is_extension_connected():
+                try:
+                    if backend == "bing":
+                        target_url = (
+                            f"https://www.bing.com/search?q={quote_plus(query)}"
+                        )
+                    elif backend in {"duckduckgo", "wikipedia"}:
+                        target_url = (
+                            f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
+                        )
+                    else:
+                        target_url = (
+                            f"https://www.google.com/search?q={quote_plus(query)}"
+                        )
+
+                    ext_hits = await dispatch_extension_search(target_url)
+                    if ext_hits:
+                        ext_hits = await _maybe_rerank_search_hits(
+                            focus_query, ext_hits
+                        )
+                        attempts.append(
+                            SearchAttempt("tier0.2", "browser_extension", "ok")
+                        )
+                        return _format_search_hits_markdown(
+                            query, backend, news, ext_hits, "via Browser Extension"
+                        )
+                    attempts.append(
+                        SearchAttempt(
+                            "tier0.2", "browser_extension", "empty", "No hits returned"
+                        )
+                    )
+                except Exception as e:
+                    logger.warning("Browser extension search failed: %s", e)
+                    attempts.append(
+                        SearchAttempt(
+                            "tier0.2", "browser_extension", "error", str(e)[:120]
+                        )
+                    )
+
             # Explicit backend handling
             if backend == "google":
                 return await _google_search_playwright(query, focus_query)

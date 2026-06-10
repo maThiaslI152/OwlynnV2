@@ -127,7 +127,12 @@ if [ -d "frontend-v2" ]; then
     echo "   API:     http://127.0.0.1:8000"
     echo "   Press Ctrl+C to stop."
     echo ""
-    open http://127.0.0.1:5173 2>/dev/null || true
+    if [ -d "/Applications/Brave Browser.app" ]; then
+        echo "      Opening Brave Browser with search extension loaded..."
+        open -a "Brave Browser" "http://127.0.0.1:5173" --args --load-extension="$(pwd)/browser-extension" 2>/dev/null || open http://127.0.0.1:5173 2>/dev/null || true
+    else
+        open http://127.0.0.1:5173 2>/dev/null || true
+    fi
 else
     echo "      Frontend not found. API at http://127.0.0.1:8000"
     echo "      Press Ctrl+C to stop."

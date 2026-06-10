@@ -6,7 +6,15 @@ with the LangGraph agent, managing user profiles, and serving the frontend.
 It supports streaming responses and handling multimodal file uploads.
 """
 
-from src.api.routes import profile, settings, memory, project, files, openai
+from src.api.routes import (
+    profile,
+    settings,
+    memory,
+    project,
+    files,
+    openai,
+    browser_extension,
+)
 from src.api.ws import handler as ws_handler
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -200,6 +208,7 @@ app.include_router(memory.router)
 app.include_router(project.router)
 app.include_router(files.router)
 app.include_router(openai.router)
+app.include_router(browser_extension.router)
 app.include_router(ws_handler.router)
 
 app.add_middleware(

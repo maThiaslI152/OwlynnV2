@@ -29,17 +29,19 @@ docker-compose.yml                  # SearXNG container (port 8888)
 ```
 User query
     │
-    ├─ Tier 0:  wttr.in (weather only) ─── fast path for weather queries
+    ├─ Tier 0:   wttr.in (weather only) ─── fast path for weather queries
     │
-    ├─ Tier 0.5: SearXNG ───────────────── self-hosted metasearch aggregator
+    ├─ Tier 0.2: Chrome Search Bridge ───── delegator to user's active Brave session (no bot checks)
     │
-    ├─ Tier 1:  curl_cffi ──────────────── browser-like TLS fingerprint (Chrome 120)
+    ├─ Tier 0.5: SearXNG ────────────────── self-hosted metasearch aggregator
     │
-    ├─ Tier 2:  DDGS ───────────────────── DuckDuckGo SDK wrapper
+    ├─ Tier 1:   curl_cffi ───────────────── browser-like TLS fingerprint (Chrome 120)
     │
-    ├─ Tier 2C: httpx (DDG HTML → Bing → DDG Lite) ─ direct HTTP parsers
+    ├─ Tier 2:   DDGS ────────────────────── DuckDuckGo SDK wrapper
     │
-    └─ Tier 3:  Playwright ─────────────── headless Chromium, JavaScript rendered
+    ├─ Tier 2C:  httpx (DDG HTML → Bing → DDG Lite) ─ direct HTTP parsers
+    │
+    └─ Tier 3:   Playwright ──────────────── headless Chromium, JavaScript rendered
 ```
 
 ## API
@@ -50,6 +52,13 @@ User query
 - Behavior: Extracts location via regex, calls `https://wttr.in/{location}?format=j1`, returns structured weather data (temp, feels-like, humidity, description)
 - Requirements: None — free API, no key
 - Tier tag: `tier0 / wttr`
+
+### Tier 0.2: Chrome Search Bridge Extension
+
+- Trigger: An active extension client is connected to `ws://localhost:8000/api/browser_extension/ws`
+- Behavior: Server forwards search query to user's open Brave/Chrome instance via WebSockets. The extension opens a background tab, triggers Google/Bing/DDG, scrapes DOM elements (prioritizing premium **Google AI Overviews (SGE)**, **Merlin AI sidebars**, and **Brave Leo** summaries), and returns them.
+- Requirements: Unpacked extension loaded in developer mode.
+- Tier tag: `tier0.2 / browser_extension`
 
 ### Tier 0.5: SearXNG
 
@@ -167,6 +176,7 @@ Pipeline:
 | `WEB_RAG_CHUNK_OVERLAP` | `WEB_RAG_CHUNK_OVERLAP` | `120` | Overlap between chunks |
 | `WEB_RAG_MIN_CHARS_FOR_RANK` | `WEB_RAG_MIN_CHARS_FOR_RANK` | `1800` | Min text length for ranking |
 | `WEB_SEARCH_RERANK_TOP_N` | `WEB_SEARCH_RERANK_TOP_N` | `8` | Search hits kept after reranking |
+| `web_search.timeouts.extension` | - | `15.0` | Browser extension search timeout |
 
 If LM Studio unreachable or embed model not loaded, reranking silently falls back to original result order.
 
@@ -176,6 +186,7 @@ If LM Studio unreachable or embed model not loaded, reranking silently falls bac
 |---------|--------|------|---------|
 | LM Studio (local) | `http://127.0.0.1:1234` | 1234 | LLM inference + embeddings |
 | SearXNG (Docker) | `SEARXNG_URL=http://localhost:8888` | 8888 | Self-hosted metasearch |
+| Browser Extension | `ws://localhost:8000/api/browser_extension/ws` | 8000 | Non-headless search gateway |
 
 ### Removed Providers (April 2026)
 
@@ -201,4 +212,4 @@ If web search runs but the UI never gets a written answer (tool loop, DSML marku
 
 ## Last updated
 
-2026-06-10 — web-search-synthesis-fix troubleshooting link
+2026-06-11 — added Tier 0.2 Chrome Search Bridge extension details

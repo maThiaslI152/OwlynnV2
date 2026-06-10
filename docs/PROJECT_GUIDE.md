@@ -2,7 +2,7 @@
 status: active
 category: reference
 audience: agent
-last_updated: 2026-06-10
+last_updated: 2026-06-11
 owner: ai-agent
 ---
 
@@ -20,7 +20,7 @@ Related: [`architecture/overview.md`](architecture/overview.md) (system shape), 
 | `start.sh`, `setup.sh`, `docker-compose.yml` | — |
 | `pyproject.toml`, `pytest.ini`, `mypy.ini`, `.ruff.toml`, `requirements-dev.txt`, `uv.lock` | — |
 | `mcp_config.json` (+ `.example`) | — |
-| `src/`, `tests/`, `frontend-v2/`, `docs/`, `scripts/`, `skills/` | — |
+| `src/`, `tests/`, `frontend-v2/`, `docs/`, `scripts/`, `skills/`, `browser-extension/` | — |
 | — | One-off patches → `scripts/archive/` |
 | — | Manual live smokes → `scripts/manual/` |
 | — | Audit exports → `docs/archive/audits/` |

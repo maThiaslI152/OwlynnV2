@@ -242,6 +242,7 @@ web_search:
     bing: 15.0
     ddg: 15.0
     cloud_connectivity_check: 15.0
+    extension: 15.0
     aggregate: 60.0                        # Total web_search pipeline cap
 
   # User-Agent strings

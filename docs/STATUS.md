@@ -12,12 +12,13 @@ audience: agent
 
 ## Overview
 
-Project status tracker. Last updated: 2026-06-11 — frontier eval harness fixes, Florence vision hardening, background memory extraction.
+Project status tracker. Last updated: 2026-06-11 — Chrome search bridge extension, frontier eval harness fixes, Florence vision hardening, background memory extraction.
 
 ## Recent Changes (2026-06-11)
 
 | Change | Impact | Doc |
 |--------|--------|-----|
+| **Chrome Search Bridge** | Browser extension search routing via Brave to bypass bot detection/CAPTCHAs | [`changes/browser-extension-search-bridge/CHANGELOG.md`](changes/browser-extension-search-bridge/CHANGELOG.md) |
 | **Frontier eval harness** | WS tool merge, idle stall exit, F4 fixture, M4 greeting gate, F8/F9 fixes; 82% → **~94%** | [`changes/frontier-eval-memory-session/CHANGELOG.md`](changes/frontier-eval-memory-session/CHANGELOG.md) |
 | **Scoring-only cloud strict** | Qwen fallback on cloud-intended turns caps grade at 49 (no runtime block) | `scripts/run_local_frontier_eval.py` |
 | **Florence vision hardening** | LM Studio auto-load, no Qwen OCR fallback, preflight + telemetry | `lm_studio_florence.py`, `vision_model_manager.py` |

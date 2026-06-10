@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "Owlynn Search Bridge",
+  "version": "1.0.0",
+  "description": "Bridges local Owlynn agent searches with your real browser session, bypassing CAPTCHAs.",
+  "permissions": ["tabs", "scripting"],
+  "host_permissions": [
+    "*://www.google.com/*",
+    "*://www.bing.com/*",
+    "*://duckduckgo.com/*",
+    "*://html.duckduckgo.com/*",
+    "*://lite.duckduckgo.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://www.google.com/*"],
+      "js": ["content_google.js"],
+      "run_at": "document_end"
+    },
+    {
+      "matches": ["*://www.bing.com/*"],
+      "js": ["content_bing.js"],
+      "run_at": "document_end"
+    },
+    {
+      "matches": [
+        "*://duckduckgo.com/*",
+        "*://html.duckduckgo.com/*",
+        "*://lite.duckduckgo.com/*"
+      ],
+      "js": ["content_ddg.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "action": {}
+}
