@@ -1,7 +1,7 @@
 ---
 status: active
 category: standards
-last_updated: 2026-06-10
+last_updated: 2026-06-11
 owner: ai-agent
 audience: agent
 ---
@@ -12,7 +12,16 @@ audience: agent
 
 ## Overview
 
-Project status tracker. Last updated: 2026-06-10 — MiniCPM5 router, agent-first docs, Electron frontend.
+Project status tracker. Last updated: 2026-06-11 — frontier eval harness fixes, Florence vision hardening, background memory extraction.
+
+## Recent Changes (2026-06-11)
+
+| Change | Impact | Doc |
+|--------|--------|-----|
+| **Frontier eval harness** | WS tool merge, idle stall exit, F4 fixture, M4 greeting gate, F8/F9 fixes; 82% → **~94%** | [`changes/frontier-eval-memory-session/CHANGELOG.md`](changes/frontier-eval-memory-session/CHANGELOG.md) |
+| **Scoring-only cloud strict** | Qwen fallback on cloud-intended turns caps grade at 49 (no runtime block) | `scripts/run_local_frontier_eval.py` |
+| **Florence vision hardening** | LM Studio auto-load, no Qwen OCR fallback, preflight + telemetry | `lm_studio_florence.py`, `vision_model_manager.py` |
+| **Background memory extraction** | Qwen extraction defers until chat idle + lower CPU nice | `local_llm_scheduler.py` |
 
 ## Recent Changes (2026-06-04)
 
@@ -43,7 +52,11 @@ Project status tracker. Last updated: 2026-06-10 — MiniCPM5 router, agent-firs
 | v5 (Qwen3.5 initial) | 2.44 | 33% error rate, 9/12 misrouted |
 | v6 (HITL + budgets) | 3.67 | 0 errors, medium model working |
 | v7-final | ~4.0 est. | Bypasses confirmed, preload working |
-| v8 (2026-06-10) | **75.8%** cloud profile | Updated scorer; F1 simple empty reply, F3–F6 DSML/HITL gaps — [`evaluations/local-frontier-eval-2026-06-10-v2.md`](evaluations/local-frontier-eval-2026-06-10-v2.md) |
+| v8 (2026-06-10) | 75.8% cloud (6 turns) | F1 empty reply, F3–F6 DSML/HITL — [`evaluations/local-frontier-eval-2026-06-10-v2.md`](evaluations/local-frontier-eval-2026-06-10-v2.md) (superseded) |
+| v9 (2026-06-11) | 82.4% mechanical (19 turns) | Pre-fix pipeline — [`evaluations/local-frontier-eval-2026-06-11.md`](evaluations/local-frontier-eval-2026-06-11.md) |
+| v9b (2026-06-11) | **94.2%** post-fix (1790/1900) | WS waiter, F4 fixture, M4/F8/F9 fixes |
+| v9c (2026-06-11) | **94.0%** post-fix (1785/1900) | Latest artifact; F9 Florence variance |
+| v10 (2026-06-11) | **Quality A/B** vs raw DeepSeek | Owlynn vs frontier chat + blind pro judge — [`evaluations/frontier-comparison-2026-06-11.md`](evaluations/frontier-comparison-2026-06-11.md) |
 
 ## Remaining Tasks
 
@@ -53,6 +66,7 @@ Project status tracker. Last updated: 2026-06-10 — MiniCPM5 router, agent-firs
 - **R2**: Inference latency — 105-276s vs SLO <8s (✅ Fixed via context optimization for M4 Air)
 
 ### 🟡 Medium Impact
+- **R10**: Frontier eval ≥97% — at **~94%** after harness fixes; F1/F6/F9 variance remains
 - **R3**: Cloud E2E with valid DeepSeek key (✅ `tests/test_cloud_e2e_network.py`, live `./scripts/ci.sh --network`, 2026-06-10)
 - **R7**: Web search aggregate timeout (✅ `tests/test_web_search_aggregate_timeout.py`)
 - **R9**: API thread_id in OpenAI compat config (✅ `tests/test_openai_thread_persistence.py`)

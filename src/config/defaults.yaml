@@ -107,9 +107,11 @@ models:
   vision_proxy:
     base_url: "http://127.0.0.1:1234/v1"
     model_name: "florence-2-base-nsfw-v2-ext-mlx"
+    # Native LM Studio catalog key (defaults to model_name). Must match My Models entry.
+    lm_studio_model_key: "florence-2-base-nsfw-v2-ext-mlx"
     temperature: 0.0
-    max_tokens: 2048
-    max_output_tokens: 2048
+    max_tokens: 512                       # OCR-only: short task output
+    max_output_tokens: 512
     timeout: 120
     request_timeout: 120
     context_window: 4096
@@ -196,6 +198,12 @@ memory:
   extraction:
     temperature: 0.1
     max_tokens: 1024
+    # Background Qwen extraction — defer until agent idle (no GPU throttle in LM Studio API)
+    idle_cooldown_seconds: 8               # Wait after turn before starting extraction
+    idle_poll_seconds: 2                   # Poll interval while waiting for idle window
+    max_idle_wait_seconds: 600             # Run anyway after 10m (avoid stuck queue)
+    defer_while_graph_active: true         # Skip extraction during active chat turns
+    process_nice: 10                       # Lower CPU priority during extraction (Unix)
 
   cloud_inject_max_chars: 800
 
@@ -280,10 +288,13 @@ cloud:
   tool_loop_force_thinking: true
   vision_transcription_cache_ttl: 3600
   vision_idle_unload_seconds: 300            # Drop lazy VLM client after idle
-  vision_max_tokens: 2048
+  vision_max_tokens: 512                     # Florence OCR-only cap (not chat)
   vision_temperature: 0.0                      # Florence OCR: deterministic
-  vision_prompt_mode: florence                 # florence | json_chat (legacy Qwen JSON)
-  vision_florence_task: "<OCR_WITH_REGION>"
+  vision_prompt_mode: florence                 # florence | json_chat (legacy Qwen — do not use)
+  vision_lm_studio_auto_load: true             # Load Florence via native API before OCR
+  vision_lm_studio_load_timeout: 120
+  vision_florence_task: "<OCR>"                # Single-line OCR; layout uses OCR_WITH_REGION retry
+  vision_florence_region_task: "<OCR_WITH_REGION>"
   vision_florence_caption_task: "<DETAILED_CAPTION>"
   circuit_breaker:
     failure_threshold: 3

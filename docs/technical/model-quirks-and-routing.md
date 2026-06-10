@@ -61,4 +61,33 @@ Non-M4 timeout/token overrides live under `models.standard` in `defaults.yaml` (
 
 Legacy routes `complex-vision` and `complex-longctx` were removed (2026-06). Cloud path details: [`DEEPSEEK_V4_INTEGRATION.md`](../architecture/DEEPSEEK_V4_INTEGRATION.md).
 
-**Last updated:** 2026-06-07
+---
+
+## 5. Vision proxy: Florence-2 (`florence-2-base-nsfw-v2-ext-mlx`)
+
+Florence is **OCR-only** for the cloud path. It never answers the user — DeepSeek synthesizes from Florence’s text block.
+
+### Role split (do not conflate with Qwen)
+
+| Layer | Model | Job |
+|-------|--------|-----|
+| `vision_proxy` | **Florence-2** on LM Studio | Task-token OCR (`<OCR>`, `<OCR_WITH_REGION>`) |
+| `complex-cloud` badge | **DeepSeek V4** | Final answer from transcribed text |
+| `complex-default` fallback | **Qwen 9B + mmproj** | Only when Florence proxy **fails** — not the designed path |
+
+Config: `models.vision_proxy.model_name`, `cloud.vision_prompt_mode: florence` (never `json_chat` in production).
+
+### Florence / LM Studio quirks
+
+1. **Prompt = task token only** — First user content must be `<OCR>` or `<OCR_WITH_REGION>`, not chat instructions. Chat templates that expect dialogue break OCR.
+2. **Greedy, short output** — `temperature: 0`, `top_p: 1`, `vision_max_tokens: 512`. Long generations are wasted on OCR and invite hallucination.
+3. **One loaded weights set** — LM Studio serves whatever is loaded. If Qwen is active, Florence API calls fail or return garbage. `ensure_florence_loaded()` uses the native `/api/v1/models/load` API before OCR when `cloud.vision_lm_studio_auto_load: true`.
+4. **Output shapes vary** — Plain text, Python dict literals, or `<OCR_WITH_REGION>` region maps. Parser: `vision_florence.py`; retry ladder: primary `<OCR>` → `<OCR_WITH_REGION>` → `<OCR>`.
+5. **Lazy load** — Florence is not startup-preloaded (router + embed are). First image triggers load; client unloads after `vision_idle_unload_seconds` (300s).
+6. **No image to cloud** — DeepSeek is text-only; images are stripped after proxy. Eval badge `large-cloud` does not prove Florence ran — check `vision_proxy_model` / OCR marker.
+
+### Telemetry (eval + WS)
+
+`model_info` events include `vision_intake_mode` (`proxy` | `fallback`) and `vision_proxy_model` when Florence succeeded.
+
+**Last updated:** 2026-06-10

@@ -2,42 +2,61 @@
 """
 Playwright frontier evaluation for Owlynn V2.
 
-Scores routing + tool usage against the **current** architecture:
-- Routes: `simple` | `complex-default` (local Qwen) | `complex-cloud` (DeepSeek)
-- Tools: inline `ToolActivityCard` (`.tool-activity-name code`), not legacy `.tool-name`
-- Cloud escalation ON (default) → complex tasks expect `complex-cloud`
+Scores routing, tools, memory, vision, file watcher, and format ingestion against
+the current cloud-primary LangGraph pipeline.
 
 Usage:
   python scripts/run_local_frontier_eval.py              # auto-detect settings
-  python scripts/run_local_frontier_eval.py --profile local   # force local complex route
-  python scripts/run_local_frontier_eval.py --profile cloud   # force cloud complex route
-  python scripts/run_local_frontier_eval.py --cloud-off       # disable escalation for run
+  python scripts/run_local_frontier_eval.py --profile local
+  python scripts/run_local_frontier_eval.py --profile cloud
+  python scripts/run_local_frontier_eval.py --cloud-off
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import base64
 import json
+import mimetypes
 import time
 import uuid
 from pathlib import Path
+from typing import Any
 
 import httpx
-from playwright.async_api import async_playwright
+from playwright.async_api import Page, async_playwright
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BASE_URL = "http://127.0.0.1:5173"
 API_URL = "http://127.0.0.1:8000"
+FIXTURE_DIR = REPO_ROOT / "assets" / "eval_fixtures"
 SCREENSHOT_DIR = REPO_ROOT / "assets" / "frontier_eval_screenshots"
 OUTPUT_DATA_FILE = REPO_ROOT / "data" / "frontier_eval_run_data.json"
+WORKSPACE_DIR = REPO_ROOT / "workspace"
 
 COMPLEX_ROUTES = frozenset({"complex-default", "complex-cloud"})
+VISION_ROUTES = frozenset({"vision", "vision_cloud"})
+# Cloud-intended complex turns that end on local Qwen are scored as failed (runtime may still fall back).
+CLOUD_QWEN_FALLBACK_BADGES = frozenset(
+    {"medium-default-fallback", "medium-default-synthesis"}
+)
 SIMPLE_TIMEOUT_S = 180
 COMPLEX_TIMEOUT_S = 900
+# Idle polls (2s each) before accepting turn when expected tools never arrive.
+IDLE_TOOL_STALL_POLLS = 8
 
-# expected_route: simple | complex (either tier) | complex-default | complex-cloud
-TEST_PROMPTS = [
+CODEWORD = "ZEBRA-42"
+MARKERS = {
+    "csv": "EVAL_CSV_MARKER_42",
+    "docx": "EVAL_DOCX_MARKER_99",
+    "xlsx": "EVAL_XLSX_CELL_7",
+    "pdf": "EVAL_PDF_MARKER_55",
+    "ocr": "EVAL_OCR_MARKER",
+}
+
+# expected_route: simple | complex | complex-default | complex-cloud | vision
+TEST_PROMPTS: list[dict[str, Any]] = [
     {
         "id": "F1.1",
         "topic": "Router Precision (Simple)",
@@ -45,6 +64,7 @@ TEST_PROMPTS = [
         "expected_route": "simple",
         "timeout_s": SIMPLE_TIMEOUT_S,
         "min_response_chars": 8,
+        "pipeline_notes": "keyword_bypass → simple → memory_write",
     },
     {
         "id": "F2.1",
@@ -53,6 +73,7 @@ TEST_PROMPTS = [
         "expected_route": "complex",
         "timeout_s": COMPLEX_TIMEOUT_S,
         "min_response_chars": 40,
+        "pipeline_notes": "code-review bypass → complex_llm",
     },
     {
         "id": "F3.1",
@@ -65,18 +86,24 @@ TEST_PROMPTS = [
         "expected_tools": ["web_search", "write_workspace_file"],
         "timeout_s": COMPLEX_TIMEOUT_S,
         "min_response_chars": 80,
+        "pipeline_notes": "web_search→fetch→HITL write→memory_write",
     },
     {
         "id": "F4.1",
         "topic": "Massive Context Ingestion",
+        "new_chat_before": True,
         "prompt": (
             "Read the file `docs/STATUS.md` from the workspace. "
             "What are the 'Architectural Concerns' listed there?"
         ),
         "expected_route": "complex",
         "expected_tools": ["read_workspace_file"],
+        "workspace_seed": "docs/STATUS.md",
+        "workspace_seed_from_fixture": "status_eval.md",
+        "expected_marker": "Screen Assist",
         "timeout_s": COMPLEX_TIMEOUT_S,
         "min_response_chars": 40,
+        "pipeline_notes": "read_workspace_file → synthesis",
     },
     {
         "id": "F5.1",
@@ -89,34 +116,382 @@ TEST_PROMPTS = [
         "expected_route": "complex",
         "timeout_s": COMPLEX_TIMEOUT_S,
         "min_response_chars": 200,
+        "pipeline_notes": "complex_llm codegen (may hit scope_clarify)",
     },
     {
         "id": "F6.1",
-        "topic": "Memory Retention",
+        "topic": "Memory Retention (conversation)",
         "prompt": (
             "Without searching the web again, what city's weather did we look up earlier in this "
             "conversation, and what was the exact file name we saved it to?"
         ),
         "expected_route": "complex",
         "expected_tools": [],
+        "expected_marker": "tokyo",
         "timeout_s": COMPLEX_TIMEOUT_S,
         "min_response_chars": 20,
+        "pipeline_notes": "STM via message history — no tools",
+    },
+    {
+        "id": "F7.1",
+        "topic": "Frontier Quality (flash tier)",
+        "prompt": (
+            "Give a rigorous formal proof sketch showing how to optimize this sorting algorithm "
+            "to best-possible time complexity. Use frontier-quality reasoning."
+        ),
+        "expected_route": "complex",
+        "expected_tier": "flash",
+        "timeout_s": COMPLEX_TIMEOUT_S,
+        "min_response_chars": 120,
+        "pipeline_notes": "frontier hint → complex-cloud; tier stays flash (profile default)",
+    },
+    {
+        "id": "F7.2",
+        "topic": "Frontier Pro tier path",
+        "prompt": "Summarize the key steps of your previous proof sketch in three bullet points.",
+        "expected_route": "complex",
+        "expected_tier": "pro",
+        "set_tier_before": "pro",
+        "restore_tier_after": "flash",
+        "timeout_s": COMPLEX_TIMEOUT_S,
+        "min_response_chars": 40,
+        "pipeline_notes": "cloud_model_tier=pro → deepseek-v4-pro",
+    },
+    {
+        "id": "F8.1",
+        "topic": "Router LLM Classifier",
+        "new_chat_before": True,
+        "prompt": (
+            "Over a long career, is breadth or depth usually more valuable? "
+            "Argue both sides in detail."
+        ),
+        "expected_route": "complex",
+        # Any non-bypass source proves the MiniCPM5 classifier actually ran.
+        "expected_source": ["llm_classifier", "question_heuristic_override"],
+        "timeout_s": COMPLEX_TIMEOUT_S,
+        "min_response_chars": 60,
+        "pipeline_notes": "open-ended reasoning → MiniCPM5 classifier (no keyword bypass)",
+    },
+    {
+        "id": "F9.1",
+        "topic": "Vision Proxy (OCR)",
+        "prompt": "What exact text do you see in this image? Reply with the full string only.",
+        # Router routes images to complex-(cloud|default) with task_category vision*.
+        "expected_route": "complex",
+        "expected_vision": True,
+        "attach_file": "ocr_sample.png",
+        "expected_marker": MARKERS["ocr"],
+        "skip_if": "vision_unavailable",
+        "timeout_s": COMPLEX_TIMEOUT_S,
+        "min_response_chars": 8,
+        "pipeline_notes": "image → complex route + vision task_category → Florence OCR → DeepSeek",
+    },
+    {
+        "id": "M1.1",
+        "topic": "Memory Session Seed",
+        "new_chat_before": True,
+        "prompt": (
+            f"My project codeword is {CODEWORD} and we use FastAPI for the backend API layer."
+        ),
+        "expected_route": "complex",
+        "expected_ws_events": ["memory_updated"],
+        "timeout_s": COMPLEX_TIMEOUT_S,
+        "min_response_chars": 20,
+        "pipeline_notes": "memory_write → personal JSON + LTM queue",
+    },
+    {
+        "id": "M1.2",
+        "topic": "Memory Session Recall",
+        "prompt": "What was my project codeword?",
+        "expected_route": "complex",
+        "expected_marker": CODEWORD,
+        "expected_tools": [],
+        "timeout_s": COMPLEX_TIMEOUT_S,
+        "min_response_chars": 5,
+        "pipeline_notes": "same thread recall via messages + personal inject",
+    },
+    {
+        "id": "M2.1",
+        "topic": "LTM Cross-Thread Recall",
+        "prompt": "What project codeword did I mention in an earlier conversation?",
+        "expected_route": "complex",
+        "expected_marker": CODEWORD,
+        "new_chat_before": True,
+        "skip_if": "mem0_unavailable",
+        "timeout_s": COMPLEX_TIMEOUT_S,
+        "min_response_chars": 5,
+        "pipeline_notes": "new thread → memory_retrieve → Mem0/Qdrant",
+    },
+    {
+        "id": "M4.1",
+        "topic": "Memory Retrieval Gate (negative)",
+        "prompt": "Hi there!",
+        "expected_route": "simple",
+        "forbid_ws_events": ["memory_updated"],
+        "timeout_s": SIMPLE_TIMEOUT_S,
+        "min_response_chars": 3,
+        "pipeline_notes": "simple route → needs_memory_retrieval=false",
+    },
+    {
+        "id": "W1.1",
+        "topic": "File Watcher",
+        "prompt": "Read the file eval_watch.txt from my workspace and summarize it in one sentence.",
+        "expected_route": "complex",
+        "expected_tools": ["read_workspace_file"],
+        "workspace_seed": "eval_watch.txt",
+        "workspace_seed_content": "EVAL_WATCH_MARKER: autonomous file watcher smoke test.",
+        "check_processed": "eval_watch.txt",
+        "expected_ws_events": ["file_status"],
+        "timeout_s": COMPLEX_TIMEOUT_S,
+        "min_response_chars": 20,
+        "pipeline_notes": "disk write → watcher → .processed → read_workspace_file",
+    },
+    {
+        "id": "FF1.1",
+        "topic": "Format PDF",
+        "prompt": "What marker string appears in the attached PDF? Reply with just that string.",
+        "expected_route": "complex",
+        "attach_file": "sample.pdf",
+        "expected_marker": MARKERS["pdf"],
+        "check_processed": "sample.pdf",
+        "timeout_s": COMPLEX_TIMEOUT_S,
+        "min_response_chars": 5,
+        "pipeline_notes": "upload → PyMuPDF/Docling → agent read",
+    },
+    {
+        "id": "FF2.1",
+        "topic": "Format DOCX",
+        "prompt": "What marker string appears in the attached Word document?",
+        "expected_route": "complex",
+        "attach_file": "sample.docx",
+        "expected_marker": MARKERS["docx"],
+        "check_processed": "sample.docx",
+        "timeout_s": COMPLEX_TIMEOUT_S,
+        "min_response_chars": 5,
+        "pipeline_notes": "upload → python-docx → agent read",
+    },
+    {
+        "id": "FF3.1",
+        "topic": "Format XLSX",
+        "prompt": "What value is in col_a of the attached spreadsheet?",
+        "expected_route": "complex",
+        "attach_file": "sample.xlsx",
+        "expected_marker": MARKERS["xlsx"],
+        "check_processed": "sample.xlsx",
+        "timeout_s": COMPLEX_TIMEOUT_S,
+        "min_response_chars": 5,
+        "pipeline_notes": "upload → pandas markdown → agent read",
+    },
+    {
+        "id": "FF4.1",
+        "topic": "Format CSV",
+        "prompt": "What is the value column for row alpha in the attached CSV?",
+        "expected_route": "complex",
+        "attach_file": "sample.csv",
+        "expected_marker": MARKERS["csv"],
+        "check_processed": "sample.csv",
+        "timeout_s": COMPLEX_TIMEOUT_S,
+        "min_response_chars": 5,
+        "pipeline_notes": "upload → pandas → agent read",
     },
 ]
 
 
 def _has_dsml_leak(text: str) -> bool:
-    return "DSML" in text or "｜｜" in text or "tool_calls" in text and "invoke" in text
+    if not text:
+        return False
+    lowered = text.lower()
+    if "dsml" in lowered or "｜｜" in text:
+        return True
+    if "tool_calls" in lowered and "invoke" in lowered:
+        return True
+    # Unexecuted tool-call markup leaking into the visible bubble.
+    for marker in ("<tool_call>", "<function=", "</function>", "<｜tool"):
+        if marker in lowered:
+            return True
+    return False
+
+
+def _is_premature_dsml(text: str) -> bool:
+    body = _normalize_response(text)
+    return bool(body) and _has_dsml_leak(body)
 
 
 def _normalize_response(text: str) -> str:
-    """Strip avatar noise and timestamps for length checks."""
+    import re
+
     lines = [
         ln
         for ln in (text or "").splitlines()
         if ln.strip() and ln.strip().lower() not in {"o", "just now"}
     ]
-    return "\n".join(lines).strip()
+    joined = "\n".join(lines).strip()
+    return re.sub(r"\s+", " ", joined)
+
+
+def merge_executed_tools(ws_tools: list[str], dom_tools: list[str]) -> list[str]:
+    """Prefer WS tool names; fall back to DOM scrape when WS is empty."""
+    return ws_tools or dom_tools
+
+
+def expected_tools_satisfied(
+    executed: list[str], expected_tools: list[str] | None
+) -> bool:
+    if not expected_tools:
+        return True
+    return all(t in executed for t in expected_tools)
+
+
+def should_exit_idle_tool_stall(
+    *,
+    tools_ok: bool,
+    expected_tools: list[str] | None,
+    normalized_len: int,
+    min_chars: int,
+    dsml: bool,
+    running_tools: list[str],
+    stall_polls: int,
+    max_stall_polls: int = IDLE_TOOL_STALL_POLLS,
+) -> bool:
+    """True when graph is idle, response is ready, but required tools won't arrive."""
+    if not expected_tools or tools_ok or dsml:
+        return False
+    if normalized_len < min_chars or running_tools:
+        return False
+    return stall_polls >= max_stall_polls
+
+
+def resolve_workspace_seed_content(item: dict) -> str:
+    fixture_name = item.get("workspace_seed_from_fixture")
+    if fixture_name:
+        path = FIXTURE_DIR / fixture_name
+        return path.read_text(encoding="utf-8")
+    return item.get("workspace_seed_content", "eval seed")
+
+
+class WsEventLog:
+    """Capture selected WebSocket frames from the browser."""
+
+    def __init__(self) -> None:
+        self.events: list[dict[str, Any]] = []
+
+    def attach(self, page: Page) -> None:
+        def on_websocket(ws) -> None:
+            def on_frame(payload) -> None:
+                try:
+                    raw = (
+                        payload if isinstance(payload, str) else payload.decode("utf-8")
+                    )
+                    data = json.loads(raw)
+                    if isinstance(data, dict) and data.get("type"):
+                        self.events.append(
+                            {"type": data["type"], "ts": time.time(), "payload": data}
+                        )
+                except Exception:
+                    pass
+
+            ws.on("framereceived", on_frame)
+
+        page.on("websocket", on_websocket)
+
+    def saw(self, event_type: str, since_ts: float | None = None) -> bool:
+        for ev in self.events:
+            if ev["type"] != event_type:
+                continue
+            if since_ts is None or ev["ts"] >= since_ts:
+                return True
+        return False
+
+    def types_since(self, since_ts: float) -> list[str]:
+        return [ev["type"] for ev in self.events if ev["ts"] >= since_ts]
+
+    def tools_since(self, since_ts: float) -> list[str]:
+        """Tool names that actually executed (status != error), from the WS stream.
+
+        This is the authoritative source of truth — the DOM ToolActivityCard
+        scrape is unreliable in headless mode.
+        """
+        seen: list[str] = []
+        for ev in self.events:
+            if ev["type"] != "tool_execution" or ev["ts"] < since_ts:
+                continue
+            payload = ev.get("payload", {})
+            if payload.get("status") != "success":
+                continue
+            name = (payload.get("tool_name") or "").strip()
+            if name and name not in seen:
+                seen.append(name)
+        return seen
+
+    def running_tools_since(self, since_ts: float) -> list[str]:
+        """Tool names with a running tool_execution event and no success/error yet."""
+        running: dict[str, bool] = {}
+        for ev in self.events:
+            if ev["type"] != "tool_execution" or ev["ts"] < since_ts:
+                continue
+            payload = ev.get("payload", {})
+            name = (payload.get("tool_name") or "").strip()
+            if not name:
+                continue
+            status = payload.get("status")
+            if status == "running":
+                running[name] = True
+            elif status in ("success", "error"):
+                running.pop(name, None)
+        return list(running)
+
+    def router_meta_since(self, since_ts: float) -> dict:
+        """Latest router_info metadata after ``since_ts`` (route, source, task)."""
+        meta: dict = {}
+        for ev in self.events:
+            if ev["type"] != "router_info" or ev["ts"] < since_ts:
+                continue
+            payload = ev.get("payload", {})
+            if isinstance(payload.get("metadata"), dict):
+                meta = payload["metadata"]
+        if not meta:
+            return {}
+        features = meta.get("features") or {}
+        return {
+            "route": meta.get("route", ""),
+            "classification_source": meta.get("classification_source", ""),
+            "confidence": meta.get("confidence", ""),
+            "task_category": features.get("task_category", ""),
+            "has_images": bool(features.get("has_images", False)),
+        }
+
+    def model_info_since(self, since_ts: float) -> dict:
+        """Latest model_info payload after ``since_ts`` (model badge, fallback chain)."""
+        info: dict = {}
+        for ev in self.events:
+            if ev["type"] != "model_info" or ev["ts"] < since_ts:
+                continue
+            payload = ev.get("payload", {})
+            info = {
+                "model": payload.get("model"),
+                "fallback_chain": payload.get("fallback_chain"),
+                "vision_intake_mode": payload.get("vision_intake_mode"),
+                "vision_proxy_model": payload.get("vision_proxy_model"),
+            }
+        return info
+
+
+async def poll_api(
+    path: str, *, timeout_s: float = 30.0, interval_s: float = 1.0
+) -> dict:
+    deadline = time.monotonic() + timeout_s
+    last: dict = {}
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        while time.monotonic() < deadline:
+            try:
+                resp = await client.get(f"{API_URL}{path}")
+                if resp.status_code == 200:
+                    last = resp.json()
+                    return last
+            except Exception:
+                pass
+            await asyncio.sleep(interval_s)
+    return last
 
 
 async def fetch_runtime_profile() -> dict:
@@ -137,21 +512,63 @@ async def fetch_runtime_profile() -> dict:
         "cloud_escalation_enabled": cloud_on,
         "cloud_available": cloud_ok,
         "cloud_model": cloud_status.get("model", ""),
+        "cloud_model_tier": settings.get("cloud_model_tier", "flash"),
         "effective_profile": "cloud" if cloud_on and cloud_ok else "local",
     }
 
 
-async def set_cloud_escalation(enabled: bool) -> None:
+async def set_unified_settings(**fields: Any) -> None:
     async with httpx.AsyncClient(timeout=10.0) as client:
-        await client.put(
-            f"{API_URL}/api/unified-settings",
-            json={"cloud_escalation_enabled": enabled},
-        )
+        await client.put(f"{API_URL}/api/unified-settings", json=fields)
+
+
+async def fetch_last_turn_tier() -> str:
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        try:
+            resp = await client.get(f"{API_URL}/api/usage")
+            if resp.status_code == 200:
+                last = resp.json().get("last_turn") or {}
+                return str(last.get("model_tier") or "")
+        except Exception:
+            pass
+    return ""
+
+
+async def mem0_available() -> bool:
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        try:
+            resp = await client.get(f"{API_URL}/api/mem0/count")
+            if resp.status_code == 200:
+                data = resp.json()
+                return data.get("status") != "error" and "error" not in data
+        except Exception:
+            pass
+    return False
+
+
+async def check_vision_vlm_available() -> bool:
+    """Return True when Florence-2 is loaded in LM Studio (vision_proxy OCR only)."""
+    from src.agent.nodes.complex_utils.lm_studio_florence import is_florence_loaded
+
+    try:
+        return await is_florence_loaded()
+    except Exception:
+        return False
+
+
+async def vision_available(profile: str) -> bool:
+    vlm_ok = await check_vision_vlm_available()
+    if profile == "local":
+        return vlm_ok
+    runtime = await fetch_runtime_profile()
+    return runtime.get("cloud_available", False) and vlm_ok
 
 
 def resolve_expected_route(expected: str, *, profile: str) -> str:
     if expected == "complex":
         return "complex-cloud" if profile == "cloud" else "complex-default"
+    if expected == "vision":
+        return "vision_cloud" if profile == "cloud" else "vision"
     return expected
 
 
@@ -162,8 +579,12 @@ def route_matches(actual: str, expected: str, *, profile: str) -> bool:
         if profile == "cloud":
             return actual == "complex-cloud"
         return actual == "complex-default"
+    if expected == "vision":
+        if profile == "cloud":
+            return actual in VISION_ROUTES and actual == "vision_cloud"
+        return actual in VISION_ROUTES
     if expected == "complex-cloud" and profile == "local":
-        return actual in COMPLEX_ROUTES  # lenient if misconfigured
+        return actual in COMPLEX_ROUTES
     return actual == expected
 
 
@@ -187,7 +608,7 @@ async def delete_project(project_id: str) -> None:
             print(f"[EVAL] Warning: Failed to delete project: {e}")
 
 
-async def wait_for_ready(page) -> None:
+async def wait_for_ready(page: Page) -> None:
     print("[EVAL] Waiting for connection status to be connected...")
     await (
         page.locator(".connection-label")
@@ -197,100 +618,223 @@ async def wait_for_ready(page) -> None:
     await page.wait_for_timeout(1000)
 
 
-async def send_message(page, text: str) -> None:
-    print("[EVAL] Sending message...")
-    textarea = page.locator("textarea")
-    await textarea.wait_for(state="visible", timeout=10000)
-    await textarea.fill(text)
-    await page.wait_for_timeout(500)
-    await page.locator(".composer-send").click()
-    print("[EVAL] Send button clicked.")
+async def new_chat(page: Page) -> None:
+    print("[EVAL] Starting new chat...")
+    await page.locator('button.workspace-refresh[title="New chat"]').click()
+    await page.wait_for_timeout(1500)
+    await wait_for_ready(page)
 
 
-async def wait_for_response(
-    page,
-    msg_count_before: int,
+async def is_graph_busy(page: Page) -> bool:
+    return await page.evaluate(
+        """() => {
+          if (document.querySelector('.composer-stop')) return true;
+          if (document.querySelector('.hitl-prompt-card.hitl-pending')) return true;
+          if (document.querySelector('.tool-activity-running')) return true;
+          if (document.querySelector('.streaming-cursor')) return true;
+          return false;
+        }"""
+    )
+
+
+async def resolve_hitl(page: Page) -> int:
+    hitl_count = await page.evaluate(
+        "() => document.querySelectorAll('.hitl-prompt-card.hitl-pending').length"
+    )
+    if hitl_count <= 0:
+        return 0
+    print("\n[EVAL] HITL Prompt detected! Resolving...")
+    if await page.evaluate(
+        "() => document.querySelectorAll('.hitl-choice-btn').length"
+    ):
+        await page.evaluate("() => document.querySelector('.hitl-choice-btn').click()")
+        await page.wait_for_timeout(1000)
+    approve = page.locator(".hitl-btn-approve")
+    if await approve.count() > 0:
+        await approve.first.click()
+        await page.wait_for_timeout(2000)
+    return hitl_count
+
+
+async def wait_for_turn_complete(
+    page: Page,
     *,
     timeout_s: int,
     min_chars: int,
-) -> tuple[str, bool]:
-    print(f"[EVAL] Waiting for response (up to {timeout_s}s, min {min_chars} chars)...")
+    expected_tools: list[str] | None = None,
+    ws_log: WsEventLog | None = None,
+    since_ts: float | None = None,
+) -> dict[str, Any]:
+    print(f"[EVAL] Waiting for graph idle (up to {timeout_s}s)...")
     start_time = time.monotonic()
-    await asyncio.sleep(2)
+    hitl_resolves = 0
+    await asyncio.sleep(1.5)
     last_print = start_time
+    tool_stall_polls = 0
+
+    async def _executed_tools() -> tuple[list[str], list[str]]:
+        dom_tools = await scrape_executed_tools(page)
+        ws_tools = ws_log.tools_since(since_ts) if ws_log and since_ts else []
+        return merge_executed_tools(ws_tools, dom_tools), ws_tools
 
     while time.monotonic() - start_time < timeout_s:
         elapsed = time.monotonic() - start_time
-        if time.monotonic() - last_print >= 10:
-            current_text = await page.evaluate(
-                "() => { const els = document.querySelectorAll('.message-assistant'); "
-                "return els[els.length-1]?.innerText || ''; }"
+        hitl_resolves += await resolve_hitl(page)
+
+        busy = await is_graph_busy(page)
+        if not busy:
+            response_text = await scrape_final_response(page)
+            normalized = _normalize_response(response_text)
+            tools, ws_tools = await _executed_tools()
+            dsml = _is_premature_dsml(response_text)
+            tools_ok = expected_tools_satisfied(tools, expected_tools)
+            if len(normalized) >= min_chars and not dsml and tools_ok:
+                source = "ws" if ws_tools else "dom"
+                print(
+                    f"\n[EVAL] Turn complete in {elapsed:.1f}s "
+                    f"({len(normalized)} chars, tools={tools}, via={source})"
+                )
+                return {
+                    "response_text": response_text,
+                    "completed": True,
+                    "graph_idle": True,
+                    "premature_complete": False,
+                    "hitl_resolves": hitl_resolves,
+                    "busy_wait_seconds": round(elapsed, 2),
+                    "executed_tools": tools,
+                    "executed_tools_ws": ws_tools,
+                }
+            ws_running = (
+                ws_log.running_tools_since(since_ts) if ws_log and since_ts else []
             )
-            tools_running = await page.evaluate(
-                "() => Array.from(document.querySelectorAll('.tool-activity-name code'))"
+            dom_running = await page.evaluate(
+                "() => Array.from(document.querySelectorAll('.tool-activity-running .tool-activity-name code'))"
+                ".map(e => e.innerText)"
+            )
+            running_tools = ws_running or dom_running
+            if should_exit_idle_tool_stall(
+                tools_ok=tools_ok,
+                expected_tools=expected_tools,
+                normalized_len=len(normalized),
+                min_chars=min_chars,
+                dsml=dsml,
+                running_tools=running_tools,
+                stall_polls=tool_stall_polls,
+            ):
+                print(
+                    f"\n[EVAL] Idle tool stall exit in {elapsed:.1f}s "
+                    f"({len(normalized)} chars, tools={tools}, missing expected)"
+                )
+                return {
+                    "response_text": response_text,
+                    "completed": True,
+                    "graph_idle": True,
+                    "premature_complete": True,
+                    "hitl_resolves": hitl_resolves,
+                    "busy_wait_seconds": round(elapsed, 2),
+                    "executed_tools": tools,
+                    "executed_tools_ws": ws_tools,
+                }
+            if dsml or (expected_tools and not tools_ok):
+                tool_stall_polls += 1
+                await asyncio.sleep(2)
+                continue
+            tool_stall_polls = 0
+            if len(normalized) >= min_chars:
+                print(
+                    f"\n[EVAL] Idle with partial quality ({len(normalized)} chars, dsml={dsml})"
+                )
+                return {
+                    "response_text": response_text,
+                    "completed": len(normalized) >= min_chars,
+                    "graph_idle": True,
+                    "premature_complete": dsml or not tools_ok,
+                    "hitl_resolves": hitl_resolves,
+                    "busy_wait_seconds": round(elapsed, 2),
+                    "executed_tools": tools,
+                    "executed_tools_ws": ws_tools,
+                }
+
+        if time.monotonic() - last_print >= 10:
+            dom_running = await page.evaluate(
+                "() => Array.from(document.querySelectorAll('.tool-activity-running .tool-activity-name code'))"
                 ".map(e => e.innerText).join(', ')"
             )
-            tps_est = (len(current_text) / 4.0) / elapsed if elapsed > 0 else 0
+            ws_running = (
+                ws_log.running_tools_since(since_ts) if ws_log and since_ts else []
+            )
+            tools_running = ", ".join(ws_running) if ws_running else dom_running
             print(
-                f"\r[EVAL] ... running ({elapsed:.0f}s / {timeout_s}s) | "
-                f"est. TPS: {tps_est:.1f} | chars: {len(current_text)} | "
-                f"tools: {tools_running or 'none'}",
+                f"\r[EVAL] ... busy ({elapsed:.0f}s / {timeout_s}s) | tools: {tools_running or 'none'}",
                 end="",
                 flush=True,
             )
             last_print = time.monotonic()
-
-        hitl_count = await page.evaluate(
-            "() => document.querySelectorAll('.hitl-prompt-card.hitl-pending').length"
-        )
-        if hitl_count > 0:
-            print("\n[EVAL] HITL Prompt detected! Resolving...")
-            if await page.evaluate(
-                "() => document.querySelectorAll('.hitl-choice-btn').length"
-            ):
-                await page.evaluate(
-                    "() => document.querySelector('.hitl-choice-btn').click()"
-                )
-                await page.wait_for_timeout(1000)
-            await page.evaluate(
-                "() => document.querySelector('.hitl-btn-approve').click()"
-            )
-            await page.wait_for_timeout(2000)
-
-        msg_count = await page.evaluate(
-            "() => document.querySelectorAll('.message-assistant').length"
-        )
-        textarea_disabled = await page.evaluate(
-            "() => document.querySelector('textarea')?.disabled"
-        )
-        current_text = await page.evaluate(
-            "() => { const els = document.querySelectorAll('.message-assistant'); "
-            "return els[els.length-1]?.innerText || ''; }"
-        )
-        normalized = _normalize_response(current_text)
-
-        if (
-            msg_count > msg_count_before
-            and not textarea_disabled
-            and hitl_count == 0
-            and len(normalized) >= min_chars
-        ):
-            print(
-                f"\n[EVAL] Response completed in {elapsed:.1f}s ({len(normalized)} chars)."
-            )
-            return current_text.strip(), True
-
         await asyncio.sleep(1)
 
-    print("\n[EVAL] Timeout waiting for response!")
-    current_text = await page.evaluate(
-        "() => { const els = document.querySelectorAll('.message-assistant'); "
-        "return els[els.length-1]?.innerText || ''; }"
+    print("\n[EVAL] Timeout waiting for turn complete!")
+    response_text = await scrape_final_response(page)
+    tools, ws_tools = await _executed_tools()
+    return {
+        "response_text": response_text,
+        "completed": False,
+        "graph_idle": not await is_graph_busy(page),
+        "premature_complete": _is_premature_dsml(response_text),
+        "hitl_resolves": hitl_resolves,
+        "busy_wait_seconds": round(time.monotonic() - start_time, 2),
+        "executed_tools": tools,
+        "executed_tools_ws": ws_tools,
+    }
+
+
+async def scrape_final_response(page: Page) -> str:
+    for _ in range(3):
+        text = await page.evaluate(
+            """() => {
+              const bubbles = document.querySelectorAll('.message-assistant .message-bubble');
+              for (let i = bubbles.length - 1; i >= 0; i--) {
+                const t = (bubbles[i].innerText || '').trim();
+                if (t && t.toLowerCase() !== 'o') return t;
+              }
+              const els = document.querySelectorAll('.message-assistant');
+              return els[els.length - 1]?.innerText || '';
+            }"""
+        )
+        if _normalize_response(text):
+            return text.strip()
+        await asyncio.sleep(0.5)
+    return ""
+
+
+async def scrape_executed_tools(page: Page) -> list[str]:
+    return await page.evaluate(
+        """() => {
+          const children = [...document.querySelectorAll('.messages > *')];
+          let lastUserIdx = -1;
+          children.forEach((el, idx) => {
+            if (el.querySelector('.message-user')) lastUserIdx = idx;
+          });
+          if (lastUserIdx < 0) return [];
+          const tools = [];
+          for (let i = lastUserIdx + 1; i < children.length; i++) {
+            const el = children[i];
+            el.querySelectorAll('.tool-activity-name code').forEach(codeEl => {
+              const card = codeEl.closest('.tool-activity-card');
+              const running = card?.classList.contains('tool-activity-running');
+              const failed = card?.classList.contains('tool-activity-failed');
+              const name = (codeEl.innerText || '').trim();
+              if (name && !running && !failed) tools.push(name);
+            });
+            if (el.classList?.contains('message-assistant') || el.querySelector('.message-assistant')) {
+              break;
+            }
+          }
+          return [...new Set(tools)];
+        }"""
     )
-    return current_text.strip(), False
 
 
-async def get_orchestration_data(page) -> dict:
+async def get_orchestration_data(page: Page) -> dict:
     try:
         model = await page.evaluate(
             "() => document.querySelector('.model-badge')?.innerText || ''"
@@ -301,38 +845,201 @@ async def get_orchestration_data(page) -> dict:
         confidence = await page.evaluate(
             "() => document.querySelector('.orchestration-gauge-value')?.innerText || ''"
         )
-        tools = await page.evaluate("""() => {
-            const userMsgs = document.querySelectorAll('.message-user');
-            const lastUser = userMsgs[userMsgs.length - 1];
-            if (!lastUser) return [];
-            const toolsList = [];
-            let node = lastUser.nextElementSibling;
-            while (node) {
-                node.querySelectorAll('.tool-activity-name code').forEach(el => {
-                    if (el.innerText) toolsList.push(el.innerText.trim());
-                });
-                if (node.classList?.contains('message-assistant')) break;
-                node = node.nextElementSibling;
-            }
-            return [...new Set(toolsList)];
-        }""")
+        classification_source = await page.evaluate(
+            """() => {
+              const rows = document.querySelectorAll('.orchestration-row');
+              for (const row of rows) {
+                const label = row.querySelector('.orchestration-label')?.innerText || '';
+                if (label.trim() === 'Source') {
+                  return row.querySelector('.orchestration-value')?.innerText?.trim() || '';
+                }
+              }
+              return '';
+            }"""
+        )
+        memory_saved = await page.evaluate(
+            "() => document.querySelector('.orchestration-memory-ok')?.innerText?.trim() || ''"
+        )
+        tools = await scrape_executed_tools(page)
         return {
             "model": model,
             "route": route,
             "confidence": confidence,
+            "classification_source": classification_source,
+            "memory_saved": memory_saved,
             "tools": tools,
         }
     except Exception as e:
         print(f"[EVAL] Error scraping orchestration data: {e}")
-        return {"model": "", "route": "", "confidence": "", "tools": []}
+        return {
+            "model": "",
+            "route": "",
+            "confidence": "",
+            "classification_source": "",
+            "memory_saved": "",
+            "tools": [],
+        }
+
+
+async def send_message(page: Page, text: str) -> None:
+    print("[EVAL] Sending message...")
+    textarea = page.locator("textarea")
+    await textarea.wait_for(state="visible", timeout=10000)
+    await textarea.fill(text)
+    await page.wait_for_timeout(500)
+    await page.locator(".composer-send").click()
+    print("[EVAL] Send button clicked.")
+
+
+async def attach_file_via_drop(page: Page, filepath: Path) -> None:
+    print(f"[EVAL] Attaching file via drop: {filepath.name}")
+    raw = filepath.read_bytes()
+    mime = mimetypes.guess_type(filepath.name)[0] or "application/octet-stream"
+    data_url = f"data:{mime};base64,{base64.b64encode(raw).decode()}"
+    ok = await page.evaluate(
+        """([name, mimeType, dataUrl]) => {
+          const wrapper = document.querySelector('.composer-wrapper');
+          if (!wrapper) return false;
+          const binary = atob(dataUrl.split(',')[1]);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+          const blob = new Blob([bytes], { type: mimeType });
+          const file = new File([blob], name, { type: mimeType });
+          const dt = new DataTransfer();
+          dt.items.add(file);
+          const event = new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt });
+          wrapper.dispatchEvent(event);
+          return true;
+        }""",
+        [filepath.name, mime, data_url],
+    )
+    if not ok:
+        raise RuntimeError("Failed to dispatch file drop on composer")
+    await page.wait_for_timeout(800)
+    chip = page.locator(
+        ".composer-attachments .attachment-name", has_text=filepath.name
+    )
+    await chip.wait_for(state="visible", timeout=10000)
+
+
+async def upload_file_api(project_id: str, filepath: Path) -> None:
+    print(f"[EVAL] Uploading {filepath.name} to project {project_id}...")
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        with filepath.open("rb") as fh:
+            resp = await client.post(
+                f"{API_URL}/api/upload",
+                params={"project_id": project_id},
+                files={
+                    "file": (
+                        filepath.name,
+                        fh,
+                        mimetypes.guess_type(filepath.name)[0]
+                        or "application/octet-stream",
+                    )
+                },
+            )
+        if resp.status_code != 200 or resp.json().get("status") == "error":
+            raise RuntimeError(f"Upload failed: {resp.text}")
+
+
+async def seed_workspace_file(project_id: str, filename: str, content: str) -> Path:
+    ws_dir = WORKSPACE_DIR / "projects" / project_id
+    target = ws_dir / filename
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(content, encoding="utf-8")
+    print(f"[EVAL] Seeded workspace file: {target}")
+    return target
+
+
+async def poll_file_processed(
+    project_id: str, filename: str, *, timeout_s: float = 45.0
+) -> bool:
+    deadline = time.monotonic() + timeout_s
+    processed_cache = WORKSPACE_DIR / "projects" / project_id / ".processed"
+    while time.monotonic() < deadline:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            try:
+                resp = await client.get(
+                    f"{API_URL}/api/files",
+                    params={"project_id": project_id, "sub_path": ""},
+                )
+                if resp.status_code == 200:
+                    for item in resp.json().get("files", []):
+                        if (
+                            item.get("name") == filename
+                            and item.get("status") == "processed"
+                        ):
+                            return True
+            except Exception:
+                pass
+        for suffix in (".txt", ".md"):
+            if (processed_cache / f"{filename}{suffix}").exists():
+                return True
+        await asyncio.sleep(1.5)
+    return False
+
+
+def _infer_vision_intake_mode(ws_router: dict, ws_model: dict) -> str | None:
+    if not ws_router.get("has_images"):
+        return None
+    chain = ws_model.get("fallback_chain") or []
+    for step in chain:
+        if isinstance(step, dict) and step.get("reason") == "vision_proxy_failed":
+            return "fallback"
+    if "vision" in (ws_router.get("task_category") or "").lower():
+        return "proxy"
+    return "proxy"
+
+
+def _vision_route_acceptable(exchange: dict) -> bool:
+    task = (exchange.get("task_category") or "").lower()
+    if "vision" in task:
+        return True
+    if exchange.get("has_images") and exchange.get("vision_intake_mode") != "fallback":
+        return True
+    chain = exchange.get("fallback_chain") or []
+    for step in chain:
+        if isinstance(step, dict) and step.get("reason") == "vision_proxy_failed":
+            return False
+    return bool(exchange.get("has_images"))
+
+
+def eval_cloud_qwen_fallback(exchange: dict, expected: dict, *, profile: str) -> bool:
+    """True when a cloud-intended complex turn ended on local Qwen fallback/synthesis."""
+    if profile != "cloud":
+        return False
+    if expected.get("expected_route") == "simple":
+        return False
+    if expected.get("expected_vision"):
+        return False
+    badge = (exchange.get("model_badge") or "").strip()
+    if badge not in CLOUD_QWEN_FALLBACK_BADGES:
+        return False
+    route = exchange.get("route") or ""
+    expected_route = expected.get("expected_route", "")
+    return expected_route == "complex" or route == "complex-cloud"
+
+
+def should_skip_turn(
+    item: dict, *, profile: str, mem0_ok: bool, vision_ok: bool
+) -> str | None:
+    skip = item.get("skip_if")
+    if skip == "mem0_unavailable" and not mem0_ok:
+        return "mem0_unavailable"
+    if skip == "vision_unavailable" and not vision_ok:
+        return "vision_unavailable"
+    return None
 
 
 def score_exchange(exchange: dict, expected: dict, *, profile: str) -> dict:
-    scores: dict = {
+    scores: dict[str, Any] = {
         "route_match": False,
         "tools_match": False,
         "response_ok": False,
         "dsml_leak": False,
+        "cloud_regression": False,
+        "cloud_fallback_fail": False,
+        "premature_complete": exchange.get("premature_complete", False),
         "grade": 0,
     }
     expected_route = expected.get("expected_route", "")
@@ -341,17 +1048,39 @@ def score_exchange(exchange: dict, expected: dict, *, profile: str) -> dict:
     scores["response_ok"] = len(body) >= min_chars
     scores["dsml_leak"] = _has_dsml_leak(body)
 
+    route_pts = (
+        35
+        if expected.get("expected_tier")
+        or expected.get("expected_source")
+        or expected.get("expected_vision")
+        else 40
+    )
     if route_matches(exchange.get("route", ""), expected_route, profile=profile):
         scores["route_match"] = True
-        scores["grade"] += 40
+        scores["grade"] += route_pts
     elif expected_route == "complex" and exchange.get("route") in COMPLEX_ROUTES:
         scores["route_match"] = True
-        scores["grade"] += 30  # partial: complex but wrong tier
+        scores["grade"] += max(20, route_pts - 10)
+    elif expected_route == "vision" and exchange.get("route") in VISION_ROUTES:
+        scores["route_match"] = True
+        scores["grade"] += route_pts
+    elif (
+        expected.get("expected_vision")
+        and exchange.get("route") in COMPLEX_ROUTES
+        and _vision_route_acceptable(exchange)
+    ):
+        # Router uses complex-cloud for images; task_category marks vision work.
+        scores["route_match"] = True
+        scores["vision_route_ok"] = True
+        scores["grade"] += max(20, route_pts - 10)
 
+    resp_pts = 15 if expected.get("expected_marker") else 20
     if scores["response_ok"]:
-        scores["grade"] += 20
+        scores["grade"] += resp_pts
     if scores["dsml_leak"]:
         scores["grade"] = max(0, scores["grade"] - 15)
+    if scores["premature_complete"]:
+        scores["grade"] = max(0, scores["grade"] - 10)
 
     if "expected_tools" in expected:
         expected_tools = expected["expected_tools"]
@@ -363,14 +1092,215 @@ def score_exchange(exchange: dict, expected: dict, *, profile: str) -> dict:
             scores["tools_match"] = not missing
             if missing:
                 scores["missing_tools"] = missing
+        tool_pts = 25 if expected.get("expected_marker") else 40
         if scores["tools_match"]:
-            scores["grade"] += 40
+            scores["grade"] += tool_pts
     else:
         scores["tools_match"] = True
-        scores["grade"] += 40
+        scores["grade"] += 30
+
+    marker = expected.get("expected_marker")
+    if marker:
+        scores["recall_ok"] = marker.lower() in body.lower()
+        if scores["recall_ok"]:
+            scores["grade"] += 20
+        else:
+            scores["recall_ok"] = False
+
+    expected_tier = expected.get("expected_tier")
+    if expected_tier:
+        actual_tier = exchange.get("model_tier", "")
+        scores["tier_match"] = actual_tier == expected_tier
+        if scores["tier_match"]:
+            scores["grade"] += 15
+        scores["tier_note"] = (
+            "frontier hints do not auto-escalate tier; tier comes from profile.cloud_model_tier"
+            if expected_tier == "flash"
+            else ""
+        )
+
+    expected_source = expected.get("expected_source")
+    if expected_source:
+        accepted = (
+            expected_source if isinstance(expected_source, list) else [expected_source]
+        )
+        actual_source = exchange.get("classification_source", "")
+        scores["source_match"] = actual_source in accepted
+        scores["actual_source"] = actual_source
+        if scores["source_match"]:
+            scores["grade"] += 15
+        elif actual_source and actual_source not in ("keyword_bypass", "deterministic"):
+            scores["grade"] += 10  # classifier ran, just a different label
+        elif actual_source:
+            scores["grade"] += 5  # bypass fired — classifier path not exercised
+
+    if expected.get("expected_vision"):
+        task = (exchange.get("task_category") or "").lower()
+        scores["vision_match"] = (
+            "vision" in task
+            or exchange.get("has_images", False)
+            or exchange.get("vision_intake_mode") == "proxy"
+        )
+        if scores["vision_match"]:
+            scores["grade"] += 15
+        marker = expected.get("expected_marker")
+        if marker:
+            if marker.lower() in body.lower() and scores["vision_match"]:
+                scores["vision_ocr_ok"] = True
+            elif scores.get("vision_match"):
+                scores["vision_ocr_ok"] = False
+                scores["grade"] = min(scores["grade"], 60)
+
+    for ev_name in expected.get("expected_ws_events", []):
+        key = f"ws_{ev_name}"
+        scores[key] = exchange.get("ws_events_seen", {}).get(ev_name, False)
+        if scores[key]:
+            scores["grade"] += 5
+
+    for ev_name in expected.get("forbid_ws_events", []):
+        seen = exchange.get("ws_events_seen", {}).get(ev_name, False)
+        scores[f"ws_forbid_{ev_name}"] = not seen
+        if seen:
+            scores["grade"] = max(0, scores["grade"] - 10)
+
+    if expected.get("check_processed"):
+        scores["processed_ok"] = exchange.get("file_processed", False)
+        if scores["processed_ok"]:
+            scores["grade"] += 10
 
     scores["grade"] = min(100, scores["grade"])
+    if eval_cloud_qwen_fallback(exchange, expected, profile=profile):
+        scores["cloud_regression"] = True
+        scores["cloud_fallback_fail"] = True
+        scores["grade"] = min(scores["grade"], 49)
     return scores
+
+
+async def run_turn(
+    page: Page,
+    item: dict,
+    *,
+    profile: str,
+    project_id: str,
+    ws_log: WsEventLog,
+    index: int,
+) -> dict:
+    turn_start = time.time()
+    ws_before = len(ws_log.events)
+
+    if item.get("new_chat_before"):
+        await new_chat(page)
+
+    if item.get("set_tier_before"):
+        await set_unified_settings(cloud_model_tier=item["set_tier_before"])
+
+    if item.get("workspace_seed"):
+        await seed_workspace_file(
+            project_id,
+            item["workspace_seed"],
+            resolve_workspace_seed_content(item),
+        )
+        await asyncio.sleep(2.0)
+
+    attach_name = item.get("attach_file")
+    if attach_name:
+        fixture = FIXTURE_DIR / attach_name
+        if not fixture.exists():
+            raise FileNotFoundError(f"Missing fixture: {fixture}")
+        await attach_file_via_drop(page, fixture)
+        if item.get("check_processed"):
+            processed = await poll_file_processed(
+                project_id, attach_name, timeout_s=20.0
+            )
+            item = {**item, "_upload_processed": processed}
+
+    start_time = time.monotonic()
+    await send_message(page, item["prompt"])
+    wait_result = await wait_for_turn_complete(
+        page,
+        timeout_s=item.get("timeout_s", COMPLEX_TIMEOUT_S),
+        min_chars=item.get("min_response_chars", 10),
+        expected_tools=item.get("expected_tools"),
+        ws_log=ws_log,
+        since_ts=turn_start,
+    )
+    duration = time.monotonic() - start_time
+    orch = await get_orchestration_data(page)
+    model_tier = await fetch_last_turn_tier()
+
+    if item.get("restore_tier_after"):
+        await set_unified_settings(cloud_model_tier=item["restore_tier_after"])
+
+    # WS stream is the source of truth; DOM scrape is a fallback only.
+    ws_tools = wait_result.get("executed_tools_ws") or ws_log.tools_since(turn_start)
+    ws_router = ws_log.router_meta_since(turn_start)
+    ws_model = ws_log.model_info_since(turn_start)
+    ws_since = {
+        ev: ws_log.saw(ev, since_ts=turn_start)
+        for ev in (
+            "memory_updated",
+            "context_summarized",
+            "file_status",
+            "router_info",
+            "tool_execution",
+        )
+    }
+
+    file_processed = item.get("_upload_processed", False)
+    check_name = item.get("check_processed")
+    if check_name and not file_processed:
+        file_processed = await poll_file_processed(
+            project_id, check_name, timeout_s=5.0
+        )
+
+    response_text = wait_result["response_text"]
+    exchange = {
+        "turn_index": index + 1,
+        "prompt_id": item["id"],
+        "topic": item["topic"],
+        "pipeline_notes": item.get("pipeline_notes", ""),
+        "user_query": item["prompt"],
+        "assistant_response": response_text[:500]
+        + ("..." if len(response_text) > 500 else ""),
+        "assistant_response_full": response_text,
+        "response_completed": wait_result["completed"],
+        "graph_idle": wait_result["graph_idle"],
+        "premature_complete": wait_result["premature_complete"],
+        "hitl_resolves": wait_result["hitl_resolves"],
+        "busy_wait_seconds": wait_result["busy_wait_seconds"],
+        "expected_route_resolved": resolve_expected_route(
+            item["expected_route"], profile=profile
+        ),
+        "model_badge": ws_model.get("model") or orch.get("model"),
+        "route": ws_router.get("route") or orch.get("route"),
+        "route_dom": orch.get("route"),
+        "task_category": ws_router.get("task_category"),
+        "has_images": ws_router.get("has_images", False),
+        "fallback_chain": ws_model.get("fallback_chain"),
+        "vision_intake_mode": ws_model.get("vision_intake_mode")
+        or _infer_vision_intake_mode(ws_router, ws_model),
+        "vision_proxy_model": ws_model.get("vision_proxy_model"),
+        "model_tier": model_tier,
+        "confidence": ws_router.get("confidence") or orch.get("confidence"),
+        "classification_source": ws_router.get("classification_source")
+        or orch.get("classification_source"),
+        "memory_saved": orch.get("memory_saved"),
+        "executed_tools": ws_tools
+        or wait_result["executed_tools"]
+        or orch.get("tools"),
+        "executed_tools_ws": ws_tools,
+        "executed_tools_dom": wait_result["executed_tools"] or orch.get("tools"),
+        "ws_events_seen": ws_since,
+        "ws_events_captured": ws_log.types_since(turn_start),
+        "file_processed": file_processed,
+        "duration_seconds": round(duration, 2),
+        "approx_tps": round((len(response_text) / 4.0) / duration, 2)
+        if duration > 0
+        else 0,
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "status": "scored",
+    }
+    return exchange
 
 
 async def main() -> None:
@@ -388,11 +1318,18 @@ async def main() -> None:
     )
     args = parser.parse_args()
 
+    fixture_script = REPO_ROOT / "scripts" / "generate_eval_fixtures.py"
+    if not FIXTURE_DIR.exists() or not any(FIXTURE_DIR.iterdir()):
+        import subprocess
+
+        subprocess.run(["python", str(fixture_script)], check=True)
+
     runtime = await fetch_runtime_profile()
     prior_cloud = runtime["cloud_escalation_enabled"]
+    prior_tier = runtime.get("cloud_model_tier", "flash")
     if args.cloud_off:
         print("[EVAL] Disabling cloud escalation for this run...")
-        await set_cloud_escalation(False)
+        await set_unified_settings(cloud_escalation_enabled=False)
         runtime = await fetch_runtime_profile()
 
     if args.profile == "auto":
@@ -400,26 +1337,41 @@ async def main() -> None:
     else:
         profile = args.profile
 
+    mem0_ok = await mem0_available()
+    vision_vlm_ok = await check_vision_vlm_available()
+    vision_ok = await vision_available(profile)
+    print(
+        f"[EVAL] mem0_available={mem0_ok} vision_vlm_ok={vision_vlm_ok} "
+        f"vision_ok={vision_ok}"
+    )
+
     SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
     suffix = uuid.uuid4().hex[:6]
     project_name = f"FrontierEval_{suffix}"
     project_id = await create_project(project_name)
 
-    eval_data = {
+    eval_data: dict[str, Any] = {
         "project_name": project_name,
         "project_id": project_id,
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "eval_version": "2026-06-10",
+        "eval_version": "2026-06-11",
         "runtime_profile": profile,
         "cloud_escalation_enabled": runtime["cloud_escalation_enabled"],
         "cloud_available": runtime["cloud_available"],
         "cloud_model": runtime["cloud_model"],
+        "cloud_model_tier": runtime.get("cloud_model_tier", "flash"),
+        "mem0_available": mem0_ok,
+        "vision_vlm_ok": vision_vlm_ok,
+        "vision_available": vision_ok,
+        "cloud_scoring": "qwen_fallback_fail",
         "hardware_profile": "Apple M4 Air 24GB",
+        "turn_count": len(TEST_PROMPTS),
         "exchanges": [],
+        "skipped_turns": [],
     }
 
     total_score = 0
-    max_score = len(TEST_PROMPTS) * 100
+    scored_turns = 0
 
     try:
         async with async_playwright() as p:
@@ -428,6 +1380,8 @@ async def main() -> None:
             page = await (
                 await browser.new_context(viewport={"width": 1440, "height": 900})
             ).new_page()
+            ws_log = WsEventLog()
+            ws_log.attach(page)
 
             print(
                 f"[EVAL] Profile: {profile} | cloud_escalation={runtime['cloud_escalation_enabled']}"
@@ -445,61 +1399,53 @@ async def main() -> None:
 
             for index, item in enumerate(TEST_PROMPTS):
                 prompt_id = item["id"]
+                skip_reason = should_skip_turn(
+                    item, profile=profile, mem0_ok=mem0_ok, vision_ok=vision_ok
+                )
                 print("\n" + "=" * 80)
                 print(
                     f"  EXCHANGE {index + 1}/{len(TEST_PROMPTS)}: [{prompt_id}] {item['topic']}"
                 )
                 print("=" * 80)
 
-                msg_count_before = await page.evaluate(
-                    "() => document.querySelectorAll('.message-assistant').length"
-                )
-                timeout_s = item.get("timeout_s", COMPLEX_TIMEOUT_S)
-                min_chars = item.get("min_response_chars", 10)
+                if skip_reason:
+                    print(f"[EVAL] SKIPPED ({skip_reason})")
+                    skipped = {
+                        "prompt_id": prompt_id,
+                        "topic": item["topic"],
+                        "reason": skip_reason,
+                        "status": "skipped",
+                    }
+                    eval_data["skipped_turns"].append(skipped)
+                    eval_data["exchanges"].append(skipped)
+                    continue
 
-                start_time = time.monotonic()
-                await send_message(page, item["prompt"])
-                response_text, completed = await wait_for_response(
+                exchange = await run_turn(
                     page,
-                    msg_count_before,
-                    timeout_s=timeout_s,
-                    min_chars=min_chars,
+                    item,
+                    profile=profile,
+                    project_id=project_id,
+                    ws_log=ws_log,
+                    index=index,
                 )
-                duration = time.monotonic() - start_time
-                orch = await get_orchestration_data(page)
-
-                exchange = {
-                    "turn_index": index + 1,
-                    "prompt_id": prompt_id,
-                    "topic": item["topic"],
-                    "user_query": item["prompt"],
-                    "assistant_response": response_text[:500]
-                    + ("..." if len(response_text) > 500 else ""),
-                    "assistant_response_full": response_text,
-                    "response_completed": completed,
-                    "expected_route_resolved": resolve_expected_route(
-                        item["expected_route"], profile=profile
-                    ),
-                    "model_badge": orch.get("model"),
-                    "route": orch.get("route"),
-                    "confidence": orch.get("confidence"),
-                    "executed_tools": orch.get("tools"),
-                    "duration_seconds": round(duration, 2),
-                    "approx_tps": round((len(response_text) / 4.0) / duration, 2)
-                    if duration > 0
-                    else 0,
-                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                }
                 scores = score_exchange(exchange, item, profile=profile)
                 exchange["scores"] = scores
+                exchange["cloud_regression"] = scores.get("cloud_regression", False)
                 total_score += scores["grade"]
+                scored_turns += 1
 
                 print(
                     f"Model: {exchange['model_badge']} | Route: {exchange['route']} "
-                    f"(expected {exchange['expected_route_resolved']})"
+                    f"(expected {exchange['expected_route_resolved']}) | tier={exchange.get('model_tier')}"
                 )
+                if scores.get("cloud_regression"):
+                    print(
+                        "  CLOUD REGRESSION: Qwen fallback on cloud-intended turn "
+                        f"(badge={exchange['model_badge']})"
+                    )
                 print(
-                    f"Tools: {exchange['executed_tools']} | completed={completed} | dsml={scores['dsml_leak']}"
+                    f"Source: {exchange.get('classification_source')} | Tools: {exchange['executed_tools']} "
+                    f"| idle={exchange['graph_idle']} | dsml={scores['dsml_leak']}"
                 )
                 print(f"Grade: {scores['grade']}/100")
 
@@ -511,19 +1457,25 @@ async def main() -> None:
                     path=str(SCREENSHOT_DIR / f"{index + 1:02d}_{prompt_id}.png")
                 )
 
+            max_score = scored_turns * 100
+            eval_data["scored_turns"] = scored_turns
             eval_data["final_score"] = f"{total_score}/{max_score}"
-            eval_data["score_percentage"] = round((total_score / max_score) * 100, 2)
+            eval_data["score_percentage"] = (
+                round((total_score / max_score) * 100, 2) if max_score else 0.0
+            )
             with open(OUTPUT_DATA_FILE, "w") as f:
                 json.dump(eval_data, f, indent=2)
             print(f"\n[EVAL] Saved {OUTPUT_DATA_FILE}")
             print(
-                f"[EVAL] Final: {eval_data['final_score']} ({eval_data['score_percentage']}%)"
+                f"[EVAL] Final: {eval_data['final_score']} ({eval_data['score_percentage']}%) "
+                f"[{scored_turns} scored, {len(eval_data['skipped_turns'])} skipped]"
             )
             await browser.close()
     finally:
         if args.cloud_off and prior_cloud:
             print("[EVAL] Restoring cloud escalation...")
-            await set_cloud_escalation(True)
+            await set_unified_settings(cloud_escalation_enabled=True)
+        await set_unified_settings(cloud_model_tier=prior_tier)
         await delete_project(project_id)
 
 

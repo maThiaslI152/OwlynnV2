@@ -94,7 +94,7 @@ manifest:
       status: active
       category: architecture
       audience: agent
-      last_updated: 2026-06-10
+      last_updated: 2026-06-11
     - path: docs/PERFORMANCE_SLOS.md
       status: active
       category: standards
@@ -129,7 +129,7 @@ manifest:
       status: active
       category: standards
       audience: agent
-      last_updated: 2026-06-10
+      last_updated: 2026-06-11
     - path: docs/TOOLS.md
       status: active
       category: reference
@@ -365,6 +365,11 @@ manifest:
       category: reference
       audience: archive
       last_updated: 2026-06-10
+    - path: docs/changes/frontier-eval-memory-session/CHANGELOG.md
+      status: active
+      category: reference
+      audience: agent
+      last_updated: 2026-06-11
     - path: docs/changes/fix-one-turn-lag/CHANGELOG.md
       status: active
       category: reference
@@ -546,10 +551,20 @@ manifest:
       audience: agent
       last_updated: 2026-06-10
     - path: docs/evaluations/local-frontier-eval-2026-06-10-v2.md
-      status: completed
+      status: superseded
       category: evaluation
       audience: agent
       last_updated: 2026-06-10
+    - path: docs/evaluations/frontier-comparison-2026-06-11.md
+      status: completed
+      category: evaluation
+      audience: agent
+      last_updated: 2026-06-11
+    - path: docs/evaluations/local-frontier-eval-2026-06-11.md
+      status: completed
+      category: evaluation
+      audience: agent
+      last_updated: 2026-06-11
     - path: docs/evaluations/long-conversation-2026-06-04.md
       status: active
       category: reference
@@ -674,7 +689,7 @@ manifest:
       status: active
       category: standards
       audience: agent
-      last_updated: 2026-06-04
+      last_updated: 2026-06-11
     - path: docs/standards/coding-style.md
       status: active
       category: reference

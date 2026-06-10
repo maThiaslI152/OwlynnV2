@@ -50,7 +50,14 @@ def _store_transcription(key: str, text: str) -> None:
 
 
 def _vision_prompt_mode() -> str:
-    return str(config.get("cloud.vision_prompt_mode", "florence")).lower()
+    mode = str(config.get("cloud.vision_prompt_mode", "florence")).lower()
+    if mode != "florence":
+        logger.warning(
+            "[vision_proxy] cloud.vision_prompt_mode=%s — Florence OCR is required; "
+            "json_chat uses Qwen and is legacy-only",
+            mode,
+        )
+    return mode
 
 
 def _raw_to_cloud_text(raw: str) -> str:
@@ -105,7 +112,25 @@ async def _invoke_vision_vlm(image_url: str) -> str:
         _vision_prompt_mode() == "florence"
         and "[Vision sensor output" not in cloud_text
     ):
-        # Retry with plain OCR task if region parse yielded nothing useful
+        primary_task = str(config.get("cloud.vision_florence_task", "<OCR>"))
+        region_task = str(
+            config.get("cloud.vision_florence_region_task", "<OCR_WITH_REGION>")
+        )
+        if primary_task != region_task:
+            region_messages = [
+                HumanMessage(
+                    content=[
+                        {"type": "text", "text": region_task},
+                        {"type": "image_url", "image_url": {"url": image_url}},
+                    ]
+                )
+            ]
+            region_resp = await vlm_llm.ainvoke(region_messages)
+            region_raw = str(region_resp.content).strip()
+            if region_raw:
+                region_text = _raw_to_cloud_text(region_raw)
+                if "[Vision sensor output" in region_text:
+                    return region_text
         ocr_task = "<OCR>"
         retry_messages = [
             HumanMessage(

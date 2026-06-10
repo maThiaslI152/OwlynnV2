@@ -23,10 +23,12 @@ Owlynn uses a **router** (always loaded) plus one **medium** model for complex l
 - **Main weights:** `HauhauCS/Qwen3.5-9B-Uncensored-HauhauCS-Aggressive` — load the **Q6_K** GGUF in LM Studio
 - **Vision encoder (mmproj):** required only for **`complex-default`** local multimodal fallback — not for cloud+image (uses Florence proxy below)
 
-### Vision proxy (Cloud + image path)
+### Vision proxy (Cloud + image path — Florence only)
 
-- **`florence-2-base-nsfw-v2-ext-mlx`** — lazy-loaded on first image; OCR via task tokens (`<OCR_WITH_REGION>`)
-- Config: `models.vision_proxy.model_name` in [`defaults.yaml`](../../src/config/defaults.yaml)
+- **`florence-2-base-nsfw-v2-ext-mlx`** — lazy-loaded on first image; **OCR sensor only** via task tokens (`<OCR>`, `<OCR_WITH_REGION>`)
+- **Not Qwen** — Qwen mmproj is for `complex-default` multimodal fallback when Florence fails
+- Config: `models.vision_proxy` in [`defaults.yaml`](../../src/config/defaults.yaml)
+- LM Studio must load Florence before OCR (`cloud.vision_lm_studio_auto_load: true`) — see [`model-quirks-and-routing.md`](../technical/model-quirks-and-routing.md)
 
 ### Embeddings (RAG / Memory Only)
 

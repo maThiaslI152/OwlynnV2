@@ -193,7 +193,8 @@ START → memory_inject_lite → router → memory_retrieve → auto_summarize? 
 | `./scripts/ci.sh` | Above + frontend production build |
 | `./scripts/ci.sh --network` | Live DeepSeek tests (`DEEPSEEK_API_KEY` required) |
 | `./scripts/ci.sh --benchmarks` | Router/complex/memory benchmarks → `tests/benchmarks/benchmark_report.json` |
-| `python scripts/run_local_frontier_eval.py` | 6-turn scored eval — `--profile auto\|local\|cloud`, `--cloud-off` |
+| `python scripts/run_local_frontier_eval.py` | ~19-turn mechanical eval — `--profile auto\|local\|cloud`, `--cloud-off` |
+| `python scripts/run_frontier_comparison_eval.py` | Quality A/B vs raw DeepSeek — `--dry-run`, `--limit N` |
 | `python scripts/run_browser_eval.py` | 12-turn conversation eval — needs stack + LM Studio |
 
 **Coverage (unit pytest):** ~57% `src/` (contract-only pass ~22% — subset). **GHA** (`.github/workflows/ci.yml`): Python lint/tests + frontend vitest; Electron build on main push only. Contract/cutover tests are **local-only** per `scripts/ci.sh`.

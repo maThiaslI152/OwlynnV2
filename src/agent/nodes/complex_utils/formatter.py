@@ -11,9 +11,19 @@ _DSML_ELEMENT_RE = re.compile(
 _DSML_MARKER_RE = re.compile(_DSML_TAG, re.IGNORECASE)
 
 
+_ALT_TOOL_SYNTAX_RE = re.compile(r"<tool_call>|<function=", re.IGNORECASE)
+_ALT_TOOL_CALL_BLOCK_RE = re.compile(
+    r"<tool_call>.*?(?:</tool_call>|$)", re.DOTALL | re.IGNORECASE
+)
+_ALT_FUNCTION_BLOCK_RE = re.compile(
+    r"<function=[^>]*>.*?(?=<tool_call>|$)", re.DOTALL | re.IGNORECASE
+)
+
+
 def _content_has_dsml_tool_syntax(text: str) -> bool:
-    """Return True when assistant text contains DeepSeek DSML pseudo-tool-call markup."""
-    return bool(_DSML_MARKER_RE.search(text or ""))
+    """Return True when assistant text contains pseudo-tool-call markup."""
+    t = text or ""
+    return bool(_DSML_MARKER_RE.search(t) or _ALT_TOOL_SYNTAX_RE.search(t))
 
 
 def _strip_dsml_blocks(text: str) -> str:
@@ -28,8 +38,31 @@ def _strip_dsml_blocks(text: str) -> str:
         cleaned = new
     if _DSML_MARKER_RE.search(cleaned):
         cleaned = _DSML_MARKER_RE.split(cleaned, maxsplit=1)[0]
+    for _ in range(4):
+        new = _ALT_TOOL_CALL_BLOCK_RE.sub("", cleaned)
+        new = _ALT_FUNCTION_BLOCK_RE.sub("", new)
+        if new == cleaned:
+            break
+        cleaned = new
+    if _ALT_TOOL_SYNTAX_RE.search(cleaned):
+        cleaned = _ALT_TOOL_SYNTAX_RE.split(cleaned, maxsplit=1)[0]
     cleaned = cleaned.strip()
     return cleaned
+
+
+def needs_web_synthesis_retry(
+    *,
+    has_tool_calls: bool,
+    raw_visible: str,
+    cleaned_visible: str,
+    min_chars: int = 80,
+) -> bool:
+    """True when forced web synthesis produced stall markup or too little prose."""
+    if has_tool_calls:
+        return False
+    if _content_has_dsml_tool_syntax(raw_visible):
+        return True
+    return len((cleaned_visible or "").strip()) < min_chars
 
 
 def _strip_thinking_tags(text: str) -> str:

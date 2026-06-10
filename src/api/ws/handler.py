@@ -244,6 +244,9 @@ class GraphSession:
         # Propagate thread_id into audit context for this graph run
         set_thread_id(self.thread_id)
 
+        from src.agent.local_llm_scheduler import LocalLLMScheduler
+
+        LocalLLMScheduler.graph_run_started()
         token = set_active_project_for_run(self.last_project_id)
         try:
             # Initial status
@@ -278,6 +281,7 @@ class GraphSession:
             for q in list(self.listeners):
                 await q.put((err_msg, correlation_id))
         finally:
+            LocalLLMScheduler.graph_run_finished()
             reset_active_project(token)
             self.is_running = False
             # Final status update
@@ -558,6 +562,14 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                     ):
                                         model_info_payload["token_usage"] = (
                                             _node_token_usage
+                                        )
+                                    if output.get("vision_intake_mode"):
+                                        model_info_payload["vision_intake_mode"] = (
+                                            output["vision_intake_mode"]
+                                        )
+                                    if output.get("vision_proxy_model"):
+                                        model_info_payload["vision_proxy_model"] = (
+                                            output["vision_proxy_model"]
                                         )
                                     await _send_ws(model_info_payload)
                                 elif _node_fallback_chain and isinstance(

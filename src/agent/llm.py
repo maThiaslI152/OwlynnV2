@@ -278,9 +278,20 @@ async def get_large_llm() -> ChatOpenAI:
     return await LLMPool.get_large_llm()
 
 
-async def get_medium_llm(variant: str = "default") -> ChatOpenAI:
-    """Get medium LLM instance (pooled, swaps if needed)."""
-    return await LLMPool.get_medium_llm(variant)
+async def get_medium_llm(
+    variant: str = "default", *, foreground: bool = True
+) -> ChatOpenAI:
+    """Get medium LLM instance (pooled, swaps if needed).
+
+    Pass ``foreground=False`` for background callers (memory extraction) that
+    manage deferral via ``invoke_medium_background`` instead of the wrapper.
+    """
+    client = await LLMPool.get_medium_llm(variant)
+    if not foreground:
+        return client
+    from src.agent.local_llm_scheduler import wrap_medium_for_foreground
+
+    return wrap_medium_for_foreground(client)
 
 
 async def get_cloud_llm(tier: Optional[str] = None) -> ChatOpenAI:

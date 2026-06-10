@@ -4,10 +4,11 @@ from src.agent.nodes.complex_utils.cloud_payload import finalize_cloud_visible_c
 from src.agent.nodes.complex_utils.formatter import (
     _content_has_dsml_tool_syntax,
     _strip_dsml_blocks,
+    needs_web_synthesis_retry,
 )
 
 
-def test_strip_dsml_blocks_removes_tool_call_markup():
+def test_strip_dsml_blocks_removes_dsml_markup():
     raw = (
         "Let me grab more info.\n"
         "<\uff5c\uff5cDSML\uff5c\uff5ctool_calls>\n"
@@ -22,6 +23,12 @@ def test_strip_dsml_blocks_removes_tool_call_markup():
     assert not _content_has_dsml_tool_syntax(cleaned)
 
 
+def test_content_has_dsml_tool_syntax_detects_alt_markers():
+    assert _content_has_dsml_tool_syntax('<tool_call>{"name":"web_search"}</tool_call>')
+    assert _content_has_dsml_tool_syntax('<function=fetch_webpage>{"url":"x"}')
+    assert not _content_has_dsml_tool_syntax("Plain answer with no tool syntax.")
+
+
 def test_finalize_cloud_visible_content_strips_dsml():
     dsml_only = (
         "<\uff5c\uff5cDSML\uff5c\uff5ctool_calls>"
@@ -30,3 +37,33 @@ def test_finalize_cloud_visible_content_strips_dsml():
         "</\uff5c\uff5cDSML\uff5c\uff5ctool_calls>"
     )
     assert finalize_cloud_visible_content(dsml_only) == ""
+
+
+def test_strip_dsml_blocks_removes_tool_call_markup():
+    raw = (
+        "Based on my search, here's the weather for Tokyo:\n\n"
+        "Temperature: 21°C\n\n"
+        "<tool_call> <function=create_docx> tokyo_weather.txt </tool_call>"
+    )
+    cleaned = _strip_dsml_blocks(raw)
+    assert "tool_call" not in cleaned.lower()
+    assert "Tokyo" in cleaned
+    assert not _content_has_dsml_tool_syntax(cleaned)
+
+
+def test_needs_web_synthesis_retry_on_prose_plus_tool_markup():
+    raw = (
+        "A" * 100
+        + " <tool_call> <function=read_workspace_file> docs/STATUS.md </tool_call>"
+    )
+    cleaned = _strip_dsml_blocks(raw)
+    assert needs_web_synthesis_retry(
+        has_tool_calls=False,
+        raw_visible=raw,
+        cleaned_visible=cleaned,
+    )
+    assert not needs_web_synthesis_retry(
+        has_tool_calls=False,
+        raw_visible="Plain answer with enough characters. " * 5,
+        cleaned_visible="Plain answer with enough characters. " * 5,
+    )

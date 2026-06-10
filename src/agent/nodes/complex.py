@@ -32,6 +32,7 @@ from .complex_utils.formatter import (
     _flatten_human_content,
     _strip_dsml_blocks,
     _strip_thinking_tags,
+    needs_web_synthesis_retry,
 )
 from .complex_utils.cloud_payload import (
     COMPLEX_PROMPT_STABLE,
@@ -46,6 +47,20 @@ from src.agent.cloud_cost_tracker import get_cost_tracker
 from src.memory.user_profile import get_profile
 
 logger = logging.getLogger(__name__)
+
+
+def _vision_telemetry(vision_intake_mode: str) -> dict[str, Any]:
+    from src.agent.nodes.complex_utils.lm_studio_florence import (
+        configured_florence_model_name,
+    )
+
+    return {
+        "vision_intake_mode": vision_intake_mode,
+        "vision_proxy_model": (
+            configured_florence_model_name() if vision_intake_mode == "proxy" else None
+        ),
+    }
+
 
 from src.config.audit_log import audit_debug
 from src.config.log_middleware import log_model_attempt, log_node
@@ -343,6 +358,53 @@ def _count_ai_tool_rounds(messages: list) -> int:
     )
 
 
+def _is_user_human_message(msg: HumanMessage) -> bool:
+    """True for real user turns, not internal synthesis/fetch nudges."""
+    c = msg.content
+    text = (
+        c
+        if isinstance(c, str)
+        else _flatten_human_content(c)
+        if isinstance(c, list)
+        else str(c or "")
+    )
+    stripped = text.strip()
+    if not stripped:
+        return False
+    if stripped.startswith("[Internal reminder"):
+        return False
+    if stripped.startswith("[FINAL ANSWER REQUIRED]"):
+        return False
+    return True
+
+
+def _messages_for_current_user_turn(messages: list) -> list:
+    """Messages from the latest real user HumanMessage through end of thread."""
+    start = 0
+    for i in range(len(messages) - 1, -1, -1):
+        m = messages[i]
+        if isinstance(m, HumanMessage) and _is_user_human_message(m):
+            start = i
+            break
+    return messages[start:]
+
+
+def _count_web_tool_rounds(messages: list) -> int:
+    """Count assistant turns that emitted web tool calls (web budget only)."""
+    count = 0
+    for m in messages:
+        if not isinstance(m, AIMessage) or not getattr(m, "tool_calls", None):
+            continue
+        if any(tc.get("name", "") in _WEB_TOOL_NAMES for tc in m.tool_calls):
+            count += 1
+    return count
+
+
+def _current_turn_has_web_activity(messages: list) -> bool:
+    """True when this user turn already invoked web tools."""
+    return _count_web_tool_rounds(messages) > 0
+
+
 def _message_has_image_content(messages: list) -> bool:
     if not messages:
         return False
@@ -633,7 +695,8 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     persona = state.get("persona", "No persona available")
     mode = state.get("mode") or "tools_on"
     thread_messages = list(state.get("messages") or [])
-    tool_round = _count_ai_tool_rounds(thread_messages)
+    turn_messages = _messages_for_current_user_turn(thread_messages)
+    tool_round = _count_web_tool_rounds(turn_messages)
     max_web_tool_rounds = int(config.get("complex.max_web_tool_rounds", 3))
     force_web_synthesis = False
 
@@ -656,8 +719,14 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     )
     vision_task = has_images and route == "complex-cloud"
     knowledge_context = state.get("knowledge_context") or "None"
+    web_turn_active = bool(
+        state.get("web_search_suggested")
+    ) or _current_turn_has_web_activity(turn_messages)
     force_web_synthesis = (
-        web_on and not vision_task and tool_round >= max_web_tool_rounds
+        web_on
+        and not vision_task
+        and web_turn_active
+        and tool_round >= max_web_tool_rounds
     )
 
     volatile_extra = ""
@@ -888,6 +957,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             "fallback_chain": fallback_chain,
             "cloud_brief_tokens_est": cloud_brief_tokens_est,
             "anonymization_placeholders_count": anonymization_placeholders_count,
+            **_vision_telemetry(vision_intake_mode),
         }
 
     # ── 9.3: Dynamic tool binding ────────────────────────────────────────
@@ -896,16 +966,14 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     )
     tools_for_invoke: list | None = list(tools)
     if force_web_synthesis:
-        # DeepSeek V4 keeps emitting tool calls under tool_choice="auto" even when web
-        # tools are stripped (it pattern-copies prior calls + obeys the aggressive
-        # "exhaustive search" prompt). Dropping ALL tools removes the tools param from
-        # the request, so the API cannot return tool_calls and the model MUST synthesize
-        # a text answer. This is the compliant way to force a final response.
-        tools_for_invoke = None
+        stripped = _strip_web_tools(tools)
+        tools_for_invoke = stripped if stripped else None
         logger.info(
-            "[complex] Web tool budget exhausted (round=%d, max=%d); synthesis-only turn",
+            "[complex] Web tool budget exhausted (round=%d, max=%d); "
+            "synthesis turn (non-web tools=%d)",
             tool_round,
             max_web_tool_rounds,
+            len(stripped),
         )
 
     # ── 9.4: Tiered fallback — model acquisition ────────────────────────
@@ -1089,7 +1157,6 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                 )
                 content_str = str(getattr(response, "content", "") or "").strip()
                 if not content_str and not getattr(response, "tool_calls", None):
-                    # Local model returned empty; synthesize a response so it's not just the warning
                     synth_response = _fallback_for_blank_response(
                         thread_messages, web_search_enabled=web_on
                     )
@@ -1244,14 +1311,23 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         force_web_synthesis
         and route == "complex-cloud"
         and "fallback" not in model_label
-        and not has_tool_calls
-        and (dsml_stall or len(cleaned_visible.strip()) < 80)
+        and needs_web_synthesis_retry(
+            has_tool_calls=has_tool_calls,
+            raw_visible=raw_visible,
+            cleaned_visible=cleaned_visible,
+        )
     ):
+        user_query = _latest_user_text(thread_messages)
+        query_hint = (
+            f" Answer the user's question: {user_query[:300]}" if user_query else ""
+        )
         retry_nudge = HumanMessage(
             content=(
-                "[FINAL ANSWER REQUIRED] Use the search results and page excerpts already "
-                "in this thread. Write a complete comparison and a clear recommendation in "
-                "plain English. Do NOT output DSML, tool_calls, or any tool invocation syntax."
+                "[FINAL ANSWER REQUIRED] Use the search results and tool outputs already "
+                "in this thread."
+                f"{query_hint} "
+                "Write a complete answer in plain English. "
+                "Do NOT output DSML, tool_calls, or any tool invocation syntax."
             )
         )
         try:
@@ -1289,14 +1365,23 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     if (
         force_web_synthesis
         and not synthesis_retry
-        and not has_tool_calls
-        and (dsml_stall or len(cleaned_visible.strip()) < 80)
+        and needs_web_synthesis_retry(
+            has_tool_calls=has_tool_calls,
+            raw_visible=raw_visible,
+            cleaned_visible=cleaned_visible,
+        )
     ):
+        user_query = _latest_user_text(thread_messages)
+        query_hint = (
+            f" Answer the user's question: {user_query[:300]}" if user_query else ""
+        )
         synth_nudge = HumanMessage(
             content=(
-                "Write the final answer for the user using the search results and page "
-                "excerpts above. Include a clear GAMMA vs ZONA recommendation in plain "
-                "English. No tool syntax."
+                "[FINAL ANSWER REQUIRED] Use the search results and tool outputs already "
+                "in this thread."
+                f"{query_hint} "
+                "Write a complete answer in plain English. "
+                "Do NOT output DSML, tool_calls, or any tool invocation syntax."
             )
         )
         try:
@@ -1421,6 +1506,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             "fallback_chain": fallback_chain,
             "cloud_brief_tokens_est": cloud_brief_tokens_est,
             "anonymization_placeholders_count": anonymization_placeholders_count,
+            **_vision_telemetry(vision_intake_mode),
         }
 
     api_tokens = enrich_token_usage_with_breakdown(
@@ -1438,6 +1524,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         "fallback_chain": fallback_chain,
         "cloud_brief_tokens_est": cloud_brief_tokens_est,
         "anonymization_placeholders_count": anonymization_placeholders_count,
+        **_vision_telemetry(vision_intake_mode),
     }
 
 
@@ -1513,7 +1600,9 @@ async def complex_tool_action_node(state: AgentState) -> AgentState:
         truncated_delta.append(msg)
     delta = truncated_delta
 
-    tool_round = _count_ai_tool_rounds(current_messages)
+    tool_round = _count_web_tool_rounds(
+        _messages_for_current_user_turn(current_messages)
+    )
     max_web_tool_rounds = int(config.get("complex.max_web_tool_rounds", 3))
     # On the last tool round, the next complex_llm turn forces synthesis (no tools).
     # Skip fetch-retry nudges that would push DeepSeek to emit DSML pseudo-calls.

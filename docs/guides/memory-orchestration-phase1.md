@@ -78,8 +78,15 @@ memory:
   extraction:
     temperature: 0.1
     max_tokens: 1024
+    idle_cooldown_seconds: 8
+    idle_poll_seconds: 2
+    max_idle_wait_seconds: 600
+    defer_while_graph_active: true
+    process_nice: 10
   cloud_inject_max_chars: 800
 ```
+
+Background extraction defers Qwen until chat idle — see [MEMORY.md](../MEMORY.md) and `src/agent/local_llm_scheduler.py`.
 
 Redis stream: `owlynn:memory:extract` (consumer group `owlynn-extractors`).
 

@@ -1,4 +1,4 @@
-"""Lazy-loaded local VLM client for vision proxy."""
+"""Lazy-loaded Florence-2 client for vision proxy (OCR only — not Qwen)."""
 
 from __future__ import annotations
 
@@ -9,6 +9,10 @@ from typing import Optional
 
 from langchain_openai import ChatOpenAI
 
+from src.agent.nodes.complex_utils.lm_studio_florence import (
+    configured_florence_model_name,
+    ensure_florence_loaded,
+)
 from src.config.audit_log import audit_debug, audit_info
 from src.config.config_loader import config, get_model_config
 
@@ -16,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class VisionModelManager:
-    """Load VLM on first image; drop reference after idle timeout."""
+    """Dedicated Florence-2 client; never falls back to medium/Qwen for OCR."""
 
     def __init__(self) -> None:
         self._client: Optional[ChatOpenAI] = None
@@ -24,6 +28,7 @@ class VisionModelManager:
         self._inflight: int = 0
         self._idle_seconds = float(config.get("cloud.vision_idle_unload_seconds", 300))
         self._watchdog_task: asyncio.Task | None = None
+        self._model_name: str = configured_florence_model_name()
 
     async def start(self) -> None:
         if self._watchdog_task and not self._watchdog_task.done():
@@ -53,39 +58,56 @@ class VisionModelManager:
         try:
             if self._client is None:
                 model_cfg = get_model_config("vision_proxy")
-                if not model_cfg.get("model_name"):
-                    model_cfg = get_model_config("medium", "vision")
+                model_name = str(
+                    model_cfg.get("model_name") or configured_florence_model_name()
+                )
+                if "florence" not in model_name.lower():
+                    raise RuntimeError(
+                        f"vision_proxy must use Florence, got {model_name!r}"
+                    )
+
+                if not await ensure_florence_loaded():
+                    raise RuntimeError(
+                        f"Florence VLM ({model_name}) is not loaded in LM Studio"
+                    )
+
                 extra_body = dict(model_cfg.get("extra_body") or {})
                 extra_body["max_output_tokens"] = int(
-                    config.get("cloud.vision_max_tokens", 2048)
+                    config.get("cloud.vision_max_tokens", 512)
                 )
+                # Florence OCR: greedy, short output — no chat persona
+                extra_body.setdefault("top_p", 1.0)
                 temp = float(
                     model_cfg.get("temperature")
                     if model_cfg.get("temperature") is not None
                     else config.get("cloud.vision_temperature", 0.0)
                 )
                 self._client = ChatOpenAI(
-                    model=model_cfg.get(
-                        "model_name", "florence-2-base-nsfw-v2-ext-mlx"
-                    ),
+                    model=model_name,
                     api_key="sk-local-no-key-needed",
                     base_url=model_cfg.get("base_url", "http://127.0.0.1:1234/v1"),
                     temperature=temp,
-                    max_tokens=int(config.get("cloud.vision_max_tokens", 2048)),
+                    max_tokens=int(config.get("cloud.vision_max_tokens", 512)),
                     extra_body=extra_body,
                     request_timeout=model_cfg.get("request_timeout")
                     or model_cfg.get("timeout", 120),
                     stream_chunk_timeout=None,
                 )
+                self._model_name = model_name
                 audit_info(
                     "agent.model",
                     "vision_proxy_loaded",
-                    model=model_cfg.get("model_name"),
+                    model=model_name,
+                    role="florence_ocr_only",
                 )
             self.touch()
             return self._client
         finally:
             self._inflight -= 1
+
+    @property
+    def model_name(self) -> str:
+        return self._model_name
 
     async def unload(self) -> None:
         if self._client is not None:
@@ -109,6 +131,10 @@ _manager = VisionModelManager()
 
 async def get_vision_llm() -> ChatOpenAI:
     return await _manager.acquire()
+
+
+def get_vision_proxy_model_name() -> str:
+    return _manager.model_name
 
 
 async def start_vision_manager() -> None:

@@ -4,7 +4,9 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from src.agent.nodes.complex import (
     _count_ai_tool_rounds,
+    _count_web_tool_rounds,
     _extract_tool_output_delta,
+    _messages_for_current_user_turn,
 )
 
 
@@ -56,6 +58,53 @@ def test_count_ai_tool_rounds():
         ),
     ]
     assert _count_ai_tool_rounds(msgs) == 2
+
+
+def test_count_web_tool_rounds_ignores_non_web_tools():
+    """Prior read_workspace_file rounds must not exhaust the web tool budget."""
+    msgs = [
+        HumanMessage(content="q"),
+        AIMessage(
+            content="",
+            tool_calls=[{"id": "1", "name": "read_workspace_file", "args": {}}],
+        ),
+        ToolMessage(content="file", tool_call_id="1"),
+        AIMessage(
+            content="", tool_calls=[{"id": "2", "name": "web_search", "args": {}}]
+        ),
+    ]
+    assert _count_web_tool_rounds(msgs) == 1
+    assert _count_ai_tool_rounds(msgs) == 2
+
+
+def test_web_tool_rounds_reset_per_user_turn():
+    """F3 web rounds must not force synthesis on a later user message in the thread."""
+    msgs = [
+        HumanMessage(content="search tokyo weather"),
+        AIMessage(
+            content="",
+            tool_calls=[{"id": "1", "name": "web_search", "args": {}}],
+        ),
+        ToolMessage(content="tokyo ok", tool_call_id="1"),
+        AIMessage(
+            content="",
+            tool_calls=[{"id": "2", "name": "fetch_webpage", "args": {}}],
+        ),
+        ToolMessage(content="page", tool_call_id="2"),
+        AIMessage(
+            content="",
+            tool_calls=[{"id": "3", "name": "web_search", "args": {}}],
+        ),
+        ToolMessage(content="more", tool_call_id="3"),
+        HumanMessage(content="read docs/STATUS.md"),
+        AIMessage(
+            content="",
+            tool_calls=[{"id": "4", "name": "read_workspace_file", "args": {}}],
+        ),
+    ]
+    assert _count_web_tool_rounds(msgs) == 3
+    turn = _messages_for_current_user_turn(msgs)
+    assert _count_web_tool_rounds(turn) == 0
 
 
 def test_old_buggy_slice_drops_parallel_tool_results():

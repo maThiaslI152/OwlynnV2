@@ -19,6 +19,7 @@ from src.memory.user_profile import get_profile
 from src.memory.persona_manager import get_persona_by_id
 from src.config.config_loader import config
 import asyncio
+import re
 import logging
 from datetime import datetime, timedelta
 from typing import Optional
@@ -487,7 +488,12 @@ async def _should_save_memory(last_human: str, last_ai: str) -> bool:
     if len(human_stripped) < 10 and len(ai_stripped) < 10:
         return False
 
-    # Skip common greeting patterns
+    # Skip common greeting patterns (align with router keyword_bypass)
+    _greeting_re = re.compile(
+        r"\b(hello|hi|hey|thanks|thank you|bye|goodbye)\b", re.IGNORECASE
+    )
+    if _greeting_re.search(human_stripped) and len(human_stripped) < 40:
+        return False
     greeting_patterns = {
         "hello",
         "hi",

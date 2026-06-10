@@ -1,7 +1,7 @@
 ---
 status: active
 category: architecture
-last_updated: 2026-06-10
+last_updated: 2026-06-11
 owner: ai-agent
 audience: agent
 ---
@@ -39,10 +39,30 @@ See [memory-vision-screen-roadmap.md](guides/memory-vision-screen-roadmap.md) fo
 
 After the agent responds, `memory_write_node`:
 1. PII-scrubs content before persistence
-2. Enqueues custom 8B extraction (Redis stream → worker → L1 atoms in Qdrant)
+2. Enqueues custom extraction (Redis stream → worker → L1 atoms in Qdrant)
 3. Extracts topics and updates topic/interests tracking
 4. Records the conversation in `conversations.json`
 5. Invalidates the memory cache for the next turn
+
+### Background extraction (Qwen) — resource deferral
+
+LTM atom extraction uses the **medium** slot (Qwen3.5-9B) in a background worker. To avoid GPU/CPU contention with active chat or local fallback:
+
+```text
+memory_write → Redis queue → worker waits for idle window → invoke_medium_background() → Mem0
+```
+
+**Defer conditions** (configurable in `defaults.yaml`):
+
+- No active graph run (`GraphSession` registers start/end)
+- No foreground medium-LLM call (agent complex/simple local path)
+- Post-turn cooldown (`idle_cooldown_seconds`, default 8s)
+- Lower CPU priority during invoke (`process_nice`, default 10)
+
+LM Studio does **not** expose per-request GPU throttling via the OpenAI API; defer-until-idle is the practical mitigation on Apple Silicon unified memory.
+
+**Module:** `src/agent/local_llm_scheduler.py`  
+**Worker:** `src/memory/extraction/worker.py` (`get_medium_llm(foreground=False)`)
 
 ## Configuration
 
@@ -59,6 +79,14 @@ memory:
     interest_half_life_days: 21    # Interest relevance half-life
     focus_window_days: 3           # Recent focus detection window
     relevance_floor: 0.05          # Minimum relevance score
+  extraction:
+    temperature: 0.1
+    max_tokens: 1024
+    idle_cooldown_seconds: 8       # Wait after turn before extraction
+    idle_poll_seconds: 2
+    max_idle_wait_seconds: 600     # Run anyway after 10m
+    defer_while_graph_active: true
+    process_nice: 10                 # Lower CPU priority (Unix)
 ```
 
 ## Context Budget Management
@@ -84,6 +112,7 @@ The `VectorLifecycleManager` orchestrates the insertion and deletion of vector d
 
 - `src/agent/nodes/memory.py` — `memory_inject_lite`, `memory_retrieve`, `memory_write`
 - `src/memory/extraction/` — Custom extractor worker + schema
+- `src/agent/local_llm_scheduler.py` — Foreground/background medium LLM deferral
 - `src/memory/scenarios.py` — L2/L3 scenario markdown
 - `src/memory/compression.py` — Cloud brief memory block
 - `src/agent/pii_scrubber.py` — PII scrub before LTM writes
