@@ -447,6 +447,65 @@ audience: agent
 
 ---
 
+## BUG-21 [CRITICAL] [FIXED]: Silent Crash in Stateful Notebook Execution Loop (LangGraph `recursion_limit` exceeded)
+
+**Symptom:** During complex multi-cell Python notebook executions, the agent goes silent ("no response") and hangs after the 5th or 6th cell execution without returning any final answer.
+
+**Root Cause:** The LangGraph execution loop for executing notebook cells (`complex_llm` -> `plan_review` -> `security_proxy` -> `tool_action`) requires 4 node transitions per cell. By the 5th/6th cell execution, the total number of node entries reached 25, which is the default recursion limit in LangGraph. Exceeding this limit raised a `GraphRecursionError` that silently crashed the background execution thread.
+
+**Affected files:**
+- `src/config/defaults.yaml`
+- `src/api/ws/handler.py`
+- `src/api/server.py`
+- `src/api/routes/openai.py`
+
+**Fix approach:**
+1. Added a central setting `recursion_limit: 100` under the `complex:` configuration block in `defaults.yaml`.
+2. Loaded this parameter and dynamically injected `"recursion_limit": 100` into the graph configuration (`config` dict) for all WebSocket runs and API streaming/non-streaming chat completions.
+3. Created `tests/test_recursion_limit.py` unit test to verify that the parameter is read correctly and accepted by the graph execution config.
+
+**Status:** FIXED
+
+---
+
+## BUG-22 [HIGH] [FIXED]: Notebook Session Leakage and Infinite Loop Hangs
+
+**Symptom:** Variable values and imports leak across different concurrent chat threads running stateful Python REPLs. Additionally, cells containing infinite execution loops (e.g. `while True: pass`) block the Python worker thread indefinitely, hanging the entire backend server.
+
+**Root Cause:** The notebook session registry used `threading.get_ident()` to isolate REPL worker environments, which fails to distinguish between different asynchronous requests running on the same thread pool. Furthermore, the subprocess read call on the worker process stdout was blocking synchronously without an execution timeout.
+
+**Affected files:**
+- `src/tools/notebook.py`
+
+**Fix approach:**
+1. Scoped notebook worker sessions using a composite key that includes the LangGraph `thread_id` (retrieved from `get_thread_id()` context variable) to ensure complete chat thread isolation.
+2. Wrapped the worker stdout socket reads in a `select.select` timeout block with a 15.0-second limit. If a cell execution exceeds 15.0 seconds, the worker process is terminated, the active session is deleted, and a descriptive timeout message is returned.
+3. Created `tests/test_notebook_timeout.py` to assert both session isolation and execution timeout behaviors.
+
+**Status:** FIXED
+
+---
+
+## BUG-23 [MEDIUM] [FIXED]: Legacy Word Document (.doc) Ingest & Parsing Failures
+
+**Symptom:** Uploading binary Word documents (`.doc`) throws parsing exceptions, or fails to extract text content, resulting in empty context injections or unicode decode errors.
+
+**Root Cause:** The file ingestion pipeline only had `.docx` extraction support via python-docx. Binary `.doc` files were treated as raw binary or ignored, leaving no text extraction path.
+
+**Affected files:**
+- `src/api/shared.py`
+- `src/api/file_processor.py`
+- `src/tools/core_tools.py`
+
+**Fix approach:**
+1. Implemented a centralized binary scanner `extract_doc_text(raw_bytes: bytes) -> str` in `shared.py` that extracts readable ASCII and UTF-16-LE character sequences (length >= 4) from `.doc` files.
+2. Wired `.doc` support into file upload message content parsing (`build_message_content`), the background file watcher (`file_processor.py`), and the workspace reader tool (`read_workspace_file` in `core_tools.py`).
+3. Created `tests/test_word_extraction.py` to verify paragraph/table extraction for both `.docx` and `.doc` extensions.
+
+**Status:** FIXED
+
+---
+
 ## Summary
 
 | Bug | Severity | Status | Verification |
@@ -471,13 +530,16 @@ audience: agent
 | BUG-18: Simple-path empty reply | HIGH | **FIXED** | F1.1 eval empty bubble |
 | BUG-19: Tool-call XML leaks as literal text | MEDIUM | **FIXED** | F3.1/F4.1 eval re-score |
 | BUG-20: Greeting routed to complex-cloud | MEDIUM | **FIXED** | M4.1 eval failure |
+| BUG-21: Silent crash in notebook loop | CRITICAL | **FIXED** | `tests/test_recursion_limit.py` |
+| BUG-22: Notebook session leakage/hangs | HIGH | **FIXED** | `tests/test_notebook_timeout.py` |
+| BUG-23: Legacy Word doc (.doc) ingestion | MEDIUM | **FIXED** | `tests/test_word_extraction.py` |
 
 ## Test Results
 
 - **Backend pytest (BUG-1, BUG-4):** `tests/test_bugfix_persona_leak.py`, `tests/test_bugfix_chat_title.py`
 - **Frontend vitest:** full suite passes after browser-audit fixes
 - **BUG-9..12:** verified by code review and/or targeted tests; BUG-12 also live network CI
-- **BUG-17..20:** identified from `local-frontier-eval-2026-06-11` (v9b/v9c) — fixes verified with unit tests and local CI pipeline.
+- **BUG-17..23:** identified from local-frontier-eval & notebook loops — fixes verified with unit tests (`tests/test_recursion_limit.py`, `tests/test_notebook_timeout.py`, `tests/test_word_extraction.py`) and local CI pipeline.
 
 ## Related
 
@@ -488,4 +550,4 @@ audience: agent
 
 ## Last updated
 
-2026-06-11 — BUG-17..20 fixed and verified: vision route, simple empty reply, tool-call leaks, greeting gate
+2026-06-11 — BUG-17..23 fixed and verified: vision, empty replies, tool-call leaks, greeting, recursion limits, notebook hangs/isolation, and legacy doc support.

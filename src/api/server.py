@@ -530,7 +530,12 @@ async def openai_stream_generator(
     created_time = int(time.time())
 
     thread_id = f"api-{uuid.uuid4().hex[:8]}"
-    config = {"configurable": {"thread_id": thread_id}}
+    from src.config.config_loader import config as app_config
+
+    config = {
+        "configurable": {"thread_id": thread_id},
+        "recursion_limit": int(app_config.get("complex.recursion_limit", 100)),
+    }
     inputs = {
         "messages": lc_messages,
         "project_id": project_id,

@@ -209,6 +209,14 @@ pytest tests/test_memory_nodes.py -v
 | `cloud_escalation_enabled` | boolean | `true` | complex_llm |
 | `cloud_anonymization_enabled` | boolean | `true` | complex_llm (cloud path) |
 | `medium_models` | object | Three variant keys | complex_llm (model selection) |
+| `recursion_limit` | integer | `100` | graph (global) |
+
+## Graph Run Limits
+
+To prevent infinite execution loops and silent crashes in multi-turn tool-calling runs (e.g., stateful Python notebook cells), the LangGraph `recursion_limit` is set globally.
+- **Default limit**: Increased from the LangGraph default of `25` to `100`.
+- **Configuration**: Overridden via `defaults.yaml` -> `complex.recursion_limit`.
+- **Scope**: Applied to all graph run configurations in the WebSocket chat handlers and OpenAI API compatibility endpoints.
 
 ## Related
 
@@ -217,4 +225,6 @@ pytest tests/test_memory_nodes.py -v
 
 ## Last updated
 
-2026-06-10 — removed swap_manager test ref; fixed architecture link
+2026-06-11 — documented recursion limit and graph run limits settings
+
+

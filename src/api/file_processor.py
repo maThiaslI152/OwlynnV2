@@ -160,8 +160,8 @@ class FileWatcherHandler(FileSystemEventHandler):
                 self._process_pdf(filepath, output_path)
             elif ext in [".csv", ".xlsx", ".xls", ".tsv"]:
                 self._process_table(filepath, output_path, ext)
-            elif ext == ".docx":
-                self._process_word(filepath, output_path)
+            elif ext in [".docx", ".doc"]:
+                self._process_word(filepath, output_path, ext)
             elif ext == ".pptx":
                 self._process_pptx(filepath, output_path)
             elif ext == ".epub":
@@ -359,8 +359,25 @@ class FileWatcherHandler(FileSystemEventHandler):
         with open(output_path_md, "w", encoding="utf-8") as f:
             f.write(markdown_text)
 
-    def _process_word(self, filepath, output_path):
-        """Extract DOCX text via Docling (includes tables; fallback to python-docx)."""
+    def _process_word(self, filepath, output_path, ext):
+        """Extract DOC/DOCX text (using Docling/python-docx for DOCX, binary extractor for DOC)."""
+        if ext == ".doc":
+            from src.api.shared import extract_doc_text
+
+            try:
+                with open(filepath, "rb") as f:
+                    raw_bytes = f.read()
+                text = extract_doc_text(raw_bytes)
+                if text:
+                    with open(output_path, "w", encoding="utf-8") as f:
+                        f.write(text)
+                    return
+            except Exception as e:
+                logger.warning(
+                    "[Watcher] Binary DOC extraction failed for %s: %s", filepath, e
+                )
+            return
+
         converter = self._get_docling_converter()
         if converter is not None:
             try:

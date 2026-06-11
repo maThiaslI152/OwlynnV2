@@ -130,6 +130,7 @@ Frontend should send `type` (MIME) on each file; Composer infers from `file.type
 |-----------|----------|
 | `image/png`, `image/jpeg`, `image/webp`, `image/gif` | **Local route (`complex-default`):** forwarded as multimodal `image_url` to local Qwen. **Cloud route (`complex-cloud`):** transcribed via `vision_proxy` before DeepSeek (text-only API). UI shows thumbnail in composer + message bubble. **Not** indexed into Qdrant/RAG. |
 | `application/pdf` / `.pdf` | Text extracted inline when possible; otherwise agent calls `read_workspace_file` |
+| `application/vnd.openxmlformats-officedocument.wordprocessingml.document` / `.docx`, `.doc` | Text and table contents extracted inline on upload; otherwise agent calls `read_workspace_file` |
 | Other UTF-8 text/code | Inlined in prompt as fenced block |
 | Other binary | Saved to workspace; agent instructed to call `read_workspace_file` |
 

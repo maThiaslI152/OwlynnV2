@@ -278,6 +278,7 @@ complex:
   max_web_tool_rounds: 3                  # After N tool-calling turns, force synthesis (no more web tools)
   default_token_budget: 4096              # Fallback token budget
   synthetic_answer_max_chars: 4500        # Max chars for synthetic answers
+  recursion_limit: 100                    # LangGraph recursion limit to prevent crashes in loops
 
 # ── Cloud ────────────────────────────────────────────────────────────────────
 cloud:

@@ -102,6 +102,22 @@ def read_workspace_file(filename: str) -> str:
             doc.close()
             if not content.strip():
                 return "This PDF has no extractable text layer."
+        elif filepath.lower().endswith(".docx"):
+            from src.api.shared import extract_docx_text
+
+            with open(filepath, "rb") as f:
+                raw_bytes = f.read()
+            content = extract_docx_text(raw_bytes)
+            if not content.strip():
+                return "This DOCX has no extractable text."
+        elif filepath.lower().endswith(".doc"):
+            from src.api.shared import extract_doc_text
+
+            with open(filepath, "rb") as f:
+                raw_bytes = f.read()
+            content = extract_doc_text(raw_bytes)
+            if not content.strip():
+                return "This DOC has no extractable text."
         else:
             with open(filepath, "r", encoding="utf-8") as f:
                 content = f.read()

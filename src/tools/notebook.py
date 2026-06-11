@@ -18,10 +18,12 @@ logger = logging.getLogger(__name__)
 
 from langchain_core.tools import tool
 
+from src.config.audit_log import get_thread_id
+
 # Per-thread notebook state to prevent cross-session contamination
 _notebook_lock = threading.Lock()
 _notebook_sessions: dict[
-    int, dict
+    str | int, dict
 ] = {}  # thread_id -> {"process": Popen, "counter": int}
 
 WORKER_SCRIPT = os.path.join(os.path.dirname(__file__), "notebook_worker.py")
@@ -47,11 +49,19 @@ def _cleanup_all():
                 _cleanup_worker(session["process"])
 
 
+def _get_session_key() -> str | int:
+    """Get the key to identify the notebook session (thread ID or python thread ID)."""
+    tid = get_thread_id()
+    if tid:
+        return f"graph_{tid}"
+    return threading.get_ident()
+
+
 def _get_session() -> dict:
     """Get or create the notebook session for the current thread."""
-    tid = threading.get_ident()
+    key = _get_session_key()
     with _notebook_lock:
-        if tid not in _notebook_sessions:
+        if key not in _notebook_sessions:
             proc = subprocess.Popen(
                 [sys.executable, WORKER_SCRIPT],
                 stdin=subprocess.PIPE,
@@ -60,10 +70,10 @@ def _get_session() -> dict:
                 text=True,
                 bufsize=1,  # line buffered
             )
-            _notebook_sessions[tid] = {"process": proc, "counter": 0}
+            _notebook_sessions[key] = {"process": proc, "counter": 0}
 
         # Check if process died
-        proc = _notebook_sessions[tid]["process"]
+        proc = _notebook_sessions[key]["process"]
         if proc.poll() is not None:
             logger.warning("Notebook worker died. Restarting.")
             proc = subprocess.Popen(
@@ -74,17 +84,17 @@ def _get_session() -> dict:
                 text=True,
                 bufsize=1,
             )
-            _notebook_sessions[tid] = {"process": proc, "counter": 0}
+            _notebook_sessions[key] = {"process": proc, "counter": 0}
 
-        return _notebook_sessions[tid]
+        return _notebook_sessions[key]
 
 
 def _reset_notebook():
     """Reset the notebook state for the current thread."""
-    tid = threading.get_ident()
+    key = _get_session_key()
     with _notebook_lock:
-        if tid in _notebook_sessions:
-            proc = _notebook_sessions[tid]["process"]
+        if key in _notebook_sessions:
+            proc = _notebook_sessions[key]["process"]
             try:
                 payload = json.dumps({"action": "reset"}) + "\n"
                 proc.stdin.write(payload)
@@ -93,8 +103,9 @@ def _reset_notebook():
             except Exception as e:
                 logger.warning("Error resetting worker: %s", e)
                 _cleanup_worker(proc)
-                del _notebook_sessions[tid]
-            _notebook_sessions[tid]["counter"] = 0
+                del _notebook_sessions[key]
+            else:
+                _notebook_sessions[key]["counter"] = 0
 
 
 @tool
@@ -148,6 +159,24 @@ def notebook_run(code: str) -> str:
 
         proc.stdin.write(payload)
         proc.stdin.flush()
+
+        import select
+
+        # Wait up to 15 seconds for stdout to become readable
+        r, _, _ = select.select([proc.stdout], [], [], 15.0)
+        if not r:
+            logger.warning(
+                "Notebook cell execution timed out after 15s. Terminating worker."
+            )
+            _cleanup_worker(proc)
+
+            # Reset session registry for this key
+            key = _get_session_key()
+            with _notebook_lock:
+                if key in _notebook_sessions:
+                    del _notebook_sessions[key]
+
+            return f"[Cell {cell_num}] Timeout Error: Code execution exceeded 15.0 seconds. The notebook session has been reset."
 
         response_line = proc.stdout.readline()
         if not response_line:

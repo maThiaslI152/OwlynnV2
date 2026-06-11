@@ -128,11 +128,76 @@ def extract_pdf_text(raw_bytes: bytes) -> str:
         return ""
 
 
+def extract_docx_text(raw_bytes: bytes) -> str:
+    """Extract paragraphs and table text from DOCX bytes using python-docx."""
+    import io
+
+    try:
+        from docx import Document
+
+        doc = Document(io.BytesIO(raw_bytes))
+        text = ""
+        for para in doc.paragraphs:
+            if para.text.strip():
+                text += para.text + "\n"
+        for table in doc.tables:
+            text += "\n--- Table ---\n"
+            for row_idx, row in enumerate(table.rows):
+                cells = [cell.text.strip() for cell in row.cells]
+                if row_idx == 0:
+                    text += " | ".join(cells) + "\n" + "---" * len(cells) + "\n"
+                else:
+                    text += " | ".join(cells) + "\n"
+        return text
+    except Exception as e:
+        logger.error("python-docx text extraction failed: %s", e)
+        return ""
+
+
+def extract_doc_text(raw_bytes: bytes) -> str:
+    """Extract printable text strings from binary DOC bytes (ASCII & UTF-16-LE)."""
+    import re
+
+    # Match ASCII printable characters of length 4 or more
+    ascii_pat = re.compile(rb"[\x20-\x7E\x0A\x0D]{4,}")
+    # Match UTF-16-LE printable characters (character followed by null byte)
+    utf16_pat = re.compile(rb"(?:[\x20-\x7E\x0A\x0D]\x00){4,}")
+
+    strings = []
+
+    # 1. Extract ASCII strings
+    for match in ascii_pat.finditer(raw_bytes):
+        try:
+            s = match.group(0).decode("ascii", errors="ignore").strip()
+            if s:
+                strings.append(s)
+        except Exception:
+            pass
+
+    # 2. Extract UTF-16-LE strings
+    for match in utf16_pat.finditer(raw_bytes):
+        try:
+            s = match.group(0).decode("utf-16-le", errors="ignore").strip()
+            if s:
+                strings.append(s)
+        except Exception:
+            pass
+
+    # Combine, clean up extra whitespaces/newlines, and join
+    combined = "\n".join(strings)
+    # Clean up multiple whitespaces
+    combined = re.sub(r"[ \t]+", " ", combined)
+    # Clean up multiple newlines
+    combined = re.sub(r"\n{3,}", "\n\n", combined)
+    return combined.strip()
+
+
 async def build_message_content(text: str, files: list):
     """
     Builds the message content block for LangChain, supporting:
     - Images: forwarded as image_url for multimodal vision models
     - Text PDFs: text extracted via PyMuPDF and injected
+    - Word Docs: text extracted via python-docx/binary scanner and injected
     - Scanned PDFs: each page rendered as image and forwarded to the vision model
     - Code/text files: decoded and injected as a fenced code block
     """
@@ -188,6 +253,48 @@ async def build_message_content(text: str, files: list):
                     f"[Workspace file `{name}` — text extracted from PDF below. "
                     f"Use this to answer when it is enough; if not, call read_workspace_file with that path "
                     f"(function/tool call, not instructions to the user).]\n\n---\n{excerpt}\n---"
+                )
+            else:
+                text_injections.append(
+                    f"[Workspace file `{name}` — little or no extractable text in upload preview. "
+                    f"You must invoke read_workspace_file for `{name}` as a tool/function call before answering.]"
+                )
+
+        elif name.lower().endswith(".docx"):
+            logger.info("Uploaded '%s'. Extracting text for chat context.", name)
+            docx_text = await asyncio.to_thread(extract_docx_text, raw_bytes)
+            docx_text = (docx_text or "").strip()
+            if len(docx_text) >= 50:
+                excerpt = docx_text[:MAX_INLINE_PDF_CHARS]
+                if len(docx_text) > MAX_INLINE_PDF_CHARS:
+                    excerpt += (
+                        "\n\n[DOCX truncated in this prompt for size; full file is on disk — "
+                        "call read_workspace_file as a real tool if you need the rest.]"
+                    )
+                text_injections.append(
+                    f"[Workspace file `{name}` — text extracted from DOCX below. "
+                    f"Use this to answer when it is enough; if not, call read_workspace_file with that path.]\n\n---\n{excerpt}\n---"
+                )
+            else:
+                text_injections.append(
+                    f"[Workspace file `{name}` — little or no extractable text in upload preview. "
+                    f"You must invoke read_workspace_file for `{name}` as a tool/function call before answering.]"
+                )
+
+        elif name.lower().endswith(".doc"):
+            logger.info("Uploaded '%s'. Extracting text for chat context.", name)
+            doc_text = await asyncio.to_thread(extract_doc_text, raw_bytes)
+            doc_text = (doc_text or "").strip()
+            if len(doc_text) >= 50:
+                excerpt = doc_text[:MAX_INLINE_PDF_CHARS]
+                if len(doc_text) > MAX_INLINE_PDF_CHARS:
+                    excerpt += (
+                        "\n\n[DOC truncated in this prompt for size; full file is on disk — "
+                        "call read_workspace_file as a real tool if you need the rest.]"
+                    )
+                text_injections.append(
+                    f"[Workspace file `{name}` — text extracted from DOC below. "
+                    f"Use this to answer when it is enough; if not, call read_workspace_file with that path.]\n\n---\n{excerpt}\n---"
                 )
             else:
                 text_injections.append(

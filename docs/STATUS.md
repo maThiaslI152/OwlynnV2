@@ -18,6 +18,7 @@ Project status tracker. Last updated: 2026-06-11 — Chrome search bridge extens
 
 | Change | Impact | Doc |
 |--------|--------|-----|
+| **Notebook & Word Doc Hardening** | Added Word doc parsing support, notebook thread-isolation, 15s cell timeouts, and 100 recursion limit | [`walkthrough.md`](../walkthrough.md), [`docs/AGENT_FLOW.md`](AGENT_FLOW.md), [`docs/TOOLS.md`](TOOLS.md) |
 | **Chrome Search Bridge** | Browser extension search routing via Brave to bypass bot detection/CAPTCHAs | [`changes/browser-extension-search-bridge/CHANGELOG.md`](changes/browser-extension-search-bridge/CHANGELOG.md) |
 | **Frontier eval harness** | WS tool merge, idle stall exit, F4 fixture, M4 greeting gate, F8/F9 fixes; 82% → **~94%** | [`changes/frontier-eval-memory-session/CHANGELOG.md`](changes/frontier-eval-memory-session/CHANGELOG.md) |
 | **Scoring-only cloud strict** | Qwen fallback on cloud-intended turns caps grade at 49 (no runtime block) | `scripts/run_local_frontier_eval.py` |
@@ -181,6 +182,18 @@ frontend-v2/src/App.tsx        # Frontend runtime
 | BUG-9 | **CRITICAL** | Default project file auto-indexing into Qdrant skipped (cache path mismatch) | `src/api/server.py` lines 80, 82-86, 1045 | Fixed |
 | BUG-10 | **MEDIUM** | DOCX table content not extracted (python-docx limitation) | `src/api/file_processor.py` `_process_word()` | Fixed |
 | BUG-11 | **LOW** | XLSX merged cells produce "Unnamed" column headers in markdown output | `src/api/file_processor.py` `_process_table()` | Fixed |
+| BUG-12 | **MEDIUM** | Cloud `tools_off` path omitted `api_tokens_used` | `src/agent/nodes/complex.py` | Fixed |
+| BUG-13 | **CRITICAL** | Web search turns stall on DeepSeek tool loop | `src/api/ws/handler.py` | Fixed |
+| BUG-14 | **MEDIUM** | Cloud Cost Chip disappears on chat switch | `CloudSettingsPanel.tsx` | Fixed |
+| BUG-15 | **LOW** | Cloud Usage popover transparent overlap | CSS styles | Fixed |
+| BUG-16 | **MEDIUM** | Markdown tables overflow narrow chat panel | CSS styles | Fixed |
+| BUG-17 | **HIGH** | Vision route not triggered deterministically | `src/agent/nodes/router.py` | Fixed |
+| BUG-18 | **HIGH** | Simple-path empty visible reply | `src/agent/nodes/simple.py` | Fixed |
+| BUG-19 | **MEDIUM** | Tool-call XML leaks as literal text in reply | `formatter.py` / `ws/handler.py` | Fixed |
+| BUG-20 | **MEDIUM** | Greeting routed to `complex-cloud` instead of `simple` | `src/agent/nodes/router.py` | Fixed |
+| BUG-21 | **CRITICAL** | Silent crash in notebook loop (exceeded recursion limit) | `defaults.yaml` & Graph run configs | Fixed |
+| BUG-22 | **HIGH** | Notebook session leakage and infinite loop hangs | `src/tools/notebook.py` | Fixed |
+| BUG-23 | **MEDIUM** | Legacy Word document (.doc) ingest & parsing failures | `src/api/shared.py`, `file_processor.py`, `core_tools.py` | Fixed |
 
 ### Architectural Concerns
 

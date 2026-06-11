@@ -304,7 +304,12 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
     await websocket.accept()
     connected_websockets.add(websocket)  # Track connection
 
-    config = {"configurable": {"thread_id": thread_id}}
+    from src.config.config_loader import config as app_config
+
+    config = {
+        "configurable": {"thread_id": thread_id},
+        "recursion_limit": int(app_config.get("complex.recursion_limit", 100)),
+    }
     agent = websocket.app.state.agent
 
     if not agent:

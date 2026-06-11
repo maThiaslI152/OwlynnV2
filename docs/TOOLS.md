@@ -54,7 +54,7 @@ src/api/routes/files.py            # Tool discovery (GET /api/tools)
 
 | Tool | Description |
 |------|-------------|
-| `read_workspace_file` | Read file content. Uses Docling for PDF/DOCX (layout-aware markdown, table extraction) with `.processed/` cache. Fuzzy filename matching |
+| `read_workspace_file` | Read file content. Uses Docling or python-docx/binary scanner for PDF, DOCX, and DOC (layout-aware markdown/text extraction) with `.processed/` cache. Fuzzy filename matching |
 | `write_workspace_file` | Create or overwrite a file |
 | `edit_workspace_file` | Search-and-replace in a file. Exact pattern match required |
 | `list_workspace_files` | List directory contents with file sizes |
@@ -68,7 +68,7 @@ src/api/routes/files.py            # Tool discovery (GET /api/tools)
 | `create_xlsx` | Excel spreadsheet from CSV-like text. First row = headers |
 | `create_pptx` | PowerPoint with slides separated by `---` |
 | `create_pdf` | PDF from text content via PyMuPDF |
-| `notebook_run` | Stateful Python REPL. Variables persist between calls |
+| `notebook_run` | Stateful Python REPL. Variables persist between calls. Isolated by LangGraph thread_id and capped at 15s execution timeout. |
 | `notebook_reset` | Clear all notebook variables |
 
 ### Toolbox: `productivity`
@@ -112,6 +112,7 @@ Pentest MCP tools (`pentest_*`) require HITL approval. Guide: [mcp-pentest-kali.
 | Dynamic toolbox selection | Reduces token overhead by ~2000/turn | Router must correctly classify toolbox needs |
 | Security proxy gates destructive tools | Safety for file write/edit/delete, notebook execution | HITL latency for approved sensitive calls |
 | Always-include `ask_user` | HITL escape hatch on every turn | Minor token overhead |
+| Notebook isolation and timeout | Prevents cross-chat variable leakage and avoids server deadlocks from infinite loops | Notebook variable state is lost on timeout reset |
 
 ## Testing
 
@@ -144,4 +145,4 @@ All other tools auto-approve. Dangerous shell patterns (`rm -rf`, `sudo`, etc.) 
 
 ## Last updated
 
-2026-06-10 — MCP tool merge + pentest Kali guide
+2026-06-11 — documented Word doc parsing support, notebook thread-isolation, and execution timeouts

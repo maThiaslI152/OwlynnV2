@@ -44,9 +44,13 @@ async def api_openai_chat_completions(body: dict):
             media_type="text/event-stream",
         )
 
-    # Non-streaming invocation
     thread_id = body.get("thread_id") or f"api-{uuid.uuid4().hex[:8]}"
-    config = {"configurable": {"thread_id": thread_id}}
+    from src.config.config_loader import config as app_config
+
+    config = {
+        "configurable": {"thread_id": thread_id},
+        "recursion_limit": int(app_config.get("complex.recursion_limit", 100)),
+    }
     inputs = {
         "messages": lc_messages,
         "project_id": project_id,

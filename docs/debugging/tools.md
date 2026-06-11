@@ -33,7 +33,7 @@ owner: human
 | HITL approval prompt not showing | Frontend interrupt handler not wired | Check `interrupt` WS event emission in `forward_events()` | Verify frontend `handleInterrupt` in `App.tsx` |
 | HITL approval denied but tool still runs | `denied_tools` not being checked | Check `security_proxy_node()` output for `denied_tools` | Verify denial propagation to `complex_llm` system prompt |
 | `ask_user` tool not working | Escape hatch not bound to LLM | `ask_user` is always included in tool sets | If missing, check `tool_sets.py` `resolve_tools()` |
-| Notebook execution hangs | Python subprocess stuck or infinite loop | Check backend process tree for zombie notebook processes | Kill stale notebook processes, add timeout |
+| Notebook execution hangs | Python subprocess stuck or infinite loop | Check backend process tree for zombie notebook processes | Kill stale notebook processes, verify 15s timeout / thread-isolation |
 | Document generation fails | Missing Python library (python-docx, openpyxl, etc.) | `pip list \| grep python-docx` | `pip install` missing dependency |
 | Web search returns no results | All tiers exhausted, SearXNG down, or network issue | Check SearXNG health: `curl http://localhost:8888/search` | Ensure SearXNG running, check internet, try alternate tier |
 | Workspace file operations fail | Wrong workspace path or permission denied | Check active workspace: `GET /api/projects` | Verify workspace path exists and is writable |
@@ -189,6 +189,7 @@ ERROR:src.tools.mcp_client:MCP tool execution failed: Connection refused
 6. For notebook:
    - Kill stale notebook processes: `pkill -f notebook`
    - The notebook may need a reset: check `notebook_reset` tool
+   - Sessions are now isolated by LangGraph `thread_id` and have a 15-second execution timeout. If execution hangs past 15s, it will automatically terminate the cell and reset the environment for that session.
 
 ### Procedure 2: HITL / Security Proxy Debugging
 
@@ -283,4 +284,4 @@ The `scope_clarify` node runs between `router` and `complex_llm` for vague build
 
 ## Last updated
 
-2026-05-31 — `docs-standards-timeline` added frontmatter
+2026-06-11 — documented notebook isolation, 15s execution timeout, and recursion limit debugging
