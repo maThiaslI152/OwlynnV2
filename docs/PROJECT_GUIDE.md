@@ -99,6 +99,7 @@ Do **not** add new `.py` test or patch scripts at repo root.
 | `frontend-v2/src/App.tsx` | App shell, WebSocket lifecycle, HITL resume |
 | `frontend-v2/src/lib/electronBridge.ts` | Electron IPC (Safe Mode, screen assist) |
 | `frontend-v2/src/lib/wsClient.ts` | WebSocket client |
+| `frontend-v2/src/lib/toolPreamble.ts` | Filter tool-only placeholder text from chat stream |
 | `frontend-v2/src/state/useAppStore.ts` | Zustand store |
 | `frontend-v2/electron/main.ts` | Electron main process |
 | `frontend-v2/src/components/AppShell.tsx` | Layout shell |

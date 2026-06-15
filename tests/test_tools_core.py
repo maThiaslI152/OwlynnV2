@@ -92,6 +92,34 @@ def test_read_nonexistent(workspace):
     assert "not found" in result.lower() or "Error" in result
 
 
+def test_read_attached_filename_wrapper(workspace):
+    processed = workspace / ".processed"
+    processed.mkdir()
+    (processed / "chapter 1 Digital Literacy.pdf.txt").write_text(
+        "study notes from cache"
+    )
+    (workspace / "chapter 1 Digital Literacy.pdf").write_bytes(b"%PDF-1.4\n")
+    result = read_workspace_file.invoke(
+        {"filename": "[Attached: chapter 1 Digital Literacy.pdf]"}
+    )
+    assert "study notes from cache" in result
+
+
+def test_read_attached_filename_txt(workspace):
+    (workspace / "notes.txt").write_text("plain study notes")
+    result = read_workspace_file.invoke({"filename": "[Attached: notes.txt]"})
+    assert result == "plain study notes"
+
+
+def test_read_uses_project_processed_cache(workspace):
+    processed = workspace / ".processed"
+    processed.mkdir()
+    (processed / "cached.pdf.txt").write_text("from cache")
+    (workspace / "cached.pdf").write_bytes(b"%PDF-1.4")
+    result = read_workspace_file.invoke({"filename": "cached.pdf"})
+    assert result == "from cache"
+
+
 def test_path_traversal_blocked(workspace):
     _, err = get_safe_workspace_path("../../etc/passwd")
     assert err is not None

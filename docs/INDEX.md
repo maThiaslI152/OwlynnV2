@@ -13,7 +13,7 @@ audience: agent
 ```yaml
 manifest:
   version: 7
-  generated: "2026-06-11T00:43:00Z"
+  generated: "2026-06-15T15:00:00Z"
   files:
     - path: AGENTS.md
       status: active
@@ -405,6 +405,16 @@ manifest:
       category: reference
       audience: archive
       last_updated: 2026-06-10
+    - path: docs/changes/browser-extension-active-tab/CHANGELOG.md
+      status: active
+      category: changelog
+      audience: agent
+      last_updated: 2026-06-15
+    - path: docs/changes/tool-preamble-read-file-fix/CHANGELOG.md
+      status: active
+      category: changelog
+      audience: agent
+      last_updated: 2026-06-15
     - path: docs/changes/web-search-synthesis-fix/CHANGELOG.md
       status: active
       category: changelog

@@ -545,6 +545,7 @@ def _workspace_paths_from_text(text: str) -> list[str]:
         r"\[Workspace file\s+`([^`]+)`",
         r"Workspace file\s+`([^`]+)`",
         r"\[File:\s*([^\]\n]+?)\s+uploaded to workspace",
+        r"\[Attached:\s*([^\]\n]+?)\s*\]",
     ):
         for m in re.finditer(pat, text, re.IGNORECASE):
             p = (m.group(1) or "").strip()

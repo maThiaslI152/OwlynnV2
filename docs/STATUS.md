@@ -1,7 +1,7 @@
 ---
 status: active
 category: standards
-last_updated: 2026-06-11
+last_updated: 2026-06-15
 owner: ai-agent
 audience: agent
 ---
@@ -12,7 +12,14 @@ audience: agent
 
 ## Overview
 
-Project status tracker. Last updated: 2026-06-11 — Chrome search bridge extension, frontier eval harness fixes, Florence vision hardening, background memory extraction.
+Project status tracker. Last updated: 2026-06-15 — tool preamble streaming fix, `read_workspace_file` false ERROR, StirlingPDF PDF intake.
+
+## Recent Changes (2026-06-15)
+
+| Change | Impact | Doc |
+|--------|--------|-----|
+| **Tool preamble / read_file UX** | No streamed “Reading workspace file…”; false ERROR on PDF reads fixed; `[Attached: …]` filename normalization | [`changes/tool-preamble-read-file-fix/CHANGELOG.md`](changes/tool-preamble-read-file-fix/CHANGELOG.md) |
+| **Browser Bridge active tab** | User push + agent `get_active_browser_context` via Brave extension v1.1 | [`changes/browser-extension-active-tab/CHANGELOG.md`](changes/browser-extension-active-tab/CHANGELOG.md) |
 
 ## Recent Changes (2026-06-11)
 

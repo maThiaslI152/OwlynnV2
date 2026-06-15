@@ -6,6 +6,7 @@ import {
   isWorkspaceRef,
   workspaceRefAttachment,
 } from '../lib/attachments'
+import { buildPageContextDraft } from '../lib/browserPageContext'
 
 interface Persona {
   id: string
@@ -51,6 +52,8 @@ export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitl
   // Persona selection states
   const activePersonaId = useAppStore((s) => s.activePersonaId)
   const setActivePersonaId = useAppStore((s) => s.setActivePersonaId)
+  const browserPageContext = useAppStore((s) => s.browserPageContext)
+  const browserPageContextNonce = useAppStore((s) => s.browserPageContextNonce)
   const [personas, setPersonas] = useState<Persona[]>([])
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -112,6 +115,12 @@ export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitl
   useEffect(() => {
     onRegisterWorkspaceAttach?.(attachWorkspaceFile)
   }, [onRegisterWorkspaceAttach, attachWorkspaceFile])
+
+  useEffect(() => {
+    if (!browserPageContextNonce || !browserPageContext) return
+    setValue(buildPageContextDraft(browserPageContext))
+    textareaRef.current?.focus()
+  }, [browserPageContextNonce, browserPageContext])
 
   const handleSubmit = (event?: React.FormEvent<HTMLFormElement>) => {
     if (event) event.preventDefault()

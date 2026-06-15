@@ -53,12 +53,15 @@ User query
 - Requirements: None — free API, no key
 - Tier tag: `tier0 / wttr`
 
-### Tier 0.2: Chrome Search Bridge Extension
+### Tier 0.2: Owlynn Browser Bridge
 
-- Trigger: An active extension client is connected to `ws://localhost:8000/api/browser_extension/ws`
-- Behavior: Server forwards search query to user's open Brave/Chrome instance via WebSockets. The extension opens a background tab, triggers Google/Bing/DDG, scrapes DOM elements (prioritizing premium **Google AI Overviews (SGE)**, **Merlin AI sidebars**, and **Brave Leo** summaries), and returns them.
-- Requirements: Unpacked extension loaded in developer mode.
-- Tier tag: `tier0.2 / browser_extension`
+- Trigger (search): An active extension client is connected to `ws://localhost:8000/api/browser_extension/ws`
+- Trigger (active tab): User context menu / popup push, or agent tool `get_active_browser_context` when `screen_assist` toolbox is bound
+- Search behavior: Opens a background tab on Google/Bing/DDG, scrapes DOM (AI Overviews, Merlin, Copilot, DuckAssist)
+- Active tab behavior: Reads the user's focused tab via `chrome.scripting` (`content_extract.js`); user push broadcasts `browser.page_context` to chat WebSocket clients
+- Requirements: Unpacked extension (`browser-extension/`) loaded in Brave/Chrome; `./start.sh` auto-loads on macOS when Brave is installed
+- Tier tag: `tier0.2 / browser_extension` (search); active tab is separate from search pipeline
+- See [`changes/browser-extension-active-tab/CHANGELOG.md`](changes/browser-extension-active-tab/CHANGELOG.md)
 
 ### Tier 1.5: SearXNG (opt-in)
 

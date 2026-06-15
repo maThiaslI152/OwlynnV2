@@ -54,7 +54,7 @@ src/api/routes/files.py            # Tool discovery (GET /api/tools)
 
 | Tool | Description |
 |------|-------------|
-| `read_workspace_file` | Read file content. Uses Docling or python-docx/binary scanner for PDF, DOCX, and DOC (layout-aware markdown/text extraction) with `.processed/` cache. Fuzzy filename matching |
+| `read_workspace_file` | Read file content. PDF via StirlingPDF → OCR → PyMuPDF (`src/pdf/intake.py`); DOCX via Docling. Cache-first under `<project>/.processed/`. Strips `[Attached: …]` / `Attached:` wrappers from LLM filenames. Fuzzy filename matching |
 | `write_workspace_file` | Create or overwrite a file |
 | `edit_workspace_file` | Search-and-replace in a file. Exact pattern match required |
 | `list_workspace_files` | List directory contents with file sizes |

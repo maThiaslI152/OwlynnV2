@@ -157,6 +157,8 @@ interface AppState {
   inlineSecurityPrompt: InlineSecurityPrompt | null
   activePersonaId: string
   pendingCorrelationId: string | null
+  browserPageContext: import('../lib/browserPageContext').BrowserPageContext | null
+  browserPageContextNonce: number
   setConnectionState: (state: ConnectionState) => void
   addMessage: (message: ChatMessage) => void
   appendStreamChunk: (chunk: string) => void
@@ -188,6 +190,7 @@ interface AppState {
   clearSession: () => void
   setActivePersonaId: (id: string) => void
   setPendingCorrelationId: (id: string | null) => void
+  applyBrowserPageContext: (ctx: import('../lib/browserPageContext').BrowserPageContext) => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -219,6 +222,8 @@ export const useAppStore = create<AppState>((set) => ({
   inlineSecurityPrompt: null,
       pendingCorrelationId: null,
   activePersonaId: 'default',
+  browserPageContext: null,
+  browserPageContextNonce: 0,
   setConnectionState: (connectionState) => set({ connectionState }),
   addMessage: (message) =>
     set((state) => ({
@@ -347,4 +352,10 @@ export const useAppStore = create<AppState>((set) => ({
     }),
   setActivePersonaId: (activePersonaId) => set({ activePersonaId }),
   setPendingCorrelationId: (pendingCorrelationId) => set({ pendingCorrelationId }),
+  applyBrowserPageContext: (ctx) =>
+    set((state) => ({
+      browserPageContext: ctx,
+      browserPageContextNonce: state.browserPageContextNonce + 1,
+      operatorNote: 'Page received from Brave.',
+    })),
 }))

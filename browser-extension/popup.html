@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Owlynn Browser Bridge</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 0;
+        padding: 12px;
+        width: 260px;
+        color: #111;
+      }
+      h1 {
+        font-size: 14px;
+        margin: 0 0 8px;
+      }
+      .status {
+        font-size: 12px;
+        margin-bottom: 12px;
+      }
+      .status.ok {
+        color: #0a7;
+      }
+      .status.off {
+        color: #c33;
+      }
+      button {
+        width: 100%;
+        padding: 8px 10px;
+        border: none;
+        border-radius: 6px;
+        background: #2563eb;
+        color: #fff;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .hint {
+        margin-top: 10px;
+        font-size: 11px;
+        color: #666;
+        line-height: 1.4;
+      }
+      .feedback {
+        margin-top: 8px;
+        font-size: 11px;
+        min-height: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Owlynn Browser Bridge</h1>
+    <div id="status" class="status off">Checking connection…</div>
+    <button id="sendBtn" disabled>Send page to Owlynn</button>
+    <div id="feedback" class="feedback"></div>
+    <p class="hint">
+      Sends the active tab URL, title, and text to Owlynn’s composer. You can also
+      right-click any page and choose “Send page to Owlynn”.
+    </p>
+    <script src="popup.js"></script>
+  </body>
+</html>

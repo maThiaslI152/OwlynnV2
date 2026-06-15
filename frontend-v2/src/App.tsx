@@ -22,6 +22,8 @@ import {
   parseContextBreakdown,
 } from './lib/cloudUsage'
 import { toWsFilePayload, type AttachedFile, isWorkspaceRef } from './lib/attachments'
+import { isToolPreambleText } from './lib/toolPreamble'
+import type { BrowserPageContext } from './lib/browserPageContext'
 import type { ChatMessage, ServerEvent } from './types/protocol'
 
 interface ProjectChat {
@@ -60,6 +62,7 @@ function App() {
   const setLatestToolExecution = useAppStore((s) => s.setLatestToolExecution)
   const pushToolExecution = useAppStore((s) => s.pushToolExecution)
   const setOperatorNote = useAppStore((s) => s.setOperatorNote)
+  const applyBrowserPageContext = useAppStore((s) => s.applyBrowserPageContext)
   const setRouterMetadata = useAppStore((s) => s.setRouterMetadata)
   const setModelInfo = useAppStore((s) => s.setModelInfo)
   const setContextCompression = useAppStore((s) => s.setContextCompression)
@@ -303,6 +306,10 @@ function App() {
         if (event.type === 'assistant.message') {
           const msg = 'message' in event ? (event as any).message : event
           const finalContent: string = msg.content || ''
+          if (isToolPreambleText(finalContent)) {
+            loadProjectsRef.current()
+            return
+          }
           loadProjectsRef.current()
           const msgs = useAppStore.getState().messages
           const last = msgs[msgs.length - 1]
@@ -344,6 +351,17 @@ function App() {
           const snapshot = toToolExecutionSnapshot(event, Date.now())
           setLatestToolExecution(snapshot)
           pushToolExecution(snapshot)
+          if (snapshot.status === 'running') {
+            const msgs = useAppStore.getState().messages
+            const last = msgs[msgs.length - 1]
+            if (
+              last?.role === 'assistant' &&
+              last.id?.startsWith('stream-') &&
+              isToolPreambleText(last.content)
+            ) {
+              useAppStore.setState({ messages: msgs.slice(0, -1) })
+            }
+          }
           // Append inline tool activity card to conversation timeline
           const store = useAppStore.getState()
           const existingIdx = store.conversationItems.findIndex(
@@ -402,7 +420,7 @@ function App() {
           )
         } else if (event.type === 'chunk') {
           const chunkContent = (event as any).content || ''
-          if (chunkContent) {
+          if (chunkContent && !isToolPreambleText(chunkContent)) {
             appendStreamChunk(chunkContent)
           }
         } else if (event.type === 'context_summarized') {
@@ -417,6 +435,14 @@ function App() {
         } else if (event.type === 'file_status') {
           loadProjectsRef.current()
           window.dispatchEvent(new CustomEvent('owlynn:file_status', { detail: event }))
+        } else if (event.type === 'browser.page_context') {
+          const ctx: BrowserPageContext = {
+            url: String((event as any).url || ''),
+            title: String((event as any).title || ''),
+            text: String((event as any).text || ''),
+            selection: String((event as any).selection || ''),
+          }
+          applyBrowserPageContext(ctx)
         }
       },
     })
@@ -426,7 +452,7 @@ function App() {
       disconnect()
       wsClientRef.current = null
     }
-  }, [activeProjectId, addMessage, appendStreamChunk, currentThreadId, executionPolicy, pushToolExecution, setConnection, setLatestToolExecution, setPendingCorrelationId, setMemoryUpdatedAt, setModelInfo, setContextCompression, setContextBreakdown, setCloudUsage, setOperatorNote, setRouterMetadata, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setTtsSpeaking, upsertActionProposal, updateActionProposalStatus, isTauriRuntime, wsBaseUrl])
+  }, [activeProjectId, addMessage, appendStreamChunk, applyBrowserPageContext, currentThreadId, executionPolicy, pushToolExecution, setConnection, setLatestToolExecution, setPendingCorrelationId, setMemoryUpdatedAt, setModelInfo, setContextCompression, setContextBreakdown, setCloudUsage, setOperatorNote, setRouterMetadata, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setTtsSpeaking, upsertActionProposal, updateActionProposalStatus, isTauriRuntime, wsBaseUrl])
 
   // Listen for Tauri runtime events (TTS state, screen assist, etc.)
   useEffect(() => {

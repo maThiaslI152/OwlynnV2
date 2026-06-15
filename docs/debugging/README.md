@@ -2,7 +2,7 @@
 status: active
 category: debugging
 audience: agent
-last_updated: 2026-06-10
+last_updated: 2026-06-15
 owner: ai-agent
 ---
 
@@ -39,6 +39,9 @@ owner: ai-agent
 | Qdrant / Redis down | `src/memory/`, `docker-compose.yml` | [memory.md](memory.md) |
 | Memory panel loading forever | `src/memory/project.py`, `frontend-v2/src/components/MemoryPanel.tsx` | [memory.md](memory.md) |
 | Tool execution fails | `src/agent/tool_sets.py`, `src/tools/` | [tools.md](tools.md) |
+| `read_workspace_file` ERROR card but answer follows | `src/api/ws/handler.py` `_tool_status_from_content` | [`changes/tool-preamble-read-file-fix/CHANGELOG.md`](../changes/tool-preamble-read-file-fix/CHANGELOG.md), `tests/test_ws_tool_ui_helpers.py` |
+| “Reading workspace file…” streams before tool card | `src/api/ws/handler.py`, `frontend-v2/src/lib/toolPreamble.ts` | [`changes/tool-preamble-read-file-fix/CHANGELOG.md`](../changes/tool-preamble-read-file-fix/CHANGELOG.md) |
+| Browser page not prefilled in composer | `browser-extension/`, `src/api/routes/browser_extension.py`, `frontend-v2/src/App.tsx` | [`changes/browser-extension-active-tab/CHANGELOG.md`](../changes/browser-extension-active-tab/CHANGELOG.md) |
 | Frontend blank / WS desync | `frontend-v2/src/App.tsx`, `frontend-v2/src/lib/wsClient.ts` | [frontend.md](frontend.md) |
 | Electron / Safe Mode IPC | `frontend-v2/src/lib/electronBridge.ts` | [frontend.md](frontend.md) |
 | Slow responses / thermal | `src/config/defaults.yaml` (M4 timeouts) | [profiling.md](profiling.md) |

@@ -43,9 +43,10 @@ async def read_screen_element(x: int, y: int) -> str:
 @tool
 async def get_active_browser_context() -> str:
     """
-    Return the frontmost browser tab URL and title (Chrome, Safari, Arc).
+    Return the active browser tab URL, title, page text, and selection.
 
-    When ``screen_assist.browser_cdp_url`` is set, also includes a Playwright DOM text snapshot.
+    Prefers the Owlynn Browser Bridge extension (Brave/Chrome) when connected;
+    otherwise falls back to AppleScript (Chrome, Safari, Arc) and optional Playwright CDP.
     """
     if not _enabled():
         return "Error: screen assist is disabled in configuration."

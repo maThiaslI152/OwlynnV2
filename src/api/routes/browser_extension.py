@@ -1,14 +1,21 @@
 import asyncio
 import logging
 import uuid
+
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+
+from src.config.config_loader import config
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/browser_extension", tags=["browser_extension"])
 
 active_connections: list[WebSocket] = []
-pending_searches: dict[str, asyncio.Future] = {}
+pending_requests: dict[str, asyncio.Future] = {}
+
+
+def _extension_timeout_seconds() -> float:
+    return float(config.get("web_search.timeouts.extension", 15.0) or 15.0)
 
 
 def is_extension_connected() -> bool:
@@ -16,10 +23,52 @@ def is_extension_connected() -> bool:
     return len(active_connections) > 0
 
 
-async def dispatch_extension_search(search_url: str) -> list[dict]:
+def _broadcast_page_context(payload: dict) -> None:
+    """Push user-initiated page context to all chat WebSocket clients."""
+    from src.api.shared import connected_websockets, logger as shared_logger
+
+    url = str(payload.get("url") or "")
+    title = str(payload.get("title") or "")
+    text = str(payload.get("text") or "")
+    selection = str(payload.get("selection") or "")
+
+    max_chars = int(config.get("browser_extension.max_tab_text_chars", 12000) or 12000)
+    if len(text) > max_chars:
+        text = text[:max_chars] + "\n… [truncated]"
+
+    event = {
+        "type": "browser.page_context",
+        "url": url,
+        "title": title,
+        "text": text,
+        "selection": selection,
+    }
+
+    try:
+        from src.api.server import app
+
+        loop = getattr(app.state, "loop", None)
+    except Exception:
+        loop = None
+
+    if not loop:
+        shared_logger.warning(
+            "Loop not preserved; cannot broadcast browser.page_context."
+        )
+        return
+
+    for ws in list(connected_websockets):
+        try:
+            coro = ws.send_json(event)
+            asyncio.run_coroutine_threadsafe(coro, loop)
+        except Exception as exc:
+            shared_logger.warning("Failed to send browser.page_context: %s", exc)
+
+
+async def dispatch_extension_request(action: str, payload: dict | None = None) -> dict:
     """
-    Dispatch a search query URL to the connected browser extension and await results.
-    Raises RuntimeError if not connected, or asyncio.TimeoutError if the extension fails to respond.
+    Dispatch an action to the connected browser extension and await the response.
+    Raises RuntimeError if not connected, or asyncio.TimeoutError on timeout.
     """
     if not is_extension_connected():
         raise RuntimeError("No browser extension is currently connected.")
@@ -29,58 +78,104 @@ async def dispatch_extension_search(search_url: str) -> list[dict]:
     loop = asyncio.get_running_loop()
     future = loop.create_future()
 
-    pending_searches[request_id] = future
-    logger.info("Dispatching search to extension (ID: %s): %s", request_id, search_url)
+    pending_requests[request_id] = future
+    message = {"id": request_id, "action": action, **(payload or {})}
+    logger.info("Dispatching extension action %s (ID: %s)", action, request_id)
 
     try:
-        # Request search from extension
-        await ws.send_json({"id": request_id, "action": "search", "url": search_url})
-
-        # Wait for content script to scrape and respond (15s timeout limit)
-        results = await asyncio.wait_for(future, timeout=15.0)
-        return results
-    except Exception as e:
+        await ws.send_json(message)
+        result = await asyncio.wait_for(future, timeout=_extension_timeout_seconds())
+        if not isinstance(result, dict):
+            return {"results": result} if action == "search" else {"tab": result}
+        return result
+    except Exception as exc:
         logger.warning(
-            "Extension search failed or timed out for ID %s: %s", request_id, e
+            "Extension action %s failed or timed out for ID %s: %s",
+            action,
+            request_id,
+            exc,
         )
-        raise e
+        raise
     finally:
-        pending_searches.pop(request_id, None)
+        pending_requests.pop(request_id, None)
+
+
+async def dispatch_extension_search(search_url: str) -> list[dict]:
+    """
+    Dispatch a search query URL to the connected browser extension and await results.
+    Raises RuntimeError if not connected, or asyncio.TimeoutError if the extension fails to respond.
+    """
+    data = await dispatch_extension_request("search", {"url": search_url})
+    results = data.get("results", [])
+    return results if isinstance(results, list) else []
+
+
+async def dispatch_extension_get_active_tab() -> dict:
+    """Request URL, title, body text, and selection from the user's active browser tab."""
+    data = await dispatch_extension_request("get_active_tab", {})
+    tab = data.get("tab", data)
+    return tab if isinstance(tab, dict) else {}
+
+
+def format_active_tab_context(tab: dict) -> str:
+    """Format extension active-tab payload for agent tools."""
+    url = str(tab.get("url") or "")
+    title = str(tab.get("title") or "")
+    text = str(tab.get("text") or "").strip()
+    selection = str(tab.get("selection") or "").strip()
+    error = str(tab.get("error") or "").strip()
+
+    max_chars = int(config.get("browser_extension.max_tab_text_chars", 12000) or 12000)
+    if len(text) > max_chars:
+        text = text[:max_chars] + "\n… [truncated]"
+
+    lines = [f"browser|{url}|{title}"]
+    if error:
+        lines.append(f"note: {error}")
+    if selection:
+        lines.append("--- selection ---")
+        lines.append(selection)
+    if text:
+        lines.append("--- page ---")
+        lines.append(text)
+    return "\n".join(lines)
 
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     active_connections.append(websocket)
-    logger.info("Browser search bridge extension connected from %s", websocket.client)
+    logger.info("Browser bridge extension connected from %s", websocket.client)
 
     try:
         while True:
             data = await websocket.receive_json()
-            request_id = data.get("id")
-            results = data.get("results", [])
 
-            if request_id and request_id in pending_searches:
-                future = pending_searches[request_id]
+            if data.get("type") == "page_context_push":
+                _broadcast_page_context(data)
+                continue
+
+            request_id = data.get("id")
+            if request_id and request_id in pending_requests:
+                future = pending_requests[request_id]
                 if not future.done():
-                    future.set_result(results)
+                    future.set_result(data)
             else:
                 logger.debug(
-                    "Received unexpected or expired query ID from extension: %s",
+                    "Received unexpected or expired request ID from extension: %s",
                     request_id,
                 )
     except WebSocketDisconnect:
-        logger.info("Browser search bridge extension disconnected.")
-    except Exception as e:
-        logger.warning("Error in extension websocket session: %s", e)
+        logger.info("Browser bridge extension disconnected.")
+    except Exception as exc:
+        logger.warning("Error in extension websocket session: %s", exc)
     finally:
         if websocket in active_connections:
             active_connections.remove(websocket)
 
-        # Clean up any pending searches connected to this socket session
         if len(active_connections) == 0:
-            for request_id, future in list(pending_searches.items()):
+            for request_id, future in list(pending_requests.items()):
                 if not future.done():
                     future.set_exception(
-                        RuntimeError("Extension client disconnected during search.")
+                        RuntimeError("Extension client disconnected during request.")
                     )

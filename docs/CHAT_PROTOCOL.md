@@ -1,7 +1,7 @@
 ---
 status: active
 category: reference
-last_updated: 2026-06-10
+last_updated: 2026-06-15
 owner: ai-agent
 audience: agent
 ---
@@ -20,6 +20,7 @@ Defines all client-to-server payloads and server-to-client event types. Keeping 
 src/api/ws/handler.py              # websocket_endpoint(), serialize_message(), forward_events()
 frontend-v2/src/lib/wsClient.ts     # WebSocket client send/receive
 frontend-v2/src/App.tsx             # Event handler wiring
+frontend-v2/src/lib/toolPreamble.ts # Tool-only placeholder filter (hide from stream)
 src/agent/nodes/simple.py           # Simple node streaming source
 src/agent/nodes/complex.py          # Complex node streaming source
 src/agent/nodes/router.py           # router_node() — router_metadata source
@@ -153,6 +154,8 @@ Cloud route (`complex-cloud`) with images: lazy-loaded Florence-2 (`models.visio
 ```
 
 - Sent during streaming for nodes: `simple`, `complex_llm`
+- **Suppressed** while tool calls are pending or running (`complex_llm` only) — progress is shown via `tool_execution` cards instead
+- **Suppressed** when chunk text is a tool-only placeholder (e.g. `Reading workspace file…`, `Searching the web…`). See `_is_tool_preamble_text()` in `handler.py` and `isToolPreambleText()` in `frontend-v2/src/lib/toolPreamble.ts`
 - Optional `metadata` from `TokenBudgetTracker`:
 
 ```json
@@ -182,6 +185,7 @@ Cloud route (`complex-cloud`) with images: lazy-loaded Florence-2 (`models.visio
 ```
 
 - `AIMessage` with `tool_calls` forwarded for tool-call UI rendering
+- Tool-only placeholder text (preamble) is **not** sent as `assistant.message` when the turn is dominated by tool calls — UI relies on `tool_execution` instead
 - Tool lifecycle/output via `tool_execution` events (not `message`)
 
 #### `error`
@@ -223,6 +227,13 @@ Finished:
 ```
 
 Derived from `AIMessage.tool_calls` + `ToolMessage` outputs. Tool outputs normalized into `tool_execution` events to avoid duplicate/misaligned chat message rendering.
+
+`status` is derived server-side via `_tool_status_from_content()`:
+
+- `error` — output starts with `Error:` / `error:` or known failure prefixes (`execution error`, `traceback`, etc.)
+- `success` — otherwise (including long PDF text that mentions “error” mid-body)
+
+Do **not** substring-match `"error:"` inside document content; that caused false ERROR cards on successful `read_workspace_file` reads. See [`changes/tool-preamble-read-file-fix/CHANGELOG.md`](changes/tool-preamble-read-file-fix/CHANGELOG.md).
 
 #### `model_info`
 
@@ -385,6 +396,24 @@ Sent at `on_chain_end` for the `auto_summarize` node. When no summarization need
 ```json
 { "type": "file_status", "name": "string", "status": "processed | deleted" }
 ```
+
+Sent by `notify_file_processed()` to trigger UI refresh of the workspace file panel.
+
+#### `browser.page_context`
+
+Broadcast when the user sends the active browser tab via Owlynn Browser Bridge (context menu or popup). **Does not auto-send a chat message** — frontend prefills the composer only.
+
+```json
+{
+  "type": "browser.page_context",
+  "url": "string",
+  "title": "string",
+  "text": "string",
+  "selection": "string"
+}
+```
+
+See [`changes/browser-extension-active-tab/CHANGELOG.md`](changes/browser-extension-active-tab/CHANGELOG.md).
 
 Sent by `notify_file_processed()` to trigger UI refresh of the workspace file panel.
 

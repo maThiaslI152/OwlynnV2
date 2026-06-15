@@ -35,6 +35,7 @@ from src.api.shared import (
 from src.agent.nodes.complex_utils.formatter import (
     _strip_dsml_blocks,
     _strip_thinking_tags,
+    _TOOL_ONLY_PLACEHOLDERS,
 )
 from src.memory.project import project_manager
 
@@ -42,6 +43,25 @@ from src.memory.project import project_manager
 def _sanitize_assistant_text(text: str) -> str:
     """Strip DSML pseudo-tool markup before sending assistant text to the UI."""
     return _strip_dsml_blocks(_strip_thinking_tags(text or ""))
+
+
+def _is_tool_preamble_text(text: str) -> bool:
+    """True when assistant text is only a short tool-running placeholder."""
+    cleaned = _sanitize_assistant_text(text).strip()
+    if not cleaned:
+        return True
+    if cleaned in _TOOL_ONLY_PLACEHOLDERS.values():
+        return True
+    for placeholder in _TOOL_ONLY_PLACEHOLDERS.values():
+        # Strip markdown bold markers for comparison
+        plain = placeholder.replace("**", "")
+        if cleaned == plain or cleaned.startswith(plain.rstrip("…")):
+            return True
+    if cleaned.lower().startswith("reading workspace file"):
+        return True
+    if cleaned.lower().startswith("running **") and cleaned.endswith("…"):
+        return True
+    return False
 
 
 from src.agent.nodes.router import generate_chat_title_router_llm
@@ -161,17 +181,19 @@ def _tool_status_from_content(content: str) -> str:
     """Best-effort status detection for tool outputs."""
     if not isinstance(content, str):
         return "success"
-    lowered = content.lower()
-    error_hints = (
-        "execution error",
-        "sandbox error",
-        "error:",
-        "traceback",
-        "exception",
-        "permission denied",
-        "command not found",
-    )
-    return "error" if any(h in lowered for h in error_hints) else "success"
+    stripped = content.strip()
+    lowered = stripped.lower()
+    if lowered.startswith("error:") or lowered.startswith("error "):
+        return "error"
+    if stripped.startswith("Error:") or stripped.startswith("Error "):
+        return "error"
+    if lowered.startswith("execution error") or lowered.startswith("sandbox error"):
+        return "error"
+    if "traceback" in lowered or "permission denied" in lowered:
+        return "error"
+    if "command not found" in lowered:
+        return "error"
+    return "success"
 
 
 def _tool_risk_metadata(tool_name: str, tool_input: str | None) -> dict | None:
@@ -409,6 +431,8 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                         "simple",
                         "complex_llm",
                     ]:
+                        if pending_tool_calls or running_tool_calls:
+                            continue
                         chunk = event["data"]["chunk"]
                         if chunk.content:
                             # Stream deltas may be str or list[content_block]; stringify like finalize path.
@@ -419,6 +443,8 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                             if not text or text.strip().startswith(
                                 "[Internal reminder"
                             ):
+                                continue
+                            if _is_tool_preamble_text(text):
                                 continue
                             # Suppress system instruction echo in streaming chunks.
                             # Some models (Qwen) regurgitate the folded system prompt as output.
@@ -707,10 +733,13 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                         )
 
                                 if tc_list:
-                                    # Include reasoning / pre-tool text in the same payload (serialize_message flattens content).
-                                    # Skip internal reminders leaking through tool-call AIMessages.
-                                    if text_for_ui and not text_for_ui.startswith(
-                                        "[Internal reminder"
+                                    # Do not surface tool-only placeholders in chat; tool cards show progress.
+                                    if (
+                                        text_for_ui
+                                        and not text_for_ui.startswith(
+                                            "[Internal reminder"
+                                        )
+                                        and not _is_tool_preamble_text(text_for_ui)
                                     ):
                                         aw_msg = serialize_message(msg)
                                         if _node_model_used:

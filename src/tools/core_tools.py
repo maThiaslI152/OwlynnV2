@@ -17,6 +17,7 @@ All file operations are sandboxed to the active project workspace via
 """
 
 import os
+import re
 from langchain_core.tools import tool
 from ..memory.memory_manager import search_memories
 from ..config.settings import WORKSPACE_DIR as _WORKSPACE_PATH
@@ -28,8 +29,20 @@ logger = logging.getLogger(__name__)
 BASE_WORKSPACE_DIR = str(_WORKSPACE_PATH.resolve())
 
 
+def _normalize_workspace_filename(filename: str) -> str:
+    """Strip chat/LLM wrappers so tool args match on-disk names."""
+    fn = (filename or "").strip().strip("`\"'")
+    attached = re.match(r"^\[Attached:\s*(.+?)\s*\]$", fn, re.IGNORECASE)
+    if attached:
+        fn = attached.group(1).strip()
+    if fn.lower().startswith("attached:"):
+        fn = fn.split(":", 1)[1].strip()
+    return fn.lstrip("/")
+
+
 def get_safe_workspace_path(filename: str) -> tuple[str, str | None]:
     """Resolve a path inside the active project workspace."""
+    filename = _normalize_workspace_filename(filename)
     if ".." in filename or filename.startswith("~"):
         return (
             "",
@@ -82,7 +95,7 @@ def read_workspace_file(filename: str) -> str:
             logger.warning("Error suppressed: %s", e)
             return f"Error: File '{filename}' not found."
 
-    processed_dir = os.path.join(BASE_WORKSPACE_DIR, ".processed")
+    processed_dir = os.path.join(tool_workspace_root(), ".processed")
     fn_only = os.path.basename(filepath)
     cached_txt = os.path.join(processed_dir, fn_only + ".txt")
     cached_md = os.path.join(processed_dir, fn_only + ".md")

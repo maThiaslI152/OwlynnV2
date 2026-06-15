@@ -24,6 +24,21 @@ class MacScreenAssistGateway:
         return text
 
     async def active_browser_url(self) -> str:
+        if bool(config.get("browser_extension.active_tab_enabled", True)):
+            try:
+                from src.api.routes.browser_extension import (
+                    dispatch_extension_get_active_tab,
+                    format_active_tab_context,
+                    is_extension_connected,
+                )
+
+                if is_extension_connected():
+                    tab = await dispatch_extension_get_active_tab()
+                    if tab:
+                        return format_active_tab_context(tab)
+            except Exception:
+                pass
+
         tab = await active_browser_tab()
         cdp = str(config.get("screen_assist.browser_cdp_url", "") or "")
         if cdp and not tab.startswith("Error"):

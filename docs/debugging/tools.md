@@ -1,7 +1,7 @@
 ---
 status: active
 category: debugging
-last_updated: 2026-05-31
+last_updated: 2026-06-15
 owner: human
 ---
 
@@ -36,7 +36,11 @@ owner: human
 | Notebook execution hangs | Python subprocess stuck or infinite loop | Check backend process tree for zombie notebook processes | Kill stale notebook processes, verify 15s timeout / thread-isolation |
 | Document generation fails | Missing Python library (python-docx, openpyxl, etc.) | `pip list \| grep python-docx` | `pip install` missing dependency |
 | Web search returns no results | All tiers exhausted, extension offline, or network issue | Check extension WS: browser connected; optional SearXNG if configured | Ensure Brave extension loaded; set SEARXNG_URL only if container running |
+| Active tab not in composer | Extension push while chat WS disconnected | Check `browser.page_context` in DevTools WS tab | Reload Owlynn UI; verify extension shows “Connected” |
+| `get_active_browser_context` empty on Brave | Extension offline; falls back to AppleScript (no Brave) | Check `/api/browser_extension/ws` connection | Load extension; see [`changes/browser-extension-active-tab/CHANGELOG.md`](../changes/browser-extension-active-tab/CHANGELOG.md) |
 | Workspace file operations fail | Wrong workspace path or permission denied | Check active workspace: `GET /api/projects` | Verify workspace path exists and is writable |
+| `read_workspace_file` shows ERROR at 0.0s but content is valid | False positive: PDF body contains substring `error:` | Inspect `tool_execution.output` — starts with prose, not `Error:` | Fixed: prefix-only status in `handler.py`. See [`changes/tool-preamble-read-file-fix/CHANGELOG.md`](../changes/tool-preamble-read-file-fix/CHANGELOG.md) |
+| `read_workspace_file` not found on first call | LLM passed `[Attached: filename.pdf]` as arg | Check `tool_execution.input` for wrapper text | Filename normalization in `core_tools.py`; prefetch pattern in `complex.py` |
 | Tool execution panel shows mock data (BUG-6) | Frontend renders demo entries | See [frontend.md](frontend.md) BUG-6 section | See [frontend.md](frontend.md) |
 
 ## Diagnostic Commands
