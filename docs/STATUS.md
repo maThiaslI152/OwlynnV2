@@ -1,7 +1,7 @@
 ---
 status: active
 category: standards
-last_updated: 2026-06-15
+last_updated: 2026-06-16
 owner: ai-agent
 audience: agent
 ---
@@ -12,7 +12,13 @@ audience: agent
 
 ## Overview
 
-Project status tracker. Last updated: 2026-06-15 — tool preamble streaming fix, `read_workspace_file` false ERROR, StirlingPDF PDF intake.
+Project status tracker. Last updated: 2026-06-16 — multi-model review security/privacy fixes; notebook run gated by loopback token.
+
+## Recent Changes (2026-06-16)
+
+| Change | Impact | Doc |
+|--------|--------|-----|
+| **Multi-model review fixes** | Notebook RCE gated (loopback token + CORS lockdown); cells default non-runnable; embed URLs restricted; cloud `user` fingerprint; anonymization reframed best-effort | [`changes/multi-model-review-fixes/CHANGELOG.md`](changes/multi-model-review-fixes/CHANGELOG.md) |
 
 ## Recent Changes (2026-06-15)
 
@@ -233,7 +239,7 @@ All known Phase 8 bugs (BUG-1 through BUG-11) are fixed. Open work is remaining 
 | Web search | SearXNG recommended for self-hosted metasearch. DuckDuckGo is backup. |
 | Workspace switching UI state | Stale UI in edge transitions |
 | Frontend/backend WS payload drift | Integration path mismatches |
-| Cloud fallback + anonymization | Regression protection needed |
+| Cloud fallback + anonymization | Best-effort redaction + hashed cloud `user` fingerprint; full NER/preview UI deferred |
 | Router selection drift | Borderline prompts, long-context/tool-heavy prompts |
 | CRUD invariants | Needs hardening under repeated operations |
 
@@ -247,4 +253,4 @@ All known Phase 8 bugs (BUG-1 through BUG-11) are fixed. Open work is remaining 
 
 ## Last updated
 
-2026-06-10 — BUG-17..20 OPEN added (vision route, simple empty reply, tool-call leaks, greeting gate); COMPLETENESS_REVIEW linked
+2026-06-16 — multi-model review fixes (notebook token gate, privacy hardening); see `changes/multi-model-review-fixes/CHANGELOG.md`

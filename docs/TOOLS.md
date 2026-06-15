@@ -68,7 +68,7 @@ src/api/routes/files.py            # Tool discovery (GET /api/tools)
 | `create_xlsx` | Excel spreadsheet from CSV-like text. First row = headers |
 | `create_pptx` | PowerPoint with slides separated by `---` |
 | `create_pdf` | PDF from text content via PyMuPDF |
-| `notebook_run` | Stateful Python REPL. Variables persist between calls. Isolated by LangGraph thread_id and capped at 15s execution timeout. |
+| `notebook_run` | Stateful Python REPL (HITL-gated). Variables persist between calls. **Not a security sandbox** — runs as your user with filesystem access. Inline chat Run uses `POST /api/notebook/run` (loopback token required). |
 | `notebook_reset` | Clear all notebook variables |
 | `notebook_vars` | List variables in the notebook session |
 | `read_ipynb` | Read workspace `.ipynb` and summarize cells |

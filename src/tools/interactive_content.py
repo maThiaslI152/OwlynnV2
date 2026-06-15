@@ -76,12 +76,19 @@ def render_interactive_block(block_type: str, payload: dict) -> str:
     payload: JSON object matching the block schema (see templates/interactive/).
 
     Include the returned fence verbatim in your final message. Keep surrounding prose brief.
+
+    For ``cell`` blocks, ``runnable`` defaults to false (display-only). Only set
+    ``runnable: true`` when the user explicitly asked to run code interactively.
     """
     if not isinstance(payload, dict):
         return "Error: payload must be a JSON object."
 
     try:
-        fence = format_interactive_fence(block_type.strip().lower(), payload)
+        block = block_type.strip().lower()
+        payload = dict(payload)
+        if block == "cell":
+            payload.setdefault("runnable", False)
+        fence = format_interactive_fence(block, payload)
     except ValueError as exc:
         return f"Error: {exc}"
 

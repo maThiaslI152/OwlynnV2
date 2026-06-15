@@ -55,6 +55,10 @@ async def lifespan(app: FastAPI):
 
     setup_logging()
 
+    from src.api.local_auth import init_local_run_token
+
+    init_local_run_token(app)
+
     # Preserve loop for async dispatchs from sync threads
     app.state.loop = asyncio.get_running_loop()
 
@@ -215,9 +219,11 @@ app.include_router(study.router)
 app.include_router(notebook.router)
 app.include_router(ws_handler.router)
 
+from src.api.local_auth import cors_allowed_origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_allowed_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -536,6 +542,12 @@ async def openai_stream_generator(
     thread_id = f"api-{uuid.uuid4().hex[:8]}"
     from src.config.config_loader import config as app_config
 
+    stream_model_id = str(
+        app_config.get("models.router.id")
+        or app_config.get("models.medium.id")
+        or "owlynn-local"
+    )
+
     config = {
         "configurable": {"thread_id": thread_id},
         "recursion_limit": int(app_config.get("complex.recursion_limit", 100)),
@@ -566,7 +578,7 @@ async def openai_stream_generator(
                             "id": chat_id,
                             "object": "chat.completion.chunk",
                             "created": created_time,
-                            "model": "qwen2.5-3b",
+                            "model": stream_model_id,
                             "choices": [
                                 {
                                     "index": 0,
@@ -582,7 +594,7 @@ async def openai_stream_generator(
             "id": chat_id,
             "object": "chat.completion.chunk",
             "created": created_time,
-            "model": "qwen2.5-3b",
+            "model": stream_model_id,
             "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
         }
         yield f"data: {json.dumps(stop_payload, ensure_ascii=False)}\n\n"

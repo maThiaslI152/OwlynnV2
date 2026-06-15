@@ -13,8 +13,16 @@ interface Props {
 }
 
 export function InteractiveEmbed({ payload, projectId }: Props) {
-  const resolved = resolveWorkspaceFileUrl(payload.url, projectId) ?? payload.url
+  const resolved = resolveWorkspaceFileUrl(payload.url, projectId)
   const title = payload.title ?? 'Embedded content'
+
+  if (!resolved.startsWith('/api/files/')) {
+    return (
+      <div className="owlynn-block owlynn-block-error">
+        Embed blocked: only workspace files under /api/files/ are allowed.
+      </div>
+    )
+  }
 
   if (payload.type === 'chart' || isInteractiveChartUrl(resolved)) {
     return <ChatInteractiveChart src={resolved} title={title} />

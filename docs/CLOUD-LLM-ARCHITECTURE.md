@@ -66,7 +66,7 @@ Prefix cache proof: [`tests/test_deepseek_cache_network.py`](../tests/test_deeps
 | Request timeout | 180s `request_timeout` on cloud calls |
 | Retry | Exponential backoff (1s/2s/4s) for 429 + 5xx |
 | Circuit breaker | `CloudCircuitBreaker` — disables cloud 60s after 3 consecutive failures |
-| PII | Anonymize → cloud → deanonymize in `prepare_cloud_payload()` |
+| PII | Best-effort regex anonymize → cloud → deanonymize; opaque hashed `user` fingerprint (not raw thread_id) |
 | Cost tracking | `SessionCostTracker` with cache-aware pricing (`cache_hit_per_1m_usd`) |
 | Model IDs | `deepseek-v4-flash` / `deepseek-v4-pro` (legacy `deepseek-chat` deprecated) |
 

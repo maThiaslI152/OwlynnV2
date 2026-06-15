@@ -1450,6 +1450,13 @@ body.tauri-glass .window-drag-strip {
   font-size: 0.82rem;
 }
 
+.owlynn-block-cell-hint {
+  padding: 0.35rem 0.85rem 0.55rem;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  margin: 0;
+}
+
 .chat-interactive-chart-lightbox {
   position: fixed;
   inset: 0;

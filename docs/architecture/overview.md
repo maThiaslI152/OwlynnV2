@@ -5,7 +5,7 @@
 
 ## System Context
 
-Owlynn is a **cloud-primary** AI coworker for Apple Silicon (Mac M4 Air 24GB). Complex work routes to **DeepSeek V4** when a key is configured; local Qwen9B is fallback only. Startup preloads **MiniCPM5 router + nomic embedding**; Florence-2 vision proxy runs lazily for cloud+image. No data leaves the machine unless the user opts into cloud (with anonymization).
+Owlynn is a **privacy-first hybrid** coworker for Apple Silicon (Mac M4 Air 24GB). **Local:** workspace files, Qdrant/Redis memory, routing, embeddings, and optional Qwen9B fallback stay on-device. **Cloud (opt-in):** complex reasoning uses **DeepSeek V4** when a key is configured; prompts are **best-effort anonymized** before send (see `src/agent/anonymization.py`). Startup preloads **MiniCPM5 router + nomic embedding**; Florence-2 vision proxy runs lazily for cloud+image OCR.
 
 ```
 Browser (http://127.0.0.1:5173)

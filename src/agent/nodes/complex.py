@@ -138,6 +138,8 @@ async def _invoke_cloud_path(
         usage = extract_api_token_usage(response)
     else:
         try:
+            from src.agent.cloud_privacy import cloud_user_fingerprint
+
             raw, usage = await invoke_cloud_chat(
                 llm_client=client,
                 model_name=model_name,
@@ -145,7 +147,7 @@ async def _invoke_cloud_path(
                 tools=tools if tools_bound else None,
                 max_tokens=budget,
                 thinking=thinking,
-                user_id=str(thread_id) if thread_id else None,
+                user_id=cloud_user_fingerprint(str(thread_id) if thread_id else None),
             )
             response = response_to_ai_message(raw)
         except RuntimeError as exc:

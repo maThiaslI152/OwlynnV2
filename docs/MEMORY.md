@@ -105,7 +105,7 @@ The `VectorLifecycleManager` orchestrates the insertion and deletion of vector d
 ## Known Issues
 
 1. **Mem0 requires `mem0ai[nlp]`** — install with `pip install mem0ai[nlp]` for spaCy/fastembed support
-2. **Memory context cap may cut important facts** — the 6000-char limit is a trade-off for context window compatibility
+2. **Memory context cap may cut important facts** — injected memory text is capped at **12000 characters** in `format_memory_context` (see `memory.py`); enhanced blocks use a separate 6000-char budget
 3. **No STM→LTM promotion** — frequently recalled facts aren't auto-promoted to LTM with higher priority
 
 ## Related Files

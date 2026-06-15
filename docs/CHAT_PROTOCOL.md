@@ -253,7 +253,7 @@ Assistant `content` may include fenced blocks rendered as inline widgets in `Mes
 | `owlynn-steps` | Accordion step reveal |
 | `owlynn-callout` | Tip / warning / note box |
 | `owlynn-embed` | Inline chart or image (`{"type":"chart\|image","url":"..."}`) |
-| `owlynn-cell` | Runnable Python cell (`POST /api/notebook/run`) |
+| `owlynn-cell` | Python cell display; optional Run (`POST /api/notebook/run` with loopback token `X-Owlynn-Run-Token` from `GET /api/local-run-token`) |
 | `mermaid` | Client-side diagram |
 
 Agents should call `render_interactive_block(block_type, payload)` to validate JSON and receive the fence string. Schemas live in `templates/interactive/`.

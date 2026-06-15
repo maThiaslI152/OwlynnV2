@@ -1,12 +1,16 @@
 """
 Data Anonymization Engine for cloud-bound messages.
 
-Scans text for PII and sensitive patterns, replaces with deterministic
+Scans text for PII and sensitive patterns, replaces with session-local
 placeholders before sending to DeepSeek API, and restores originals
 in the response. Only used for the cloud path — local models are trusted.
+
+This is **best-effort** redaction (regex + profile name/custom terms). It does
+not catch all third-party names, addresses, financial IDs, or document content.
 """
 
 import re
+import secrets
 from typing import Optional
 
 
@@ -76,15 +80,12 @@ def anonymize(text: str, context: Optional[dict] = None) -> tuple[str, dict]:
     reverse: dict[str, str] = {}  # original → placeholder (for dedup)
     counters: dict[str, int] = {}  # category → next N
 
-    import hashlib
-
     def _get_placeholder(category: str, value: str) -> str:
-        """Get or create a deterministic placeholder for a value using a short hash."""
+        """Session-local placeholder; same value deduped within one anonymize() call."""
         if value in reverse:
             return reverse[value]
-        # Use a short hash of the value to ensure determinism across stateless turns
-        val_hash = hashlib.sha256(value.encode("utf-8")).hexdigest()[:8]
-        placeholder = f"[{category}_{val_hash}]"
+        suffix = secrets.token_hex(4)
+        placeholder = f"[{category}_{suffix}]"
         mapping[placeholder] = value
         reverse[value] = placeholder
         return placeholder

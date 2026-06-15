@@ -42,6 +42,17 @@ def test_render_interactive_block_tool():
     assert "Remember to review" in result
 
 
+def test_render_cell_defaults_not_runnable():
+    result = render_interactive_block.invoke(
+        {"block_type": "cell", "payload": {"code": "print(1)"}}
+    )
+    assert "owlynn-cell" in result
+    assert (
+        '"runnable": false' in result.lower()
+        or '"runnable":false' in result.replace(" ", "")
+    )
+
+
 def test_all_block_types_have_schema():
     for block_type in BLOCK_LANG:
         payload = _minimal_payload(block_type)
