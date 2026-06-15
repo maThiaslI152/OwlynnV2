@@ -2,7 +2,8 @@
 Web Tools: Search + Fetch
 -------------------------
 web_search           : Tiered reliability pipeline:
-                       wttr.in (weather) -> SearXNG -> curl_cffi -> DDGS -> httpx -> Playwright.
+                       browser extension -> wttr.in (weather) -> curl_cffi ->
+                       SearXNG (opt-in) -> DDGS -> httpx -> Playwright.
 fetch_webpage        : Static fetching via httpx + BeautifulSoup
 fetch_webpage_dynamic: Dynamic fetching via Playwright
 """
@@ -725,7 +726,7 @@ async def web_search(
     """
     Searches the web and returns top results.
 
-    Order: SearXNG → curl_cffi → DDGS → httpx → Playwright.
+    Order: browser extension → curl_cffi → SearXNG (if SEARXNG_URL set) → DDGS → httpx → Playwright.
     ``backend="google"`` uses Playwright only.
 
     Use this to look up current information, documentation, definitions, or
@@ -812,7 +813,15 @@ async def web_search(
                     )
                 )
 
-            # Tier 0.5: SearXNG (self-hosted metasearch — no API keys, no bot blocking)
+            # Tier 1B: curl_cffi browser-like TLS fallback
+            curl_out, curl_attempt = await _web_search_curl_cffi(
+                query, backend, news, focus_query
+            )
+            attempts.append(curl_attempt)
+            if curl_out:
+                return curl_out
+
+            # Tier 1.5: SearXNG (opt-in self-hosted metasearch — requires SEARXNG_URL)
             if SEARXNG_URL:
                 try:
                     from src.tools.web_search_enhanced import searxng_search
@@ -828,26 +837,18 @@ async def web_search(
                             for h in sx_hits
                         ]
                         hits = await _maybe_rerank_search_hits(focus_query, hits)
-                        attempts.append(SearchAttempt("tier0.5", "searxng", "ok"))
+                        attempts.append(SearchAttempt("tier1.5", "searxng", "ok"))
                         return _format_search_hits_markdown(
                             query, backend, news, hits, "via SearXNG"
                         )
                     attempts.append(
-                        SearchAttempt("tier0.5", "searxng", "empty", "No results")
+                        SearchAttempt("tier1.5", "searxng", "empty", "No results")
                     )
                 except Exception as e:
                     logger.warning("Error suppressed: %s", e)
                     attempts.append(
-                        SearchAttempt("tier0.5", "searxng", "error", str(e)[:120])
+                        SearchAttempt("tier1.5", "searxng", "error", str(e)[:120])
                     )
-
-            # Tier 1B: curl_cffi browser-like TLS fallback
-            curl_out, curl_attempt = await _web_search_curl_cffi(
-                query, backend, news, focus_query
-            )
-            attempts.append(curl_attempt)
-            if curl_out:
-                return curl_out
 
             # Tier 2: DDGS API
             DDGS = _get_ddgs_class()

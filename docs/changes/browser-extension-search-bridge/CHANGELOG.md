@@ -16,7 +16,7 @@ owner: ai-agent
 |--------|--------|
 | Trigger search in Chat UI | Backend checks if the browser extension is connected via WebSocket. |
 | Extension online (Tier 0.2) | Opens a background tab in Brave, runs search query, content scripts scrape results (including AI Overviews, Merlin AI summaries, Copilot summaries, and DuckAssist), and auto-closes the tab within 15 seconds. |
-| Extension offline / Timeout | Gracefully falls back to SearXNG (Tier 0.5), `curl_cffi` (Tier 1), DDG SDK (Tier 2), and Playwright (Tier 3). |
+| Extension offline / Timeout | Falls back to curl_cffi (Tier 1), SearXNG if configured (Tier 1.5), DDG SDK (Tier 2), and Playwright (Tier 3). |
 | Start application (`./start.sh`) | Launcher checks if Brave Browser is installed and automatically starts Brave loaded with the unpacked extension. |
 
 ## Supported Scraping Providers

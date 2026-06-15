@@ -133,6 +133,18 @@ Do **not** add new `.py` test or patch scripts at repo root.
 | `src/config/config_loader.py` | YAML + env + profile merge |
 | `src/config/settings.py` | Workspace roots, paths |
 
+## File intake (PDF)
+
+| File | Role |
+|------|------|
+| `src/pdf/intake.py` | Unified PDF text extraction (Stirling → OCR → PyMuPDF) |
+| `src/integrations/stirling_pdf.py` | StirlingPDF HTTP client |
+| `src/api/file_processor.py` | Workspace watcher — writes `.processed/*.txt` |
+| `src/api/shared.py` | Chat attachment inline PDF extraction |
+| `src/tools/core_tools.py` | `read_workspace_file` PDF path |
+| `docker-compose.yml` | `owlynn_stirling_pdf` service on port 8090 |
+| `tests/test_pdf_intake.py` | Mocked intake tests (no live container in CI) |
+
 ## Graph orchestration
 
 | File | Role |

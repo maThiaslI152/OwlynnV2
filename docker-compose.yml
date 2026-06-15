@@ -13,6 +13,8 @@ services:
   searxng:
     image: searxng/searxng:latest
     container_name: owlynn_searxng
+    profiles:
+      - searxng
     ports:
       - "8888:8080"
     volumes:
@@ -31,7 +33,26 @@ services:
     restart: unless-stopped
     mem_limit: 512m
 
+  stirling-pdf:
+    image: stirlingtools/stirling-pdf:latest
+    container_name: owlynn_stirling_pdf
+    ports:
+      - "8090:8080"
+    volumes:
+      - stirling_tessdata:/usr/share/tessdata
+      - stirling_configs:/configs
+      - stirling_logs:/logs
+    environment:
+      - SECURITY_ENABLELOGIN=false
+      - SECURITY_CUSTOMGLOBALAPIKEY=${STIRLING_PDF_API_KEY:-owlynn-local-dev}
+      - LANGS=en_GB
+    restart: unless-stopped
+    mem_limit: 1g
+
 volumes:
   qdrant_data:
   searxng_data:
   redis_data:
+  stirling_tessdata:
+  stirling_configs:
+  stirling_logs:

@@ -32,19 +32,20 @@ echo "════════════════════════�
 echo ""
 
 # ═══════════════════════════════════════════════════════════════════
-# [1/3] Podman containers — Qdrant + Redis (+ optional SearXNG)
+# [1/3] Podman containers — Qdrant, Redis, StirlingPDF (SearXNG opt-in)
 # ═══════════════════════════════════════════════════════════════════
-echo "[1/3] Containers..."
-if podman ps --format '{{.Names}}' 2>/dev/null | grep -q 'owlynn_qdrant\|owlynn_redis'; then
-    echo "      Already running."
+_CORE_SERVICES="qdrant redis stirling-pdf"
+echo "[1/3] Containers (Qdrant, Redis, StirlingPDF)..."
+podman machine start 2>/dev/null || true
+podman compose up -d $_CORE_SERVICES 2>/dev/null || podman-compose up -d $_CORE_SERVICES 2>/dev/null || docker compose up -d $_CORE_SERVICES 2>/dev/null || {
+    echo "      ERROR: Could not start containers. Is Podman/Docker installed?"
+    exit 1
+}
+sleep 3
+if curl -sf http://127.0.0.1:8090/swagger-ui/index.html >/dev/null 2>&1; then
+    echo "      StirlingPDF ready on :8090."
 else
-    echo "      Starting (podman compose up)..."
-    podman machine start 2>/dev/null || true
-    podman compose up -d 2>/dev/null || podman-compose up -d 2>/dev/null || docker compose up -d 2>/dev/null || {
-        echo "      ERROR: Could not start containers. Is Podman/Docker installed?"
-        exit 1
-    }
-    sleep 5
+    echo "      StirlingPDF not yet ready (PDF intake falls back to PyMuPDF)."
 fi
 echo "      Ready."
 
@@ -81,7 +82,8 @@ fi
 # Docling model path (default to project-local cache)
 export DOCLING_ARTIFACTS_PATH="${DOCLING_ARTIFACTS_PATH:-$(pwd)/.models/docling/}"
 export PYTHONPATH="$(pwd):$PYTHONPATH"
-export SEARXNG_URL="${SEARXNG_URL:-http://localhost:8888}"
+export STIRLING_PDF_URL="${STIRLING_PDF_URL:-http://localhost:8090}"
+export STIRLING_PDF_API_KEY="${STIRLING_PDF_API_KEY:-owlynn-local-dev}"
 
 source .venv/bin/activate 2>/dev/null || {
     echo "      ERROR: .venv not found. Run ./setup.sh first."

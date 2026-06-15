@@ -19,7 +19,7 @@ owner: human
 src/tools/web_tools.py              # web_search, fetch_webpage, fetch_webpage_dynamic
 src/tools/web_search_enhanced.py    # SearXNG integration
 src/config/settings.py              # WEB_RAG_* env vars
-docker-compose.yml                  # SearXNG container (port 8888)
+docker-compose.yml                  # SearXNG container opt-in (compose profile searxng, port 8888)
 ```
 
 ## Architecture
@@ -31,11 +31,11 @@ User query
     │
     ├─ Tier 0:   wttr.in (weather only) ─── fast path for weather queries
     │
-    ├─ Tier 0.2: Chrome Search Bridge ───── delegator to user's active Brave session (no bot checks)
-    │
-    ├─ Tier 0.5: SearXNG ────────────────── self-hosted metasearch aggregator
+    ├─ Tier 0.2: Chrome Search Bridge ───── delegator to user's active Brave session (primary)
     │
     ├─ Tier 1:   curl_cffi ───────────────── browser-like TLS fingerprint (Chrome 120)
+    │
+    ├─ Tier 1.5: SearXNG (opt-in) ────────── self-hosted metasearch (requires SEARXNG_URL)
     │
     ├─ Tier 2:   DDGS ────────────────────── DuckDuckGo SDK wrapper
     │
@@ -60,16 +60,16 @@ User query
 - Requirements: Unpacked extension loaded in developer mode.
 - Tier tag: `tier0.2 / browser_extension`
 
-### Tier 0.5: SearXNG
+### Tier 1.5: SearXNG (opt-in)
 
-- Trigger: `SEARXNG_URL` env var is set
+- Trigger: `SEARXNG_URL` env var is set **and** container is running
 - Behavior: Calls SearXNG JSON API at `{SEARXNG_URL}/search?format=json`. Aggregates Google, Bing, DDG, Wikipedia results
-- Requirements: Docker running `searxng/searxng:latest` on port 8888 + `SEARXNG_URL` in `.env`
-- Tier tag: `tier0.5 / searxng`
+- Requirements: `podman compose --profile searxng up -d searxng` + `SEARXNG_URL=http://localhost:8888` in `.env`. **Not started by `./start.sh`.**
+- Tier tag: `tier1.5 / searxng`
 
 ### Tier 1: curl_cffi
 
-- Trigger: All non-weather, non-Google queries after SearXNG fails
+- Trigger: All non-weather, non-Google queries after browser extension (and before SearXNG when configured)
 - Behavior: Uses `curl_cffi` with `impersonate="chrome120"` for real browser TLS/HTTP fingerprints. Tries DDG HTML, DDG Lite, Bing in sequence. Detects Cloudflare/anti-bot challenges, skips blocked sources
 - Requirements: `pip install curl_cffi` (silently skipped if not installed). Toggle: `WEB_SEARCH_ENABLE_CURL_CFFI=false`
 - Tier tag: `tier1 / curl_cffi`
@@ -155,7 +155,8 @@ Pipeline:
 | Decision | Rationale | Trade-off |
 |----------|-----------|-----------|
 | Multi-tier fallback pipeline | Resilience without API keys | Complex error handling across tiers |
-| SearXNG as tier 0.5 | Self-hosted, privacy-preserving metasearch | Requires Docker container |
+| Browser extension as tier 0.2 (primary) | Uses real Brave session; bypasses bot checks | Requires extension connected |
+| SearXNG as tier 1.5 (opt-in) | Self-hosted metasearch when explicitly configured | Not started by `./start.sh`; requires profile + SEARXNG_URL |
 | curl_cffi TLS fingerprinting | Bypasses anti-bot detection | Additional dependency |
 | Playwright as last resort | Full JS rendering | Slowest tier, highest resource cost |
 | Removed API-key providers (Brave/Serper/Tavily) | Simplified stack, no key management | Fewer search backends |
@@ -185,7 +186,7 @@ If LM Studio unreachable or embed model not loaded, reranking silently falls bac
 | Service | Config | Port | Purpose |
 |---------|--------|------|---------|
 | LM Studio (local) | `http://127.0.0.1:1234` | 1234 | LLM inference + embeddings |
-| SearXNG (Docker) | `SEARXNG_URL=http://localhost:8888` | 8888 | Self-hosted metasearch |
+| SearXNG (opt-in) | `SEARXNG_URL=http://localhost:8888` + `podman compose --profile searxng up -d` | 8888 | Self-hosted metasearch fallback |
 | Browser Extension | `ws://localhost:8000/api/browser_extension/ws` | 8000 | Non-headless search gateway |
 
 ### Removed Providers (April 2026)

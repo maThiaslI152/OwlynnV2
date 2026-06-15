@@ -49,6 +49,12 @@ _ENV_OVERRIDE_MAP: dict[str, str] = {
     "QDRANT_PORT": "external_services.qdrant.port",
     "REDIS_URL": "external_services.redis.url",
     "SEARXNG_URL": "external_services.searxng.url",
+    "STIRLING_PDF_URL": "external_services.stirling_pdf.url",
+    "STIRLING_PDF_API_KEY": "external_services.stirling_pdf.api_key",
+    "STIRLING_PDF_ENABLED": "external_services.stirling_pdf.enabled",
+    "STIRLING_PDF_TIMEOUT_SECONDS": "external_services.stirling_pdf.timeout_seconds",
+    "STIRLING_PDF_OCR_LANGUAGES": "external_services.stirling_pdf.ocr_languages",
+    "STIRLING_PDF_MIN_TEXT_CHARS": "external_services.stirling_pdf.min_text_chars",
     # Small model
     "SMALL_LLM_BASE_URL": "models.small.base_url",
     "SMALL_LLM_MODEL_NAME": "models.small.model_name",

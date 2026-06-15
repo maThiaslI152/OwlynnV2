@@ -80,7 +80,8 @@ Reduces KV cache memory ~4x. The "Context Length setting is ignored" message mea
 podman machine stop
 podman machine set --memory 1024
 podman machine start
-podman start owlynn_qdrant owlynn_redis owlynn_searxng
+podman start owlynn_qdrant owlynn_redis owlynn_stirling_pdf
+# SearXNG (optional): podman compose --profile searxng up -d searxng
 ```
 
 Reduced from **1907 MB → 1024 MB**. Containers use ~196 MB of the 1024 MB allocation.

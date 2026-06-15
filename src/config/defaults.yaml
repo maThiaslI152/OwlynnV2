@@ -30,6 +30,13 @@ external_services:
     url: "redis://localhost:6379"  # REDIS_URL env
   searxng:
     url: ""                  # SEARXNG_URL env (e.g. "http://localhost:8888")
+  stirling_pdf:
+    url: "http://localhost:8090"   # STIRLING_PDF_URL env
+    api_key: ""                    # STIRLING_PDF_API_KEY env
+    enabled: true                  # STIRLING_PDF_ENABLED env
+    timeout_seconds: 120           # STIRLING_PDF_TIMEOUT_SECONDS env
+    ocr_languages: "eng"           # STIRLING_PDF_OCR_LANGUAGES env
+    min_text_chars: 50             # STIRLING_PDF_MIN_TEXT_CHARS env
   lm_studio:
     base_url: "http://127.0.0.1:1234/v1"   # SMALL_LLM_BASE_URL / MEDIUM_LLM_BASE_URL env
     management_url: "http://127.0.0.1:1234"  # For SwapManager API calls

@@ -16,7 +16,7 @@ owner: human
 
 | Symptom | Likely Cause | Diagnostic | Fix |
 |---------|-------------|-----------|-----|
-| System swap / beachball | Memory exceeded ~14 GB (degradation threshold) | `memory_pressure`, `vm_stat` | Unload medium LLM, reduce context window, kill SearXNG |
+| System swap / beachball | Memory exceeded ~14 GB (degradation threshold) | `memory_pressure`, `vm_stat` | Unload medium LLM, reduce context window; optionally `podman stop owlynn_searxng` |
 | Simple queries > 5s | Small LLM not loaded or LM Studio hung | Check model status in LM Studio | Reload small LLM, restart LM Studio |
 | Complex queries > 20s | Medium LLM OOM or tool execution slow | Check individual tool timing in WS events | Optimize tool, reduce tools bound, use small LLM fallback |
 | First token > 8s | Model cold start or swap in progress | Check `model_info` WS event `swapping` field | Keep medium LLM warm, reduce swap frequency |
@@ -155,7 +155,7 @@ The system has moderate memory pressure.
 
 # Critical (red) — immediate action needed
 The system has critical memory pressure.
-→ Action: unload medium LLM, reduce context window, terminate SearXNG
+→ Action: unload medium LLM, reduce context window; optionally stop SearXNG manually
 ```
 
 ### Thermal Logs
@@ -216,7 +216,7 @@ Total: 18s → Suggests model swap or OOM pressure
    - If > 14 GB used: unload medium LLM
    - If > 15 GB used: reduce context window to 50K tokens
    - If > 15.5 GB used: disable auto-summarize
-   - If < 1 GB free: terminate SearXNG container
+   - If < 1 GB free: optionally `podman stop owlynn_searxng` (manual; not automated)
 
 4. To unload medium LLM:
    ```bash

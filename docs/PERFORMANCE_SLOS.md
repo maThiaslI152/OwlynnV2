@@ -31,7 +31,7 @@ tests/test_frontend_cutover_serving.py
 1. Unload medium LLM from LM Studio (fall back to small LLM only)
 2. Reduce context window to 50K tokens
 3. Disable auto-summarize (keep full context at reduced window)
-4. If below 1 GB free, terminate SearXNG container
+4. If below 1 GB free, optionally stop SearXNG manually (`podman stop owlynn_searxng`) — not automated in application code
 
 ## API
 

@@ -35,7 +35,7 @@ owner: human
 | `ask_user` tool not working | Escape hatch not bound to LLM | `ask_user` is always included in tool sets | If missing, check `tool_sets.py` `resolve_tools()` |
 | Notebook execution hangs | Python subprocess stuck or infinite loop | Check backend process tree for zombie notebook processes | Kill stale notebook processes, verify 15s timeout / thread-isolation |
 | Document generation fails | Missing Python library (python-docx, openpyxl, etc.) | `pip list \| grep python-docx` | `pip install` missing dependency |
-| Web search returns no results | All tiers exhausted, SearXNG down, or network issue | Check SearXNG health: `curl http://localhost:8888/search` | Ensure SearXNG running, check internet, try alternate tier |
+| Web search returns no results | All tiers exhausted, extension offline, or network issue | Check extension WS: browser connected; optional SearXNG if configured | Ensure Brave extension loaded; set SEARXNG_URL only if container running |
 | Workspace file operations fail | Wrong workspace path or permission denied | Check active workspace: `GET /api/projects` | Verify workspace path exists and is writable |
 | Tool execution panel shows mock data (BUG-6) | Frontend renders demo entries | See [frontend.md](frontend.md) BUG-6 section | See [frontend.md](frontend.md) |
 
@@ -74,8 +74,8 @@ pkill -f "notebook"
 # Tier 0: Weather
 curl -s "wttr.in/Bangkok?format=3"
 
-# Tier 0.5: SearXNG
-curl -s "http://localhost:8888/search?q=test&format=json" | head -c 100
+# Tier 1.5: SearXNG (only if SEARXNG_URL set and container running)
+# curl -s "http://localhost:8888/search?q=test&format=json" | head -c 100
 
 # Tier 1A: Check API keys
 echo "BRAVE_API_KEY: ${BRAVE_API_KEY:0:8}..."
@@ -178,9 +178,9 @@ ERROR:src.tools.mcp_client:MCP tool execution failed: Connection refused
    - Check if file is locked by another process: `lsof <path>`
 
 4. For web search:
-   - Verify SearXNG is running: `curl http://localhost:8888/search`
+   - Check browser extension connected (primary tier 0.2)
+   - Optional SearXNG (only if SEARXNG_URL set): `curl http://localhost:8888/search`
    - Check internet connectivity: `curl -s https://google.com | head -c 10`
-   - Check API keys if using Tier 1A
 
 5. For document generation:
    - Verify Python library is installed: `pip list | grep <library>`

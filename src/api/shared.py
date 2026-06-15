@@ -111,20 +111,13 @@ def serialize_message(msg):
 
 
 def extract_pdf_text(raw_bytes: bytes) -> str:
-    """Extract text from a PDF using PyMuPDF."""
+    """Extract text from a PDF via StirlingPDF (fallback PyMuPDF)."""
     try:
-        import fitz  # PyMuPDF
+        from src.pdf.intake import extract_pdf_text_from_bytes
 
-        doc = fitz.open(stream=raw_bytes, filetype="pdf")
-        try:
-            pages_text = []
-            for page in doc:
-                pages_text.append(page.get_text())
-        finally:
-            doc.close()
-        return "\n\n".join(pages_text)
+        return extract_pdf_text_from_bytes(raw_bytes)
     except Exception as e:
-        logger.error("PyMuPDF text extraction failed: %s", e)
+        logger.error("PDF text extraction failed: %s", e)
         return ""
 
 

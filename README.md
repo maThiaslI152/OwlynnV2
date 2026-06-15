@@ -23,7 +23,7 @@ Owlynn is a **desktop AI coworker** that keeps your data local. It reasons throu
 | **Vision proxy** | Local VLM → JSON OCR → text-only DeepSeek path; lazy load + idle unload |
 | **Screen assist** | macOS tmux capture, Accessibility API, browser tab, Kali SSH tmux (Python tools) |
 | **HITL** | Security proxy + plan review for sensitive tool calls |
-| **Search** | wttr.in → SearXNG → curl_cffi → DDGS → Playwright |
+| **Search** | Browser extension (tier 0.2) → curl_cffi → DDGS → Playwright; SearXNG opt-in |
 
 Full roadmap: [`docs/guides/memory-vision-screen-roadmap.md`](docs/guides/memory-vision-screen-roadmap.md)
 
@@ -82,7 +82,7 @@ Routes: **`simple`**, **`complex-default`** (local Qwen), **`complex-cloud`** (D
 | File processing | Docling v2 (PDF/DOCX → markdown) |
 | Memory | Mem0 + Qdrant + JSON STM; Redis extraction worker |
 | Checkpointing | Redis (`AsyncRedisSaver`; falls back to in-memory) |
-| Search | Multi-tier: wttr.in / SearXNG → curl_cffi / DDGS → Playwright |
+| Search | Multi-tier: browser extension → curl_cffi / DDGS → Playwright; SearXNG opt-in |
 | Testing | pytest + hypothesis (backend), vitest (frontend) |
 | CI | Local [`scripts/ci.sh`](scripts/ci.sh) (pre-push hook) |
 
@@ -124,7 +124,7 @@ Settings live in `src/config/defaults.yaml` (override chain: YAML → env → `u
 |----------|-------------|
 | `REDIS_URL` | LangGraph checkpointing + memory extraction stream |
 | `QDRANT_HOST` / `QDRANT_PORT` | Vector memory |
-| `SEARXNG_URL` | Self-hosted search (e.g. `http://localhost:8888`) |
+| `SEARXNG_URL` | Optional self-hosted search — not started by `./start.sh`; run `podman compose --profile searxng up -d searxng` first |
 | `DEEPSEEK_API_KEY` | Optional cloud route (`complex-cloud`) |
 | `KALI_SSH_HOST` | Remote Kali VM for `capture_kali_terminal` |
 | `SCREEN_ASSIST_TMUX_SESSION` | Default local tmux session name |

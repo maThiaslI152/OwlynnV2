@@ -2,13 +2,13 @@
 Enhanced Web Search — SearXNG Integration
 ===========================================
 
-Adds SearXNG (self-hosted metasearch) as the primary search backend.
+Optional self-hosted metasearch (opt-in via ``SEARXNG_URL``).
 
-SearXNG advantages for local setups:
+SearXNG advantages when enabled:
 - No API keys needed (self-hosted)
 - No bot blocking or CAPTCHAs
 - Aggregates Google, Bing, DuckDuckGo, Wikipedia, etc.
-- Easy to self-host via Docker (``docker-compose up searxng``)
+- Start with: ``podman compose --profile searxng up -d searxng``
 
 Functions:
 - ``searxng_search(query, categories, max_results)``: Search via local SearXNG.

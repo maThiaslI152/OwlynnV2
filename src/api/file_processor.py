@@ -227,78 +227,35 @@ class FileWatcherHandler(FileSystemEventHandler):
                 self.on_processed_callback(filepath, "error")
 
     def _get_docling_converter(self):
-        """Lazy-initialise the Docling converter with local model cache.
-
-        Uses DOCLING_ARTIFACTS_PATH env var or falls back to project .models/docling/.
-        Enables table structure detection for PDFs. Returns None if Docling is unavailable.
-        """
+        """Lazy-initialise Docling for DOCX only. Returns None if unavailable."""
         try:
             from docling.document_converter import (
                 DocumentConverter,
-                PdfFormatOption,
                 WordFormatOption,
             )
             from docling.datamodel.base_models import InputFormat
-            from docling.datamodel.pipeline_options import PdfPipelineOptions
         except ImportError:
             logger.warning(
-                "[Watcher] Docling not installed — falling back to PyMuPDF/python-docx"
+                "[Watcher] Docling not installed — falling back to python-docx for DOCX"
             )
             return None
 
         if self._docling_converter is None:
-            artifacts_path = os.environ.get("DOCLING_ARTIFACTS_PATH", "")
-            if not artifacts_path:
-                from src.config.settings import MODELS_DIR
-
-                artifacts_path = str(MODELS_DIR / "docling")
-
-            pipeline_options = PdfPipelineOptions(artifacts_path=artifacts_path)
-            pipeline_options.do_table_structure = True
-
             self._docling_converter = DocumentConverter(
                 format_options={
-                    InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options),
                     InputFormat.DOCX: WordFormatOption(),
                 }
             )
-            logger.info(
-                "[Watcher] Docling converter initialised (models: %s)", artifacts_path
-            )
+            logger.info("[Watcher] Docling converter initialised (DOCX only)")
         return self._docling_converter
 
     def _process_pdf(self, filepath, output_path):
-        """Extract PDF text via Docling (fallback to PyMuPDF)."""
-        converter = self._get_docling_converter()
-        if converter is not None:
-            try:
-                result = converter.convert(filepath)
-                markdown_text = result.document.export_to_markdown()
-                if markdown_text and len(markdown_text.strip()) > 50:
-                    with open(output_path, "w", encoding="utf-8") as f:
-                        f.write(markdown_text)
-                    return
-            except Exception as e:
-                logger.warning(
-                    "[Watcher] Docling PDF extraction failed for %s: %s — falling back to PyMuPDF",
-                    filepath,
-                    e,
-                )
+        """Extract PDF text via StirlingPDF (fallback PyMuPDF)."""
+        from src.pdf.intake import extract_pdf_text_from_path
 
-        # Fallback: PyMuPDF
-        import fitz
-
-        doc = fitz.open(filepath)
-        try:
-            text = ""
-            for i, page in enumerate(doc):
-                text += f"--- Page {i + 1} ---\n"
-                text += page.get_text() + "\n\n"
-
-            with open(output_path, "w", encoding="utf-8") as f:
-                f.write(text)
-        finally:
-            doc.close()
+        text = extract_pdf_text_from_path(filepath, page_markers=True)
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(text)
 
     def _process_table(self, filepath, output_path, ext):
         import pandas as pd

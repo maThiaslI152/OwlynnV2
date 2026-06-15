@@ -95,11 +95,9 @@ def read_workspace_file(filename: str) -> str:
             with open(cached_md, "r", encoding="utf-8") as f:
                 content = f.read()
         elif filepath.lower().endswith(".pdf"):
-            import fitz
+            from src.pdf.intake import extract_pdf_text_from_path
 
-            doc = fitz.open(filepath)
-            content = "".join(page.get_text() + "\n\n" for page in doc)
-            doc.close()
+            content = extract_pdf_text_from_path(filepath)
             if not content.strip():
                 return "This PDF has no extractable text layer."
         elif filepath.lower().endswith(".docx"):

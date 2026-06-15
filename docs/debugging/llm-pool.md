@@ -219,7 +219,7 @@ INFO:src.agent.llm:Cloud budget: 420000/500000 (84%) — WARNING
 
 4. Reduce context window if still OOM:
    - Set a lower `max_tokens` via profile or defer to small LLM for simple queries.
-   - The system has a degradation ladder: unload medium → reduce context → disable summarize → terminate SearXNG.
+   - The system has a degradation ladder: unload medium → reduce context → disable summarize. Optionally stop SearXNG manually (`podman stop owlynn_searxng`) — not automated in code.
 
 ### Procedure 4: DeepSeek API Errors
 

@@ -51,8 +51,8 @@ for c in cols:
 redis-cli -u redis://localhost:6379 PING 2>/dev/null || echo "Redis not reachable"
 redis-cli -u redis://localhost:6379 INFO memory | grep used_memory_human
 
-# SearXNG health
-curl -s -o /dev/null -w "%{http_code}" http://localhost:8888/search
+# SearXNG health (optional — only if SEARXNG_URL configured)
+# curl -s -o /dev/null -w "%{http_code}" http://localhost:8888/search
 ```
 
 ### Container Logs
@@ -64,8 +64,8 @@ docker logs qdrant --tail 20
 # Redis logs
 docker logs redis --tail 20
 
-# SearXNG logs
-docker logs searxng --tail 20
+# SearXNG logs (optional)
+# podman logs owlynn_searxng --tail 20
 ```
 
 ### Mem0 / Embeddings
@@ -227,15 +227,14 @@ INFO:langgraph.checkpoint.memory:Using in-memory checkpointer (data lost on rest
    redis-cli -u redis://localhost:6379 PING
    # Expected: PONG
 
-   # SearXNG
-   curl -s -o /dev/null -w "%{http_code}" http://localhost:8888/search
-   # Expected: 200 or 302
+   # SearXNG (optional, if SEARXNG_URL configured)
+   # curl -s -o /dev/null -w "%{http_code}" http://localhost:8888/search
    ```
 
 4. If containers fail to start:
-   - Check logs: `docker logs qdrant`, `docker logs redis`, `docker logs searxng`
-   - Port conflicts: check `lsof -i :6333`, `lsof -i :6379`, `lsof -i :8888`
-   - Memory: Qdrant needs ~512 MB, Redis ~128 MB, SearXNG ~256 MB
+   - Check logs: `podman logs owlynn_qdrant`, `podman logs owlynn_redis`
+   - Port conflicts: check `lsof -i :6333`, `lsof -i :6379`, `lsof -i :8090`
+   - Memory: Qdrant ~512 MB, Redis ~128 MB (512m cap), StirlingPDF up to 1 GB
 
 ### Procedure 2: Embedding Failures
 

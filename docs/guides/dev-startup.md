@@ -39,6 +39,8 @@ http://127.0.0.1:8000           # Backend API (FastAPI)
 http://127.0.0.1:1234           # LM Studio (LLM inference)
 http://127.0.0.1:6333           # Qdrant (vector DB)
 http://127.0.0.1:6379           # Redis (session persistence)
+http://127.0.0.1:8090           # StirlingPDF (PDF text + OCR intake)
+http://127.0.0.1:8888           # SearXNG (optional — not started by ./start.sh)
 ```
 
 ## Step 0: One-time bootstrap (optional)
@@ -122,22 +124,36 @@ python3 -c "from src.config.config_loader import validate_config; print(validate
 | `DEEPSEEK_API_KEY` | Cloud route (`complex-cloud`); prefer `.env.local` over `.env` |
 | `CLOUD_LLM_MODEL_NAME` | `deepseek-v4-flash` or `deepseek-v4-pro` (only with API key) |
 | `OPTIMIZE_FOR_M4` | Set to `true` on Mac M4 Air for shorter timeouts / memory limits (optional; CI works without it) |
-| `SEARXNG_URL` | Self-hosted search engine for web search (optional) |
+| `SEARXNG_URL` | Self-hosted search (optional — set only if you run `podman compose --profile searxng up -d searxng`) |
+| `STIRLING_PDF_URL` | StirlingPDF service for PDF text extraction (default `http://localhost:8090`) |
+| `STIRLING_PDF_API_KEY` | API key matching `SECURITY_CUSTOMGLOBALAPIKEY` in compose (default `owlynn-local-dev`) |
 | `REDIS_URL` | Default `redis://localhost:6379` — no change needed |
 | `DOCLING_ARTIFACTS_PATH` | `.models/docling/` — auto-set, no change needed |
 
-## Step 2: Containers (Qdrant + Redis)
+## Step 2: Containers (Qdrant, Redis, StirlingPDF)
 
-The launcher script (`start.sh`) tries three backends in order: `podman compose` → `podman-compose` → `docker compose`. Any of these work.
+The launcher script (`start.sh`) tries three backends in order: `podman compose` → `podman-compose` → `docker compose`. Any of these work. `start.sh` starts **core services only** (`qdrant`, `redis`, `stirling-pdf`). SearXNG is **not** started by default.
 
 ```bash
-# Start containers (choose one)
-podman compose up -d     # preferred (Podman users)
-docker compose up -d     # Docker users
+# Start core containers (choose one)
+podman compose up -d qdrant redis stirling-pdf     # preferred (Podman users)
+docker compose up -d qdrant redis stirling-pdf     # Docker users
 
 # Verify they're running
 podman ps --format '{{.Names}}' | grep owlynn
-# Expected: owlynn_qdrant, owlynn_redis
+# Expected: owlynn_qdrant, owlynn_redis, owlynn_stirling_pdf
+```
+
+**StirlingPDF** (~1GB first pull): PDF text extraction + OCR for scanned documents. Swagger UI: `http://127.0.0.1:8090/swagger-ui/index.html`. If Stirling is down, Owlynn falls back to PyMuPDF automatically.
+
+Manual smoke (after containers up): `python scripts/manual/stirling_pdf_smoke.py`
+
+**SearXNG (opt-in):** Primary web search is the Brave browser extension (tier 0.2). To enable SearXNG as a fallback tier:
+
+```bash
+podman compose --profile searxng up -d searxng
+# In .env.local:
+SEARXNG_URL=http://localhost:8888
 ```
 
 If you don't have either installed, `start.sh` will fail with a clear error. Install Podman (`brew install podman`) or Docker Desktop, then retry.

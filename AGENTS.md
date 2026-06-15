@@ -21,6 +21,8 @@
 | `src/config/` | `defaults.yaml` — single source of truth |
 | `src/memory/` | STM/LTM/personal memory managers |
 | `src/tools/` | Agent tool implementations |
+| `src/pdf/` | Unified PDF text intake (StirlingPDF + PyMuPDF fallback) |
+| `src/integrations/` | External service clients (StirlingPDF) |
 | `frontend-v2/` | React + Electron UI |
 | `tests/` | Python unit, property, contract, and benchmark tests |
 | `scripts/ci.sh` | Local CI (run before push) |
@@ -35,6 +37,7 @@
 | I want to… | Read | Edit |
 |------------|------|------|
 | Change routing / model selection | [`docs/EXTENDING_AGENT.md`](docs/EXTENDING_AGENT.md) | `src/agent/nodes/router.py`, `src/agent/router/`, `src/config/defaults.yaml` |
+| Change PDF intake / OCR | [`docs/guides/dev-startup.md`](docs/guides/dev-startup.md) | `src/pdf/intake.py`, `src/integrations/stirling_pdf.py`, `docker-compose.yml` |
 | Add or change a tool | [`docs/TOOLS.md`](docs/TOOLS.md) | `src/tools/`, `src/agent/tool_sets.py` |
 | Change WebSocket events | [`docs/CHAT_PROTOCOL.md`](docs/CHAT_PROTOCOL.md) | `src/api/ws/handler.py`, `frontend-v2/src/` |
 | Fix memory / context injection | [`docs/MEMORY.md`](docs/MEMORY.md) | `src/agent/nodes/memory.py`, `src/memory/` |

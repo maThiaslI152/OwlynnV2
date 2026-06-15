@@ -6,7 +6,7 @@
 
 - Python 3.12+
 - Node.js 18+ (for frontend tests)
-- Docker/Podman (for Qdrant, SearXNG, Redis)
+- Docker/Podman (for Qdrant, Redis, StirlingPDF; SearXNG optional via compose profile)
 - LM Studio with models loaded on port 1234
 - Electron (optional — for desktop packaging via `frontend-v2`)
 

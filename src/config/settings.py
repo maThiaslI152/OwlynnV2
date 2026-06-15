@@ -72,6 +72,21 @@ WEB_SEARCH_ENABLE_BROWSER_FALLBACK = config.get(
 
 SEARXNG_URL = config.get("external_services.searxng.url", "") or ""
 
+# ── StirlingPDF ──────────────────────────────────────────────────────────────
+
+STIRLING_PDF_URL = config.get("external_services.stirling_pdf.url", "") or ""
+STIRLING_PDF_API_KEY = config.get("external_services.stirling_pdf.api_key", "") or ""
+STIRLING_PDF_ENABLED = bool(config.get("external_services.stirling_pdf.enabled", True))
+STIRLING_PDF_TIMEOUT_SECONDS = float(
+    config.get("external_services.stirling_pdf.timeout_seconds", 120)
+)
+STIRLING_PDF_OCR_LANGUAGES = config.get(
+    "external_services.stirling_pdf.ocr_languages", "eng"
+)
+STIRLING_PDF_MIN_TEXT_CHARS = int(
+    config.get("external_services.stirling_pdf.min_text_chars", 50)
+)
+
 # ── Redis & DeepSeek ─────────────────────────────────────────────────────────
 
 REDIS_URL = config.get("external_services.redis.url", "redis://localhost:6379")
