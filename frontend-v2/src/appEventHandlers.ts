@@ -29,7 +29,7 @@ export function toToolExecutionSnapshot(
 
 // ── Conversation timeline model ──────────────────────────────────────
 
-export type ConversationItemKind = 'message' | 'tool_activity' | 'hitl_prompt'
+export type ConversationItemKind = 'message' | 'tool_activity' | 'hitl_prompt' | 'chart_embed'
 
 export interface ConversationMessage {
   kind: 'message'
@@ -66,10 +66,41 @@ export interface ConversationHitlPrompt {
   ts: number
 }
 
+export interface ConversationChartEmbed {
+  kind: 'chart_embed'
+  id: string
+  url: string
+  filename: string
+  chartKind: 'interactive' | 'static'
+  mimeType: string
+  toolCallId?: string | null
+  ts: number
+}
+
 export type ConversationItem =
   | ConversationMessage
   | ConversationToolActivity
   | ConversationHitlPrompt
+  | ConversationChartEmbed
+
+/** Build a timeline chart embed item from a successful notebook_run tool event. */
+export function buildChartEmbedItem(
+  event: ToolExecutionEvent,
+  now: number,
+): ConversationChartEmbed | null {
+  const artifact = event.chart_artifact
+  if (event.status !== 'success' || !artifact) return null
+  return {
+    kind: 'chart_embed',
+    id: event.tool_call_id ? `chart-${event.tool_call_id}` : `chart-${now}`,
+    url: artifact.url,
+    filename: artifact.filename,
+    chartKind: artifact.kind,
+    mimeType: artifact.mime_type,
+    toolCallId: event.tool_call_id ?? null,
+    ts: now,
+  }
+}
 
 type InterruptMetadata = {
   backendToolName: string

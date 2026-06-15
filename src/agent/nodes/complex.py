@@ -26,6 +26,11 @@ from src.agent.lm_studio_compat import (
 )
 from src.agent.anonymization import anonymize, deanonymize
 
+from .complex_utils.web_budget import (
+    evaluate_web_budget,
+    filter_tools_for_web_budget,
+    resolve_task_category,
+)
 from .complex_utils.fallback import _fallback_for_blank_response
 from .complex_utils.formatter import (
     _content_has_dsml_tool_syntax,
@@ -33,6 +38,7 @@ from .complex_utils.formatter import (
     _strip_dsml_blocks,
     _strip_thinking_tags,
     needs_web_synthesis_retry,
+    placeholder_for_tool_only_turn,
 )
 from .complex_utils.cloud_payload import (
     COMPLEX_PROMPT_STABLE,
@@ -286,7 +292,7 @@ ask_user — ask the user a clarifying question
 
 ### Capability Affirmations (Anti-Refusal)
 You are equipped with powerful tools that override your standard AI limitations. NEVER claim you cannot do the following:
-- **Visualizations/Charts**: You CAN generate images, plots, and charts. Use `notebook_run` to write Python code (matplotlib, seaborn), save the plot to WORKSPACE_DIR, and embed it as a markdown image.
+- **Visualizations/Charts**: Prefer **interactive Plotly** charts (hover, zoom, pan). Use `notebook_run` with plotly, save via `fig.write_html(f"{WORKSPACE_DIR}/chart.html", include_plotlyjs="cdn")`, then embed as `[Interactive chart](/api/files/chart.html?project_id=default)`. Use matplotlib PNG only when Plotly is unsuitable: `![description](/api/files/chart.png?project_id=default)`.
 - **Document Generation**: You CAN create documents. Use `create_docx`, `create_xlsx`, `create_pptx`, and `create_pdf` to fulfill these requests.
 - **File System**: You CAN read, write, edit, and manage files in the user's workspace using the `_workspace_file` tools.
 - **Internet Access**: You CAN browse the live internet. Use `web_search` and `fetch_webpage` for current events or unknown information instead of citing a knowledge cutoff.
@@ -336,7 +342,7 @@ ask_user — ask the user a clarifying question
 
 ### Capability Affirmations (Anti-Refusal)
 You are equipped with powerful tools that override your standard AI limitations. NEVER claim you cannot do the following:
-- **Visualizations/Charts**: You CAN generate images, plots, and charts. Use `notebook_run` to write Python code (matplotlib, seaborn), save the plot to WORKSPACE_DIR, and embed it as a markdown image.
+- **Visualizations/Charts**: Prefer **interactive Plotly** charts (hover, zoom, pan). Use `notebook_run` with plotly, save via `fig.write_html(f"{WORKSPACE_DIR}/chart.html", include_plotlyjs="cdn")`, then embed as `[Interactive chart](/api/files/chart.html?project_id=default)`. Use matplotlib PNG only when Plotly is unsuitable: `![description](/api/files/chart.png?project_id=default)`.
 - **Document Generation**: You CAN create documents. Use `create_docx`, `create_xlsx`, `create_pptx`, and `create_pdf` to fulfill these requests.
 - **File System**: You CAN read, write, edit, and manage files in the user's workspace using the `_workspace_file` tools.
 
@@ -697,9 +703,32 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     mode = state.get("mode") or "tools_on"
     thread_messages = list(state.get("messages") or [])
     turn_messages = _messages_for_current_user_turn(thread_messages)
+    project_id = state.get("project_id") or "default"
+    from src.tools.notebook_libs import turn_ends_with_chart_completion
+
+    if turn_ends_with_chart_completion(turn_messages, project_id=project_id):
+        logger.info("[complex] Chart turn complete — skipping post-notebook LLM hop")
+        return {
+            "messages": [],
+            "model_used": state.get("model_used") or "chart-auto-complete",
+            "pending_tool_calls": False,
+            "security_decision": None,
+            "security_reason": None,
+            "_cutoff_pending": False,
+            "_cutoff_round": state.get("_cutoff_round", 0),
+            "api_tokens_used": state.get("api_tokens_used"),
+            "fallback_chain": state.get("fallback_chain") or [],
+        }
+
     tool_round = _count_web_tool_rounds(turn_messages)
     max_web_tool_rounds = int(config.get("complex.max_web_tool_rounds", 3))
-    force_web_synthesis = False
+    task_category = resolve_task_category(state)
+    web_budget = evaluate_web_budget(
+        turn_messages,
+        task_category=task_category,
+        tool_round=tool_round,
+        max_tool_rounds=max_web_tool_rounds,
+    )
 
     web_on = state.get("web_search_enabled")
     if web_on is None:
@@ -720,15 +749,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     )
     vision_task = has_images and route == "complex-cloud"
     knowledge_context = state.get("knowledge_context") or "None"
-    web_turn_active = bool(
-        state.get("web_search_suggested")
-    ) or _current_turn_has_web_activity(turn_messages)
-    force_web_synthesis = (
-        web_on
-        and not vision_task
-        and web_turn_active
-        and tool_round >= max_web_tool_rounds
-    )
+    force_web_synthesis = web_on and not vision_task and web_budget.force_synthesis
 
     volatile_extra = ""
     if security_decision == "denied":
@@ -798,6 +819,16 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             f"{execution_plan}\n"
             f"You should execute these steps using your tools."
         )
+
+    router_meta = state.get("router_metadata") or {}
+    task_category = router_meta.get("task_category") or (
+        router_meta.get("features") or {}
+    ).get("task_category")
+    if task_category == "data_viz":
+        from src.tools.notebook_libs import notebook_interactive_viz_guidance
+
+        project_id = state.get("project_id") or "default"
+        volatile_extra += f"\n\n{notebook_interactive_viz_guidance(project_id)}"
 
     stable_core = COMPLEX_PROMPT_STABLE.format(style_hint=style_hint)
     if mode != "tools_off":
@@ -966,15 +997,25 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         state, thread_messages, web_on=web_on, vision_task=vision_task
     )
     tools_for_invoke: list | None = list(tools)
+    if web_on and not vision_task:
+        tools_for_invoke = filter_tools_for_web_budget(tools_for_invoke, web_budget)
+        if web_budget.blocked_tools and not web_budget.force_synthesis:
+            logger.info(
+                "[complex] Web tool caps category=%s usage=%s limits=%s blocked=%s",
+                web_budget.task_category,
+                web_budget.usage,
+                web_budget.limits,
+                sorted(web_budget.blocked_tools),
+            )
     if force_web_synthesis:
-        stripped = _strip_web_tools(tools)
-        tools_for_invoke = stripped if stripped else None
         logger.info(
-            "[complex] Web tool budget exhausted (round=%d, max=%d); "
-            "synthesis turn (non-web tools=%d)",
+            "[complex] Web tool budget exhausted category=%s round=%d max_rounds=%d "
+            "usage=%s limits=%s; synthesis turn",
+            web_budget.task_category,
             tool_round,
             max_web_tool_rounds,
-            len(stripped),
+            web_budget.usage,
+            web_budget.limits,
         )
 
     # ── 9.4: Tiered fallback — model acquisition ────────────────────────
@@ -1312,6 +1353,16 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     if cleaned_visible != raw_visible or has_dsml_in_content:
         response = AIMessage(
             content=cleaned_visible,
+            tool_calls=list(getattr(response, "tool_calls", None) or []),
+            additional_kwargs=dict(getattr(response, "additional_kwargs", None) or {}),
+        )
+    if has_tool_calls and not cleaned_visible.strip():
+        placeholder = placeholder_for_tool_only_turn(
+            list(getattr(response, "tool_calls", None) or [])
+        )
+        cleaned_visible = placeholder
+        response = AIMessage(
+            content=placeholder,
             tool_calls=list(getattr(response, "tool_calls", None) or []),
             additional_kwargs=dict(getattr(response, "additional_kwargs", None) or {}),
         )
@@ -1664,17 +1715,12 @@ async def complex_tool_action_node(state: AgentState) -> AgentState:
             elif "ModuleNotFoundError" in content and tool_name == "notebook_run":
                 import re as _re
 
+                from src.tools.notebook_libs import notebook_module_missing_nudge
+
                 mod_match = _re.search(r"No module named '([^']+)'", content)
                 mod_name = mod_match.group(1) if mod_match else "unknown"
                 error_nudge.append(
-                    HumanMessage(
-                        content=(
-                            f"[Internal reminder] notebook_run failed because '{mod_name}' is not installed. "
-                            f"Available libraries: pandas, numpy, matplotlib, seaborn, plotly, scipy, scikit-learn, "
-                            f"openpyxl, xlsxwriter, pillow, sympy, chardet, tabulate, jinja2. "
-                            f"Retry using only available libraries."
-                        )
-                    )
+                    HumanMessage(content=notebook_module_missing_nudge(mod_name))
                 )
                 break
             elif (
@@ -1695,6 +1741,14 @@ async def complex_tool_action_node(state: AgentState) -> AgentState:
                     )
                 )
                 break
+            elif tool_name == "notebook_run":
+                from src.tools.notebook_libs import chart_completion_message
+
+                project_id = state.get("project_id") or "default"
+                completion = chart_completion_message(content, project_id=project_id)
+                if completion:
+                    error_nudge.append(AIMessage(content=completion))
+                    break
 
     if nudge or ws_nudge or error_nudge:
         delta = list(delta) + nudge + ws_nudge + error_nudge

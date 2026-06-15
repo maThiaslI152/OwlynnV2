@@ -145,6 +145,13 @@ export interface InterruptEvent {
   >
 }
 
+export interface ChartArtifact {
+  filename: string
+  url: string
+  kind: 'interactive' | 'static'
+  mime_type: string
+}
+
 export interface ToolExecutionEvent {
   type: 'tool_execution'
   status: 'running' | 'success' | 'error'
@@ -158,6 +165,7 @@ export interface ToolExecutionEvent {
   risk_rationale?: string
   remediation_hint?: string
   duration?: number
+  chart_artifact?: ChartArtifact
 }
 
 export type ClientEvent = UserMessageEvent | StopClientEvent | SecurityApprovalClientEvent | AskUserResponseClientEvent | PlanReviewResponseClientEvent

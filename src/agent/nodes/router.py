@@ -846,7 +846,30 @@ async def router_node(state: AgentState) -> AgentState:
         )
         if has_tool_history:
             logger.info("[router] Complex path — conversation has tool history")
-            route, toolbox = _resolve_complex_route(user_text, state, ["all"])
+            toolbox_seed = ["all"]
+            task_category = "tool_followup"
+            skill_matched = None
+            if _user_wants_data_viz(user_text):
+                toolbox_seed = ["data_viz"]
+                task_category = "data_viz"
+                try:
+                    matcher = SkillMatcher(_skill_loader)
+                    match_result = matcher.match_with_confidence(user_text, top_k=3)
+                    if match_result.top_match and match_result.best_score >= float(
+                        config.get("routing.skill_clarification_threshold", 0.5)
+                    ):
+                        skill_matched = {
+                            "name": match_result.top_match.name,
+                            "score": round(match_result.best_score, 3),
+                        }
+                except Exception as e:
+                    logger.warning(
+                        "[router] Skill match on viz follow-up failed: %s", e
+                    )
+            elif _user_wants_file_work(user_text):
+                toolbox_seed = ["file_ops"]
+                task_category = "file_ops"
+            route, toolbox = _resolve_complex_route(user_text, state, toolbox_seed)
             budget = estimate_token_budget(user_text, route)
             metadata = _build_router_metadata(
                 route,
@@ -855,7 +878,7 @@ async def router_node(state: AgentState) -> AgentState:
                 classification_source="deterministic",
                 cloud_available=cloud_available,
                 has_images=has_images,
-                task_category="tool_followup",
+                task_category=task_category,
                 estimated_tokens=budget,
                 web_on=web_on,
                 swap_from=state.get("current_medium_model"),
@@ -867,14 +890,14 @@ async def router_node(state: AgentState) -> AgentState:
                 route=route,
                 confidence=0.95,
                 source="tool_history",
-                task_category="tool_followup",
+                task_category=task_category,
             )
             return {
                 "route": route,
                 "token_budget": budget,
                 "selected_toolboxes": toolbox,
                 "router_clarification_used": False,
-                "skill_matched": None,
+                "skill_matched": skill_matched,
                 "router_metadata": metadata,
             }
 

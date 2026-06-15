@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildAutoApproveInterruptResponse,
+  buildChartEmbedItem,
   buildInterruptProposal,
   resolveProjectSwitch,
   toToolExecutionSnapshot,
@@ -76,5 +77,40 @@ describe('app event wiring helpers', () => {
     expect(resolved?.nextActiveProjectId).toBe('proj-b')
     expect(resolved?.nextCurrentThreadId).toBe('thread-b')
     expect(resolved?.nextProjectThreads['proj-a']).toBe('thread-a')
+  })
+
+  it('builds chart embed item from notebook_run tool success', () => {
+    const item = buildChartEmbedItem(
+      {
+        type: 'tool_execution',
+        status: 'success',
+        tool_name: 'notebook_run',
+        tool_call_id: 'call-chart',
+        chart_artifact: {
+          filename: 'chart.html',
+          url: '/api/files/chart.html?project_id=default',
+          kind: 'interactive',
+          mime_type: 'text/html',
+        },
+      },
+      999,
+    )
+
+    expect(item).toMatchObject({
+      kind: 'chart_embed',
+      id: 'chart-call-chart',
+      chartKind: 'interactive',
+      mimeType: 'text/html',
+      ts: 999,
+    })
+  })
+
+  it('skips chart embed when artifact missing', () => {
+    expect(
+      buildChartEmbedItem(
+        { type: 'tool_execution', status: 'success', tool_name: 'notebook_run' },
+        1,
+      ),
+    ).toBeNull()
   })
 })

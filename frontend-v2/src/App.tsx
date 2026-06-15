@@ -8,6 +8,7 @@ import { useAppStore } from './state/useAppStore'
 import { electronBridge as tauriBridge } from './lib/electronBridge'
 import {
   buildAutoApproveInterruptResponse,
+  buildChartEmbedItem,
   buildInterruptProposal,
   parseInterruptChoices,
   resolveProjectSwitch,
@@ -375,6 +376,10 @@ function App() {
               duration: snapshot.duration,
             })
           }
+          const chartEmbed = buildChartEmbedItem(event, Date.now())
+          if (chartEmbed) {
+            store.appendConversationItem(chartEmbed)
+          }
         } else if (event.type === 'interrupt') {
           handleInterruptRef.current(event.interrupts)
         } else if (event.type === 'router_info') {
@@ -475,6 +480,10 @@ function App() {
             ts: Date.now(),
             duration: snapshot.duration,
           })
+        }
+        const chartEmbed = buildChartEmbedItem(payload, Date.now())
+        if (chartEmbed) {
+          store.appendConversationItem(chartEmbed)
         }
       } else if (payload.type === 'interrupt') {
         handleInterrupt(payload.interrupts)

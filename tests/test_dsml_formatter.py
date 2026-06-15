@@ -5,6 +5,7 @@ from src.agent.nodes.complex_utils.formatter import (
     _content_has_dsml_tool_syntax,
     _strip_dsml_blocks,
     needs_web_synthesis_retry,
+    placeholder_for_tool_only_turn,
 )
 
 
@@ -86,3 +87,9 @@ def test_strip_orphan_qwen_tags():
 def test_content_has_dsml_tool_syntax_detects_orphan_closing_tags():
     assert _content_has_dsml_tool_syntax("Some content </tool_call>")
     assert _content_has_dsml_tool_syntax("Some content </function>")
+
+
+def test_placeholder_for_tool_only_turn_notebook():
+    text = placeholder_for_tool_only_turn([{"name": "notebook_run", "args": {}}])
+    assert "notebook_run" in text
+    assert "chart" in text.lower() or "Generating" in text

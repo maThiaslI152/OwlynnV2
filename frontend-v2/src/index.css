@@ -1058,6 +1058,202 @@ body.tauri-glass .window-drag-strip {
   background: var(--bg-elevated);
 }
 
+.msg-inline-image-wrap {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  margin: 8px 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: zoom-in;
+  text-align: left;
+}
+
+.msg-inline-image-wrap:hover .msg-inline-image {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border-default));
+}
+
+.msg-inline-image-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+.msg-inline-image {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  max-height: min(72vh, 720px);
+  margin: 0;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  object-fit: contain;
+  background: var(--bg-elevated);
+}
+
+.chat-image-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  background: rgba(8, 12, 20, 0.92);
+  backdrop-filter: blur(6px);
+}
+
+.chat-image-lightbox-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(148, 196, 255, 0.12);
+  background: rgba(12, 18, 30, 0.95);
+}
+
+.chat-image-lightbox-btn,
+.chat-image-lightbox-link {
+  appearance: none;
+  border: 1px solid rgba(148, 196, 255, 0.18);
+  background: rgba(44, 73, 113, 0.35);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  line-height: 1;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.chat-image-lightbox-btn:hover,
+.chat-image-lightbox-link:hover {
+  background: rgba(58, 96, 145, 0.45);
+}
+
+.chat-image-lightbox-scale {
+  min-width: 52px;
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.chat-image-lightbox-stage {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  touch-action: none;
+}
+
+.chat-image-lightbox-image {
+  max-width: min(96vw, 1600px);
+  max-height: calc(100vh - 88px);
+  object-fit: contain;
+  transform-origin: center center;
+  transition: transform 0.08s ease-out;
+  user-select: none;
+}
+
+.chat-image-lightbox-image.is-pannable {
+  cursor: grab;
+}
+
+.chat-image-lightbox-image.is-pannable:active {
+  cursor: grabbing;
+}
+
+.msg-interactive-chart {
+  margin: 8px 0;
+  width: 100%;
+}
+
+.msg-interactive-chart-frame {
+  display: block;
+  width: 100%;
+  height: min(560px, 72vh);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: #fff;
+}
+
+.msg-interactive-chart-frame.is-expanded {
+  width: min(96vw, 1400px);
+  height: calc(100vh - 96px);
+}
+
+.msg-interactive-chart-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.msg-interactive-chart-btn {
+  appearance: none;
+  border: 1px solid rgba(148, 196, 255, 0.18);
+  background: rgba(44, 73, 113, 0.35);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: 5px 10px;
+  font-size: 0.72rem;
+  line-height: 1;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.msg-interactive-chart-btn:hover {
+  background: rgba(58, 96, 145, 0.45);
+}
+
+.chat-interactive-chart-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  background: rgba(8, 12, 20, 0.94);
+  backdrop-filter: blur(6px);
+}
+
+.chat-interactive-chart-lightbox-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(148, 196, 255, 0.12);
+}
+
+.chat-interactive-chart-lightbox-title {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.chat-interactive-chart-lightbox-btn {
+  appearance: none;
+  border: 1px solid rgba(148, 196, 255, 0.18);
+  background: rgba(44, 73, 113, 0.35);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.chat-interactive-chart-lightbox-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+}
+
 .message-attachment-file {
   display: inline-block;
   padding: 4px 8px;

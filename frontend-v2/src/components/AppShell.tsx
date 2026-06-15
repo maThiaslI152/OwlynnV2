@@ -16,12 +16,20 @@ import { MemoryPanel } from './MemoryPanel'
 import { HitlPromptCard, type HitlPromptViewModel } from './HitlPromptCard'
 import { ToolActivityCard } from './ToolActivityCard'
 import type { InterruptChoice } from '../state/useAppStore'
-import type { ConversationItem, ConversationToolActivity, ConversationHitlPrompt } from '../appEventHandlers'
+import type { ConversationItem, ConversationToolActivity, ConversationHitlPrompt, ConversationChartEmbed } from '../appEventHandlers'
 import { useAppStore } from '../state/useAppStore'
 import { electronBridge as tauriBridge } from '../lib/electronBridge'
 import type { ChatMessage } from '../types/protocol'
 import type { AttachedFile } from '../lib/attachments'
 import { isTauriRuntime } from '../lib/runtime'
+import {
+  isInteractiveChartUrl,
+  isWorkspaceImageUrl,
+  resolveWorkspaceFileUrl,
+  rewriteWorkspaceImageMarkdown,
+} from '../lib/workspaceImageUrl'
+import { ChatImageViewer } from './ChatImageViewer'
+import { ChatInteractiveChart } from './ChatInteractiveChart'
 
 interface ProjectChat {
   id: string
@@ -78,6 +86,7 @@ const markdownSchema: Options = {
     th: [...(defaultSchema.attributes?.th || []), 'style', 'align'],
     td: [...(defaultSchema.attributes?.td || []), 'style', 'align'],
     table: [...(defaultSchema.attributes?.table || []), 'style'],
+    img: [...(defaultSchema.attributes?.img || []), 'src', 'alt', 'title', 'loading'],
     code: ['className'],
     pre: ['className'],
   },
@@ -98,20 +107,55 @@ function formatTimeRelative(ts: number): string {
   return new Date(ts).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
-function MessageContent({ content }: { content: string }) {
+function MessageContent({ content, projectId }: { content: string; projectId: string }) {
   // Collapse 3+ consecutive newlines into a single blank line (2 newlines)
   // to prevent large visual gaps caused by excessive blank lines in markdown.
-  const cleaned = content.replace(/\n{3,}/g, '\n\n')
+  const cleaned = rewriteWorkspaceImageMarkdown(
+    content.replace(/\n{3,}/g, '\n\n'),
+    projectId,
+  )
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
       rehypePlugins={[rehypeRaw, [rehypeSanitize, markdownSchema]]}
       components={{
-        a: ({ href, children, ...props }) => (
-          <a className="msg-link" href={href} target="_blank" rel="noopener noreferrer" {...props}>
-            {children}
-          </a>
-        ),
+        a: ({ href, children, ...props }) => {
+          const resolved = href ? resolveWorkspaceFileUrl(href, projectId) : href
+          if (resolved && isInteractiveChartUrl(resolved)) {
+            return (
+              <ChatInteractiveChart
+                src={resolved}
+                title={typeof children === 'string' ? children : 'Interactive chart'}
+              />
+            )
+          }
+          if (resolved && isWorkspaceImageUrl(resolved)) {
+            return (
+              <ChatImageViewer
+                src={resolved}
+                alt={typeof children === 'string' ? children : 'Chart'}
+              />
+            )
+          }
+          return (
+            <a
+              className="msg-link"
+              href={resolved}
+              target="_blank"
+              rel="noopener noreferrer"
+              {...props}
+            >
+              {children}
+            </a>
+          )
+        },
+        img: ({ src, alt }) => {
+          const resolved = src ? resolveWorkspaceFileUrl(src, projectId) : ''
+          if (resolved && isInteractiveChartUrl(resolved)) {
+            return <ChatInteractiveChart src={resolved} title={alt || 'Interactive chart'} />
+          }
+          return <ChatImageViewer src={resolved} alt={alt || 'Chart'} />
+        },
         pre: ({ children, ...props }) => (
           <pre className="msg-code-block" {...props}>
             {children}
@@ -189,14 +233,24 @@ function MessageAttachments({ attachments }: { attachments: ChatMessage['attachm
   )
 }
 
-function MessageBubble({ message, isStreaming }: { message: ChatMessage; isStreaming: boolean }) {
+function MessageBubble({
+  message,
+  isStreaming,
+  projectId,
+}: {
+  message: ChatMessage
+  isStreaming: boolean
+  projectId: string
+}) {
   return (
     <div className={`message message-${message.role}`}>
       <MessageAvatar role={message.role} />
       <div className="message-body">
         <div className="message-bubble">
           <MessageAttachments attachments={message.attachments} />
-          {message.content ? <MessageContent content={message.content} /> : null}
+          {message.content ? (
+            <MessageContent content={message.content} projectId={projectId} />
+          ) : null}
           {isStreaming && <span className="streaming-cursor" />}
         </div>
         <span className="message-timestamp">{formatTimeRelative(message.ts)}</span>
@@ -727,7 +781,14 @@ export function AppShell({
                     isStreamingRef.current &&
                     idx === displayMessages.length - 1 &&
                     message.id?.startsWith('stream-')
-                  return <MessageBubble key={`msg-${message.id || idx}`} message={message} isStreaming={isStreaming} />
+                  return (
+                    <MessageBubble
+                      key={`msg-${message.id || idx}`}
+                      message={message}
+                      isStreaming={isStreaming}
+                      projectId={activeProjectId}
+                    />
+                  )
                 }
 
                 // conversation_item
@@ -768,6 +829,27 @@ export function AppShell({
                   )
                 }
 
+                if (item.kind === 'chart_embed') {
+                  const ce = item as ConversationChartEmbed
+                  const resolved = resolveWorkspaceFileUrl(ce.url, activeProjectId)
+                  if (ce.chartKind === 'interactive' || isInteractiveChartUrl(resolved)) {
+                    return (
+                      <ChatInteractiveChart
+                        key={`chart-${ce.id}`}
+                        src={resolved}
+                        title={ce.filename}
+                      />
+                    )
+                  }
+                  return (
+                    <ChatImageViewer
+                      key={`chart-${ce.id}`}
+                      src={resolved}
+                      alt={ce.filename}
+                    />
+                  )
+                }
+
                 // Fallback for message-kind conversation items
                 if (item.kind === 'message') {
                   const msgItem = item as { role: string; content: string; id: string; ts: number }
@@ -781,6 +863,7 @@ export function AppShell({
                         ts: msgItem.ts,
                       }}
                       isStreaming={false}
+                      projectId={activeProjectId}
                     />
                   )
                 }

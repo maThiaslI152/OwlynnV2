@@ -319,6 +319,39 @@ async def test_long_context_boundary_routes_cloud_not_default():
 
 
 @pytest.mark.anyio
+async def test_tool_history_data_viz_followup_uses_data_viz_toolbox():
+    """Visualize follow-ups after tool-heavy threads should bind data_viz tools."""
+    state: AgentState = {
+        "messages": [
+            HumanMessage(content="What is the news about Ukraine today"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "name": "web_search",
+                        "args": {"query": "Ukraine news"},
+                        "id": "call_1",
+                    }
+                ],
+            ),
+            ToolMessage(
+                content="search results...",
+                tool_call_id="call_1",
+                name="web_search",
+            ),
+            AIMessage(content="Here is the latest news summary."),
+            HumanMessage(content="Can you visualize it?"),
+        ],
+        "web_search_enabled": True,
+    }
+    with patch("src.agent.nodes.router._check_cloud_available", return_value=True):
+        out = await router_node(state)
+    assert out["route"].startswith("complex")
+    assert out["selected_toolboxes"] == ["data_viz"]
+    assert out["router_metadata"]["features"]["task_category"] == "data_viz"
+
+
+@pytest.mark.anyio
 async def test_greeting_still_simple_with_tool_history():
     """Greetings must route to simple even when the conversation has tool history."""
     state: AgentState = {

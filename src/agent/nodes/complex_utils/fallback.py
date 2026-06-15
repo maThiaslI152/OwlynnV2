@@ -82,6 +82,23 @@ def _answer_from_fetch_excerpts(messages: list) -> AIMessage | None:
     )
 
 
+def _answer_from_notebook_chart(
+    messages: list, *, project_id: str = "default"
+) -> AIMessage | None:
+    """Use chart completion copy when notebook_run saved a chart this turn."""
+    from src.tools.notebook_libs import chart_completion_message
+
+    for m in reversed(messages):
+        if not isinstance(m, ToolMessage) or getattr(m, "name", "") != "notebook_run":
+            continue
+        content = m.content if isinstance(m.content, str) else str(m.content or "")
+        completion = chart_completion_message(content, project_id=project_id)
+        if completion:
+            return AIMessage(content=completion)
+        break
+    return None
+
+
 def _fallback_for_blank_response(
     messages: list, *, web_search_enabled: bool
 ) -> AIMessage:
@@ -91,6 +108,10 @@ def _fallback_for_blank_response(
     Prefers fetch/deep_research excerpts, then filtered web_search listings.
     """
     user_text = _latest_user_text(messages)
+
+    chart_answer = _answer_from_notebook_chart(messages)
+    if chart_answer is not None:
+        return chart_answer
 
     fetch_answer = _answer_from_fetch_excerpts(messages)
     if fetch_answer is not None:

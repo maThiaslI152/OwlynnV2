@@ -124,3 +124,32 @@ def _flatten_human_content(content) -> str:
                 parts.append(str(block.get("text", "")))
         return "\n".join(parts)
     return str(content or "")
+
+
+_TOOL_ONLY_PLACEHOLDERS: dict[str, str] = {
+    "notebook_run": "Generating chart with **notebook_run** — this may take a moment…",
+    "web_search": "Searching the web…",
+    "fetch_webpage": "Fetching page content…",
+    "fetch_webpage_dynamic": "Loading rendered page content…",
+    "deep_research": "Running deep research…",
+    "read_workspace_file": "Reading workspace file…",
+    "write_workspace_file": "Writing to workspace…",
+}
+
+
+def placeholder_for_tool_only_turn(tool_calls: list) -> str:
+    """Short visible text when the model returns tool_calls with empty content."""
+    names: list[str] = []
+    for tc in tool_calls or []:
+        if isinstance(tc, dict):
+            names.append(str(tc.get("name") or ""))
+        else:
+            names.append(str(getattr(tc, "name", "") or ""))
+    for name in names:
+        if name in _TOOL_ONLY_PLACEHOLDERS:
+            return _TOOL_ONLY_PLACEHOLDERS[name]
+    if "notebook_run" in names:
+        return _TOOL_ONLY_PLACEHOLDERS["notebook_run"]
+    if names:
+        return f"Running **{names[0]}**…"
+    return "Working on your request…"

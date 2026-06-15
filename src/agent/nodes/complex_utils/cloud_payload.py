@@ -104,6 +104,34 @@ class CloudPayload:
     vision_proxy_ok: bool = True
 
 
+def _anonymize_tool_arg_value(
+    value: object, anon_ctx: dict, anon_mapping: dict | None
+) -> tuple[object, dict | None]:
+    """Recursively anonymize string leaves in tool args without JSON round-trip."""
+    if isinstance(value, str):
+        anonymized, mapping = anonymize(value, anon_ctx)
+        if mapping:
+            anon_mapping = {**(anon_mapping or {}), **mapping}
+        return anonymized, anon_mapping
+    if isinstance(value, dict):
+        out: dict = {}
+        for key, item in value.items():
+            anonymized_item, anon_mapping = _anonymize_tool_arg_value(
+                item, anon_ctx, anon_mapping
+            )
+            out[key] = anonymized_item
+        return out, anon_mapping
+    if isinstance(value, list):
+        out_list: list = []
+        for item in value:
+            anonymized_item, anon_mapping = _anonymize_tool_arg_value(
+                item, anon_ctx, anon_mapping
+            )
+            out_list.append(anonymized_item)
+        return out_list, anon_mapping
+    return value, anon_mapping
+
+
 def _anonymize_tool_calls(
     tool_calls: list, anon_ctx: dict, anon_mapping: dict | None
 ) -> tuple[list, dict | None]:
@@ -115,11 +143,9 @@ def _anonymize_tool_calls(
         tc_copy = dict(tc)
         args = tc_copy.get("args")
         if isinstance(args, dict) and args:
-            args_str = json.dumps(args)
-            args_str, m = anonymize(args_str, anon_ctx)
-            if m:
-                anon_mapping = {**(anon_mapping or {}), **m}
-            tc_copy["args"] = json.loads(args_str)
+            tc_copy["args"], anon_mapping = _anonymize_tool_arg_value(
+                args, anon_ctx, anon_mapping
+            )
         out.append(tc_copy)
     return out, anon_mapping
 

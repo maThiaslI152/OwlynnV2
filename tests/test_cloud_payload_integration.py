@@ -156,6 +156,45 @@ class TestVisionTranscriptionCache:
         assert "screenshot text" in str(out2[0].content)
 
 
+class TestAnonymizeToolCalls:
+    def test_notebook_run_code_with_backslashes_does_not_crash(self):
+        from src.agent.nodes.complex_utils.cloud_payload import _anonymize_tool_calls
+
+        code = (
+            "import matplotlib.pyplot as plt\n"
+            "plt.rcParams['font.sans-serif'] = ['DejaVu Sans']\n"
+            "path = r'\\Users\\tim\\data\\report.csv'\n"
+            "label = '\\u041a\\u0438\\u0457\\u0432'\n"
+            "plt.savefig('/tmp/chart.png')\n"
+        )
+        tool_calls = [
+            {
+                "id": "nb1",
+                "name": "notebook_run",
+                "args": {"code": code, "timeout": 60},
+            }
+        ]
+        out, mapping = _anonymize_tool_calls(tool_calls, {}, None)
+        assert "import matplotlib.pyplot as plt" in out[0]["args"]["code"]
+        assert out[0]["args"]["timeout"] == 60
+        assert isinstance(out[0]["args"]["code"], str)
+
+    def test_anonymizes_email_in_tool_args_without_json_roundtrip(self):
+        from src.agent.nodes.complex_utils.cloud_payload import _anonymize_tool_calls
+
+        tool_calls = [
+            {
+                "id": "1",
+                "name": "send_email",
+                "args": {"to": "user@example.com", "body": "hello"},
+            }
+        ]
+        out, mapping = _anonymize_tool_calls(tool_calls, {}, None)
+        assert "user@example.com" not in out[0]["args"]["to"]
+        assert mapping
+        assert "user@example.com" in mapping.values()
+
+
 class TestFallbackAnonymization:
     def test_deanonymize_restores_placeholders(self):
         from src.agent.nodes.complex import _deanonymize_ai_message

@@ -46,6 +46,7 @@ def _sanitize_assistant_text(text: str) -> str:
 
 from src.agent.nodes.router import generate_chat_title_router_llm
 from src.config.settings import get_project_workspace, normalize_project_id
+from src.tools.notebook_libs import parse_chart_artifact
 from src.tools.workspace_context import set_active_project_for_run, reset_active_project
 from src.config.audit_log import set_thread_id, audit_info
 
@@ -827,21 +828,31 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                             )
                                         content = str(getattr(msg, "content", "") or "")
                                         status = _tool_status_from_content(content)
-                                        await _send_ws(
-                                            {
-                                                "type": "tool_execution",
-                                                "status": status,
-                                                "tool_name": tool_name,
-                                                "tool_call_id": tool_call_id or None,
-                                                "output": content
-                                                if status == "success"
-                                                else None,
-                                                "error": content
-                                                if status == "error"
-                                                else None,
-                                                "duration": duration,
-                                            }
-                                        )
+                                        tool_payload: dict = {
+                                            "type": "tool_execution",
+                                            "status": status,
+                                            "tool_name": tool_name,
+                                            "tool_call_id": tool_call_id or None,
+                                            "output": content
+                                            if status == "success"
+                                            else None,
+                                            "error": content
+                                            if status == "error"
+                                            else None,
+                                            "duration": duration,
+                                        }
+                                        if (
+                                            status == "success"
+                                            and tool_name == "notebook_run"
+                                        ):
+                                            chart_artifact = parse_chart_artifact(
+                                                content, session.last_project_id
+                                            )
+                                            if chart_artifact:
+                                                tool_payload["chart_artifact"] = (
+                                                    chart_artifact
+                                                )
+                                        await _send_ws(tool_payload)
                                     else:
                                         # Skip internal assistant reminders and empty messages.
                                         content = str(

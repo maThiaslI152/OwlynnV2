@@ -276,6 +276,31 @@ complex:
   max_cutoff_retries: 1                   # Auto-continuation rounds (reduced for faster UX)
   max_cloud_retries: 3                    # Cloud LLM retries with backoff
   max_web_tool_rounds: 3                  # After N tool-calling turns, force synthesis (no more web tools)
+  web_tool_budgets:
+    default:
+      web_search: 2
+      fetch_webpage: 3
+      deep_research: 1
+    web_search:
+      web_search: 2
+      fetch_webpage: 4
+      deep_research: 1
+    data_viz:
+      web_search: 0
+      fetch_webpage: 0
+      deep_research: 0
+    tool_followup:
+      web_search: 0
+      fetch_webpage: 0
+      deep_research: 0
+    file_operations:
+      web_search: 0
+      fetch_webpage: 1
+      deep_research: 0
+    simple_conversation:
+      web_search: 1
+      fetch_webpage: 1
+      deep_research: 0
   default_token_budget: 4096              # Fallback token budget
   synthetic_answer_max_chars: 4500        # Max chars for synthetic answers
   recursion_limit: 100                    # LangGraph recursion limit to prevent crashes in loops
