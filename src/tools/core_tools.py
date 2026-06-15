@@ -272,7 +272,7 @@ def recall_memories(query: str) -> str:
 
 
 @tool
-def recall_all_memories(query: str = "", project_id: str = "") -> str:
+def recall_all_memories(query: str = "", project_id: str = "", tags: str = "") -> str:
     """
     Searches ALL long-term memory (including Mem0/Qdrant vector memory) for facts about the user.
 
@@ -281,6 +281,7 @@ def recall_all_memories(query: str = "", project_id: str = "") -> str:
     Args:
         query: Optional search text. If empty, returns recent memories.
         project_id: Optional project ID to scope search (e.g. "my-project"). Leave empty for global.
+        tags: Optional comma-separated metadata tags to filter (e.g. study,misconception).
     """
     try:
         from ..memory.long_term import memory as mem0_memory
@@ -301,14 +302,37 @@ def recall_all_memories(query: str = "", project_id: str = "") -> str:
             else "owner"
         )
         search_query = query if query else " "
-        results_dict = mem0_memory.search(
-            search_query, filters={"user_id": user_id}, limit=20
+        from src.memory.educator import (
+            fetch_study_struggle_memories,
+            is_struggle_recall_query,
         )
-        results = (
-            results_dict.get("results", [])
-            if isinstance(results_dict, dict)
-            else results_dict
-        )
+        from src.tools.study_tools import _filter_memories_by_tags
+
+        tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []
+
+        if is_struggle_recall_query(search_query):
+            results = fetch_study_struggle_memories(mem0_memory, user_id, search_query)
+            if not results:
+                results_dict = mem0_memory.search(
+                    search_query, filters={"user_id": user_id}, limit=20
+                )
+                results = (
+                    results_dict.get("results", [])
+                    if isinstance(results_dict, dict)
+                    else results_dict
+                )
+        else:
+            results_dict = mem0_memory.search(
+                search_query, filters={"user_id": user_id}, limit=20
+            )
+            results = (
+                results_dict.get("results", [])
+                if isinstance(results_dict, dict)
+                else results_dict
+            )
+
+        if tag_list:
+            results = _filter_memories_by_tags(results or [], tag_list)
 
         if not results:
             return "No long-term memories found in vector store."

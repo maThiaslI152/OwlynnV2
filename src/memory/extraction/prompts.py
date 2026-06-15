@@ -41,6 +41,15 @@ Conversation turn:
 {turn_text}
 """
 
+STUDY_EXTRACTION_USER = """Scenario: study / educator tutoring.
+Prefer tags: study, misconception, mastery, struggle, topic.
+Extract durable facts about what the user struggled with, corrected misconceptions,
+topics they mastered, and course/chapter context they would want recalled later.
+
+Conversation turn:
+{turn_text}
+"""
+
 DEFAULT_EXTRACTION_USER = """Extract durable user-specific facts from this turn.
 
 Conversation turn:
@@ -55,6 +64,8 @@ def build_extraction_messages(
         user = PENTEST_EXTRACTION_USER.format(turn_text=turn_text)
     elif scenario_id == "research":
         user = RESEARCH_EXTRACTION_USER.format(turn_text=turn_text)
+    elif scenario_id == "study":
+        user = STUDY_EXTRACTION_USER.format(turn_text=turn_text)
     else:
         user = DEFAULT_EXTRACTION_USER.format(turn_text=turn_text)
     return [

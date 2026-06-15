@@ -172,7 +172,7 @@ Toolbox categories (pick one or more, or "all" if unsure):
 - all: when unsure or multiple categories needed
 
 Reply with exactly one JSON object (nothing else). The execution_plan should briefly break down the steps required to solve the user's request (e.g. 1. search for X, 2. write to file Y). If simple routing, leave execution_plan empty and set needs_memory_retrieval to false. If the Knowledge Cache fully answers the question, set needs_memory_retrieval to false and omit web_search from toolbox:
-{{"routing":"simple"|"complex","confidence":0.0-1.0,"toolbox":["name1","name2"],"execution_plan":"Step 1... Step 2...","needs_memory_retrieval":true|false,"scenario_id":"pentest"|"research"|null}}
+{{"routing":"simple"|"complex","confidence":0.0-1.0,"toolbox":["name1","name2"],"execution_plan":"Step 1... Step 2...","needs_memory_retrieval":true|false,"scenario_id":"pentest"|"research"|"study"|null}}
 
 Knowledge Cache:
 {knowledge_context}
@@ -265,7 +265,7 @@ def _resolve_memory_gate(
 
 
 def _resolve_scenario_id(parsed_scenario: str | None, user_text: str) -> str | None:
-    if parsed_scenario in ("pentest", "research"):
+    if parsed_scenario in ("pentest", "research", "study"):
         return parsed_scenario
     from src.memory.scenarios import detect_scenario_id
 
@@ -535,7 +535,31 @@ def _augment_toolbox_for_scenario(
         if get_mcp_tools():
             toolbox = [*toolbox, "mcp"]
 
+    if scenario_id == "study":
+        for box in ("file_ops", "memory", "study"):
+            if box not in toolbox:
+                toolbox = [*toolbox, box]
+
     return toolbox
+
+
+def _apply_learning_mode(
+    state: AgentState, gate_fields: dict, toolbox: list[str]
+) -> tuple[dict, list[str]]:
+    """Learning response_style → study scenario + study toolboxes."""
+    style = (state.get("response_style") or "").strip().lower()
+    if style != "learning":
+        return gate_fields, toolbox
+    gf = dict(gate_fields)
+    if not gf.get("scenario_id"):
+        gf["scenario_id"] = "study"
+    gf["needs_memory_retrieval"] = True
+    tb = list(toolbox)
+    if "all" not in tb:
+        for box in ("file_ops", "memory", "study"):
+            if box not in tb:
+                tb.append(box)
+    return gf, tb
 
 
 def _is_simple_informational_query(text: str) -> bool:
@@ -1651,6 +1675,7 @@ async def router_node(state: AgentState) -> AgentState:
         parsed_needs=parsed_needs,
         parsed_scenario=parsed_scenario,
     )
+    gate_fields, toolbox = _apply_learning_mode(state, gate_fields, toolbox)
     toolbox = _augment_toolbox_for_scenario(
         toolbox, gate_fields.get("scenario_id"), user_text
     )
@@ -1723,6 +1748,7 @@ def _toolbox_for_skill(skill) -> list[str]:
             or "graph" in t
             or "plot" in t
             or "document" in t
+            or "notebook" in t
             for t in tools
         ):
             toolbox.append("data_viz")
@@ -1734,16 +1760,20 @@ def _toolbox_for_skill(skill) -> list[str]:
             for t in tools
         ):
             toolbox.append("screen_assist")
+        if any("todo" in t or "skill" in t or "invoke" in t for t in tools):
+            toolbox.append("productivity")
+        if any("recall" in t or "memory" in t or "forget" in t for t in tools):
+            toolbox.append("memory")
         if any(
-            "terminal" in t
-            or "shell" in t
-            or "run" in t
-            or "execute" in t
-            or "bash" in t
-            or "notebook" in t
+            "flashcard" in t
+            or "course_" in t
+            or "study_" in t
+            or "quiz_" in t
+            or "mastery" in t
+            or "export_study" in t
             for t in tools
         ):
-            toolbox.append("productivity")
+            toolbox.append("study")
         if toolbox:
             return toolbox
 

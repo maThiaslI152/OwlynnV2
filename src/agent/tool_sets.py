@@ -14,9 +14,22 @@ from src.tools.core_tools import (
 from src.tools.core_tools import recall_memories, recall_all_memories, forget_memory
 from src.tools.doc_generator import create_docx, create_xlsx, create_pptx, create_pdf
 from src.tools.notebook import notebook_run, notebook_reset
-from src.tools.todo import todo_add, todo_list, todo_complete
+from src.tools.todo import todo_add, todo_list, todo_complete, todo_update, todo_filter
 from src.tools.ask_user import ask_user
 from src.tools.skills import list_skills, invoke_skill
+from src.tools.study_tools import (
+    course_register,
+    course_list,
+    course_get,
+    study_note_save,
+    study_note_search,
+    flashcard_deck_create,
+    flashcard_review,
+    quiz_session_start,
+    quiz_session_answer,
+    mastery_record,
+    export_study_sheet,
+)
 from src.tools.rag_tools import search_workspace_docs
 from src.tools.screen_assist.tools import SCREEN_ASSIST_TOOLS
 
@@ -49,9 +62,23 @@ COMPLEX_TOOLS_WITH_WEB: list = [
     todo_add,
     todo_list,
     todo_complete,
+    todo_update,
+    todo_filter,
     # Skills
     list_skills,
     invoke_skill,
+    # Study PA
+    course_register,
+    course_list,
+    course_get,
+    study_note_save,
+    study_note_search,
+    flashcard_deck_create,
+    flashcard_review,
+    quiz_session_start,
+    quiz_session_answer,
+    mastery_record,
+    export_study_sheet,
     # HITL
     ask_user,
 ]
@@ -76,8 +103,21 @@ COMPLEX_TOOLS_NO_WEB: list = [
     todo_add,
     todo_list,
     todo_complete,
+    todo_update,
+    todo_filter,
     list_skills,
     invoke_skill,
+    course_register,
+    course_list,
+    course_get,
+    study_note_save,
+    study_note_search,
+    flashcard_deck_create,
+    flashcard_review,
+    quiz_session_start,
+    quiz_session_answer,
+    mastery_record,
+    export_study_sheet,
     ask_user,
 ]
 
@@ -100,7 +140,28 @@ TOOLBOX_REGISTRY: dict[str, list] = {
         notebook_run,
         notebook_reset,
     ],
-    "productivity": [todo_add, todo_list, todo_complete, list_skills, invoke_skill],
+    "productivity": [
+        todo_add,
+        todo_list,
+        todo_complete,
+        todo_update,
+        todo_filter,
+        list_skills,
+        invoke_skill,
+    ],
+    "study": [
+        course_register,
+        course_list,
+        course_get,
+        study_note_save,
+        study_note_search,
+        flashcard_deck_create,
+        flashcard_review,
+        quiz_session_start,
+        quiz_session_answer,
+        mastery_record,
+        export_study_sheet,
+    ],
     "memory": [
         recall_memories,
         recall_all_memories,

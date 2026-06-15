@@ -20,6 +20,8 @@ SENSITIVE_TOOLS = {
     "edit_workspace_file",
     "delete_workspace_file",
     "notebook_run",
+    "study_note_save",
+    "flashcard_deck_create",
 }
 
 SENSITIVE_PATTERN_RE = re.compile(

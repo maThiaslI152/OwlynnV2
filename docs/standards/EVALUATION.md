@@ -18,6 +18,7 @@ audience: agent
 | Live cloud | `./scripts/ci.sh --network` | DeepSeek E2E, KV cache, chat matrix (`DEEPSEEK_API_KEY`) |
 | Benchmarks | `./scripts/ci.sh --benchmarks` | Router/complex/memory latency → `tests/benchmarks/benchmark_report.json` |
 | **Frontier eval** | `python scripts/run_local_frontier_eval.py` | ~19-turn scored routing + tools + memory + vision + formats |
+| **Educator eval** | `python scripts/run_educator_eval.py` | 7-turn UID10667 study session (EDU1–EDU7); optional, needs fixtures |
 | **Frontier comparison** | `python scripts/run_frontier_comparison_eval.py` | Quality A/B: Owlynn vs raw DeepSeek V4 + blind pro judge |
 | **Conversation eval** | `python scripts/run_browser_eval.py` | 12-prompt multi-topic run (qualitative) |
 
@@ -176,7 +177,27 @@ python scripts/run_local_frontier_eval.py --profile auto
 
 # Local-only regression:
 python scripts/run_local_frontier_eval.py --cloud-off --profile local
+
+# Educator / UID10667 PDF study (5 turns, learning mode):
+python scripts/prepare_uid10667_fixtures.py
+python scripts/run_educator_eval.py --profile auto
 ```
+
+### Educator eval (EDU1–EDU7)
+
+| Turn | Focus | Pass (≥70) |
+|------|-------|------------|
+| EDU1 | Attach chapter 1 PDF, study guide | `read_workspace_file`, no `web_search`, ≥2 course keywords |
+| EDU2 | Quiz same thread | ≥2 keywords in quiz |
+| EDU3 | User criticism | Acknowledgment + revision language |
+| EDU4 | Self-reinforcement | Acknowledgment (informational) |
+| EDU5 | New chat struggle recall | Topic + substantive recall (misconception/correction); denial phrases fail |
+| EDU6 | Flashcard deck from chapter | `flashcard_deck_create` or PDF read; flashcard keywords |
+| EDU7 | Mock exam weak areas | Questions + weak-area language |
+
+Fixtures: `assets/eval_fixtures/uid10667/` via `python scripts/prepare_uid10667_fixtures.py --source <UID10667 folder>`.
+
+Artifacts: `data/educator_eval_run_data.json`, `assets/educator_eval_screenshots/`, `docs/evaluations/educator-eval-YYYY-MM-DD.md`.
 
 ### Artifacts
 

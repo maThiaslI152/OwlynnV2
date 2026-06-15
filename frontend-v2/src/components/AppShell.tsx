@@ -13,6 +13,7 @@ import { ScreenAssistPanel } from './ScreenAssistPanel'
 import { ProjectKnowledgePanel } from './ProjectKnowledgePanel'
 import { OrchestrationPanel } from './OrchestrationPanel'
 import { MemoryPanel } from './MemoryPanel'
+import { StudyPanel } from './StudyPanel'
 import { HitlPromptCard, type HitlPromptViewModel } from './HitlPromptCard'
 import { ToolActivityCard } from './ToolActivityCard'
 import type { InterruptChoice } from '../state/useAppStore'
@@ -955,6 +956,9 @@ export function AppShell({
           </CollapsibleSection>
           <CollapsibleSection title="Orchestration" icon="⚙" defaultOpen>
             <OrchestrationPanel />
+          </CollapsibleSection>
+          <CollapsibleSection title="Study" icon="📚" defaultOpen={false}>
+            <StudyPanel />
           </CollapsibleSection>
           <CollapsibleSection title="Memory & Context" icon="🧠" defaultOpen={false}>
             <MemoryPanel />

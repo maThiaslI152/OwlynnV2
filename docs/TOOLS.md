@@ -81,6 +81,20 @@ src/api/routes/files.py            # Tool discovery (GET /api/tools)
 | `list_skills` | List available skill templates from `skills/` directory |
 | `invoke_skill` | Load and return a skill's prompt template |
 
+### Toolbox: `study`
+
+| Tool | Description |
+|------|-------------|
+| `course_register` | Register course code, name, exam date, linked PDFs |
+| `course_list` / `course_get` | List or fetch course metadata |
+| `study_note_save` / `study_note_search` | Structured study notes CRUD/search |
+| `flashcard_deck_create` / `flashcard_review` | Flashcard decks with SM-2 lite scheduling |
+| `quiz_session_start` / `quiz_session_answer` | Thread-scoped multi-question quizzes |
+| `mastery_record` | Explicit study misconception/mastery LTM atoms |
+| `export_study_sheet` | Export study guide to PDF or DOCX |
+
+Study skills (`study_tutor`, `exam_prep`, `flashcard_builder`, etc.) bind `file_ops` + `memory` + `study` toolboxes. Learning mode (`response_style: learning`) activates study scenario automatically.
+
 ### Toolbox: `memory`
 
 | Tool | Description |

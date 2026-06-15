@@ -526,7 +526,9 @@ function App() {
   }, [addMessage, executionPolicy, handleInterrupt, latestToolExecution, pushToolExecution, setLatestToolExecution, setOperatorNote, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setTtsSpeaking, upsertActionProposal, updateActionProposalStatus])
 
   const handleSend = useCallback((content: string, files?: AttachedFile[]) => {
-    const activePersonaId = useAppStore.getState().activePersonaId
+    const store = useAppStore.getState()
+    const activePersonaId = store.activePersonaId
+    const responseStyle = store.responseStyle || store.evalResponseStyle || undefined
     const message: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
@@ -566,8 +568,20 @@ function App() {
       files: files && files.length > 0 ? files.map(toWsFilePayload) : undefined,
       project_id: activeProjectId,
       persona_id: activePersonaId,
+      ...(responseStyle ? { response_style: responseStyle } : {}),
     })
   }, [addMessage, activeProjectId])
+
+  useEffect(() => {
+    const setEvalResponseStyle = useAppStore.getState().setEvalResponseStyle
+    ;(window as Window & { __owlynnEval?: { setResponseStyle: (s: string) => void } }).__owlynnEval =
+      {
+        setResponseStyle: (style: string) => setEvalResponseStyle(style || null),
+      }
+    return () => {
+      delete (window as Window & { __owlynnEval?: unknown }).__owlynnEval
+    }
+  }, [])
 
   const handleStop = useCallback(() => {
     wsClientRef.current?.send({ type: 'stop' })

@@ -14,6 +14,7 @@ from src.api.routes import (
     files,
     openai,
     browser_extension,
+    study,
 )
 from src.api.ws import handler as ws_handler
 from fastapi import FastAPI
@@ -209,6 +210,7 @@ app.include_router(project.router)
 app.include_router(files.router)
 app.include_router(openai.router)
 app.include_router(browser_extension.router)
+app.include_router(study.router)
 app.include_router(ws_handler.router)
 
 app.add_middleware(

@@ -157,6 +157,8 @@ interface AppState {
   inlineSecurityPrompt: InlineSecurityPrompt | null
   activePersonaId: string
   pendingCorrelationId: string | null
+  evalResponseStyle: string | null
+  responseStyle: string | null
   browserPageContext: import('../lib/browserPageContext').BrowserPageContext | null
   browserPageContextNonce: number
   setConnectionState: (state: ConnectionState) => void
@@ -190,6 +192,8 @@ interface AppState {
   clearSession: () => void
   setActivePersonaId: (id: string) => void
   setPendingCorrelationId: (id: string | null) => void
+  setEvalResponseStyle: (style: string | null) => void
+  setResponseStyle: (style: string | null) => void
   applyBrowserPageContext: (ctx: import('../lib/browserPageContext').BrowserPageContext) => void
 }
 
@@ -222,6 +226,8 @@ export const useAppStore = create<AppState>((set) => ({
   inlineSecurityPrompt: null,
       pendingCorrelationId: null,
   activePersonaId: 'default',
+  evalResponseStyle: null,
+  responseStyle: null,
   browserPageContext: null,
   browserPageContextNonce: 0,
   setConnectionState: (connectionState) => set({ connectionState }),
@@ -352,6 +358,8 @@ export const useAppStore = create<AppState>((set) => ({
     }),
   setActivePersonaId: (activePersonaId) => set({ activePersonaId }),
   setPendingCorrelationId: (pendingCorrelationId) => set({ pendingCorrelationId }),
+  setEvalResponseStyle: (evalResponseStyle) => set({ evalResponseStyle }),
+  setResponseStyle: (responseStyle) => set({ responseStyle }),
   applyBrowserPageContext: (ctx) =>
     set((state) => ({
       browserPageContext: ctx,

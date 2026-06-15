@@ -6,7 +6,12 @@ STYLE_INSTRUCTIONS: dict[str, str] = {
     "normal": "",
     "learning": (
         "\n\nResponse style: Learning mode — teach clearly: define terms, use a concrete example "
-        "where helpful, and build from simple to more detailed."
+        "where helpful, and build from simple to more detailed. "
+        "When the user criticizes your answer, acknowledge the correction, revisit the source "
+        "material if available, and revise. "
+        'When the user self-reinforces ("I think…", "I finally understand…"), confirm what is '
+        "correct, gently fix misconceptions, and extend with one helpful detail. "
+        "End study answers with a brief check-for-understanding question when appropriate."
     ),
     "concise": (
         "\n\nResponse style: Concise — short paragraphs, no filler, bullet points when listing items."

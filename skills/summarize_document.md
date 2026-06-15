@@ -1,8 +1,9 @@
 ---
 name: Document Summarizer
-triggers: [summarize, summary, tldr, key points, overview, digest, recap, brief]
+triggers: [summarize, summary, tldr, key points, overview, digest, recap, brief, study sheet, exam sheet, cheat sheet]
 description: Creates structured summaries of documents, data files, and text content with adjustable depth
 category: general
+note: When user wants teaching/quizzing (study + summarize), prefer Study Tutor skill.
 params:
   - name: length
     description: "Summary length: brief (3-5 bullets), standard (full structured), detailed (comprehensive with quotes)"
@@ -92,6 +93,14 @@ When `{focus}` is provided (non-empty), weight the summary toward that topic:
 - Add a note: "Summary focused on: {focus}"
 
 When `{focus}` is empty, give equal weight to all content.
+
+## Exam Sheet output (when user asks for exam sheet, cheat sheet, or study sheet)
+
+Produce:
+- **Must-know definitions** (5–10 terms)
+- **Likely exam questions** (3–5 with brief model answers)
+- **Mnemonics or memory hooks** where helpful
+- **One-page density** — scannable bullets, not prose walls
 
 ## Step 4: Multi-File Summarization
 

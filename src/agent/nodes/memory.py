@@ -160,6 +160,12 @@ async def _build_memory_context_async(
 
     mem0_uid = _get_mem0_user_id(state)
 
+    from src.memory.educator import (
+        fetch_study_struggle_memories,
+        is_struggle_recall_query,
+        prioritize_study_memories,
+    )
+
     results = []
     if vector_search and memory is not None:
         try:
@@ -175,6 +181,18 @@ async def _build_memory_context_async(
             )
         except Exception as e:
             logger.warning("[mem0] search failed: %s", e)
+
+        if is_struggle_recall_query(user_message):
+            try:
+                study_hits = await asyncio.to_thread(
+                    lambda: fetch_study_struggle_memories(
+                        memory, mem0_uid, user_message
+                    )
+                )
+                if study_hits:
+                    results = prioritize_study_memories([*study_hits, *results])
+            except Exception as e:
+                logger.warning("[mem0] study struggle search failed: %s", e)
 
         if project_id != "default":
             try:
@@ -350,6 +368,13 @@ async def memory_retrieve_node(state: AgentState) -> AgentState:
         route = state.get("route") or ""
         needs = route.startswith("complex")
 
+    from src.memory.educator import is_struggle_recall_query
+
+    if is_struggle_recall_query(user_message):
+        needs = True
+        if not scenario_id:
+            scenario_id = "study"
+
     base_context = state.get("memory_context") or ""
     knowledge_context = state.get("knowledge_context") or ""
 
@@ -458,12 +483,24 @@ def format_memory_context(
 
     # Add relevant past context
     if results:
-        lines.append("\n=== Relevant Past Context ===")
-        for item in results:
-            if isinstance(item, dict):
-                lines.append(f"  - {item.get('memory', item)}")
-            else:
-                lines.append(f"  - {item}")
+        from src.memory.educator import is_study_memory_item
+
+        study_items = [r for r in results if is_study_memory_item(r)]
+        other_items = [r for r in results if not is_study_memory_item(r)]
+        if study_items:
+            lines.append("\n=== Prior Study Struggles & Mastery (cite when asked) ===")
+            for item in study_items:
+                if isinstance(item, dict):
+                    lines.append(f"  - {item.get('memory', item)}")
+                else:
+                    lines.append(f"  - {item}")
+        if other_items:
+            lines.append("\n=== Relevant Past Context ===")
+            for item in other_items:
+                if isinstance(item, dict):
+                    lines.append(f"  - {item.get('memory', item)}")
+                else:
+                    lines.append(f"  - {item}")
 
     final_text = "\n".join(lines) if lines else "No prior memory available."
     if len(final_text) > 12000:
@@ -706,10 +743,68 @@ async def memory_write_node(state: AgentState) -> AgentState:
 
     # Save enriched facts to long-term memory
     from src.memory.long_term import memory
+    from src.memory.educator import (
+        build_mastery_atom,
+        build_misconception_atom,
+        is_study_correction,
+        is_study_mastery,
+        resolve_study_scenario,
+    )
 
     mem0_uid = _get_mem0_user_id(state)
+    response_style = state.get("response_style")
+    human_text = str(last_human)
+    ai_text = str(last_ai)
+    study_scenario = resolve_study_scenario(response_style, human_text)
+    extraction_scenario = "study" if study_scenario else state.get("scenario_id")
+
     if memory is not None:
         try:
+            # Synchronous study atoms — available before async extraction completes
+            if study_scenario:
+                if is_study_correction(human_text):
+                    atom_text = build_misconception_atom(human_text, ai_text)
+                    from src.agent.pii_scrubber import scrub_for_storage
+
+                    scrubbed_atom, _ = scrub_for_storage(atom_text)
+                    await asyncio.to_thread(
+                        memory.add,
+                        scrubbed_atom,
+                        user_id=mem0_uid,
+                        metadata={
+                            "type": "study_atom",
+                            "tags": ["study", "misconception"],
+                            "scenario_id": "study",
+                        },
+                        infer=False,
+                    )
+                    audit_info(
+                        "memory.write",
+                        "study_misconception_saved",
+                        user_id=mem0_uid,
+                    )
+                elif is_study_mastery(human_text):
+                    atom_text = build_mastery_atom(human_text)
+                    from src.agent.pii_scrubber import scrub_for_storage
+
+                    scrubbed_atom, _ = scrub_for_storage(atom_text)
+                    await asyncio.to_thread(
+                        memory.add,
+                        scrubbed_atom,
+                        user_id=mem0_uid,
+                        metadata={
+                            "type": "study_atom",
+                            "tags": ["study", "mastery"],
+                            "scenario_id": "study",
+                        },
+                        infer=False,
+                    )
+                    audit_info(
+                        "memory.write",
+                        "study_mastery_saved",
+                        user_id=mem0_uid,
+                    )
+
             # Extract topics and interests from the conversation
             conversation_text = f"{last_human} {last_ai}"
             topics = TopicExtractor.extract_topics(conversation_text)
@@ -725,7 +820,7 @@ async def memory_write_node(state: AgentState) -> AgentState:
                     "turn_text": scrubbed,
                     "mem0_uid": mem0_uid,
                     "project_id": state.get("project_id") or "default",
-                    "scenario_id": state.get("scenario_id"),
+                    "scenario_id": extraction_scenario,
                     "thread_id": thread_id,
                 }
             )

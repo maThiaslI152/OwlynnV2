@@ -1,8 +1,9 @@
 ---
 name: Research Assistant
-triggers: [research, deep dive, investigate, analysis, report on, look into, find out about, study]
-description: Generates a detailed, source-backed research overview on any topic
+triggers: [research, deep dive, investigate, analysis, report on, look into, find out about]
+description: Generates a detailed, source-backed research overview on any topic (web sources — not workspace PDF study)
 category: research
+note: Workspace PDF study routes to Study Tutor, not this skill.
 params:
   - name: depth
     description: "Research depth: quick (1-2 sources), standard (3-5 sources), deep (5+ sources with cross-referencing)"

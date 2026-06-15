@@ -39,14 +39,36 @@ _RESEARCH_HINTS = (
     "literature",
 )
 
+_STUDY_HINTS = (
+    "study",
+    "quiz",
+    "exam prep",
+    "exam",
+    "digital literacy",
+    "chapter",
+    "help me learn",
+    "teach me",
+    "review this",
+    "course",
+    "lecture",
+    "struggle",
+    "misconception",
+    "learn from",
+)
+
 
 def detect_scenario_id(user_text: str) -> str | None:
     """Heuristic scenario classification for router fallback."""
     lower = user_text.lower()
     pentest_score = sum(1 for h in _PENTEST_HINTS if h in lower)
     research_score = sum(1 for h in _RESEARCH_HINTS if h in lower)
+    study_score = sum(1 for h in _STUDY_HINTS if h in lower)
     if pentest_score >= 2 or (pentest_score >= 1 and research_score == 0):
         return "pentest"
+    if study_score >= 2:
+        return "study"
+    if study_score >= 1 and pentest_score == 0 and research_score == 0:
+        return "study"
     if research_score >= 2:
         return "research"
     if pentest_score == 1:

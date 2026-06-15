@@ -52,6 +52,13 @@ def test_detect_scenario_research():
     )
 
 
+def test_detect_scenario_study():
+    assert detect_scenario_id("Help me study Digital Literacy for exam prep") == "study"
+    assert (
+        detect_scenario_id("What did I struggle with in Digital Literacy?") == "study"
+    )
+
+
 def test_format_scenario_context_includes_playbook():
     ctx = format_scenario_context("pentest")
     assert "Pentest playbook" in ctx
