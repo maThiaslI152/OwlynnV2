@@ -60,11 +60,9 @@ def test_notebook_chart_embed_nudge_builds_api_markdown():
         project_id="default",
     )
     assert nudge is not None
-    assert "auto-render" in nudge
-    assert "1–2 short sentences" in nudge
-    assert "project_id=" not in nudge
-    assert "![Chart" not in nudge
-    assert "write_html" in nudge
+    assert "owlynn-embed" in nudge
+    assert "ukraine_war_sitrep_2026.png" in nudge
+    assert "1–2 sentences" in nudge
 
 
 def test_notebook_chart_embed_nudge_prefers_interactive_html():
@@ -73,10 +71,9 @@ def test_notebook_chart_embed_nudge_prefers_interactive_html():
         project_id="default",
     )
     assert nudge is not None
-    assert "auto-render" in nudge
-    assert "Plotly" in nudge
-    assert "project_id=" not in nudge
-    assert "[Interactive chart]" not in nudge
+    assert "owlynn-embed" in nudge
+    assert "ukraine_sitrep.html" in nudge
+    assert "project_id=default" in nudge
 
 
 def test_parse_chart_artifact_interactive_html():

@@ -3,15 +3,21 @@
 from __future__ import annotations
 
 STYLE_INSTRUCTIONS: dict[str, str] = {
-    "normal": "",
+    "normal": (
+        "\n\nResponse style: Normal — when a diagram, collapsible section, or inline widget "
+        "(quiz, steps, callout via render_interactive_block) would clarify the answer, prefer "
+        "that over long prose."
+    ),
     "learning": (
         "\n\nResponse style: Learning mode — teach clearly: define terms, use a concrete example "
         "where helpful, and build from simple to more detailed. "
+        "Prefer interactive blocks (`render_interactive_block` or owlynn-* fences) over walls "
+        "of text: one brief intro sentence, then the widget. "
         "When the user criticizes your answer, acknowledge the correction, revisit the source "
         "material if available, and revise. "
         'When the user self-reinforces ("I think…", "I finally understand…"), confirm what is '
         "correct, gently fix misconceptions, and extend with one helpful detail. "
-        "End study answers with a brief check-for-understanding question when appropriate."
+        "End study answers with an inline quiz or check-for-understanding when appropriate."
     ),
     "concise": (
         "\n\nResponse style: Concise — short paragraphs, no filler, bullet points when listing items."

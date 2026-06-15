@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Educator evaluation for Owlynn — UID10667 PDF study session (EDU1–EDU5).
+Educator evaluation for Owlynn — UID10667 PDF study session (EDU1–EDU8).
 
 Usage:
   python scripts/prepare_uid10667_fixtures.py
@@ -203,6 +203,23 @@ def build_prompts(meta: dict[str, Any]) -> list[dict[str, Any]]:
             "min_response_chars": 100,
             "pipeline_notes": "mock exam + weak-area summary",
         },
+        {
+            "id": "EDU8",
+            "topic": "Interactive Inline Widget",
+            "response_style": "learning",
+            "prompt": (
+                "Walk me through the main ideas step by step, then give me one "
+                "multiple-choice question to check my understanding."
+            ),
+            "expected_route": "complex",
+            "require_interactive_fence": True,
+            "interactive_fence_any": ["owlynn-steps", "owlynn-quiz"],
+            "educator_keywords": [keyword_hint],
+            "min_keyword_hits": 1,
+            "timeout_s": COMPLEX_TIMEOUT_S,
+            "min_response_chars": 80,
+            "pipeline_notes": "inline owlynn-steps or owlynn-quiz fence in reply",
+        },
     ]
 
 
@@ -315,6 +332,16 @@ def score_educator_exchange(exchange: dict, expected: dict, *, profile: str) -> 
     if expected.get("informational_only"):
         scores["informational"] = True
 
+    fence_any = expected.get("interactive_fence_any") or []
+    if expected.get("require_interactive_fence") and fence_any:
+        found = [f for f in fence_any if f"```{f}" in body]
+        scores["interactive_fence_hits"] = found
+        scores["interactive_fence_ok"] = bool(found)
+        if scores["interactive_fence_ok"]:
+            scores["grade"] = min(100, scores["grade"] + 10)
+        else:
+            scores["grade"] = max(0, scores["grade"] - 25)
+
     scores["grade"] = min(100, max(0, scores["grade"]))
     scores["pass"] = (
         scores["grade"] >= 70 and not forbidden_used and not forbid_phrase_fail
@@ -324,6 +351,8 @@ def score_educator_exchange(exchange: dict, expected: dict, *, profile: str) -> 
     if topic_kw and substantive_kw and (min_topic or min_substantive):
         scores["pass"] = scores["pass"] and scores.get("keywords_ok", False)
         scores["pass"] = scores["pass"] and scores.get("forbid_phrases_ok", True)
+    if expected.get("require_interactive_fence"):
+        scores["pass"] = scores["pass"] and scores.get("interactive_fence_ok", False)
     if expected.get("baseline_expected_fail"):
         scores["pass"] = bool(scores.get("baseline_gap_documented"))
     return scores

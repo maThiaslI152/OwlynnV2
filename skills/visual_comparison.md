@@ -170,6 +170,8 @@ Always end with a brief text verdict explaining your recommendation:
 - Note any caveats or trade-offs
 - If the user's priorities are unclear, suggest which option is best for different use cases
 
+For relationship diagrams (not numeric comparisons), use a ` ```mermaid ` block. For tips alongside tables, add `render_interactive_block("callout", ...)`.
+
 ---
 
 Input: {context}

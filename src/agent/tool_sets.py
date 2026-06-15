@@ -13,7 +13,9 @@ from src.tools.core_tools import (
 )
 from src.tools.core_tools import recall_memories, recall_all_memories, forget_memory
 from src.tools.doc_generator import create_docx, create_xlsx, create_pptx, create_pdf
-from src.tools.notebook import notebook_run, notebook_reset
+from src.tools.notebook import notebook_run, notebook_reset, notebook_vars
+from src.tools.interactive_content import render_interactive_block
+from src.tools.ipynb_tools import read_ipynb, write_ipynb, export_ipynb_html
 from src.tools.todo import todo_add, todo_list, todo_complete, todo_update, todo_filter
 from src.tools.ask_user import ask_user
 from src.tools.skills import list_skills, invoke_skill
@@ -53,6 +55,10 @@ COMPLEX_TOOLS_WITH_WEB: list = [
     # Computation
     notebook_run,
     notebook_reset,
+    notebook_vars,
+    read_ipynb,
+    write_ipynb,
+    export_ipynb_html,
     # Document generation
     create_docx,
     create_xlsx,
@@ -67,6 +73,7 @@ COMPLEX_TOOLS_WITH_WEB: list = [
     # Skills
     list_skills,
     invoke_skill,
+    render_interactive_block,
     # Study PA
     course_register,
     course_list,
@@ -96,6 +103,10 @@ COMPLEX_TOOLS_NO_WEB: list = [
     search_workspace_docs,
     notebook_run,
     notebook_reset,
+    notebook_vars,
+    read_ipynb,
+    write_ipynb,
+    export_ipynb_html,
     create_docx,
     create_xlsx,
     create_pptx,
@@ -107,6 +118,7 @@ COMPLEX_TOOLS_NO_WEB: list = [
     todo_filter,
     list_skills,
     invoke_skill,
+    render_interactive_block,
     course_register,
     course_list,
     course_get,
@@ -139,6 +151,10 @@ TOOLBOX_REGISTRY: dict[str, list] = {
         create_pdf,
         notebook_run,
         notebook_reset,
+        notebook_vars,
+        read_ipynb,
+        write_ipynb,
+        export_ipynb_html,
     ],
     "productivity": [
         todo_add,
@@ -148,6 +164,7 @@ TOOLBOX_REGISTRY: dict[str, list] = {
         todo_filter,
         list_skills,
         invoke_skill,
+        render_interactive_block,
     ],
     "study": [
         course_register,
@@ -161,6 +178,7 @@ TOOLBOX_REGISTRY: dict[str, list] = {
         quiz_session_answer,
         mastery_record,
         export_study_sheet,
+        render_interactive_block,
     ],
     "memory": [
         recall_memories,

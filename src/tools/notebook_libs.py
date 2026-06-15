@@ -83,9 +83,9 @@ def notebook_interactive_viz_guidance(project_id: str = "default") -> str:
         "For user-facing visualizations, prefer **interactive Plotly** charts (hover tooltips, zoom, pan). "
         "Use notebook_run with plotly.express or plotly.graph_objects, then save:\n"
         f"  {PLOTLY_SAVE_SNIPPET}\n"
-        "Embed in your final reply as a markdown link (not an image):\n"
-        f"  [Interactive chart](/api/files/chart.html?project_id={project_id})\n"
-        "Use matplotlib PNG only when Plotly is unsuitable."
+        "Embed inline in your final reply using render_interactive_block(embed, ...) or:\n"
+        f'  ```owlynn-embed\n{{"type":"chart","url":"/api/files/chart.html?project_id={project_id}"}}\n```\n'
+        "Keep prose to 1–2 sentences; the UI renders the chart inline."
     )
 
 
@@ -178,18 +178,26 @@ def notebook_chart_embed_nudge(content: str, project_id: str = "default") -> str
     filename = artifact["filename"]
     if artifact["kind"] == "interactive":
         return (
-            f"[Internal reminder] Interactive chart `{filename}` was saved and will auto-render "
-            "in the chat UI (Plotly hover/zoom/pan). Your **final user-visible reply** must be "
-            "1–2 short sentences describing the chart insight only — do NOT include markdown "
-            "image links, file paths, or `/api/files/` URLs."
+            f"[Internal reminder] Interactive chart `{filename}` was saved. Your **final reply** must "
+            "include an inline embed fence:\n"
+            f'```owlynn-embed\n{{"type":"chart","url":"/api/files/{filename}?project_id={project_id}"}}\n```\n'
+            "Plus 1–2 sentences of insight — no markdown image links or raw file paths."
         )
 
     return (
-        f"[Internal reminder] Chart `{filename}` was saved and will auto-render in the chat UI. "
-        "Your **final user-visible reply** must be 1–2 short sentences describing the chart "
-        "insight only — do NOT include markdown image links, file paths, or `/api/files/` URLs. "
-        "For interactive charts next time, prefer Plotly HTML:\n"
+        f"[Internal reminder] Chart `{filename}` was saved. Include inline embed:\n"
+        f'```owlynn-embed\n{{"type":"image","url":"/api/files/{filename}?project_id={project_id}"}}\n```\n'
+        "Plus 1–2 sentences of insight. For interactivity next time, prefer Plotly HTML:\n"
         f"  {PLOTLY_SAVE_SNIPPET}"
+    )
+
+
+def notebook_cell_fence_guidance() -> str:
+    """Guidance for inline runnable Python cells in chat."""
+    return (
+        "For short runnable Python snippets in chat, use render_interactive_block(cell, ...) or:\n"
+        '```owlynn-cell\n{"language":"python","code":"print(1+1)","runnable":true}\n```\n'
+        "After notebook_run, you may pre-fill the output field and set runnable:false for replay."
     )
 
 

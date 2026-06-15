@@ -6,6 +6,7 @@ import logging
 router = APIRouter()
 
 import os
+import json
 import asyncio
 from src.api.shared import connected_websockets, logger
 from src.config.settings import WORKSPACE_DIR, get_project_workspace
@@ -291,42 +292,34 @@ async def api_get_tools():
 
 @router.get("/api/artifacts")
 async def api_get_artifacts(project_id: str = "default"):
-    """Returns a list of artifacts. Mocked for design demonstration."""
-    # In a full impl, we would read from `{workspace}/.artifacts/`
-    return [
-        {
-            "id": "1",
-            "name": "Writing editor",
-            "type": "editor",
-            "category": "Learn something",
-            "image_url": "https://images.unsplash.com/photo-1455390582262-044cdead277a?w=400&auto=format&fit=crop&q=60",
-            "description": "Use 'I' instead of 'me' as the subject.",
-        },
-        {
-            "id": "2",
-            "name": "PRD To Prototype",
-            "type": "prototype",
-            "category": "Life hacks",
-            "image_url": "https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?w=400&auto=format&fit=crop&q=60",
-            "description": "Convert PRD to visual design dashboard.",
-        },
-        {
-            "id": "3",
-            "name": "Slack Project Insights",
-            "type": "insights",
-            "category": "Play a game",
-            "image_url": "https://images.unsplash.com/photo-1563986768609-322da13575f3?w=400&auto=format&fit=crop&q=60",
-            "description": "Summarize insights from project slack dumps.",
-        },
-        {
-            "id": "4",
-            "name": "CodeVerter",
-            "type": "converter",
-            "category": "Be creative",
-            "image_url": "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=400&auto=format&fit=crop&q=60",
-            "description": "Convert Python to Javascript logic.",
-        },
-    ]
+    """List interactive blocks persisted under `{workspace}/.artifacts/`."""
+    from src.config.settings import get_project_workspace, normalize_project_id
+
+    base = get_project_workspace(normalize_project_id(project_id))
+    art_dir = os.path.join(base, ".artifacts")
+    if not os.path.isdir(art_dir):
+        return {"status": "ok", "artifacts": []}
+
+    artifacts = []
+    for name in sorted(os.listdir(art_dir)):
+        if not name.endswith(".json"):
+            continue
+        path = os.path.join(art_dir, name)
+        try:
+            with open(path, encoding="utf-8") as fh:
+                record = json.load(fh)
+            artifacts.append(
+                {
+                    "id": record.get("id") or name.replace(".json", ""),
+                    "name": record.get("block_type", "block"),
+                    "type": record.get("block_type", "interactive"),
+                    "category": "interactive",
+                    "description": json.dumps(record.get("payload", {}))[:200],
+                }
+            )
+        except (json.JSONDecodeError, OSError):
+            continue
+    return {"status": "ok", "artifacts": artifacts}
 
 
 @router.get("/api/files")

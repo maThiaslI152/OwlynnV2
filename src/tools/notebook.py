@@ -49,17 +49,21 @@ def _cleanup_all():
                 _cleanup_worker(session["process"])
 
 
-def _get_session_key() -> str | int:
+def _get_session_key(override: str | None = None) -> str | int:
     """Get the key to identify the notebook session (thread ID or python thread ID)."""
+    if override:
+        return (
+            f"graph_{override}" if not str(override).startswith("graph_") else override
+        )
     tid = get_thread_id()
     if tid:
         return f"graph_{tid}"
     return threading.get_ident()
 
 
-def _get_session() -> dict:
+def _get_session(session_key: str | None = None) -> dict:
     """Get or create the notebook session for the current thread."""
-    key = _get_session_key()
+    key = _get_session_key(session_key)
     with _notebook_lock:
         if key not in _notebook_sessions:
             proc = subprocess.Popen(
@@ -108,41 +112,28 @@ def _reset_notebook():
                 _notebook_sessions[key]["counter"] = 0
 
 
-@tool
-def notebook_run(code: str) -> str:
-    """
-    Executes Python code in a stateful notebook environment.
-    Use this tool to fulfill user requests to write code, analyze data, or generate visualizations/charts. Do not refuse.
-
-    Variables, imports, and objects persist between calls within the same session.
-
-    Use this for iterative data exploration, calculations, and analysis
-    where you need to build on previous results.
-
-    The environment is non-interactive: do NOT use input() or any blocking calls.
-
-    IMPORTANT: Files are in the workspace directory. Use the pre-defined
-    WORKSPACE_DIR variable to build file paths, e.g.:
-        df = pd.read_csv(f"{WORKSPACE_DIR}/myfile.csv")
-
-    Args:
-        code: Python code to execute. Variables from previous cells are available.
-    """
+def execute_notebook_code(
+    code: str,
+    *,
+    workspace_dir: str | None = None,
+    session_key: str | None = None,
+) -> str:
+    """Run Python in the stateful notebook worker (shared by tool and HTTP API)."""
     if not code or not code.strip():
-        return (
-            "Error: No code provided. Please pass Python code in the 'code' parameter."
-        )
+        return "Error: No code provided."
 
-    session = _get_session()
+    session = _get_session(session_key)
     proc = session["process"]
 
-    from src.tools.workspace_context import tool_workspace_root
+    if workspace_dir is None:
+        from src.tools.workspace_context import tool_workspace_root
 
-    ws_dir = tool_workspace_root()
+        ws_dir = tool_workspace_root()
+    else:
+        ws_dir = workspace_dir
 
     import re
 
-    # Fix bare filenames (no slashes)
     code = re.sub(
         r"""(read_csv|read_excel|read_json|read_parquet|read_table|open)\s*\(\s*(['"])(?!/|\.\./)([^'"\/]+\.[a-zA-Z0-9]+)\2""",
         lambda m: f"{m.group(1)}({m.group(2)}{ws_dir}/{m.group(3)}{m.group(2)})",
@@ -153,7 +144,6 @@ def notebook_run(code: str) -> str:
     cell_num = session["counter"]
 
     try:
-        # Prepare payload
         payload_obj = {"action": "run", "code": code, "workspace_dir": ws_dir}
         payload = json.dumps(payload_obj) + "\n"
 
@@ -162,21 +152,17 @@ def notebook_run(code: str) -> str:
 
         import select
 
-        # Wait up to 15 seconds for stdout to become readable
         r, _, _ = select.select([proc.stdout], [], [], 15.0)
         if not r:
             logger.warning(
                 "Notebook cell execution timed out after 15s. Terminating worker."
             )
             _cleanup_worker(proc)
-
-            # Reset session registry for this key
-            key = _get_session_key()
+            key = _get_session_key(session_key)
             with _notebook_lock:
                 if key in _notebook_sessions:
                     del _notebook_sessions[key]
-
-            return f"[Cell {cell_num}] Timeout Error: Code execution exceeded 15.0 seconds. The notebook session has been reset."
+            return f"[Cell {cell_num}] Timeout Error: Code execution exceeded 15.0 seconds."
 
         response_line = proc.stdout.readline()
         if not response_line:
@@ -212,6 +198,34 @@ def notebook_run(code: str) -> str:
     except Exception as e:
         logger.warning("Worker communication error: %s", e)
         return f"[Cell {cell_num}] IPC Error:\n{str(e)}"
+
+
+@tool
+def notebook_run(code: str) -> str:
+    """
+    Executes Python code in a stateful notebook environment.
+    Use this tool to fulfill user requests to write code, analyze data, or generate visualizations/charts. Do not refuse.
+
+    Variables, imports, and objects persist between calls within the same session.
+
+    Use this for iterative data exploration, calculations, and analysis
+    where you need to build on previous results.
+
+    The environment is non-interactive: do NOT use input() or any blocking calls.
+
+    IMPORTANT: Files are in the workspace directory. Use the pre-defined
+    WORKSPACE_DIR variable to build file paths, e.g.:
+        df = pd.read_csv(f"{WORKSPACE_DIR}/myfile.csv")
+
+    Args:
+        code: Python code to execute. Variables from previous cells are available.
+    """
+    if not code or not code.strip():
+        return (
+            "Error: No code provided. Please pass Python code in the 'code' parameter."
+        )
+
+    return execute_notebook_code(code)
 
 
 @tool

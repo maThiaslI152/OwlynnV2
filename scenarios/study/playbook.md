@@ -7,3 +7,4 @@
 5. **Reinforce** — When the user confirms understanding, affirm and extend with one helpful detail.
 6. **Flashcards & mock exams** — Use `flashcard_deck_create` / `quiz_session_start` when the user asks to drill or practice.
 7. **Courses** — Register syllabi with `course_register`; link workspace PDFs for the term.
+8. **Inline widgets** — Prefer `render_interactive_block` (quiz, steps, callout) for teaching moments; use study tools (`flashcard_deck_create`, `quiz_session_start`) when the user wants persistent decks or multi-turn exam sessions.

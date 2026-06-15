@@ -222,9 +222,17 @@ Finished:
   "tool_call_id": "string|null",
   "output": "string|null",
   "error": "string|null",
-  "duration": 1.23
+  "duration": 1.23,
+  "chart_artifact": {
+    "filename": "chart.html",
+    "url": "/api/files/chart.html?project_id=default",
+    "kind": "interactive|static",
+    "mime_type": "text/html"
+  }
 }
 ```
+
+`chart_artifact` is optional — attached when `notebook_run` saves a chart file. Prefer inline `owlynn-embed` fences in the assistant reply (see below); timeline `chart_embed` items remain as a fallback.
 
 Derived from `AIMessage.tool_calls` + `ToolMessage` outputs. Tool outputs normalized into `tool_execution` events to avoid duplicate/misaligned chat message rendering.
 
@@ -234,6 +242,23 @@ Derived from `AIMessage.tool_calls` + `ToolMessage` outputs. Tool outputs normal
 - `success` — otherwise (including long PDF text that mentions “error” mid-body)
 
 Do **not** substring-match `"error:"` inside document content; that caused false ERROR cards on successful `read_workspace_file` reads. See [`changes/tool-preamble-read-file-fix/CHANGELOG.md`](changes/tool-preamble-read-file-fix/CHANGELOG.md).
+
+#### Inline interactive markdown (assistant replies)
+
+Assistant `content` may include fenced blocks rendered as inline widgets in `MessageContent` (`frontend-v2/src/lib/interactiveBlocks/`):
+
+| Fence lang | Purpose |
+|------------|---------|
+| `owlynn-quiz` | Clickable multiple-choice check |
+| `owlynn-steps` | Accordion step reveal |
+| `owlynn-callout` | Tip / warning / note box |
+| `owlynn-embed` | Inline chart or image (`{"type":"chart\|image","url":"..."}`) |
+| `owlynn-cell` | Runnable Python cell (`POST /api/notebook/run`) |
+| `mermaid` | Client-side diagram |
+
+Agents should call `render_interactive_block(block_type, payload)` to validate JSON and receive the fence string. Schemas live in `templates/interactive/`.
+
+Native `<details><summary>` collapsibles are also supported in sanitized markdown.
 
 #### `model_info`
 

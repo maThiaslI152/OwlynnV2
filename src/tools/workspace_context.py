@@ -15,6 +15,10 @@ def tool_workspace_root() -> str:
     return get_project_workspace(raw)
 
 
+def get_active_project_id() -> str:
+    return normalize_project_id(_active_project_id.get())
+
+
 def set_active_project_for_run(project_id: str | None) -> Token:
     token = _active_project_id.set(normalize_project_id(project_id))
     return token

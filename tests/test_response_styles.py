@@ -15,6 +15,7 @@ def test_learning_style_handles_criticism_and_reinforcement():
     assert "self-reinfor" in hint or "i think" in hint or "finally understand" in hint
 
 
-def test_normal_style_empty():
-    assert style_instruction_for_prompt("normal") == ""
-    assert style_instruction_for_prompt(None) == ""
+def test_normal_style_hints_interactive():
+    hint = style_instruction_for_prompt("normal")
+    assert "render_interactive_block" in hint
+    assert style_instruction_for_prompt(None) == hint

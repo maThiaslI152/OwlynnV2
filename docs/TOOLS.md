@@ -70,6 +70,11 @@ src/api/routes/files.py            # Tool discovery (GET /api/tools)
 | `create_pdf` | PDF from text content via PyMuPDF |
 | `notebook_run` | Stateful Python REPL. Variables persist between calls. Isolated by LangGraph thread_id and capped at 15s execution timeout. |
 | `notebook_reset` | Clear all notebook variables |
+| `notebook_vars` | List variables in the notebook session |
+| `read_ipynb` | Read workspace `.ipynb` and summarize cells |
+| `write_ipynb` | Create/update workspace `.ipynb` from JSON cell array |
+| `export_ipynb_html` | Export notebook to HTML via nbconvert (when installed) |
+| `render_interactive_block` | Validate payload and return inline chat widget fence (quiz, steps, callout, embed, cell) |
 
 ### Toolbox: `productivity`
 
@@ -80,6 +85,7 @@ src/api/routes/files.py            # Tool discovery (GET /api/tools)
 | `todo_complete` | Mark a task as done |
 | `list_skills` | List available skill templates from `skills/` directory |
 | `invoke_skill` | Load and return a skill's prompt template |
+| `render_interactive_block` | Build validated inline widget fences for chat UI |
 
 ### Toolbox: `study`
 
@@ -93,7 +99,9 @@ src/api/routes/files.py            # Tool discovery (GET /api/tools)
 | `mastery_record` | Explicit study misconception/mastery LTM atoms |
 | `export_study_sheet` | Export study guide to PDF or DOCX |
 
-Study skills (`study_tutor`, `exam_prep`, `flashcard_builder`, etc.) bind `file_ops` + `memory` + `study` toolboxes. Learning mode (`response_style: learning`) activates study scenario automatically.
+Study skills (`study_tutor`, `exam_prep`, `flashcard_builder`, `interactive_teaching`, etc.) bind `file_ops` + `memory` + `study` toolboxes. Learning mode (`response_style: learning`) activates study scenario automatically.
+
+**Inline widgets:** `interactive_teaching` skill + `render_interactive_block` produce `owlynn-*` fences rendered inline in chat (see `docs/CHAT_PROTOCOL.md`).
 
 ### Toolbox: `memory`
 

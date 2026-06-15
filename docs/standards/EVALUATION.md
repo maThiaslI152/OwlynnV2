@@ -18,7 +18,7 @@ audience: agent
 | Live cloud | `./scripts/ci.sh --network` | DeepSeek E2E, KV cache, chat matrix (`DEEPSEEK_API_KEY`) |
 | Benchmarks | `./scripts/ci.sh --benchmarks` | Router/complex/memory latency → `tests/benchmarks/benchmark_report.json` |
 | **Frontier eval** | `python scripts/run_local_frontier_eval.py` | ~19-turn scored routing + tools + memory + vision + formats |
-| **Educator eval** | `python scripts/run_educator_eval.py` | 7-turn UID10667 study session (EDU1–EDU7); optional, needs fixtures |
+| **Educator eval** | `python scripts/run_educator_eval.py` | 8-turn UID10667 study session (EDU1–EDU8); optional, needs fixtures |
 | **Frontier comparison** | `python scripts/run_frontier_comparison_eval.py` | Quality A/B: Owlynn vs raw DeepSeek V4 + blind pro judge |
 | **Conversation eval** | `python scripts/run_browser_eval.py` | 12-prompt multi-topic run (qualitative) |
 

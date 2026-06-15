@@ -1,7 +1,4 @@
 import { useEffect, useRef, useState, useCallback, type ReactNode } from 'react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
 import type { Options } from 'rehype-sanitize'
 import { Composer } from './Composer'
@@ -31,6 +28,11 @@ import {
 } from '../lib/workspaceImageUrl'
 import { ChatImageViewer } from './ChatImageViewer'
 import { ChatInteractiveChart } from './ChatInteractiveChart'
+import {
+  parseInteractiveBlocks,
+  InteractiveBlockRenderer,
+  renderMarkdownSegment,
+} from '../lib/interactiveBlocks'
 
 interface ProjectChat {
   id: string
@@ -90,6 +92,8 @@ const markdownSchema: Options = {
     img: [...(defaultSchema.attributes?.img || []), 'src', 'alt', 'title', 'loading'],
     code: ['className'],
     pre: ['className'],
+    details: ['open', 'className'],
+    summary: ['className'],
   },
 }
 
@@ -108,112 +112,148 @@ function formatTimeRelative(ts: number): string {
   return new Date(ts).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
-function MessageContent({ content, projectId }: { content: string; projectId: string }) {
-  // Collapse 3+ consecutive newlines into a single blank line (2 newlines)
-  // to prevent large visual gaps caused by excessive blank lines in markdown.
+function buildMarkdownComponents(projectId: string) {
+  return {
+    a: ({ href, children, ...props }: { href?: string; children?: ReactNode }) => {
+      const resolved = href ? resolveWorkspaceFileUrl(href, projectId) : href
+      if (resolved && isInteractiveChartUrl(resolved)) {
+        return (
+          <ChatInteractiveChart
+            src={resolved}
+            title={typeof children === 'string' ? children : 'Interactive chart'}
+          />
+        )
+      }
+      if (resolved && isWorkspaceImageUrl(resolved)) {
+        return (
+          <ChatImageViewer
+            src={resolved}
+            alt={typeof children === 'string' ? children : 'Chart'}
+          />
+        )
+      }
+      return (
+        <a
+          className="msg-link"
+          href={resolved}
+          target="_blank"
+          rel="noopener noreferrer"
+          {...props}
+        >
+          {children}
+        </a>
+      )
+    },
+    img: ({ src, alt }: { src?: string; alt?: string }) => {
+      const resolved = src ? resolveWorkspaceFileUrl(src, projectId) : ''
+      if (resolved && isInteractiveChartUrl(resolved)) {
+        return <ChatInteractiveChart src={resolved} title={alt || 'Interactive chart'} />
+      }
+      return <ChatImageViewer src={resolved} alt={alt || 'Chart'} />
+    },
+    pre: ({ children, ...props }: { children?: ReactNode }) => (
+      <pre className="msg-code-block" {...props}>
+        {children}
+      </pre>
+    ),
+    code: ({ className, children, ...props }: { className?: string; children?: ReactNode }) => {
+      const isInline = !className
+      if (isInline) {
+        return <code className="msg-inline-code" {...props}>{children}</code>
+      }
+      const lang = className?.replace('language-', '')
+      return (
+        <code className={className} {...props}>
+          {lang && <span className="msg-code-lang">{lang}</span>}
+          {children}
+        </code>
+      )
+    },
+    table: ({ children, ...props }: { children?: ReactNode }) => (
+      <div className="msg-table-wrap">
+        <table className="msg-table" {...props}>{children}</table>
+      </div>
+    ),
+    th: ({ children, ...props }: { children?: ReactNode }) => (
+      <th {...props}>{children}</th>
+    ),
+    td: ({ children, ...props }: { children?: ReactNode }) => (
+      <td {...props}>{children}</td>
+    ),
+    details: ({ children, ...props }: { children?: ReactNode }) => (
+      <details className="owlynn-block-details" {...props}>{children}</details>
+    ),
+    summary: ({ children, ...props }: { children?: ReactNode }) => (
+      <summary className="owlynn-block-summary" {...props}>{children}</summary>
+    ),
+    h1: ({ children, ...props }: { children?: ReactNode }) => (
+      <h1 className="msg-heading h1" {...props}>{children}</h1>
+    ),
+    h2: ({ children, ...props }: { children?: ReactNode }) => (
+      <h2 className="msg-heading h2" {...props}>{children}</h2>
+    ),
+    h3: ({ children, ...props }: { children?: ReactNode }) => (
+      <h3 className="msg-heading h3" {...props}>{children}</h3>
+    ),
+    h4: ({ children, ...props }: { children?: ReactNode }) => (
+      <h4 className="msg-heading h4" {...props}>{children}</h4>
+    ),
+    h5: ({ children, ...props }: { children?: ReactNode }) => (
+      <h5 className="msg-heading h5" {...props}>{children}</h5>
+    ),
+    h6: ({ children, ...props }: { children?: ReactNode }) => (
+      <h6 className="msg-heading h6" {...props}>{children}</h6>
+    ),
+    ul: ({ children, ...props }: { children?: ReactNode }) => (
+      <ul className="msg-list" {...props}>{children}</ul>
+    ),
+    ol: ({ children, ...props }: { children?: ReactNode }) => (
+      <ol className="msg-list" {...props}>{children}</ol>
+    ),
+  }
+}
+
+function MessageContent({
+  content,
+  projectId,
+  threadId,
+}: {
+  content: string
+  projectId: string
+  threadId: string
+}) {
   const cleaned = rewriteWorkspaceImageMarkdown(
     content.replace(/\n{3,}/g, '\n\n'),
     projectId,
   )
+  const segments = parseInteractiveBlocks(cleaned)
+  const markdownComponents = buildMarkdownComponents(projectId)
+
+  if (segments.length === 1 && segments[0].type === 'markdown') {
+    return renderMarkdownSegment(cleaned, markdownSchema, markdownComponents)
+  }
+
   return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      rehypePlugins={[rehypeRaw, [rehypeSanitize, markdownSchema]]}
-      components={{
-        a: ({ href, children, ...props }) => {
-          const resolved = href ? resolveWorkspaceFileUrl(href, projectId) : href
-          if (resolved && isInteractiveChartUrl(resolved)) {
-            return (
-              <ChatInteractiveChart
-                src={resolved}
-                title={typeof children === 'string' ? children : 'Interactive chart'}
-              />
-            )
-          }
-          if (resolved && isWorkspaceImageUrl(resolved)) {
-            return (
-              <ChatImageViewer
-                src={resolved}
-                alt={typeof children === 'string' ? children : 'Chart'}
-              />
-            )
-          }
+    <>
+      {segments.map((segment, idx) => {
+        if (segment.type === 'markdown') {
+          if (!segment.content.trim()) return null
           return (
-            <a
-              className="msg-link"
-              href={resolved}
-              target="_blank"
-              rel="noopener noreferrer"
-              {...props}
-            >
-              {children}
-            </a>
+            <div key={`md-${idx}`}>
+              {renderMarkdownSegment(segment.content, markdownSchema, markdownComponents)}
+            </div>
           )
-        },
-        img: ({ src, alt }) => {
-          const resolved = src ? resolveWorkspaceFileUrl(src, projectId) : ''
-          if (resolved && isInteractiveChartUrl(resolved)) {
-            return <ChatInteractiveChart src={resolved} title={alt || 'Interactive chart'} />
-          }
-          return <ChatImageViewer src={resolved} alt={alt || 'Chart'} />
-        },
-        pre: ({ children, ...props }) => (
-          <pre className="msg-code-block" {...props}>
-            {children}
-          </pre>
-        ),
-        code: ({ className, children, ...props }) => {
-          const isInline = !className
-          if (isInline) {
-            return <code className="msg-inline-code" {...props}>{children}</code>
-          }
-          const lang = className?.replace('language-', '')
-          return (
-            <code className={className} {...props}>
-              {lang && <span className="msg-code-lang">{lang}</span>}
-              {children}
-            </code>
-          )
-        },
-        table: ({ children, ...props }) => (
-          <div className="msg-table-wrap">
-            <table className="msg-table" {...props}>{children}</table>
-          </div>
-        ),
-        th: ({ children, ...props }) => (
-          <th {...props}>{children}</th>
-        ),
-        td: ({ children, ...props }) => (
-          <td {...props}>{children}</td>
-        ),
-        h1: ({ children, ...props }) => (
-          <h1 className="msg-heading h1" {...props}>{children}</h1>
-        ),
-        h2: ({ children, ...props }) => (
-          <h2 className="msg-heading h2" {...props}>{children}</h2>
-        ),
-        h3: ({ children, ...props }) => (
-          <h3 className="msg-heading h3" {...props}>{children}</h3>
-        ),
-        h4: ({ children, ...props }) => (
-          <h4 className="msg-heading h4" {...props}>{children}</h4>
-        ),
-        h5: ({ children, ...props }) => (
-          <h5 className="msg-heading h5" {...props}>{children}</h5>
-        ),
-        h6: ({ children, ...props }) => (
-          <h6 className="msg-heading h6" {...props}>{children}</h6>
-        ),
-        ul: ({ children, ...props }) => (
-          <ul className="msg-list" {...props}>{children}</ul>
-        ),
-        ol: ({ children, ...props }) => (
-          <ol className="msg-list" {...props}>{children}</ol>
-        ),
-      }}
-    >
-      {cleaned}
-    </ReactMarkdown>
+        }
+        return (
+          <InteractiveBlockRenderer
+            key={`block-${idx}`}
+            segment={segment}
+            projectId={projectId}
+            threadId={threadId}
+          />
+        )
+      })}
+    </>
   )
 }
 
@@ -238,10 +278,12 @@ function MessageBubble({
   message,
   isStreaming,
   projectId,
+  threadId,
 }: {
   message: ChatMessage
   isStreaming: boolean
   projectId: string
+  threadId: string
 }) {
   return (
     <div className={`message message-${message.role}`}>
@@ -250,7 +292,7 @@ function MessageBubble({
         <div className="message-bubble">
           <MessageAttachments attachments={message.attachments} />
           {message.content ? (
-            <MessageContent content={message.content} projectId={projectId} />
+            <MessageContent content={message.content} projectId={projectId} threadId={threadId} />
           ) : null}
           {isStreaming && <span className="streaming-cursor" />}
         </div>
@@ -788,6 +830,7 @@ export function AppShell({
                       message={message}
                       isStreaming={isStreaming}
                       projectId={activeProjectId}
+                      threadId={currentThreadId}
                     />
                   )
                 }
@@ -865,6 +908,7 @@ export function AppShell({
                       }}
                       isStreaming={false}
                       projectId={activeProjectId}
+                      threadId={currentThreadId}
                     />
                   )
                 }
