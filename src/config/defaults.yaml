@@ -338,6 +338,7 @@ cloud:
   circuit_breaker:
     failure_threshold: 3
     cooldown_seconds: 60
+  no_local_fallback: false                 # OWLYNN_CLOUD_NO_FALLBACK env; profile override: cloud_no_local_fallback
   budget:
     daily_token_limit: 500000
     warning_thresholds: [0.5, 0.8, 0.95]

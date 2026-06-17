@@ -64,6 +64,14 @@ def _is_tool_preamble_text(text: str) -> bool:
     return False
 
 
+def _last_ai_message(messages: list) -> AIMessage | None:
+    """Pick the newest assistant message from a node output batch."""
+    for msg in reversed(messages or []):
+        if isinstance(msg, AIMessage):
+            return msg
+    return None
+
+
 from src.agent.nodes.router import generate_chat_title_router_llm
 from src.config.settings import get_project_workspace, normalize_project_id
 from src.tools.notebook_libs import parse_chart_artifact
@@ -603,9 +611,26 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                         if node in ["simple", "complex_llm"]:
                             if isinstance(output, dict) and "messages" in output:
                                 messages = output.get("messages") or []
-                                if not messages:
+                                msg = _last_ai_message(messages)
+                                if not msg:
                                     continue
-                                msg = messages[0]
+                                # Flush any buffered stream text (simple node may not emit chunks).
+                                if _stream_echo_buffer.strip():
+                                    pending = _stream_echo_buffer
+                                    _stream_echo_buffer = ""
+                                    if "[SYSTEM INSTRUCTIONS END]" in pending:
+                                        idx = pending.find("[SYSTEM INSTRUCTIONS END]")
+                                        after = pending[
+                                            idx + len("[SYSTEM INSTRUCTIONS END]") :
+                                        ].lstrip()
+                                        if after:
+                                            await _send_ws(
+                                                {"type": "chunk", "content": after}
+                                            )
+                                    elif "[SYSTEM INSTRUCTIONS BEGIN]" not in pending:
+                                        await _send_ws(
+                                            {"type": "chunk", "content": pending}
+                                        )
                                 tc_list = list(getattr(msg, "tool_calls", None) or [])
                                 text_for_ui = (
                                     _sanitize_assistant_text(
@@ -785,7 +810,9 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                 elif not tc_list:
                                     # text_for_ui is empty (e.g. _clean_response stripped system echo leaving nothing).
                                     # Fallback: extract raw content after system markers from the uncut message.
-                                    raw_content = str(getattr(msg, "content", "") or "")
+                                    raw_content = _stringify_lc_message_content(
+                                        getattr(msg, "content", "")
+                                    )
                                     if "[SYSTEM INSTRUCTIONS END]" in raw_content:
                                         idx = raw_content.find(
                                             "[SYSTEM INSTRUCTIONS END]"
@@ -794,8 +821,33 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                         if after:
                                             fallback_msg = {
                                                 "type": msg.type,
-                                                "content": after,
+                                                "content": _sanitize_assistant_text(
+                                                    after
+                                                ),
                                             }
+                                            if _node_model_used:
+                                                fallback_msg["model_used"] = (
+                                                    _node_model_used
+                                                )
+                                            await _send_ws(
+                                                {
+                                                    "type": "assistant.message",
+                                                    "message": fallback_msg,
+                                                }
+                                            )
+                                    elif raw_content.strip():
+                                        from src.agent.nodes.simple import (
+                                            _clean_response,
+                                        )
+
+                                        cleaned = _clean_response(raw_content).strip()
+                                        cleaned = _sanitize_assistant_text(cleaned)
+                                        if cleaned and not _is_tool_preamble_text(
+                                            cleaned
+                                        ):
+                                            fallback_msg = serialize_message(
+                                                AIMessage(content=cleaned)
+                                            )
                                             if _node_model_used:
                                                 fallback_msg["model_used"] = (
                                                     _node_model_used

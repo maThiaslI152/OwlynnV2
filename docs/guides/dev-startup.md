@@ -56,7 +56,7 @@ cp .env.example .env
 cp .env.local.example .env.local   # optional — recommended for DEEPSEEK_API_KEY only
 ```
 
-**Secrets workflow:** Keep general config in `.env`. Put API keys and other secrets in `.env.local` (gitignored). `start.sh` loads `.env` first, then `.env.local` — local values win.
+**Secrets workflow:** Keep general config in `.env`. Put API keys and other secrets in `.env.local` (gitignored). `start.sh` loads `.env` first, then `.env.local` — local values win. The Python backend also loads both files on startup (`src/config/env_files.py`), so manual `uvicorn` picks up `DEEPSEEK_API_KEY` without sourcing the shell.
 
 ### Centralized Configuration (New — June 2026)
 
@@ -144,7 +144,7 @@ podman ps --format '{{.Names}}' | grep owlynn
 # Expected: owlynn_qdrant, owlynn_redis, owlynn_stirling_pdf
 ```
 
-**StirlingPDF** (~1GB first pull): PDF text extraction + OCR for scanned documents. Swagger UI: `http://127.0.0.1:8090/swagger-ui/index.html`. If Stirling is down, Owlynn falls back to PyMuPDF automatically.
+**StirlingPDF** (~1GB image pull; **allocate 2GB container RAM** — 1GB causes Metaspace OOM crash loops on Java 25): PDF text extraction + OCR for scanned documents. Swagger UI: `http://127.0.0.1:8090/swagger-ui/index.html`. If Stirling is down, Owlynn falls back to PyMuPDF automatically.
 
 Manual smoke (after containers up): `python scripts/manual/stirling_pdf_smoke.py`
 

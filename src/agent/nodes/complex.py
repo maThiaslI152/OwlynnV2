@@ -50,6 +50,10 @@ from .complex_utils.cloud_payload import (
 from .complex_utils.cloud_invoke import invoke_cloud_chat, response_to_ai_message
 from .complex_utils.context_breakdown import enrich_token_usage_with_breakdown
 from src.agent.cloud_cost_tracker import get_cost_tracker
+from src.agent.cloud_strict import (
+    block_cloud_local_fallback,
+    cloud_no_local_fallback_enabled,
+)
 from src.memory.user_profile import get_profile
 
 logger = logging.getLogger(__name__)
@@ -906,15 +910,25 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         vision_intake_mode = payload.vision_intake_mode
 
         if not payload.vision_proxy_ok and has_images:
-            logger.warning(
-                "[complex] vision_proxy failed; falling back to complex-default"
-            )
             fallback_chain.append(
                 {
                     "model": "large-cloud",
                     "status": "failed",
                     "reason": "vision_proxy_failed",
                 }
+            )
+            blocked = block_cloud_local_fallback(
+                fallback_chain=fallback_chain,
+                reason="vision_proxy_failed",
+                vision_intake_mode="proxy",
+                cloud_brief_tokens_est=cloud_brief_tokens_est,
+                anonymization_placeholders_count=anonymization_placeholders_count,
+            )
+            if blocked:
+                blocked.update(_vision_telemetry("proxy"))
+                return blocked
+            logger.warning(
+                "[complex] vision_proxy failed; falling back to complex-default"
             )
             route = "complex-default"
             max_context = int(config.get("models.medium.context_window", 16384))
@@ -944,12 +958,29 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                 model_label = "medium-default"
             log_model_attempt(model_label, "success", reason="tools_off_direct")
         except CloudUnavailableError as e:
+            log_model_attempt(model_label or route, "failed", reason=str(e)[:120])
+            fallback_chain.append(
+                {
+                    "model": model_label or route,
+                    "status": "failed",
+                    "reason": str(e)[:120],
+                }
+            )
+            blocked = block_cloud_local_fallback(
+                fallback_chain=fallback_chain,
+                reason="fallback_from_unavailable",
+                cloud_brief_tokens_est=cloud_brief_tokens_est,
+                anonymization_placeholders_count=anonymization_placeholders_count,
+                vision_intake_mode=vision_intake_mode,
+            )
+            if blocked:
+                blocked.update(_vision_telemetry(vision_intake_mode))
+                return blocked
             logger.warning(
                 "[complex] Model %s unavailable (%s), falling back to medium-default",
                 route,
                 e,
             )
-            log_model_attempt(model_label or route, "failed", reason=str(e)[:120])
             llm = await get_medium_llm("default")
             model_label = "medium-default-fallback"
             log_model_attempt(
@@ -1034,11 +1065,6 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             model_label = "medium-default"
             log_model_attempt("medium-default", "success", reason="initial_route")
     except CloudUnavailableError as e:
-        logger.warning(
-            "[complex] Model %s unavailable (%s), falling back to medium-default",
-            route,
-            e,
-        )
         fallback_chain.append(
             {
                 "model": model_label if model_label != "medium-default" else route,
@@ -1051,6 +1077,21 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             model_label if model_label != "medium-default" else route,
             "failed",
             reason=str(e)[:120],
+        )
+        blocked = block_cloud_local_fallback(
+            fallback_chain=fallback_chain,
+            reason="fallback_from_unavailable",
+            cloud_brief_tokens_est=cloud_brief_tokens_est,
+            anonymization_placeholders_count=anonymization_placeholders_count,
+            vision_intake_mode=vision_intake_mode,
+        )
+        if blocked:
+            blocked.update(_vision_telemetry(vision_intake_mode))
+            return blocked
+        logger.warning(
+            "[complex] Model %s unavailable (%s), falling back to medium-default",
+            route,
+            e,
         )
         llm = await get_medium_llm("default")
         model_label = "medium-default-fallback"
@@ -1139,6 +1180,16 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                             else 0,
                         }
                     )
+                    blocked = block_cloud_local_fallback(
+                        fallback_chain=fallback_chain,
+                        reason="fallback_rate_limit",
+                        cloud_brief_tokens_est=cloud_brief_tokens_est,
+                        anonymization_placeholders_count=anonymization_placeholders_count,
+                        vision_intake_mode=vision_intake_mode,
+                    )
+                    if blocked:
+                        blocked.update(_vision_telemetry(vision_intake_mode))
+                        return blocked
                     llm = await get_medium_llm("default")
                     prompt_messages = strip_image_blocks_from_messages(
                         with_system_for_local_server(system, original_trimmed_messages)
@@ -1194,6 +1245,16 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                         else 0,
                     }
                 )
+                blocked = block_cloud_local_fallback(
+                    fallback_chain=fallback_chain,
+                    reason="fallback_auth_error",
+                    cloud_brief_tokens_est=cloud_brief_tokens_est,
+                    anonymization_placeholders_count=anonymization_placeholders_count,
+                    vision_intake_mode=vision_intake_mode,
+                )
+                if blocked:
+                    blocked.update(_vision_telemetry(vision_intake_mode))
+                    return blocked
                 llm = await get_medium_llm("default")
                 prompt_messages = strip_image_blocks_from_messages(
                     with_system_for_local_server(system, original_trimmed_messages)
@@ -1260,6 +1321,16 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                         else 0,
                     }
                 )
+                blocked = block_cloud_local_fallback(
+                    fallback_chain=fallback_chain,
+                    reason="fallback_generic_cloud_error",
+                    cloud_brief_tokens_est=cloud_brief_tokens_est,
+                    anonymization_placeholders_count=anonymization_placeholders_count,
+                    vision_intake_mode=vision_intake_mode,
+                )
+                if blocked:
+                    blocked.update(_vision_telemetry(vision_intake_mode))
+                    return blocked
                 llm = await get_medium_llm("default")
                 prompt_messages = strip_image_blocks_from_messages(
                     with_system_for_local_server(system, original_trimmed_messages)
@@ -1450,23 +1521,26 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             )
         )
         try:
-            local_prompt = strip_image_blocks_from_messages(
-                with_system_for_local_server(system, thread_messages + [synth_nudge])
-            )
-            local_budget = _cap_budget_to_context(local_prompt, budget, max_context)
-            local_llm = await get_medium_llm("default")
-            local_resp = await local_llm.bind(max_tokens=local_budget).ainvoke(
-                local_prompt
-            )
-            local_text = _strip_dsml_blocks(
-                _strip_thinking_tags(str(getattr(local_resp, "content", "") or ""))
-            )
-            if len(local_text.strip()) >= 80:
-                response = AIMessage(content=local_text)
-                local_synthesis = True
-                model_label = "medium-default-synthesis"
-                dsml_stall = False
-                cleaned_visible = local_text
+            if not cloud_no_local_fallback_enabled():
+                local_prompt = strip_image_blocks_from_messages(
+                    with_system_for_local_server(
+                        system, thread_messages + [synth_nudge]
+                    )
+                )
+                local_budget = _cap_budget_to_context(local_prompt, budget, max_context)
+                local_llm = await get_medium_llm("default")
+                local_resp = await local_llm.bind(max_tokens=local_budget).ainvoke(
+                    local_prompt
+                )
+                local_text = _strip_dsml_blocks(
+                    _strip_thinking_tags(str(getattr(local_resp, "content", "") or ""))
+                )
+                if len(local_text.strip()) >= 80:
+                    response = AIMessage(content=local_text)
+                    local_synthesis = True
+                    model_label = "medium-default-synthesis"
+                    dsml_stall = False
+                    cleaned_visible = local_text
         except Exception as exc:
             logger.warning("[complex] Local synthesis fallback failed: %s", exc)
 

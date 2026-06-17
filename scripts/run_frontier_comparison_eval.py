@@ -35,22 +35,10 @@ if str(REPO_ROOT) not in sys.path:
 
 
 def _load_dotenv_files() -> None:
-    """Load .env / .env.local like scripts/ci.sh (baseline + judge need DEEPSEEK_API_KEY)."""
-    import os
+    """Load .env / .env.local like start.sh."""
+    from src.config.env_files import load_project_env_files
 
-    for name in (".env", ".env.local"):
-        path = REPO_ROOT / name
-        if not path.is_file():
-            continue
-        for line in path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, _, val = line.partition("=")
-            key = key.strip()
-            val = val.strip().strip('"').strip("'")
-            if key and key not in os.environ:
-                os.environ[key] = val
+    load_project_env_files(REPO_ROOT)
 
 
 _load_dotenv_files()
@@ -897,12 +885,31 @@ async def main() -> None:
     parser.add_argument(
         "--skip-owlynn", action="store_true", help="Baseline + judge only (no browser)"
     )
+    parser.add_argument(
+        "--strict-cloud",
+        action="store_true",
+        help="Block local Qwen fallback on Owlynn arm (default when cloud profile)",
+    )
+    parser.add_argument(
+        "--allow-local-fallback",
+        action="store_true",
+        help="Opt out of strict cloud mode for Owlynn arm",
+    )
     args = parser.parse_args()
 
     fe = _load_frontier_eval()
     prompts = _select_prompts(args)
     runtime = await fe.fetch_runtime_profile()
+    prior_strict = runtime.get("cloud_no_local_fallback", False)
     profile = runtime["effective_profile"] if args.profile == "auto" else args.profile
+    use_strict = (
+        not args.allow_local_fallback
+        and profile == "cloud"
+        and (args.strict_cloud or args.profile in ("auto", "cloud"))
+    )
+    if use_strict:
+        print("[CMP] Enabling strict cloud mode for Owlynn arm...")
+        await fe.set_unified_settings(cloud_no_local_fallback=True)
 
     SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
     suffix = uuid.uuid4().hex[:6]
@@ -913,6 +920,7 @@ async def main() -> None:
         "eval_version": "2026-06-11-comparison",
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         "runtime_profile": profile,
+        "strict_cloud": use_strict,
         "baseline_system_prompt": BASELINE_SYSTEM,
         "baseline_model_tier": "flash",
         "judge_model_tier": "pro",
@@ -1045,6 +1053,7 @@ async def main() -> None:
         )
         print(f"Saved {OUTPUT_FILE}")
     finally:
+        await fe.set_unified_settings(cloud_no_local_fallback=prior_strict)
         await fe.delete_project(project_id)
 
 

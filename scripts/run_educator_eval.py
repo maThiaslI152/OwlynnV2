@@ -403,6 +403,7 @@ async def run_edu_turn(
     model_tier = await fe.fetch_last_turn_tier()
     ws_tools = wait_result.get("executed_tools_ws") or ws_log.tools_since(turn_start)
     ws_router = ws_log.router_meta_since(turn_start)
+    ws_model = ws_log.model_info_since(turn_start)
     response_text = wait_result["response_text"]
 
     exchange = {
@@ -416,6 +417,8 @@ async def run_edu_turn(
         "assistant_response_full": response_text,
         "response_completed": wait_result["completed"],
         "route": ws_router.get("route") or orch.get("route"),
+        "model_badge": ws_model.get("model") or orch.get("model"),
+        "fallback_chain": ws_model.get("fallback_chain"),
         "executed_tools": ws_tools or wait_result["executed_tools"],
         "model_tier": model_tier,
         "duration_seconds": round(duration, 2),
@@ -481,6 +484,16 @@ async def main() -> None:
         default="auto",
     )
     parser.add_argument("--cloud-off", action="store_true")
+    parser.add_argument(
+        "--strict-cloud",
+        action="store_true",
+        help="Block local Qwen fallback (default when effective profile is cloud)",
+    )
+    parser.add_argument(
+        "--allow-local-fallback",
+        action="store_true",
+        help="Opt out of strict cloud mode",
+    )
     args = parser.parse_args()
 
     fixture_script = REPO_ROOT / "scripts" / "prepare_uid10667_fixtures.py"
@@ -494,10 +507,34 @@ async def main() -> None:
     prompts = build_prompts(meta)
 
     runtime = await fe.fetch_runtime_profile()
+    prior_strict = runtime.get("cloud_no_local_fallback", False)
+    prior_scope = runtime.get("scope_clarification_enabled")
+    prior_plan = runtime.get("plan_review_enabled")
     if args.cloud_off:
         await fe.set_unified_settings(cloud_escalation_enabled=False)
         runtime = await fe.fetch_runtime_profile()
     profile = runtime["effective_profile"] if args.profile == "auto" else args.profile
+
+    use_strict = (
+        not args.allow_local_fallback
+        and profile == "cloud"
+        and (args.strict_cloud or args.profile in ("auto", "cloud"))
+    )
+    if use_strict:
+        print("[EDU] Enabling strict cloud mode (no local Qwen fallback)...")
+        await fe.set_unified_settings(cloud_no_local_fallback=True)
+        runtime = await fe.fetch_runtime_profile()
+
+    print("[EDU] Disabling scope/plan HITL for automated run...")
+    await fe.set_unified_settings(
+        scope_clarification_enabled=False,
+        plan_review_enabled=False,
+    )
+
+    if profile == "cloud" and not runtime.get("cloud_available"):
+        raise SystemExit(
+            "[EDU] Cloud profile requires valid DeepSeek API before --profile cloud."
+        )
 
     SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
     project_id = await fe.create_project(f"EducatorEval_{uuid.uuid4().hex[:6]}")
@@ -506,6 +543,8 @@ async def main() -> None:
         "project_id": project_id,
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         "runtime_profile": profile,
+        "strict_cloud": use_strict,
+        "qwen_fallback_turns": [],
         "exchanges": [],
         "scores": {},
     }
@@ -546,6 +585,22 @@ async def main() -> None:
                 exchange["screenshot"] = str(shot_path.relative_to(REPO_ROOT))
 
                 eval_data["exchanges"].append(exchange)
+                badge = (exchange.get("model_badge") or "").strip()
+                if badge in fe.CLOUD_QWEN_FALLBACK_BADGES and profile == "cloud":
+                    chain = exchange.get("fallback_chain") or []
+                    reason = ""
+                    for step in reversed(chain):
+                        if isinstance(step, dict) and step.get("reason"):
+                            reason = str(step["reason"])
+                            break
+                    eval_data["qwen_fallback_turns"].append(
+                        {
+                            "id": item["id"],
+                            "model_badge": badge,
+                            "route": exchange.get("route"),
+                            "reason": reason,
+                        }
+                    )
                 print(
                     f"[EDU] {item['id']} grade={scores['grade']} pass={scores['pass']}"
                 )
@@ -557,6 +612,11 @@ async def main() -> None:
 
         await browser.close()
 
+    await fe.set_unified_settings(cloud_no_local_fallback=prior_strict)
+    if prior_scope is not None:
+        await fe.set_unified_settings(scope_clarification_enabled=prior_scope)
+    if prior_plan is not None:
+        await fe.set_unified_settings(plan_review_enabled=prior_plan)
     OUTPUT_DATA.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT_DATA.write_text(json.dumps(eval_data, indent=2), encoding="utf-8")
     report_path = write_report(eval_data, scores_by_id)

@@ -12,11 +12,18 @@ import re
 
 from langchain_core.messages import AIMessage, SystemMessage
 from src.agent.llm import get_small_llm
+from src.agent.cloud_strict import (
+    SMALL_FAILED_MODEL,
+    cloud_failure_message,
+    cloud_no_local_fallback_enabled,
+)
 from src.agent.response_styles import style_instruction_for_prompt
 from src.agent.lm_studio_compat import with_system_for_local_server
 from src.agent.state import AgentState
+from src.api.shared import _stringify_lc_message_content
 
 from src.config.log_middleware import log_node
+from src.config.config_loader import get_model_config
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +89,25 @@ def _clean_response(text: str) -> str:
     return result or text
 
 
+def _extract_llm_text(chunk_or_message) -> str:
+    """Flatten visible assistant text; fall back to reasoning_content when content is empty."""
+    text = _stringify_lc_message_content(getattr(chunk_or_message, "content", None))
+    if text:
+        return text
+    extra = getattr(chunk_or_message, "additional_kwargs", None) or {}
+    reasoning = extra.get("reasoning_content") or getattr(
+        chunk_or_message, "reasoning_content", None
+    )
+    return str(reasoning or "")
+
+
+def _simple_output_max_tokens(budget: int | None) -> int:
+    """MiniCPM can fill reasoning_content and leave content empty below ~512 tokens."""
+    small_cfg = get_model_config("small")
+    floor = int(small_cfg.get("max_tokens") or 512)
+    return max(int(budget or 256), floor)
+
+
 async def _get_llm_response(runnable, prompt) -> str:
     """Safely stream or invoke the runnable.
 
@@ -98,21 +124,26 @@ async def _get_llm_response(runnable, prompt) -> str:
 
     if is_mock or not hasattr(runnable, "astream"):
         response = await runnable.ainvoke(prompt)
-        if hasattr(response, "content"):
-            return response.content or ""
-        return str(response)
+        return (
+            _extract_llm_text(response)
+            if hasattr(response, "content")
+            else str(response)
+        )
 
     try:
         response_content = ""
         async for chunk in runnable.astream(prompt):
-            if chunk.content:
-                response_content += chunk.content
+            part = _extract_llm_text(chunk)
+            if part:
+                response_content += part
         return response_content
     except (TypeError, AttributeError):
         response = await runnable.ainvoke(prompt)
-        if hasattr(response, "content"):
-            return response.content or ""
-        return str(response)
+        return (
+            _extract_llm_text(response)
+            if hasattr(response, "content")
+            else str(response)
+        )
 
 
 @log_node("simple")
@@ -150,12 +181,19 @@ async def simple_node(state: AgentState) -> AgentState:
 
     # Try small model, fall back to large on failure
     budget = state.get("token_budget") or 256
+    output_tokens = _simple_output_max_tokens(budget)
+    small_extra = dict(get_model_config("small").get("extra_body") or {})
     fallback_chain: list[dict] = []
     try:
         start_ts = asyncio.get_running_loop().time()
         llm = await get_small_llm()
         response_content = await _get_llm_response(
-            llm.bind(temperature=0.4, max_tokens=budget), prompt
+            llm.bind(
+                temperature=0.4,
+                max_tokens=output_tokens,
+                extra_body=small_extra,
+            ),
+            prompt,
         )
         content = _clean_response(response_content)
         model = "small-local"
@@ -170,9 +208,6 @@ async def simple_node(state: AgentState) -> AgentState:
             }
         )
     except Exception as e:
-        logger.warning(
-            "[simple] Small model failed (%s), falling back to medium-default", e
-        )
         fallback_chain.append(
             {
                 "model": "small-local",
@@ -181,12 +216,30 @@ async def simple_node(state: AgentState) -> AgentState:
                 "duration_ms": 0,
             }
         )
+        if cloud_no_local_fallback_enabled():
+            fallback_chain.append(
+                {
+                    "model": SMALL_FAILED_MODEL,
+                    "status": "blocked",
+                    "reason": "fallback_simple_failed",
+                }
+            )
+            content = cloud_failure_message("fallback_simple_failed")
+            return {
+                "messages": [AIMessage(content=content)],
+                "model_used": SMALL_FAILED_MODEL,
+                "fallback_chain": fallback_chain,
+            }
+        logger.warning(
+            "[simple] Small model failed (%s), falling back to medium-default", e
+        )
         from src.agent.llm import get_medium_llm
 
         fb_start = asyncio.get_running_loop().time()
         llm = await get_medium_llm("default")
         response_content = await _get_llm_response(
-            llm.bind(temperature=0.4, max_tokens=budget), prompt
+            llm.bind(temperature=0.4, max_tokens=output_tokens),
+            prompt,
         )
         content = _clean_response(response_content)
         model = "medium-default-fallback"

@@ -40,6 +40,20 @@ def test_synthesis_badge_also_fails():
     assert eval_cloud_qwen_fallback(exchange, expected, profile="cloud")
 
 
+def test_large_cloud_failed_badge_fails_complex():
+    exchange = {
+        "route": "complex-cloud",
+        "model_badge": "large-cloud-failed",
+        "assistant_response_full": "Cloud compute failed",
+        "executed_tools": [],
+    }
+    expected = {"expected_route": "complex"}
+    assert eval_cloud_qwen_fallback(exchange, expected, profile="cloud")
+    scores = score_exchange(exchange, expected, profile="cloud")
+    assert scores["cloud_fallback_fail"]
+    assert scores["grade"] <= 49
+
+
 def test_simple_route_small_local_not_regression():
     exchange = {
         "route": "simple",

@@ -100,6 +100,7 @@ VALID_FIELDS = {
     "cloud_model_tier": str,
     "cloud_thinking_mode": str,
     "cloud_reasoning_effort": str,
+    "cloud_no_local_fallback": (bool, type(None)),
 }
 
 

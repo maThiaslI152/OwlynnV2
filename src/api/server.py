@@ -78,9 +78,13 @@ async def lifespan(app: FastAPI):
         profile = get_profile()
         cloud_key = resolve_deepseek_api_key()
         cloud_on = bool(cloud_key) and profile.get("cloud_escalation_enabled", True)
+        from src.agent.cloud_strict import cloud_no_local_fallback_enabled
+
+        strict_no_fallback = cloud_no_local_fallback_enabled()
         require_medium = (
             bool(config.get("startup.require_medium_when_cloud_unavailable", True))
             and not cloud_on
+            and not strict_no_fallback
         )
 
         preload_slots = config.get("startup.preload") or ["small", "embedding"]
@@ -126,9 +130,14 @@ async def lifespan(app: FastAPI):
                 logger.warning("[startup] Medium LLM preload failed: %s", e)
                 return
         else:
-            logger.info(
-                "[startup] Skipping medium preload (cloud available); lazy on fallback"
-            )
+            if strict_no_fallback:
+                logger.info(
+                    "[startup] Skipping medium preload (strict cloud — no local fallback)"
+                )
+            else:
+                logger.info(
+                    "[startup] Skipping medium preload (cloud available); lazy on fallback"
+                )
 
         if warmup:
             await _asyncio.sleep(2)

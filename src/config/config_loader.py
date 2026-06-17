@@ -38,6 +38,10 @@ logger = logging.getLogger(__name__)
 _CONFIG_DIR = Path(__file__).parent
 _DEFAULTS_PATH = _CONFIG_DIR / "defaults.yaml"
 
+from src.config.env_files import load_project_env_files
+
+load_project_env_files()
+
 # ── Environment variable → config dot-path mapping ────────────────────────────
 # Keys: env var name.  Values: dot-path into the defaults.yaml structure.
 _ENV_OVERRIDE_MAP: dict[str, str] = {
@@ -64,6 +68,7 @@ _ENV_OVERRIDE_MAP: dict[str, str] = {
     # Cloud model
     "CLOUD_LLM_BASE_URL": "models.cloud.base_url",
     "CLOUD_LLM_MODEL_NAME": "models.cloud.model_name",
+    "OWLYNN_CLOUD_NO_FALLBACK": "cloud.no_local_fallback",
     # Longctx variant
     "MEDIUM_LONGCTX_CONTEXT": "models.medium.context_window",
     # Voice
@@ -116,6 +121,7 @@ _PROFILE_OVERRIDE_MAP: dict[str, str] = {
     "cloud_anonymization_enabled": "cloud.anonymization_enabled",
     "cloud_brief_enabled": "cloud.escalation_enabled",
     "cloud_brief_max_chars": "cloud.budget.brief_max_chars",
+    "cloud_no_local_fallback": "cloud.no_local_fallback",
     # LM Studio
     "lm_studio_fold_system": "models.medium.fold_system",
     # Inference defaults

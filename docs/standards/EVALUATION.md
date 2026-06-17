@@ -178,6 +178,33 @@ python scripts/run_local_frontier_eval.py --profile auto
 # Local-only regression:
 python scripts/run_local_frontier_eval.py --cloud-off --profile local
 
+# Strict cloud debug (no Qwen fallback on compute paths — fail with large-cloud-failed):
+python scripts/run_local_frontier_eval.py --profile cloud --strict-cloud
+python scripts/run_educator_eval.py --profile cloud --strict-cloud
+python scripts/run_browser_eval.py --strict-cloud
+
+# Re-run failed turns only:
+python scripts/run_local_frontier_eval.py --profile cloud --strict-cloud --ids F3.1,F9.1
+
+# Opt out of strict mode (allow silent Qwen fallback again):
+python scripts/run_local_frontier_eval.py --profile cloud --allow-local-fallback
+```
+
+### Strict cloud mode
+
+When `cloud_no_local_fallback` is enabled (via `--strict-cloud` on cloud profile runs):
+
+- **Blocked:** `medium-default-fallback`, `medium-default-synthesis`, `vision_proxy_failed` → Qwen, `simple` → Qwen
+- **Allowed:** router MiniCPM, Florence vision proxy, background memory extraction Qwen
+- **Failure badge:** `large-cloud-failed` or `small-local-failed` with explicit error text
+- **Scoring:** cloud-intended turns ending on fallback badges cap at grade 49 (`cloud_fallback_fail`)
+- **Preflight:** `--profile cloud` exits if `/api/cloud-status` reports `key_valid: false`
+
+Config: `cloud.no_local_fallback` in `defaults.yaml`, profile field `cloud_no_local_fallback`, env `OWLYNN_CLOUD_NO_FALLBACK`.
+
+Run JSON includes `strict_cloud: true` and `qwen_fallback_turns[]` with `fallback_chain` reasons for triage.
+
+```bash
 # Educator / UID10667 PDF study (5 turns, learning mode):
 python scripts/prepare_uid10667_fixtures.py
 python scripts/run_educator_eval.py --profile auto

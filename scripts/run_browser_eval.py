@@ -5,6 +5,9 @@ Fulfills US-1 and US-2 requirements to execute a real conversation test run.
 """
 
 import asyncio
+import argparse
+import importlib.util
+import sys
 import uuid
 import time
 import json
@@ -17,6 +20,18 @@ BASE_URL = "http://127.0.0.1:5173"
 API_URL = "http://127.0.0.1:8000"
 SCREENSHOT_DIR = REPO_ROOT / "assets" / "eval_screenshots"
 OUTPUT_DATA_FILE = REPO_ROOT / "data" / "eval_run_data.json"
+
+
+def _load_frontier_eval():
+    path = REPO_ROOT / "scripts" / "run_local_frontier_eval.py"
+    spec = importlib.util.spec_from_file_location("frontier_eval", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("Could not load run_local_frontier_eval.py")
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["frontier_eval"] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
 
 # 5 Curated topics with exact user prompts
 TEST_PROMPTS = [
@@ -248,6 +263,46 @@ async def get_orchestration_data(page) -> dict:
 
 
 async def main():
+    parser = argparse.ArgumentParser(description="Owlynn browser conversation eval")
+    parser.add_argument(
+        "--strict-cloud",
+        action="store_true",
+        help="Block local Qwen fallback (default when cloud available)",
+    )
+    parser.add_argument(
+        "--allow-local-fallback",
+        action="store_true",
+        help="Opt out of strict cloud mode",
+    )
+    args = parser.parse_args()
+
+    fe = _load_frontier_eval()
+    runtime = await fe.fetch_runtime_profile()
+    prior_strict = runtime.get("cloud_no_local_fallback", False)
+    prior_scope = runtime.get("scope_clarification_enabled")
+    prior_plan = runtime.get("plan_review_enabled")
+    profile = runtime["effective_profile"]
+    use_strict = (
+        not args.allow_local_fallback
+        and profile == "cloud"
+        and (args.strict_cloud or True)
+    )
+    if use_strict:
+        print("[EVAL] Enabling strict cloud mode (no local Qwen fallback)...")
+        await fe.set_unified_settings(cloud_no_local_fallback=True)
+        runtime = await fe.fetch_runtime_profile()
+
+    print("[EVAL] Disabling scope/plan HITL for automated run...")
+    await fe.set_unified_settings(
+        scope_clarification_enabled=False,
+        plan_review_enabled=False,
+    )
+
+    if profile == "cloud" and not runtime.get("cloud_available"):
+        raise SystemExit(
+            "[EVAL] Cloud profile requires valid DeepSeek API before strict browser eval."
+        )
+
     SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
 
     suffix = uuid.uuid4().hex[:6]
@@ -258,8 +313,13 @@ async def main():
         "project_name": project_name,
         "project_id": project_id,
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "runtime_profile": profile,
+        "strict_cloud": use_strict,
+        "qwen_fallback_turns": [],
         "exchanges": [],
     }
+
+    ws_log = fe.WsEventLog()
 
     try:
         async with async_playwright() as p:
@@ -267,6 +327,7 @@ async def main():
             browser = await p.chromium.launch(headless=True)
             context = await browser.new_context(viewport={"width": 1440, "height": 900})
             page = await context.new_page()
+            ws_log.attach(page)
 
             print(f"[EVAL] Navigating to {BASE_URL}...")
             await page.goto(BASE_URL, wait_until="load")
@@ -297,6 +358,7 @@ async def main():
                 print("=" * 80)
                 print(f"User: {prompt_text[:120]}...")
 
+                turn_start = time.time()
                 msg_count_before = await page.evaluate(
                     "() => document.querySelectorAll('.message-assistant').length"
                 )
@@ -308,6 +370,9 @@ async def main():
                 duration = time.monotonic() - start_time
 
                 orch_data = await get_orchestration_data(page)
+                ws_model = ws_log.model_info_since(turn_start)
+                model_badge = ws_model.get("model") or orch_data.get("model")
+                fallback_chain = ws_model.get("fallback_chain")
 
                 print(f"Owlynn: {response_text[:120]}...")
                 print(
@@ -321,12 +386,24 @@ async def main():
                     "topic": topic,
                     "user_query": prompt_text,
                     "assistant_response": response_text,
-                    "model_badge": orch_data.get("model"),
+                    "model_badge": model_badge,
                     "route": orch_data.get("route"),
+                    "fallback_chain": fallback_chain,
                     "confidence": orch_data.get("confidence"),
                     "duration_seconds": duration,
                     "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                 }
+                if (
+                    profile == "cloud"
+                    and (model_badge or "").strip() in fe.CLOUD_QWEN_FALLBACK_BADGES
+                ):
+                    eval_data["qwen_fallback_turns"].append(
+                        {
+                            "id": prompt_id,
+                            "model_badge": model_badge,
+                            "route": orch_data.get("route"),
+                        }
+                    )
                 eval_data["exchanges"].append(exchange)
 
                 # Incrementally save data after each exchange
@@ -429,6 +506,11 @@ async def main():
 
             await browser.close()
     finally:
+        await fe.set_unified_settings(cloud_no_local_fallback=prior_strict)
+        if prior_scope is not None:
+            await fe.set_unified_settings(scope_clarification_enabled=prior_scope)
+        if prior_plan is not None:
+            await fe.set_unified_settings(plan_review_enabled=prior_plan)
         await delete_project(project_id)
 
 

@@ -291,16 +291,16 @@ function App() {
         const storeState = useAppStore.getState()
         const pendingId = storeState.pendingCorrelationId
         const eventId = (event as any).correlation_id
+        const isIdleStatus =
+          event.type === 'status' && (event as any).content === 'idle'
 
-        if (eventId && pendingId && eventId !== pendingId) {
+        if (!isIdleStatus && eventId && pendingId && eventId !== pendingId) {
             console.debug("Ignoring mismatched correlation id", eventId)
             return
         }
 
-        if (event.type === 'status' && (event as any).content === 'idle') {
-            if (pendingId && eventId === pendingId) {
-                useAppStore.setState({ pendingCorrelationId: null })
-            }
+        if (isIdleStatus && pendingId) {
+            useAppStore.setState({ pendingCorrelationId: null })
         }
 
         if (event.type === 'assistant.message') {
@@ -336,6 +336,9 @@ function App() {
           }
           if (finalContent.trim() && isTauriRuntime) {
             void tauriBridge.speakText(finalContent.trim())
+          }
+          if (pendingId) {
+            useAppStore.setState({ pendingCorrelationId: null })
           }
         } else if (event.type === 'safe_mode.changed') {
           setSafeMode(event.mode)
@@ -573,11 +576,18 @@ function App() {
   }, [addMessage, activeProjectId])
 
   useEffect(() => {
-    const setEvalResponseStyle = useAppStore.getState().setEvalResponseStyle
-    ;(window as Window & { __owlynnEval?: { setResponseStyle: (s: string) => void } }).__owlynnEval =
-      {
-        setResponseStyle: (style: string) => setEvalResponseStyle(style || null),
+    const store = useAppStore.getState()
+    const setEvalResponseStyle = store.setEvalResponseStyle
+    const setPendingCorrelationId = store.setPendingCorrelationId
+    ;(window as Window & {
+      __owlynnEval?: {
+        setResponseStyle: (s: string) => void
+        clearPendingCorrelation: () => void
       }
+    }).__owlynnEval = {
+      setResponseStyle: (style: string) => setEvalResponseStyle(style || null),
+      clearPendingCorrelation: () => setPendingCorrelationId(null),
+    }
     return () => {
       delete (window as Window & { __owlynnEval?: unknown }).__owlynnEval
     }

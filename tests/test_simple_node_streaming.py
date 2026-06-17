@@ -1,7 +1,12 @@
 import pytest
 from langchain_core.messages import HumanMessage, AIMessage
-from src.agent.nodes.simple import simple_node
+from src.agent.nodes.simple import simple_node, _simple_output_max_tokens
 from src.agent.state import AgentState
+
+
+def test_simple_output_max_tokens_respects_minicpm_floor():
+    assert _simple_output_max_tokens(256) >= 512
+    assert _simple_output_max_tokens(1024) >= 1024
 
 
 @pytest.mark.anyio

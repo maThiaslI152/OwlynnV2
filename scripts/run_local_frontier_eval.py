@@ -39,7 +39,12 @@ COMPLEX_ROUTES = frozenset({"complex-default", "complex-cloud"})
 VISION_ROUTES = frozenset({"vision", "vision_cloud"})
 # Cloud-intended complex turns that end on local Qwen are scored as failed (runtime may still fall back).
 CLOUD_QWEN_FALLBACK_BADGES = frozenset(
-    {"medium-default-fallback", "medium-default-synthesis"}
+    {
+        "medium-default-fallback",
+        "medium-default-synthesis",
+        "large-cloud-failed",
+        "small-local-failed",
+    }
 )
 SIMPLE_TIMEOUT_S = 180
 COMPLEX_TIMEOUT_S = 900
@@ -423,6 +428,15 @@ class WsEventLog:
                 seen.append(name)
         return seen
 
+    def idle_since(self, since_ts: float) -> bool:
+        for ev in self.events:
+            if ev["ts"] < since_ts:
+                continue
+            payload = ev.get("payload", {})
+            if payload.get("type") == "status" and payload.get("content") == "idle":
+                return True
+        return False
+
     def running_tools_since(self, since_ts: float) -> list[str]:
         """Tool names with a running tool_execution event and no success/error yet."""
         running: dict[str, bool] = {}
@@ -467,12 +481,14 @@ class WsEventLog:
             if ev["type"] != "model_info" or ev["ts"] < since_ts:
                 continue
             payload = ev.get("payload", {})
-            info = {
-                "model": payload.get("model"),
-                "fallback_chain": payload.get("fallback_chain"),
-                "vision_intake_mode": payload.get("vision_intake_mode"),
-                "vision_proxy_model": payload.get("vision_proxy_model"),
-            }
+            for key in (
+                "model",
+                "fallback_chain",
+                "vision_intake_mode",
+                "vision_proxy_model",
+            ):
+                if payload.get(key) is not None:
+                    info[key] = payload.get(key)
         return info
 
 
@@ -513,6 +529,9 @@ async def fetch_runtime_profile() -> dict:
         "cloud_available": cloud_ok,
         "cloud_model": cloud_status.get("model", ""),
         "cloud_model_tier": settings.get("cloud_model_tier", "flash"),
+        "cloud_no_local_fallback": bool(settings.get("cloud_no_local_fallback")),
+        "scope_clarification_enabled": settings.get("scope_clarification_enabled"),
+        "plan_review_enabled": settings.get("plan_review_enabled"),
         "effective_profile": "cloud" if cloud_on and cloud_ok else "local",
     }
 
@@ -626,33 +645,59 @@ async def new_chat(page: Page) -> None:
 
 
 async def is_graph_busy(page: Page) -> bool:
-    return await page.evaluate(
-        """() => {
+    script = """() => {
           if (document.querySelector('.composer-stop')) return true;
           if (document.querySelector('.hitl-prompt-card.hitl-pending')) return true;
           if (document.querySelector('.tool-activity-running')) return true;
           if (document.querySelector('.streaming-cursor')) return true;
           return false;
         }"""
-    )
+    try:
+        return await asyncio.wait_for(page.evaluate(script), timeout=8.0)
+    except Exception:
+        return True
 
 
 async def resolve_hitl(page: Page) -> int:
-    hitl_count = await page.evaluate(
-        "() => document.querySelectorAll('.hitl-prompt-card.hitl-pending').length"
-    )
+    pending = page.locator(".hitl-prompt-card.hitl-pending")
+    try:
+        hitl_count = await pending.count()
+    except Exception:
+        return 0
     if hitl_count <= 0:
         return 0
     print("\n[EVAL] HITL Prompt detected! Resolving...")
-    if await page.evaluate(
-        "() => document.querySelectorAll('.hitl-choice-btn').length"
-    ):
-        await page.evaluate("() => document.querySelector('.hitl-choice-btn').click()")
-        await page.wait_for_timeout(1000)
+    skip = page.locator(".hitl-btn-skip")
+    try:
+        if await skip.count() > 0:
+            await skip.first.click(timeout=5000)
+            await page.wait_for_timeout(2000)
+            return hitl_count
+    except Exception:
+        pass
+    try:
+        if await page.locator(".hitl-scope-question").count() > 0:
+            await page.evaluate(
+                """() => {
+                  document.querySelectorAll('.hitl-scope-question').forEach((q) => {
+                    const btn = q.querySelector('.hitl-choice-btn');
+                    if (btn) btn.click();
+                  });
+                }"""
+            )
+            await page.wait_for_timeout(500)
+        elif await page.locator(".hitl-choice-btn").count() > 0:
+            await page.locator(".hitl-choice-btn").first.click(timeout=3000)
+            await page.wait_for_timeout(1000)
+    except Exception:
+        pass
     approve = page.locator(".hitl-btn-approve")
-    if await approve.count() > 0:
-        await approve.first.click()
-        await page.wait_for_timeout(2000)
+    try:
+        if await approve.count() > 0:
+            await approve.first.click(timeout=5000)
+            await page.wait_for_timeout(2000)
+    except Exception:
+        pass
     return hitl_count
 
 
@@ -679,9 +724,20 @@ async def wait_for_turn_complete(
 
     while time.monotonic() - start_time < timeout_s:
         elapsed = time.monotonic() - start_time
-        hitl_resolves += await resolve_hitl(page)
+        try:
+            hitl_resolves += await asyncio.wait_for(resolve_hitl(page), timeout=12.0)
+        except asyncio.TimeoutError:
+            print("\n[EVAL] HITL resolve timed out; continuing poll...")
 
-        busy = await is_graph_busy(page)
+        ws_idle = bool(ws_log and since_ts and ws_log.idle_since(since_ts))
+        if ws_idle:
+            try:
+                await page.evaluate(
+                    "() => window.__owlynnEval?.clearPendingCorrelation?.()"
+                )
+            except Exception:
+                pass
+        busy = False if ws_idle else await is_graph_busy(page)
         if not busy:
             response_text = await scrape_final_response(page)
             normalized = _normalize_response(response_text)
@@ -1009,7 +1065,8 @@ def eval_cloud_qwen_fallback(exchange: dict, expected: dict, *, profile: str) ->
     if profile != "cloud":
         return False
     if expected.get("expected_route") == "simple":
-        return False
+        badge = (exchange.get("model_badge") or "").strip()
+        return badge == "small-local-failed"
     if expected.get("expected_vision"):
         return False
     badge = (exchange.get("model_badge") or "").strip()
@@ -1320,6 +1377,21 @@ async def main() -> None:
         action="store_true",
         help="Disable cloud escalation for this run (restores prior setting after)",
     )
+    parser.add_argument(
+        "--strict-cloud",
+        action="store_true",
+        help="Block local Qwen fallback (default when effective profile is cloud)",
+    )
+    parser.add_argument(
+        "--allow-local-fallback",
+        action="store_true",
+        help="Opt out of strict cloud mode for this run",
+    )
+    parser.add_argument(
+        "--ids",
+        default="",
+        help="Comma-separated turn IDs to run (e.g. F3.1,F9.1)",
+    )
     args = parser.parse_args()
 
     fixture_script = REPO_ROOT / "scripts" / "generate_eval_fixtures.py"
@@ -1331,6 +1403,9 @@ async def main() -> None:
     runtime = await fetch_runtime_profile()
     prior_cloud = runtime["cloud_escalation_enabled"]
     prior_tier = runtime.get("cloud_model_tier", "flash")
+    prior_strict = runtime.get("cloud_no_local_fallback", False)
+    prior_scope = runtime.get("scope_clarification_enabled")
+    prior_plan = runtime.get("plan_review_enabled")
     if args.cloud_off:
         print("[EVAL] Disabling cloud escalation for this run...")
         await set_unified_settings(cloud_escalation_enabled=False)
@@ -1340,6 +1415,32 @@ async def main() -> None:
         profile = runtime["effective_profile"]
     else:
         profile = args.profile
+
+    use_strict = (
+        not args.allow_local_fallback
+        and profile == "cloud"
+        and (args.strict_cloud or args.profile in ("auto", "cloud"))
+    )
+    if use_strict:
+        print("[EVAL] Enabling strict cloud mode (no local Qwen fallback)...")
+        await set_unified_settings(cloud_no_local_fallback=True)
+        runtime = await fetch_runtime_profile()
+
+    print("[EVAL] Disabling scope/plan HITL for automated run...")
+    await set_unified_settings(
+        scope_clarification_enabled=False,
+        plan_review_enabled=False,
+    )
+
+    id_filter = (
+        {x.strip() for x in args.ids.split(",") if x.strip()} if args.ids else None
+    )
+
+    if profile == "cloud" and not runtime.get("cloud_available"):
+        raise SystemExit(
+            "[EVAL] Cloud profile requires valid DeepSeek API (GET /api/cloud-status). "
+            "Configure DEEPSEEK_API_KEY in Keychain or .env.local before --profile cloud."
+        )
 
     mem0_ok = await mem0_available()
     vision_vlm_ok = await check_vision_vlm_available()
@@ -1368,6 +1469,8 @@ async def main() -> None:
         "vision_vlm_ok": vision_vlm_ok,
         "vision_available": vision_ok,
         "cloud_scoring": "qwen_fallback_fail",
+        "strict_cloud": use_strict,
+        "qwen_fallback_turns": [],
         "hardware_profile": "Apple M4 Air 24GB",
         "turn_count": len(TEST_PROMPTS),
         "exchanges": [],
@@ -1388,7 +1491,8 @@ async def main() -> None:
             ws_log.attach(page)
 
             print(
-                f"[EVAL] Profile: {profile} | cloud_escalation={runtime['cloud_escalation_enabled']}"
+                f"[EVAL] Profile: {profile} | cloud_escalation={runtime['cloud_escalation_enabled']} "
+                f"| strict_cloud={use_strict}"
             )
             await page.goto(BASE_URL, wait_until="load")
             await wait_for_ready(page)
@@ -1403,6 +1507,8 @@ async def main() -> None:
 
             for index, item in enumerate(TEST_PROMPTS):
                 prompt_id = item["id"]
+                if id_filter and prompt_id not in id_filter:
+                    continue
                 skip_reason = should_skip_turn(
                     item, profile=profile, mem0_ok=mem0_ok, vision_ok=vision_ok
                 )
@@ -1435,6 +1541,22 @@ async def main() -> None:
                 scores = score_exchange(exchange, item, profile=profile)
                 exchange["scores"] = scores
                 exchange["cloud_regression"] = scores.get("cloud_regression", False)
+                if scores.get("cloud_fallback_fail"):
+                    chain = exchange.get("fallback_chain") or []
+                    reason = ""
+                    for step in reversed(chain):
+                        if isinstance(step, dict) and step.get("reason"):
+                            reason = str(step["reason"])
+                            break
+                    eval_data["qwen_fallback_turns"].append(
+                        {
+                            "id": prompt_id,
+                            "model_badge": exchange.get("model_badge"),
+                            "route": exchange.get("route"),
+                            "reason": reason,
+                            "fallback_chain": chain,
+                        }
+                    )
                 total_score += scores["grade"]
                 scored_turns += 1
 
@@ -1479,7 +1601,12 @@ async def main() -> None:
         if args.cloud_off and prior_cloud:
             print("[EVAL] Restoring cloud escalation...")
             await set_unified_settings(cloud_escalation_enabled=True)
+        await set_unified_settings(cloud_no_local_fallback=prior_strict)
         await set_unified_settings(cloud_model_tier=prior_tier)
+        if prior_scope is not None:
+            await set_unified_settings(scope_clarification_enabled=prior_scope)
+        if prior_plan is not None:
+            await set_unified_settings(plan_review_enabled=prior_plan)
         await delete_project(project_id)
 
 
