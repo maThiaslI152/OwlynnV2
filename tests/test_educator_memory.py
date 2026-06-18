@@ -58,7 +58,11 @@ def test_format_struggle_recall_block():
     from src.memory.educator import format_struggle_recall_block
 
     block = format_struggle_recall_block(
-        [{"memory": "User struggled with Digital Literacy — corrected misconception about online learning"}]
+        [
+            {
+                "memory": "User struggled with Digital Literacy — corrected misconception about online learning"
+            }
+        ]
     )
     assert "STUDY STRUGGLE RECALL" in block
     assert "online learning" in block
