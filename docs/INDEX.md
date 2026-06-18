@@ -12,14 +12,14 @@ audience: agent
 
 ```yaml
 manifest:
-  version: 7
-  generated: "2026-06-15T15:00:00Z"
+  version: 8
+  generated: "2026-06-18T04:00:00Z"
   files:
     - path: AGENTS.md
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-06-10
+      last_updated: 2026-06-18
     - path: docs/ADR.md
       status: active
       category: architecture
@@ -109,7 +109,7 @@ manifest:
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-06-10
+      last_updated: 2026-06-18
     - path: docs/PROJECT_OVERVIEW.md
       status: active
       category: reference
@@ -134,7 +134,7 @@ manifest:
       status: active
       category: standards
       audience: agent
-      last_updated: 2026-06-11
+      last_updated: 2026-06-18
     - path: docs/TOOLS.md
       status: active
       category: reference
@@ -585,6 +585,16 @@ manifest:
       category: evaluation
       audience: agent
       last_updated: 2026-06-11
+    - path: docs/evaluations/strict-cloud-debug-2026-06-16.md
+      status: active
+      category: evaluation
+      audience: agent
+      last_updated: 2026-06-18
+    - path: docs/evaluations/educator-eval-2026-06-18.md
+      status: active
+      category: evaluation
+      audience: agent
+      last_updated: 2026-06-18
     - path: docs/evaluations/long-conversation-2026-06-04.md
       status: active
       category: reference
@@ -709,7 +719,7 @@ manifest:
       status: active
       category: standards
       audience: agent
-      last_updated: 2026-06-11
+      last_updated: 2026-06-18
     - path: docs/standards/coding-style.md
       status: active
       category: reference

@@ -89,6 +89,11 @@ MAX_CUTOFF_RETRIES = int(config.get("complex.max_cutoff_retries", 1))
 _MAX_CLOUD_RETRIES = int(config.get("complex.max_cloud_retries", 3))
 
 
+def _format_cloud_error_reason(exc: BaseException) -> str:
+    """Stable short reason for fallback_chain when str(exc) is empty."""
+    return (str(exc) or getattr(exc, "message", "") or type(exc).__name__)[:120]
+
+
 async def _invoke_cloud_path(
     *,
     llm,
@@ -837,6 +842,43 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         project_id = state.get("project_id") or "default"
         volatile_extra += f"\n\n{notebook_interactive_viz_guidance(project_id)}"
 
+    human_text = ""
+    for msg in reversed(turn_messages):
+        if isinstance(msg, HumanMessage):
+            human_text = _flatten_human_content(msg.content)
+            break
+    human_lower = human_text.lower()
+    from src.memory.educator import is_struggle_recall_query
+
+    if is_struggle_recall_query(human_text):
+        volatile_extra += (
+            "\n\n[STUDY RECALL] Answer from injected memory. State what the user got wrong, "
+            "how they were corrected, and topics they struggled with (e.g. online learning "
+            "guidelines, digital competency, misconceptions)."
+        )
+    if (state.get("response_style") or "").strip().lower() == "learning":
+        if "flashcard" in human_lower or "deck" in human_lower:
+            volatile_extra += (
+                "\n\n[LEARNING] Call flashcard_deck_create with at least 5 term/definition "
+                "pairs. Do not only list cards in prose."
+            )
+        if "mock exam" in human_lower or (
+            "exam" in human_lower and "question" in human_lower
+        ):
+            volatile_extra += (
+                "\n\n[LEARNING] Use quiz_session_start for a short mock exam (3+ questions) "
+                "and summarize the user's weak areas in prose."
+            )
+        if ("step by step" in human_lower or "step-by-step" in human_lower) and (
+            "multiple-choice" in human_lower
+            or "multiple choice" in human_lower
+            or "check my understanding" in human_lower
+        ):
+            volatile_extra += (
+                "\n\n[LEARNING] Call render_interactive_block for steps, then quiz. "
+                "Include owlynn-steps and owlynn-quiz fences in your final reply."
+            )
+
     stable_core = COMPLEX_PROMPT_STABLE.format(style_hint=style_hint)
     if mode != "tools_off":
         if vision_task:
@@ -958,12 +1000,13 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                 model_label = "medium-default"
             log_model_attempt(model_label, "success", reason="tools_off_direct")
         except CloudUnavailableError as e:
-            log_model_attempt(model_label or route, "failed", reason=str(e)[:120])
+            err_reason = _format_cloud_error_reason(e)
+            log_model_attempt(model_label or route, "failed", reason=err_reason)
             fallback_chain.append(
                 {
                     "model": model_label or route,
                     "status": "failed",
-                    "reason": str(e)[:120],
+                    "reason": err_reason,
                 }
             )
             blocked = block_cloud_local_fallback(
@@ -1065,18 +1108,19 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             model_label = "medium-default"
             log_model_attempt("medium-default", "success", reason="initial_route")
     except CloudUnavailableError as e:
+        err_reason = _format_cloud_error_reason(e)
         fallback_chain.append(
             {
                 "model": model_label if model_label != "medium-default" else route,
                 "status": "failed",
-                "reason": str(e)[:120],
+                "reason": err_reason,
                 "duration_ms": 0,
             }
         )
         log_model_attempt(
             model_label if model_label != "medium-default" else route,
             "failed",
-            reason=str(e)[:120],
+            reason=err_reason,
         )
         blocked = block_cloud_local_fallback(
             fallback_chain=fallback_chain,
@@ -1142,6 +1186,8 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     except Exception as e:
         error_str = str(e).lower()
         if route == "complex-cloud":
+            err_reason = _format_cloud_error_reason(e)
+            logger.exception("[complex] Cloud invocation failed: %s", err_reason)
             if "429" in str(e) or "rate" in error_str:
                 # Rate limit: retry after delay
                 loop_start_time = asyncio.get_running_loop().time()
@@ -1297,13 +1343,14 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                 )
             else:
                 logger.warning(
-                    "[complex] Cloud error (%s), falling back to medium-default", e
+                    "[complex] Cloud error (%s), falling back to medium-default",
+                    err_reason,
                 )
                 fallback_chain.append(
                     {
                         "model": "large-cloud",
                         "status": "failed",
-                        "reason": str(e)[:120],
+                        "reason": err_reason,
                         "duration_ms": max(
                             0,
                             int(

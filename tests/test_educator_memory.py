@@ -54,6 +54,17 @@ def test_resolve_study_scenario_keywords_without_style():
     assert resolve_study_scenario("normal", "What is the weather?") is None
 
 
+def test_format_struggle_recall_block():
+    from src.memory.educator import format_struggle_recall_block
+
+    block = format_struggle_recall_block(
+        [{"memory": "User struggled with Digital Literacy — corrected misconception about online learning"}]
+    )
+    assert "STUDY STRUGGLE RECALL" in block
+    assert "online learning" in block
+    assert format_struggle_recall_block([]) == ""
+
+
 def test_is_struggle_recall_query():
     assert is_struggle_recall_query("What did I struggle with in Digital Literacy?")
     assert not is_struggle_recall_query("Quiz me on chapter 1")

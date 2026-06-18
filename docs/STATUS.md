@@ -1,7 +1,7 @@
 ---
 status: active
 category: standards
-last_updated: 2026-06-16
+last_updated: 2026-06-18
 owner: ai-agent
 audience: agent
 ---
@@ -12,7 +12,14 @@ audience: agent
 
 ## Overview
 
-Project status tracker. Last updated: 2026-06-16 — multi-model review security/privacy fixes; notebook run gated by loopback token.
+Project status tracker. Last updated: 2026-06-18 — strict-cloud BUG-24..29 fixes; cloud tool-loop compaction; eval harness turn-scoped capture.
+
+## Recent Changes (2026-06-18)
+
+| Change | Impact | Doc |
+|--------|--------|-----|
+| **Strict-cloud round 2** | BUG-27 cloud payload compaction; BUG-28 circuit-breaker per browser turn; BUG-29 turn-scoped assistant scrape; educator EDU5–8 nudges | [`evaluations/strict-cloud-debug-2026-06-16.md`](evaluations/strict-cloud-debug-2026-06-16.md) |
+| **Eval harness HITL** | All eval scripts set `execution_policy=auto_approve` during runs (scope/plan/security) | [`standards/EVALUATION.md`](standards/EVALUATION.md) |
 
 ## Recent Changes (2026-06-16)
 
@@ -72,6 +79,8 @@ Project status tracker. Last updated: 2026-06-16 — multi-model review security
 | v9b (2026-06-11) | **94.2%** post-fix (1790/1900) | WS waiter, F4 fixture, M4/F8/F9 fixes |
 | v9c (2026-06-11) | **94.0%** post-fix (1785/1900) | Latest artifact; F9 Florence variance |
 | v10 (2026-06-11) | **Quality A/B** vs raw DeepSeek | Owlynn vs frontier chat + blind pro judge — [`evaluations/frontier-comparison-2026-06-11.md`](evaluations/frontier-comparison-2026-06-11.md) |
+| v11 (2026-06-17) | **91.3%** strict cloud (1644/1800) | Runtime `cloud_no_local_fallback`; F5.1 only `qwen_fallback` — [`evaluations/strict-cloud-debug-2026-06-16.md`](evaluations/strict-cloud-debug-2026-06-16.md) |
+| v11b (2026-06-18) | **Fixes landed** (re-run pending) | BUG-27..29 + educator harness/product fixes committed |
 
 ## Remaining Tasks
 
@@ -83,8 +92,9 @@ Project status tracker. Last updated: 2026-06-16 — multi-model review security
 - **BUG-18**: Simple-path empty reply — streaming bubble doesn't surface even when route + model correct (F1.1) (✅ Fixed)
 - **BUG-19**: Tool-call XML leaks as literal text in assistant reply — Qwen format not stripped (F3.1/F4.1) (✅ Fixed)
 - **BUG-20**: Greeting routed to `complex-cloud` instead of `simple` — keyword bypass gap (M4.1) (✅ Fixed)
+- **BUG-24..29**: Strict-cloud eval regressions — MiniCPM empty reply, harness idle/scrape, F5.1 cloud replay, browser circuit breaker, educator turns (✅ Fixed — re-run evals to confirm scores)
 
-> See [`docs/BUG-TRACKER.md`](BUG-TRACKER.md) for root cause analysis and fix approaches for BUG-17..20.
+> See [`docs/BUG-TRACKER.md`](BUG-TRACKER.md) for root cause analysis and fix approaches for BUG-17..20. Strict-cloud BUG-24..29: [`evaluations/strict-cloud-debug-2026-06-16.md`](evaluations/strict-cloud-debug-2026-06-16.md).
 
 ### 🟡 Medium Impact
 - **R10**: Frontier eval ≥97% — at **~94%** after harness fixes; F1/F6/F9 variance remains
@@ -207,6 +217,12 @@ frontend-v2/src/App.tsx        # Frontend runtime
 | BUG-21 | **CRITICAL** | Silent crash in notebook loop (exceeded recursion limit) | `defaults.yaml` & Graph run configs | Fixed |
 | BUG-22 | **HIGH** | Notebook session leakage and infinite loop hangs | `src/tools/notebook.py` | Fixed |
 | BUG-23 | **MEDIUM** | Legacy Word document (.doc) ingest & parsing failures | `src/api/shared.py`, `file_processor.py`, `core_tools.py` | Fixed |
+| BUG-24 | **HIGH** | MiniCPM empty simple reply (F1.1) — `reasoning_content` only | `simple.py`, `handler.py` | Fixed |
+| BUG-25 | **HIGH** | Eval harness `composer-stop` stuck 900s | `App.tsx`, eval waiter | Fixed |
+| BUG-26 | **MEDIUM** | Scope/plan HITL stalls automated eval | eval scripts | Fixed |
+| BUG-27 | **HIGH** | F5.1 cloud fail on tool-loop round 2 (bloated tool-call args) | `cloud_payload.py`, `complex.py` | Fixed |
+| BUG-28 | **MEDIUM** | Browser eval mid-thread `large-cloud-failed` (circuit breaker) | `run_browser_eval.py` | Fixed |
+| BUG-29 | **MEDIUM** | Educator stale assistant scrape (EDU6–8 = EDU5 text) | `run_local_frontier_eval.py` | Fixed |
 
 ### Architectural Concerns
 

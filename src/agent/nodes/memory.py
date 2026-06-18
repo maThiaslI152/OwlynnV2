@@ -368,7 +368,11 @@ async def memory_retrieve_node(state: AgentState) -> AgentState:
         route = state.get("route") or ""
         needs = route.startswith("complex")
 
-    from src.memory.educator import is_struggle_recall_query
+    from src.memory.educator import (
+        fetch_study_struggle_memories,
+        format_struggle_recall_block,
+        is_struggle_recall_query,
+    )
 
     if is_struggle_recall_query(user_message):
         needs = True
@@ -407,11 +411,34 @@ async def memory_retrieve_node(state: AgentState) -> AgentState:
     if scenario_block:
         merged_context = f"{merged_context}\n\n{scenario_block}".strip()
 
-    return {
+    struggle_block = ""
+    if is_struggle_recall_query(user_message):
+        from src.memory.long_term import memory as mem0_memory
+
+        mem0_uid = _get_mem0_user_id(state)
+        if mem0_memory is not None:
+            try:
+                study_hits = await asyncio.to_thread(
+                    lambda: fetch_study_struggle_memories(
+                        mem0_memory, mem0_uid, user_message
+                    )
+                )
+                struggle_block = format_struggle_recall_block(study_hits)
+            except Exception as e:
+                logger.warning("[mem0] struggle recall block failed: %s", e)
+        if struggle_block:
+            merged_context = f"{struggle_block}\n\n{merged_context}".strip()
+
+    out: dict = {
         "memory_context": merged_context,
         "knowledge_context": knowledge_context,
         "scenario_context": scenario_block or None,
     }
+    if is_struggle_recall_query(user_message):
+        out["needs_memory_retrieval"] = True
+        if scenario_id:
+            out["scenario_id"] = scenario_id
+    return out
 
 
 @log_node("memory_inject")

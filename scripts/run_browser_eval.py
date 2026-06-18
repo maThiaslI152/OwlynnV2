@@ -281,6 +281,7 @@ async def main():
     prior_strict = runtime.get("cloud_no_local_fallback", False)
     prior_scope = runtime.get("scope_clarification_enabled")
     prior_plan = runtime.get("plan_review_enabled")
+    prior_execution = runtime.get("execution_policy", "auto_approve")
     profile = runtime["effective_profile"]
     use_strict = (
         not args.allow_local_fallback
@@ -296,6 +297,7 @@ async def main():
     await fe.set_unified_settings(
         scope_clarification_enabled=False,
         plan_review_enabled=False,
+        execution_policy="auto_approve",
     )
 
     if profile == "cloud" and not runtime.get("cloud_available"):
@@ -350,6 +352,10 @@ async def main():
                 prompt_id = item["id"]
                 topic = item["topic"]
                 prompt_text = item["prompt"]
+
+                from src.agent.cloud_circuit_breaker import reset_circuit_breaker
+
+                reset_circuit_breaker()
 
                 print("\n" + "=" * 80)
                 print(
@@ -511,6 +517,8 @@ async def main():
             await fe.set_unified_settings(scope_clarification_enabled=prior_scope)
         if prior_plan is not None:
             await fe.set_unified_settings(plan_review_enabled=prior_plan)
+        if prior_execution is not None:
+            await fe.set_unified_settings(execution_policy=prior_execution)
         await delete_project(project_id)
 
 

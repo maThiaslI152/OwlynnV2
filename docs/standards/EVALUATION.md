@@ -1,7 +1,7 @@
 ---
 status: active
 category: standards
-last_updated: 2026-06-11
+last_updated: 2026-06-18
 owner: ai-agent
 audience: agent
 ---
@@ -173,22 +173,24 @@ Skipped turns (Mem0 offline, vision unavailable) are excluded from `max_score`.
 
 ```bash
 # Production-like (cloud-first):
-python scripts/run_local_frontier_eval.py --profile auto
+PYTHONPATH=. python scripts/run_local_frontier_eval.py --profile auto
 
 # Local-only regression:
-python scripts/run_local_frontier_eval.py --cloud-off --profile local
+PYTHONPATH=. python scripts/run_local_frontier_eval.py --cloud-off --profile local
 
 # Strict cloud debug (no Qwen fallback on compute paths — fail with large-cloud-failed):
-python scripts/run_local_frontier_eval.py --profile cloud --strict-cloud
-python scripts/run_educator_eval.py --profile cloud --strict-cloud
-python scripts/run_browser_eval.py --strict-cloud
+PYTHONPATH=. python scripts/run_local_frontier_eval.py --profile cloud --strict-cloud
+PYTHONPATH=. python scripts/run_educator_eval.py --profile cloud --strict-cloud
+PYTHONPATH=. python scripts/run_browser_eval.py --strict-cloud
 
 # Re-run failed turns only:
-python scripts/run_local_frontier_eval.py --profile cloud --strict-cloud --ids F3.1,F9.1
+PYTHONPATH=. python scripts/run_local_frontier_eval.py --profile cloud --strict-cloud --ids F5.1
 
 # Opt out of strict mode (allow silent Qwen fallback again):
-python scripts/run_local_frontier_eval.py --profile cloud --allow-local-fallback
+PYTHONPATH=. python scripts/run_local_frontier_eval.py --profile cloud --allow-local-fallback
 ```
+
+Set `PYTHONPATH=.` (repo root) when running eval scripts so `src` imports resolve.
 
 ### Strict cloud mode
 
@@ -204,13 +206,19 @@ Config: `cloud.no_local_fallback` in `defaults.yaml`, profile field `cloud_no_lo
 
 Run JSON includes `strict_cloud: true` and `qwen_fallback_turns[]` with `fallback_chain` reasons for triage.
 
+**Automated eval harness (2026-06-18):** During runs, scripts temporarily set `scope_clarification_enabled=false`, `plan_review_enabled=false`, and `execution_policy=auto_approve` (restored on exit). Educator and browser eval call `reset_circuit_breaker()` per turn. Frontier waiter prefers `assistant.message` WS text and turn-scoped DOM scrape (`BUG-29`).
+
+**Cloud tool-loop (BUG-27):** Completed `write_workspace_file` tool-call args are compacted in `cloud_payload.py` before DeepSeek replay so round-2 invokes do not resend multi-KB `content` blobs. Config: `tool_output.max_api_tool_arg_chars` (default 2048).
+
+Canonical strict-cloud report: [`docs/evaluations/strict-cloud-debug-2026-06-16.md`](../evaluations/strict-cloud-debug-2026-06-16.md).
+
 ```bash
 # Educator / UID10667 PDF study (5 turns, learning mode):
 python scripts/prepare_uid10667_fixtures.py
 python scripts/run_educator_eval.py --profile auto
 ```
 
-### Educator eval (EDU1–EDU7)
+### Educator eval (EDU1–EDU8)
 
 | Turn | Focus | Pass (≥70) |
 |------|-------|------------|
@@ -220,7 +228,8 @@ python scripts/run_educator_eval.py --profile auto
 | EDU4 | Self-reinforcement | Acknowledgment (informational) |
 | EDU5 | New chat struggle recall | Topic + substantive recall (misconception/correction); denial phrases fail |
 | EDU6 | Flashcard deck from chapter | `flashcard_deck_create` or PDF read; flashcard keywords |
-| EDU7 | Mock exam weak areas | Questions + weak-area language |
+| EDU7 | Mock exam weak areas | Questions + weak-area language; `quiz_session_start` preferred |
+| EDU8 | Step-by-step + MCQ widget | `owlynn-steps` or `owlynn-quiz` fence via `render_interactive_block` |
 
 Fixtures: `assets/eval_fixtures/uid10667/` via `python scripts/prepare_uid10667_fixtures.py --source <UID10667 folder>`.
 

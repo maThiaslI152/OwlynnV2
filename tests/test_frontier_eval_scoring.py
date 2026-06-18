@@ -18,6 +18,25 @@ from run_local_frontier_eval import (  # noqa: E402
 )
 
 
+def test_ws_assistant_text_since_prefers_latest():
+    log = WsEventLog()
+    t0 = 1000.0
+    log.events = [
+        {
+            "type": "assistant.message",
+            "ts": t0 + 1,
+            "payload": {"message": {"content": "first reply"}},
+        },
+        {
+            "type": "assistant.message",
+            "ts": t0 + 5,
+            "payload": {"message": {"content": "second reply"}},
+        },
+    ]
+    assert log.assistant_text_since(t0) == "second reply"
+    assert log.assistant_message_seen_since(t0 + 3)
+
+
 def test_cloud_qwen_fallback_badges_fail_complex_cloud():
     exchange = {
         "route": "complex-cloud",

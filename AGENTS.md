@@ -27,7 +27,8 @@
 | `tests/` | Python unit, property, contract, and benchmark tests |
 | `scripts/ci.sh` | Local CI (run before push) |
 | `scripts/run_browser_eval.py` | Playwright conversation eval (12 prompts) |
-| `scripts/run_local_frontier_eval.py` | Frontier eval — `--profile auto/local/cloud`, `--cloud-off` |
+| `scripts/run_local_frontier_eval.py` | Frontier eval — `--profile auto/local/cloud`, `--cloud-off`, `--strict-cloud` |
+| `scripts/run_educator_eval.py` | Educator eval (EDU1–EDU8) — `--strict-cloud` |
 | `scripts/archive/` | Retired one-off patch scripts (not CI) |
 | `scripts/manual/` | Live tool smoke scripts (not pytest) |
 | `docs/evaluations/` | Evaluation run reports (write after significant evals) |
@@ -68,4 +69,4 @@ Pre-push hook runs this automatically. Skip only when intentional: `git push -o 
 
 ## Last updated
 
-2026-06-10 — CI/eval routing; BUG-13..16 fixes committed
+2026-06-18 — Strict-cloud BUG-27..29; cloud tool-loop compaction; eval harness fixes

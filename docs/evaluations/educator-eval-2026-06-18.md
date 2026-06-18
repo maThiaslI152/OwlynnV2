@@ -7,6 +7,8 @@ last_updated: 2026-06-18
 
 # Educator Eval — 2026-06-18
 
+> **Note:** Scores below are from run 2 (pre BUG-27..29 harness fixes). Re-run with `PYTHONPATH=. python scripts/run_educator_eval.py --profile cloud --strict-cloud` after 2026-06-18 commits.
+
 Profile: **cloud** | Project: `bf99f6dc`
 
 ## Summary

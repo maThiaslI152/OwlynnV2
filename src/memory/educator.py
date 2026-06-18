@@ -199,6 +199,29 @@ def fetch_study_struggle_memories(
     return prioritize_study_memories(merged)
 
 
+def format_struggle_recall_block(items: list) -> str:
+    """Compact struggle-recall block for memory_context injection."""
+    if not items:
+        return ""
+    lines = [
+        "=== STUDY STRUGGLE RECALL (answer from this — mention what was wrong and corrected) ==="
+    ]
+    for item in items[:6]:
+        if not isinstance(item, dict):
+            continue
+        text = str(item.get("memory") or item.get("text") or "").strip()
+        if text:
+            lines.append(f"- {text}")
+    if len(lines) <= 1:
+        return ""
+    lines.append("=== END STUDY STRUGGLE RECALL ===")
+    body = "\n".join(lines)
+    max_chars = 1500
+    if len(body) > max_chars:
+        return body[:max_chars] + "\n[... struggle recall truncated ...]"
+    return body
+
+
 def resolve_study_scenario(response_style: str | None, user_text: str) -> str | None:
     """Return ``study`` when learning mode or study-related keywords are present."""
     if (response_style or "").strip().lower() == "learning":

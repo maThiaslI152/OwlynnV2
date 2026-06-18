@@ -306,12 +306,72 @@ def build_volatile_system_block(
     return stable + block + extra_suffix
 
 
-def message_to_deepseek_dict(msg: BaseMessage) -> dict:
+_API_TOOL_ARG_MAX_CHARS = int(config.get("tool_output.max_api_tool_arg_chars", 2048))
+
+_WRITE_TOOLS = frozenset({"write_workspace_file", "edit_workspace_file"})
+
+
+def _completed_tool_call_ids(messages: list[BaseMessage]) -> set[str]:
+    """Tool call IDs that already have a ToolMessage result in the thread."""
+    ids: set[str] = set()
+    for msg in messages:
+        if isinstance(msg, ToolMessage) and msg.tool_call_id:
+            ids.add(str(msg.tool_call_id))
+    return ids
+
+
+def compact_tool_call_args_for_api(
+    tool_name: str,
+    args: object,
+    *,
+    completed: bool,
+) -> object:
+    """
+    Shrink tool-call args for cloud API replay after tools have executed.
+
+    Large write payloads are duplicated in AIMessage history on round 2+; compact
+    them so the API request stays within schema/size limits.
+    """
+    if not isinstance(args, dict):
+        return args
+    out = dict(args)
+    name = str(tool_name or "")
+    if completed and name in _WRITE_TOOLS:
+        filename = str(out.get("filename") or "file")
+        if name == "write_workspace_file" and "content" in out:
+            out["content"] = (
+                f"[written to {filename} — use read_workspace_file if needed]"
+            )
+        elif name == "edit_workspace_file":
+            if "replacement_text" in out:
+                out["replacement_text"] = (
+                    f"[edited {filename} — use read_workspace_file if needed]"
+                )
+            if "search_pattern" in out and isinstance(out["search_pattern"], str):
+                pat = out["search_pattern"]
+                if len(pat) > _API_TOOL_ARG_MAX_CHARS:
+                    out["search_pattern"] = pat[:_API_TOOL_ARG_MAX_CHARS] + "…"
+    for key, val in list(out.items()):
+        if isinstance(val, str) and len(val) > _API_TOOL_ARG_MAX_CHARS:
+            over = len(val) - _API_TOOL_ARG_MAX_CHARS
+            out[key] = (
+                val[:_API_TOOL_ARG_MAX_CHARS]
+                + f"\n[... truncated {over} chars for API replay ...]"
+            )
+    return out
+
+
+def message_to_deepseek_dict(
+    msg: BaseMessage,
+    *,
+    completed_tool_call_ids: set[str] | None = None,
+) -> dict:
     """
     Convert a LangChain message to DeepSeek/OpenAI API dict.
 
     Preserves ``reasoning_content`` on assistant messages for tool-loop replay.
     """
+    completed = completed_tool_call_ids or set()
     if isinstance(msg, SystemMessage):
         return {"role": "system", "content": _content_to_str(msg.content)}
     if isinstance(msg, HumanMessage):
@@ -331,26 +391,37 @@ def message_to_deepseek_dict(msg: BaseMessage) -> dict:
         if reasoning:
             out["reasoning_content"] = reasoning
         if msg.tool_calls:
-            out["tool_calls"] = [
-                {
-                    "id": tc.get("id"),
-                    "type": "function",
-                    "function": {
-                        "name": tc.get("name"),
-                        "arguments": json.dumps(tc.get("args", {}))
-                        if isinstance(tc.get("args"), dict)
-                        else str(tc.get("args", "")),
-                    },
-                }
-                for tc in msg.tool_calls
-            ]
+            out["tool_calls"] = []
+            for tc in msg.tool_calls:
+                tc_id = str(tc.get("id") or "")
+                tool_name = str(tc.get("name") or "")
+                raw_args = tc.get("args", {})
+                completed = bool(tc_id and tc_id in completed)
+                args = compact_tool_call_args_for_api(
+                    tool_name, raw_args, completed=completed
+                )
+                out["tool_calls"].append(
+                    {
+                        "id": tc.get("id"),
+                        "type": "function",
+                        "function": {
+                            "name": tc.get("name"),
+                            "arguments": json.dumps(args)
+                            if isinstance(args, dict)
+                            else str(args),
+                        },
+                    }
+                )
         return out
     return {"role": "user", "content": _content_to_str(getattr(msg, "content", ""))}
 
 
 def messages_to_deepseek_api(messages: list[BaseMessage]) -> list[dict]:
     """Convert LangChain messages to API payload list with reasoning_content preserved."""
-    return [message_to_deepseek_dict(m) for m in messages]
+    completed = _completed_tool_call_ids(messages)
+    return [
+        message_to_deepseek_dict(m, completed_tool_call_ids=completed) for m in messages
+    ]
 
 
 def capture_cloud_response(response: Any) -> AIMessage:

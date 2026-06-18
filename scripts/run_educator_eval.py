@@ -510,6 +510,7 @@ async def main() -> None:
     prior_strict = runtime.get("cloud_no_local_fallback", False)
     prior_scope = runtime.get("scope_clarification_enabled")
     prior_plan = runtime.get("plan_review_enabled")
+    prior_execution = runtime.get("execution_policy", "auto_approve")
     if args.cloud_off:
         await fe.set_unified_settings(cloud_escalation_enabled=False)
         runtime = await fe.fetch_runtime_profile()
@@ -529,6 +530,7 @@ async def main() -> None:
     await fe.set_unified_settings(
         scope_clarification_enabled=False,
         plan_review_enabled=False,
+        execution_policy="auto_approve",
     )
 
     if profile == "cloud" and not runtime.get("cloud_available"):
@@ -617,6 +619,8 @@ async def main() -> None:
         await fe.set_unified_settings(scope_clarification_enabled=prior_scope)
     if prior_plan is not None:
         await fe.set_unified_settings(plan_review_enabled=prior_plan)
+    if prior_execution is not None:
+        await fe.set_unified_settings(execution_policy=prior_execution)
     OUTPUT_DATA.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT_DATA.write_text(json.dumps(eval_data, indent=2), encoding="utf-8")
     report_path = write_report(eval_data, scores_by_id)

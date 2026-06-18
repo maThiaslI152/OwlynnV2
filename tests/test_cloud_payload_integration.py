@@ -80,6 +80,63 @@ class TestCloudBriefGate:
         assert payload.cloud_brief_tokens_est > 0
 
 
+class TestCompactToolCallArgs:
+    def test_completed_write_compacts_content(self):
+        from src.agent.nodes.complex_utils.cloud_payload import (
+            compact_tool_call_args_for_api,
+            message_to_deepseek_dict,
+            messages_to_deepseek_api,
+        )
+
+        huge = "x" * 5000
+        args = compact_tool_call_args_for_api(
+            "write_workspace_file",
+            {"filename": "dashboard.css", "content": huge},
+            completed=True,
+        )
+        assert args["content"].startswith("[written to dashboard.css")
+        assert huge not in args["content"]
+
+        messages = [
+            HumanMessage(content="write file"),
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "tc1",
+                        "name": "write_workspace_file",
+                        "args": {"filename": "dashboard.css", "content": huge},
+                    }
+                ],
+            ),
+            ToolMessage(content="✅ Written", tool_call_id="tc1"),
+        ]
+        api_msgs = messages_to_deepseek_api(messages)
+        tc_args = json.loads(api_msgs[1]["tool_calls"][0]["function"]["arguments"])
+        assert huge not in tc_args["content"]
+        assert "dashboard.css" in tc_args["content"]
+
+    def test_pending_write_keeps_content(self):
+        from src.agent.nodes.complex_utils.cloud_payload import (
+            message_to_deepseek_dict,
+        )
+
+        huge = "y" * 1000
+        msg = AIMessage(
+            content="",
+            tool_calls=[
+                {
+                    "id": "tc2",
+                    "name": "write_workspace_file",
+                    "args": {"filename": "a.txt", "content": huge},
+                }
+            ],
+        )
+        out = message_to_deepseek_dict(msg, completed_tool_call_ids=set())
+        tc_args = json.loads(out["tool_calls"][0]["function"]["arguments"])
+        assert huge in tc_args["content"]
+
+
 class TestReasoningContentReplay:
     def test_message_converter_preserves_reasoning(self):
         from src.agent.nodes.complex_utils.cloud_payload import message_to_deepseek_dict

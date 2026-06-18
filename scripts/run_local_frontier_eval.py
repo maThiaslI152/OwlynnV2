@@ -491,6 +491,37 @@ class WsEventLog:
                     info[key] = payload.get(key)
         return info
 
+    def assistant_message_seen_since(self, since_ts: float) -> bool:
+        """True when an assistant.message WS frame arrived after ``since_ts``."""
+        for ev in self.events:
+            if ev["ts"] < since_ts or ev["type"] != "assistant.message":
+                continue
+            payload = ev.get("payload", {})
+            msg = payload.get("message") if isinstance(payload, dict) else None
+            if isinstance(msg, dict):
+                content = msg.get("content") or ""
+            else:
+                content = payload.get("content") or ""
+            if str(content).strip():
+                return True
+        return False
+
+    def assistant_text_since(self, since_ts: float) -> str:
+        """Latest assistant.message content after ``since_ts`` (WS source of truth)."""
+        latest = ""
+        for ev in self.events:
+            if ev["ts"] < since_ts or ev["type"] != "assistant.message":
+                continue
+            payload = ev.get("payload", {})
+            msg = payload.get("message") if isinstance(payload, dict) else None
+            if isinstance(msg, dict):
+                content = msg.get("content") or ""
+            else:
+                content = payload.get("content") or ""
+            if isinstance(content, str) and content.strip():
+                latest = content
+        return latest
+
 
 async def poll_api(
     path: str, *, timeout_s: float = 30.0, interval_s: float = 1.0
@@ -532,6 +563,7 @@ async def fetch_runtime_profile() -> dict:
         "cloud_no_local_fallback": bool(settings.get("cloud_no_local_fallback")),
         "scope_clarification_enabled": settings.get("scope_clarification_enabled"),
         "plan_review_enabled": settings.get("plan_review_enabled"),
+        "execution_policy": settings.get("execution_policy", "auto_approve"),
         "effective_profile": "cloud" if cloud_on and cloud_ok else "local",
     }
 
@@ -737,9 +769,19 @@ async def wait_for_turn_complete(
                 )
             except Exception:
                 pass
+            if (
+                since_ts
+                and ws_log
+                and not ws_log.assistant_message_seen_since(since_ts)
+            ):
+                await asyncio.sleep(1)
+                continue
         busy = False if ws_idle else await is_graph_busy(page)
         if not busy:
-            response_text = await scrape_final_response(page)
+            ws_text = (
+                ws_log.assistant_text_since(since_ts) if ws_log and since_ts else ""
+            )
+            response_text = ws_text or await scrape_final_response(page)
             normalized = _normalize_response(response_text)
             tools, ws_tools = await _executed_tools()
             dsml = _is_premature_dsml(response_text)
@@ -829,7 +871,8 @@ async def wait_for_turn_complete(
         await asyncio.sleep(1)
 
     print("\n[EVAL] Timeout waiting for turn complete!")
-    response_text = await scrape_final_response(page)
+    ws_text = ws_log.assistant_text_since(since_ts) if ws_log and since_ts else ""
+    response_text = ws_text or await scrape_final_response(page)
     tools, ws_tools = await _executed_tools()
     return {
         "response_text": response_text,
@@ -847,13 +890,30 @@ async def scrape_final_response(page: Page) -> str:
     for _ in range(3):
         text = await page.evaluate(
             """() => {
-              const bubbles = document.querySelectorAll('.message-assistant .message-bubble');
-              for (let i = bubbles.length - 1; i >= 0; i--) {
-                const t = (bubbles[i].innerText || '').trim();
+              const children = [...document.querySelectorAll('.messages > *')];
+              let lastUserIdx = -1;
+              children.forEach((el, idx) => {
+                if (el.querySelector('.message-user')) lastUserIdx = idx;
+              });
+              if (lastUserIdx < 0) {
+                const bubbles = document.querySelectorAll('.message-assistant .message-bubble');
+                for (let i = bubbles.length - 1; i >= 0; i--) {
+                  const t = (bubbles[i].innerText || '').trim();
+                  if (t && t.toLowerCase() !== 'o') return t;
+                }
+                return '';
+              }
+              for (let i = lastUserIdx + 1; i < children.length; i++) {
+                const el = children[i];
+                const bubble = el.querySelector('.message-assistant .message-bubble')
+                  || (el.classList?.contains('message-assistant')
+                    ? el.querySelector('.message-bubble')
+                    : null);
+                if (!bubble) continue;
+                const t = (bubble.innerText || '').trim();
                 if (t && t.toLowerCase() !== 'o') return t;
               }
-              const els = document.querySelectorAll('.message-assistant');
-              return els[els.length - 1]?.innerText || '';
+              return '';
             }"""
         )
         if _normalize_response(text):
@@ -1406,6 +1466,7 @@ async def main() -> None:
     prior_strict = runtime.get("cloud_no_local_fallback", False)
     prior_scope = runtime.get("scope_clarification_enabled")
     prior_plan = runtime.get("plan_review_enabled")
+    prior_execution = runtime.get("execution_policy", "auto_approve")
     if args.cloud_off:
         print("[EVAL] Disabling cloud escalation for this run...")
         await set_unified_settings(cloud_escalation_enabled=False)
@@ -1430,6 +1491,7 @@ async def main() -> None:
     await set_unified_settings(
         scope_clarification_enabled=False,
         plan_review_enabled=False,
+        execution_policy="auto_approve",
     )
 
     id_filter = (
@@ -1607,6 +1669,8 @@ async def main() -> None:
             await set_unified_settings(scope_clarification_enabled=prior_scope)
         if prior_plan is not None:
             await set_unified_settings(plan_review_enabled=prior_plan)
+        if prior_execution is not None:
+            await set_unified_settings(execution_policy=prior_execution)
         await delete_project(project_id)
 
 

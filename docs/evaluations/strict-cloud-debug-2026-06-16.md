@@ -2,7 +2,7 @@
 status: active
 category: evaluation
 audience: agent
-last_updated: 2026-06-17
+last_updated: 2026-06-18
 ---
 
 # Strict Cloud Debug — 2026-06-16/17
@@ -17,7 +17,8 @@ last_updated: 2026-06-17
 | `src/agent/nodes/complex.py` | Block all cloud→Qwen fallback sites when strict |
 | `src/agent/nodes/simple.py` | Block small→medium fallback; MiniCPM `max_tokens` floor + `reasoning_content` fallback |
 | `src/config/env_files.py` | Auto-load `.env` / `.env.local` |
-| Eval scripts | `--strict-cloud`, scope/plan HITL disabled during runs, WS-idle completion |
+| Eval scripts | `--strict-cloud`, scope/plan/security HITL disabled during runs (`execution_policy=auto_approve`), WS-idle + turn-scoped assistant capture |
+| `cloud_payload.py` | Compact completed `write_workspace_file` tool-call args on cloud replay (BUG-27) |
 | `frontend-v2/src/App.tsx` | Clear `pendingCorrelationId` on any `status: idle` + `assistant.message` |
 
 ## Tier A — Frontier (19 turns)
@@ -91,13 +92,48 @@ Router `token_budget` (256) was below MiniCPM's practical output floor; model fi
 
 **Fix:** Disable `scope_clarification_enabled` / `plan_review_enabled` during automated eval runs.
 
-### BUG-27 — F5.1 cloud failure under strict (P2) — **open**
+### BUG-27 — F5.1 cloud failure under strict (P2) — **fixed**
 
-`fallback_generic_cloud_error` at ~4.7s on React codegen; strict mode correctly surfaced failure instead of Qwen fallback. Investigate DeepSeek error logs / tool loop.
+Round-2 cloud invoke replayed full `write_workspace_file` `content` in `AIMessage.tool_calls`, bloating the API payload and failing with empty exception text.
 
-### BUG-28 — Browser mid-thread cloud failures (P2) — **open**
+**Fix:** `compact_tool_call_args_for_api()` in `cloud_payload.py`; `_format_cloud_error_reason()` in `complex.py`.
 
-After long multi-turn context, several turns get `large-cloud-failed` quickly. May be context size, circuit breaker, or API errors — not a fallback-mask issue.
+### BUG-28 — Browser mid-thread cloud failures (P2) — **fixed (harness)**
+
+Circuit breaker opened after consecutive failures in a single browser-eval thread (no per-turn reset).
+
+**Fix:** `reset_circuit_breaker()` per turn in `run_browser_eval.py`; `execution_policy=auto_approve` during eval runs.
+
+### BUG-29 — Stale assistant scrape in educator eval (P2) — **fixed (harness)**
+
+`scrape_final_response` used the last assistant bubble globally; EDU6–8 inherited EDU5 text.
+
+**Fix:** Turn-scoped DOM scrape; `WsEventLog.assistant_text_since()` preferred over DOM; require `assistant.message` after turn start before accepting WS idle.
+
+### Educator EDU5–EDU8 — **product fixes (2026-06-18)**
+
+| Turn | Fix |
+|------|-----|
+| EDU5 | `format_struggle_recall_block()` prepended to memory context; study-recall volatile nudge |
+| EDU6 | Learning-mode nudge to call `flashcard_deck_create` |
+| EDU7 | Eval `auto_approve` + `quiz_session_start` nudge |
+| EDU8 | Learning style + nudge for `render_interactive_block` (`owlynn-steps` / `owlynn-quiz`) |
+
+Re-run educator eval after harness fixes to confirm pass rate.
+
+## Fix round 2 (2026-06-18) — committed
+
+Code and docs updated for BUG-27..29 and educator EDU5–8 product nudges. **Scores below are from the 2026-06-17 run (pre round-2);** re-run strict-cloud evals to refresh artifacts:
+
+```bash
+export PYTHONPATH=.
+curl -s http://127.0.0.1:8000/api/cloud-status | jq '.key_valid'
+python scripts/run_local_frontier_eval.py --profile cloud --strict-cloud --ids F5.1
+python scripts/run_educator_eval.py --profile cloud --strict-cloud
+python scripts/run_browser_eval.py --strict-cloud
+```
+
+Expected improvements: F5.1 passes cloud round-2 after write; browser turns 4–10 no longer cascade on circuit breaker; EDU6–8 capture distinct assistant text.
 
 ## Re-run after fixes
 
@@ -111,6 +147,6 @@ python scripts/run_local_frontier_eval.py --profile cloud --strict-cloud --ids F
 ## Unit tests
 
 ```bash
-pytest tests/test_cloud_strict_mode.py tests/test_frontier_eval_scoring.py tests/test_env_files.py tests/test_simple_node_streaming.py -q
+pytest tests/test_cloud_strict_mode.py tests/test_cloud_payload_integration.py tests/test_frontier_eval_scoring.py tests/test_educator_memory.py tests/test_env_files.py tests/test_simple_node_streaming.py -q
 ./scripts/ci.sh --quick
 ```

@@ -13,6 +13,10 @@ STYLE_INSTRUCTIONS: dict[str, str] = {
         "where helpful, and build from simple to more detailed. "
         "Prefer interactive blocks (`render_interactive_block` or owlynn-* fences) over walls "
         "of text: one brief intro sentence, then the widget. "
+        "When the user asks for flashcards, call `flashcard_deck_create` (≥5 pairs). "
+        "When they ask for a mock exam or quiz, call `quiz_session_start`. "
+        "For step-by-step walkthroughs plus a check-for-understanding question, emit "
+        "`render_interactive_block` with `steps` then `quiz` (owlynn-steps / owlynn-quiz fences). "
         "When the user criticizes your answer, acknowledge the correction, revisit the source "
         "material if available, and revise. "
         'When the user self-reinforces ("I think…", "I finally understand…"), confirm what is '

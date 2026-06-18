@@ -41,8 +41,7 @@ Do **not** add new `.py` test or patch scripts at repo root.
 | `src/agent/llm.py` | `LLMPool` singleton — small + medium + cloud slots |
 | `src/agent/nodes/simple.py` | Fast simple-path answers (no tools) |
 | `src/agent/nodes/complex.py` | Tool-calling cycle, local + cloud paths |
-| `src/agent/nodes/complex_utils/cloud_payload.py` | Cloud prompt layers, anonymization |
-| `src/agent/nodes/complex_utils/cloud_invoke.py` | DeepSeek client, tool strict mode |
+| `src/agent/nodes/complex_utils/cloud_payload.py` | Cloud prompt layers, anonymization, tool-arg compaction on replay (BUG-27) |
 | `src/agent/nodes/complex_utils/vision_florence.py` | Florence OCR parser |
 | `src/agent/nodes/complex_utils/vision_*.py` | Vision proxy for cloud image path (Florence default) |
 | `src/tools/mcp_client.py` | MCP stdio client; tools merged via `merge_mcp_tools()` |
@@ -59,7 +58,7 @@ Do **not** add new `.py` test or patch scripts at repo root.
 | File | Role |
 |------|------|
 | `src/agent/nodes/complex.py` | `complex_llm_node()`, `complex_tool_action_node()`, `_resolve_complex_tools()` |
-| `src/agent/nodes/complex_utils/cloud_payload.py` | Brief gate, PII scrub, cache metrics |
+| `src/agent/nodes/complex_utils/cloud_payload.py` | Brief gate, PII scrub, cache metrics, completed write arg compaction |
 | `src/agent/nodes/complex_utils/cloud_invoke.py` | Raw API invoke + retries |
 | `src/agent/anonymization.py` | PII scrubbing for cloud escalation |
 | `tests/test_complex_node_properties.py` | Complex node behavior |
@@ -206,9 +205,10 @@ START → memory_inject_lite → router → memory_retrieve → auto_summarize? 
 | `./scripts/ci.sh` | Above + frontend production build |
 | `./scripts/ci.sh --network` | Live DeepSeek tests (`DEEPSEEK_API_KEY` required) |
 | `./scripts/ci.sh --benchmarks` | Router/complex/memory benchmarks → `tests/benchmarks/benchmark_report.json` |
-| `python scripts/run_local_frontier_eval.py` | ~19-turn mechanical eval — `--profile auto\|local\|cloud`, `--cloud-off` |
+| `python scripts/run_local_frontier_eval.py` | ~19-turn mechanical eval — `--profile auto\|local\|cloud`, `--cloud-off`, `--strict-cloud` |
+| `python scripts/run_educator_eval.py` | 8-turn UID10667 study session — `--strict-cloud` |
 | `python scripts/run_frontier_comparison_eval.py` | Quality A/B vs raw DeepSeek — `--dry-run`, `--limit N` |
-| `python scripts/run_browser_eval.py` | 12-turn conversation eval — needs stack + LM Studio |
+| `python scripts/run_browser_eval.py` | 12-turn conversation eval — `--strict-cloud`; per-turn circuit-breaker reset |
 
 **Coverage (unit pytest):** ~57% `src/` (contract-only pass ~22% — subset). **GHA** (`.github/workflows/ci.yml`): Python lint/tests + frontend vitest; Electron build on main push only. Contract/cutover tests are **local-only** per `scripts/ci.sh`.
 
@@ -219,7 +219,9 @@ START → memory_inject_lite → router → memory_retrieve → auto_summarize? 
 | Area | Tests |
 |------|-------|
 | Web search synthesis | `tests/test_tool_output_delta.py`, `tests/test_dsml_formatter.py`, `tests/test_fetch_retry_nudge.py` |
-| Cloud usage / breakdown | `tests/test_context_breakdown.py`, `tests/test_cloud_*.py` |
+| Cloud usage / breakdown | `tests/test_context_breakdown.py`, `tests/test_cloud_*.py`, `tests/test_cloud_payload_integration.py` |
+| Strict cloud / eval harness | `tests/test_cloud_strict_mode.py`, `tests/test_frontier_eval_scoring.py` |
+| Educator memory | `tests/test_educator_memory.py` |
 | Cloud chip (frontend) | `frontend-v2/src/components/__tests__/cloud-usage-chip.test.tsx`, `cloud-settings.test.tsx` |
 
 ## Development rules
@@ -240,4 +242,4 @@ START → memory_inject_lite → router → memory_retrieve → auto_summarize? 
 
 ## Last updated
 
-2026-06-10 — CI/eval map; BUG-13..16 test references
+2026-06-18 — strict-cloud BUG-27..29; eval harness + cloud_payload compaction
