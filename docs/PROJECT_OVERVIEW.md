@@ -20,23 +20,23 @@ This document provides a high-level summary of the OwlynnV2 project, covering it
 
 ## 1. Project Goal
 
-Owlynn is a **local-first desktop AI coworker** designed primarily for developers and power users on Apple Silicon (e.g., M4 Air 24GB). 
+Owlynn is a **cloud-primary desktop AI coworker** designed primarily for developers and power users on Apple Silicon (e.g., M4 Air 24GB). 
 
 **Core Objectives:**
-- Keep user data entirely local, preserving privacy.
+- Keep user data private with best-effort anonymization for cloud processing.
 - Reason through complex tasks and execute tools (file operations, document generation, web search, code execution).
 - Remember context across sessions via semantic vector memory.
-- Safely gate sensitive tool operations behind human-in-the-loop (HITL) approval without sending data to the cloud (unless explicitly opted-in for fallback).
+- Safely gate sensitive tool operations behind human-in-the-loop (HITL) approval with key data staying local.
 
 ## 2. Overall Architecture
 
-The system operates on a stateful, cyclic **LangGraph** architecture with a three-tier LLM routing strategy:
+The system operates on a stateful, cyclic **LangGraph** architecture with a cloud-primary LLM routing strategy:
 - **Backend:** Python 3.12+, FastAPI, LangGraph.
 - **Frontend:** React 19, TypeScript (Vite 8), Zustand 5, wrapped in an Electron desktop shell.
 - **LLM Tiers:**
-  - **Small (Router):** `ibm-grok4-ultrafast-coder-1b` for quick classification.
-  - **Medium (Reasoning):** `gemma-4-e4b-uncensored-hauhaucs-aggressive` for tool calling and reasoning.
-  - **Cloud (Fallback):** DeepSeek API for escalated requests.
+  - **Router:** `minicpm5-1b` for quick classification (local).
+  - **Cloud (Primary):** `deepseek-v4-flash` for complex reasoning, vision, and tool calling.
+  - **Extraction:** `gemma-4-e2b` for background memory extraction (local).
 - **Memory System:** Three-tier architecture using Mem0 + Qdrant (long-term semantic), JSON files (short-term facts), and topic/interest tracking. Includes a zero-config workspace file watcher that auto-indexes documents into Qdrant for hybrid semantic search. PDF/DOCX extraction via Docling (layout-aware markdown with table structure detection).
 - **Security:** A Security Proxy node that intercepts high-risk tool calls and requests user approval before execution.
 - **Persona System:** Built-in profiles (Owlynn, Coder, Writer, Researcher) with custom JSON support, dynamically adjusting system prompts, tool permissions, and response tone via `persona_manager.py`.

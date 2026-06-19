@@ -32,31 +32,16 @@ def _clear_pool():
 
 def test_clear_resets_all_slots():
     LLMPool._small_llm = "fake"
-    LLMPool._medium_llm = "fake"
+    LLMPool._extraction_llm = "fake"
     LLMPool._cloud_llm_flash = "fake"
     LLMPool._cloud_llm_pro = "fake"
 
     LLMPool.clear()
 
     assert LLMPool._small_llm is None
-    assert LLMPool._medium_llm is None
+    assert LLMPool._extraction_llm is None
     assert LLMPool._cloud_llm_flash is None
     assert LLMPool._cloud_llm_pro is None
-
-
-@pytest.mark.anyio
-async def test_get_medium_llm_cache_hit():
-    """When variant matches, no swap is triggered."""
-    mock_swap = AsyncMock()
-    LLMPool._swap_manager = mock_swap
-
-    fake_llm = MagicMock()
-    LLMPool._medium_llm = fake_llm
-
-    result = await LLMPool.get_medium_llm("default")
-
-    assert result is fake_llm
-    mock_swap.swap_model.assert_not_called()
 
 
 @pytest.mark.anyio

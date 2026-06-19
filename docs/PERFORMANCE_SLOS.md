@@ -28,10 +28,11 @@ tests/test_frontend_cutover_serving.py
 
 ### Degradation Ladder (Memory Approaches Limit at 14/16 GB)
 
-1. Unload medium LLM from LM Studio (fall back to small LLM only)
-2. Reduce context window to 50K tokens
-3. Disable auto-summarize (keep full context at reduced window)
-4. If below 1 GB free, optionally stop SearXNG manually (`podman stop owlynn_searxng`) — not automated in application code
+1. Unload vision VLM from LM Studio (Qwen3-VL-4B, ~3 GB — largest model)
+2. Unload extraction model from LM Studio (Gemma-4-E2B, ~3.5 GB)
+3. Reduce context window to 50K tokens
+4. Disable auto-summarize (keep full context at reduced window)
+5. If below 1 GB free, optionally stop SearXNG manually (`podman stop owlynn_searxng`) — not automated in application code
 
 ## API
 
@@ -40,7 +41,7 @@ tests/test_frontend_cutover_serving.py
 | Metric | Target | Degraded | Unacceptable |
 |--------|--------|----------|--------------|
 | Simple query (keyword-matched) | < 2s | 2-5s | > 5s |
-| Complex query (LLM-classified, medium model) | < 8s | 8-20s | > 20s |
+| Complex query (cloud DeepSeek V4) | < 15s | 15-30s | > 30s |
 | Streaming first token | < 3s | 3-8s | > 8s |
 | Tool execution (single call) | < 5s | 5-15s | > 15s |
 | WebSocket connect | < 1s | 1-3s | > 3s |
@@ -52,14 +53,15 @@ Measured from: user sends message → assistant first token received (streaming)
 | Component | Budget | Notes |
 |-----------|--------|-------|
 | Python agent (langgraph + LLM pool) | 2 GB | Peak during complex reasoning + tool execution |
-| Small LLM (`ibm-grok4-ultrafast-coder-1b`, Q8_0, LM Studio) | 1.5 GB | Always loaded |
-| Medium LLM (`gemma-4-e4b-uncensored-hauhaucs-aggressive`, Q4_K_M, LM Studio) | 2.5 GB | Loaded on demand; stays warm for session |
+| Small LLM (`minicpm5-1b`, Q8_0, LM Studio) | 1.5 GB | Router + simple fallback |
+| Extraction LLM (`gemma-4-e2b-heretic-uncensored-mlx`, LM Studio) | 3.5 GB | Background memory extraction |
+| Vision LLM (`qwen3-vl-4b-instruct-c_abliterated-v2-mlx`, LM Studio) | 3.0 GB | Vision proxy (lazy, on first image) |
 | Qdrant (Docker) | 512 MB | Vector store for memory |
 | Redis (Docker) | 128 MB | Session state + LangGraph checkpoints |
 | SearxNG (Docker) | 256 MB | Local web search |
 | Frontend (Tauri + React) | 256 MB | Desktop shell + rendered UI |
-| **Total sustained** | **~7.1 GB** | Medium model loaded, all services running |
-| **Total peak** | **~8.5 GB** | During complex reasoning + web search + memory save |
+| **Total sustained** | **~9.1 GB** | All models loaded, all services running |
+| **Total peak** | **~10.5 GB** | During complex reasoning + web search + memory save |
 
 ### Storage
 
@@ -85,8 +87,8 @@ Measured from: user sends message → assistant first token received (streaming)
 | Metric | Target |
 |--------|--------|
 | Concurrent sessions | 1 (active) + unlimited (idle, checkpointed) |
-| Streaming tokens/second (medium model) | > 30 tok/s |
-| Streaming tokens/second (small model) | > 80 tok/s |
+| Streaming tokens/second (cloud model) | > 30 tok/s |
+| Streaming tokens/second (router model) | > 80 tok/s |
 | WebSocket reconnect | < 2s |
 | Project switch latency | < 500ms |
 

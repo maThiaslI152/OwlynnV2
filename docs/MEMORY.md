@@ -44,9 +44,9 @@ After the agent responds, `memory_write_node`:
 4. Records the conversation in `conversations.json`
 5. Invalidates the memory cache for the next turn
 
-### Background extraction (Qwen) — resource deferral
+### Background extraction (Gemma) — resource deferral
 
-LTM atom extraction uses the **medium** slot (Qwen3.5-9B) in a background worker. To avoid GPU/CPU contention with active chat or local fallback:
+LTM atom extraction uses the **extraction** slot (Gemma-4-E2B-heretic-uncensored-mlx) in a background worker. To avoid GPU/CPU contention with active chat or local fallback:
 
 ```text
 memory_write → Redis queue → worker waits for idle window → invoke_medium_background() → Mem0
@@ -62,7 +62,7 @@ memory_write → Redis queue → worker waits for idle window → invoke_medium_
 LM Studio does **not** expose per-request GPU throttling via the OpenAI API; defer-until-idle is the practical mitigation on Apple Silicon unified memory.
 
 **Module:** `src/agent/local_llm_scheduler.py`  
-**Worker:** `src/memory/extraction/worker.py` (`get_medium_llm(foreground=False)`)
+**Worker:** `src/memory/extraction/worker.py` (`get_extraction_llm(foreground=False)`)
 
 ## Configuration
 

@@ -546,7 +546,6 @@ async def main() -> None:
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         "runtime_profile": profile,
         "strict_cloud": use_strict,
-        "qwen_fallback_turns": [],
         "exchanges": [],
         "scores": {},
     }
@@ -587,22 +586,6 @@ async def main() -> None:
                 exchange["screenshot"] = str(shot_path.relative_to(REPO_ROOT))
 
                 eval_data["exchanges"].append(exchange)
-                badge = (exchange.get("model_badge") or "").strip()
-                if badge in fe.CLOUD_QWEN_FALLBACK_BADGES and profile == "cloud":
-                    chain = exchange.get("fallback_chain") or []
-                    reason = ""
-                    for step in reversed(chain):
-                        if isinstance(step, dict) and step.get("reason"):
-                            reason = str(step["reason"])
-                            break
-                    eval_data["qwen_fallback_turns"].append(
-                        {
-                            "id": item["id"],
-                            "model_badge": badge,
-                            "route": exchange.get("route"),
-                            "reason": reason,
-                        }
-                    )
                 print(
                     f"[EDU] {item['id']} grade={scores['grade']} pass={scores['pass']}"
                 )

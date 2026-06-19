@@ -54,9 +54,8 @@ Reply with exactly one JSON object (no markdown, no extra text):
 
 def _default_classification(*, cloud_available: bool = False) -> RouteClassification:
     """Return safe default classification on any failure."""
-    default_route = "complex-cloud" if cloud_available else "complex-default"
     return RouteClassification(
-        route=default_route,
+        route="complex-cloud",
         confidence=0.5,
         toolbox=["all"],
         reasoning="fallback-default",
@@ -79,9 +78,9 @@ def parse_classification(content: str) -> RouteClassification:
 
         parsed = json.loads(match.group(0))
 
-        route = str(parsed.get("route", "complex-default")).lower().strip()
+        route = str(parsed.get("route", "complex-cloud")).lower().strip()
         if route not in VALID_ROUTES:
-            route = "complex-default"
+            route = "complex-cloud"
 
         confidence = float(parsed.get("confidence", 0.5))
 

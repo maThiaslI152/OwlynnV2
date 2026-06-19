@@ -84,7 +84,7 @@ export function CloudSettingsPanel() {
           }}
         >
           <option value="on">Enabled (cloud-first routing)</option>
-          <option value="off">Disabled (local models only)</option>
+          <option value="off">Disabled (no cloud)</option>
         </select>
       </label>
       <label>

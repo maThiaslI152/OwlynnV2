@@ -331,7 +331,7 @@ class TestMemoryWriteNode:
     async def test_queues_extraction_job(
         self, mock_enqueue, mock_mem0, mock_personal_assistant
     ):
-        """When Mem0 is available, extraction is queued asynchronously."""
+        """When Mem0 is available, extraction is queued."""
         mock_enqueue.return_value = True
         state = _make_state(
             messages=[
@@ -376,7 +376,6 @@ class TestMemoryWriteNode:
                 _ai_msg("The capital of France is Paris."),
             ],
         )
-        # Mock memory to avoid DB connection errors
         with patch("src.memory.long_term.memory") as mock_mem:
             mock_mem.add = MagicMock()
             await memory_write_node(state)

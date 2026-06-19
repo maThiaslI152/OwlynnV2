@@ -18,7 +18,7 @@ async def api_openai_chat_completions(body: dict):
 
     # Extract request params
     messages = body.get("messages", [])
-    model = body.get("model", "qwen2.5-3b")
+    model = body.get("model", "minicpm5-1b")
     stream = bool(body.get("stream", False))
     project_id = body.get("project_id", "default")
     persona_id = body.get("persona_id", "default")

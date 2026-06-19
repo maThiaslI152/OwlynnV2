@@ -322,7 +322,6 @@ WebSocket request payload keys parsed in `websocket_endpoint()` and passed into 
 | `cloud_llm_base_url` | string | `"https://api.deepseek.com/v1"` | DeepSeek cloud API base URL |
 | `cloud_llm_model_name` | string | `"deepseek-v4-flash"` | Cloud model name (`deepseek-v4-flash` or `deepseek-v4-pro`) |
 | `deepseek_api_key` | string | `""` | DeepSeek API key (env var `DEEPSEEK_API_KEY` takes priority) |
-| `medium_models` | object | `{"default": "gemma-4-e4b-uncensored-hauhaucs-aggressive", ...}` | M-tier model key mapping |
 | `cloud_escalation_enabled` | boolean | `true` | Allow routing to cloud |
 | `cloud_anonymization_enabled` | boolean | `true` | Scrub PII before cloud API calls |
 | `custom_sensitive_terms` | list | `[]` | Additional terms to anonymize |

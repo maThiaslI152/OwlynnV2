@@ -5,7 +5,7 @@
 
 ## System Context
 
-Owlynn is a **privacy-first hybrid** coworker for Apple Silicon (Mac M4 Air 24GB). **Local:** workspace files, Qdrant/Redis memory, routing, embeddings, and optional Qwen9B fallback stay on-device. **Cloud (opt-in):** complex reasoning uses **DeepSeek V4** when a key is configured; prompts are **best-effort anonymized** before send (see `src/agent/anonymization.py`). Startup preloads **MiniCPM5 router + nomic embedding**; Florence-2 vision proxy runs lazily for cloud+image OCR.
+Owlynn is a **privacy-first hybrid** coworker for Apple Silicon (Mac M4 Air 24GB). **Local:** workspace files, Qdrant/Redis memory, routing, embeddings, and MiniCPM5 routing, embedding, and memory extraction (Gemma-4-E2B) stay on-device. **Cloud (opt-in):** complex reasoning uses **DeepSeek V4** when a key is configured; prompts are **best-effort anonymized** before send (see `src/agent/anonymization.py`). Startup preloads **MiniCPM5 router + nomic embedding**; Qwen3-VL-4B vision proxy runs lazily for cloud+image transcription.
 
 ```
 Browser (http://127.0.0.1:5173)
@@ -21,8 +21,8 @@ Browser (http://127.0.0.1:5173)
   ├─► LM Studio (port 1234)
   │     ├─► MiniCPM5 router (startup preload)
   │     ├─► nomic embedding (startup preload)
-  │     ├─► Florence-2 vision proxy (lazy, cloud+image)
-  │     └─► Qwen9B medium (lazy fallback when cloud off)
+  │     ├─► Qwen3-VL-4B vision proxy (lazy, cloud+image)
+  │     └─► Gemma-4-E2B extraction
   │
   ├─► Qdrant (port 6333)
   │     └─► Long-term memory (Mem0 embeddings)
@@ -38,9 +38,9 @@ Browser (http://127.0.0.1:5173)
 | **Config** | `src/config/defaults.yaml` | Single source of truth for all settings. Override chain: YAML → env → profile |
 | **Config Loader** | `src/config/config_loader.py` | Layered config with typed accessors, env var mapping, validation |
 | **Agent Graph** | `src/agent/graph.py` | LangGraph orchestration: memory→router→simple/complex→tools→memory |
-| **Router** | `src/agent/nodes/router.py` | 3-way routing: `simple`, `complex-default`, `complex-cloud` — keyword bypass, LLM classifier, HITL |
-| **Simple Node** | `src/agent/nodes/simple.py` | Fast answers via MiniCPM5 router model, with medium fallback |
-| **Complex Node** | `src/agent/nodes/complex.py` | Tool-augmented reasoning — local Qwen or cloud DeepSeek V4 |
+| **Router** | `src/agent/nodes/router.py` | Cloud-primary routing: `simple`, `complex-cloud` — keyword bypass, LLM classifier, HITL |
+| **Simple Node** | `src/agent/nodes/simple.py` | Fast answers via MiniCPM5 router model, retry-once on failure |
+| **Complex Node** | `src/agent/nodes/complex.py` | Tool-augmented reasoning — Cloud DeepSeek V4 |
 | **Cloud payload** | `src/agent/nodes/complex_utils/cloud_payload.py` | Anonymization, brief gate, stable/volatile prompt layers, cache metrics |
 | **Cloud invoke** | `src/agent/nodes/complex_utils/cloud_invoke.py` | Raw DeepSeek client, tool strict mode, reasoning replay |
 | **Vision proxy** | `src/agent/nodes/complex_utils/vision_*.py` | Lazy VLM → JSON OCR → text for DeepSeek cloud path |
@@ -48,7 +48,7 @@ Browser (http://127.0.0.1:5173)
 | **Memory** | `src/agent/nodes/memory.py` | Memory injection + write: STM, LTM (Mem0/Qdrant), personal context |
 | **Summarizer** | `src/agent/nodes/summarize.py` | Auto-compress older turns when context >85% of window |
 | **HITL** | `src/agent/hitl/` | Safety gates: scope_clarify, plan_review, security_proxy |
-| **LLM Pool** | `src/agent/llm.py` | Singleton pool: small + medium + cloud instances |
+| **LLM Pool** | `src/agent/llm.py` | Singleton pool: router + extraction + cloud instances |
 | **Tools** | `src/tools/` | Web search, file ops, notebook, skills, MCP |
 | **API** | `src/api/server.py` | FastAPI with REST + WebSocket + OpenAI-compatible endpoints |
 | **Frontend** | `frontend-v2/` | React 19 + Vite + Zustand + Electron main process |
@@ -62,7 +62,7 @@ User Message
 memory_inject_lite ──► Profile, persona, topics (no vector search)
   │
   ▼
-router ──► Classify: simple | complex-default | complex-cloud; memory gate + scenario
+router ──► Classify: simple | complex-cloud; memory gate + scenario
   │
   ▼
 memory_retrieve ──► Gated Qdrant/Mem0 + scenario markdown (when needed)
@@ -77,7 +77,7 @@ simple | scope_clarify → complex_llm
   │
   └── complex ──► scope_clarify ──► complex_llm
                         │              │
-                        │    local (complex-default) or cloud (complex-cloud)
+                        │    cloud (complex-cloud)
                         │              │
                         │    plan_review / security_proxy (HITL)
                         │              │
@@ -99,7 +99,7 @@ defaults.yaml  →  environment variables  →  user_profile.json
 ```
 
 **Key sections:**
-- `models` — small/medium/cloud/standard: names, base_urls, temps, budgets, pricing
+- `models` — small/cloud/extraction/standard: names, base_urls, temps, budgets, pricing
 - `cloud` — thinking mode, reasoning effort, vision cache TTL
 - `routing` — confidence thresholds, budget tiers, keyword bypasses
 - `memory` — max facts, cache TTL, decay constants

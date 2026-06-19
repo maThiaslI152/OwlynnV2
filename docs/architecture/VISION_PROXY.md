@@ -1,20 +1,20 @@
 ---
 status: active
 category: architecture
-last_updated: 2026-06-09
+last_updated: 2026-06-19
 owner: ai-agent
 ---
 
 # Vision Proxy (Phase 2)
 
-Local VLM acts as an **OCR/layout sensor** for the text-only DeepSeek cloud path. Output is structured JSON — no conversational prose.
+Qwen3-VL-4B acts as a **vision-language sensor** for the text-only DeepSeek cloud path. It transcribes visible text, detects UI elements, and describes visual structure — DeepSeek synthesizes the final answer from the transcription.
 
 ## Flow
 
 ```text
-User image (chat or screen crop)
-  → vision_proxy (local VLM, lazy-loaded)
-  → JSON: text_blocks, ui_elements, subjects
+User image (chat upload or screen crop)
+  → vision_proxy (Qwen3-VL-4B local VLM, lazy-loaded)
+  → natural-language transcription of text + UI
   → formatted block in cloud prompt (image_url stripped)
   → DeepSeek V4
 ```
@@ -23,26 +23,67 @@ User image (chat or screen crop)
 
 | Path | Role |
 |------|------|
-| `src/agent/nodes/complex_utils/vision_proxy.py` | Transcribe, cache, lazy manager |
-| `src/agent/nodes/complex_utils/vision_schema.py` | JSON parse + cloud formatting |
-| `src/agent/nodes/complex.py` | `complex-cloud` + images → proxy; failure → `complex-default` |
+| `src/agent/nodes/complex_utils/vision_proxy.py` | Image interception, VLM call, cache, cloud formatting |
+| `src/agent/nodes/complex_utils/vision_qwen3vl.py` | Parse Qwen3-VL natural-language output into structured blocks |
+| `src/agent/nodes/complex_utils/vision_schema.py` | Output contract: text_blocks, ui_elements, subjects, confidence |
+| `src/agent/nodes/complex_utils/lm_studio_vision.py` | LM Studio catalog search, auto-load, active-instance check |
+| `src/agent/nodes/complex_utils/vision_model_manager.py` | Lazy ChatOpenAI client, idle watchdog (300s unload) |
+| `src/agent/nodes/complex.py` | `complex-cloud` + images → proxy; failure → text-only fallback |
+
+Legacy: `vision_florence.py` retained for `vision_prompt_mode: florence` backward compat.
 
 ## Output contract
 
+Qwen3-VL is prompted to transcribe text verbatim and identify UI elements. The parser extracts:
+
 ```json
 {
-  "text_blocks": [{"text": "exact OCR line", "bbox": null}],
+  "text_blocks": [{"text": "EVAL_OCR_MARKER", "bbox": null}],
   "ui_elements": [{"role": "button", "label": "Submit"}],
-  "subjects": ["terminal", "form"],
-  "confidence": 0.92
+  "subjects": ["image"],
+  "confidence": 0.75
 }
 ```
 
-Cloud-visible text is a dense bullet block — never raw `image_url` to DeepSeek.
+Cloud-visible format:
+```
+[Image content transcribed by vision sensor]
+Visible text: EVAL_OCR_MARKER
+confidence=0.75
+```
+
+## Model config (`defaults.yaml`)
+
+```yaml
+models:
+  vision_proxy:
+    model_name: "qwen3-vl-4b-instruct-c_abliterated-v2-mlx"
+    lm_studio_model_key: "qwen3-vl-4b-instruct-c_abliterated-v2-mlx"
+    temperature: 0.1
+    max_tokens: 2048
+    extra_body:
+      chat_template_kwargs:
+        enable_thinking: false
+
+cloud:
+  vision_prompt_mode: qwen3vl
+  vision_qwen3vl_system: "You are an OCR sensor. Output ALL visible text exactly..."
+  vision_qwen3vl_user: "Extract the exact text from this image..."
+  vision_max_tokens: 2048
+  vision_temperature: 0.1
+  vision_lm_studio_auto_load: true
+```
 
 ## Lazy load
 
-`VisionModelManager` holds a dedicated Florence-2 client (`models.vision_proxy`). Unloads after `cloud.vision_idle_unload_seconds` (default 300s) with no active transcriptions. Qwen9B+mmproj remains for `complex-default` local multimodal fallback only.
+`VisionModelManager` holds a dedicated Qwen3-VL client. Unloads after `cloud.vision_idle_unload_seconds` (default 300s) with no active transcriptions. On proxy failure, `complex-cloud` retries text-only.
+
+Models loaded in LM Studio for production:
+- `minicpm5-1b` (1.1 GB) — router
+- `gemma-4-e2b-heretic-uncensored-mlx` (3.4 GB) — extraction
+- `qwen3-vl-4b-instruct-c_abliterated-v2-mlx` (3.0 GB) — vision proxy
+- `text-embedding-nomic-embed-text-v1.5` (0.14 GB) — embeddings
+- **Total: ~7.5 GB** of 24 GB (M4 Air)
 
 ## Screen assist hook (Phase 3)
 
@@ -50,7 +91,7 @@ Cloud-visible text is a dense bullet block — never raw `image_url` to DeepSeek
 await transcribe_crop(image_bytes, mime_type="image/png")
 ```
 
-Used by `src/tools/screen_assist/ax_macos.py` when AX returns no text (512×512 crop). See [screen-assist-phase3.md](../guides/screen-assist-phase3.md).
+Used by `src/tools/screen_assist/ax_macos.py` when AX returns no text (512×512 crop).
 
 ## Configuration
 
@@ -59,12 +100,14 @@ cloud:
   vision_transcription_cache_ttl: 3600
   vision_idle_unload_seconds: 300
   vision_max_tokens: 2048
+  vision_prompt_mode: qwen3vl
+  vision_lm_studio_auto_load: true
 ```
 
 ## Tests
 
 ```bash
-PYTHONPATH=$(pwd) python -m pytest -q \
+PYTHONPATH=. python -m pytest -q \
   tests/test_vision_proxy.py \
   tests/test_vision_schema.py \
   tests/test_vision_proxy_cloud_path.py

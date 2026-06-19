@@ -9,7 +9,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from langgraph.prebuilt import ToolNode
 
 from src.agent.state import AgentState
-from src.agent.llm import get_medium_llm, get_cloud_llm, CloudUnavailableError
+from src.agent.llm import get_cloud_llm, CloudUnavailableError
 from src.agent.response_styles import style_instruction_for_prompt
 from src.agent.tool_sets import (
     COMPLEX_TOOLS_NO_WEB,
@@ -19,9 +19,6 @@ from src.agent.tool_sets import (
     resolve_tools,
 )
 from src.agent.lm_studio_compat import (
-    is_local_server,
-    normalize_messages_for_lm_studio,
-    strip_image_blocks_from_messages,
     with_system_for_local_server,
 )
 from src.agent.anonymization import anonymize, deanonymize
@@ -50,24 +47,20 @@ from .complex_utils.cloud_payload import (
 from .complex_utils.cloud_invoke import invoke_cloud_chat, response_to_ai_message
 from .complex_utils.context_breakdown import enrich_token_usage_with_breakdown
 from src.agent.cloud_cost_tracker import get_cost_tracker
-from src.agent.cloud_strict import (
-    block_cloud_local_fallback,
-    cloud_no_local_fallback_enabled,
-)
 from src.memory.user_profile import get_profile
 
 logger = logging.getLogger(__name__)
 
 
 def _vision_telemetry(vision_intake_mode: str) -> dict[str, Any]:
-    from src.agent.nodes.complex_utils.lm_studio_florence import (
-        configured_florence_model_name,
+    from src.agent.nodes.complex_utils.lm_studio_vision import (
+        configured_vision_model_name,
     )
 
     return {
         "vision_intake_mode": vision_intake_mode,
         "vision_proxy_model": (
-            configured_florence_model_name() if vision_intake_mode == "proxy" else None
+            configured_vision_model_name() if vision_intake_mode == "proxy" else None
         ),
     }
 
@@ -87,11 +80,6 @@ MAX_CUTOFF_RETRIES = int(config.get("complex.max_cutoff_retries", 1))
 
 # Max retries for cloud LLM calls with exponential backoff
 _MAX_CLOUD_RETRIES = int(config.get("complex.max_cloud_retries", 3))
-
-
-def _format_cloud_error_reason(exc: BaseException) -> str:
-    """Stable short reason for fallback_chain when str(exc) is empty."""
-    return (str(exc) or getattr(exc, "message", "") or type(exc).__name__)[:120]
 
 
 async def _invoke_cloud_path(
@@ -326,17 +314,15 @@ You are equipped with powerful tools that override your standard AI limitations.
 COMPLEX_TOOL_GUIDANCE_VISION = (
     """
 ### Vision task (image attached)
-You can see the user's image in this conversation. Analyze it with your vision capabilities first.
+The user's image has been transcribed by a local vision sensor. The user message ends with an [Image content transcribed by vision sensor] block containing the exact visible text and UI details. **Read the "Visible text:" lines** and use them to answer the user. Directly relay the transcribed content — do not describe what you "see" or run workspace searches for image-content questions.
 
 ### Tools
-read_workspace_file, list_workspace_files, search_workspace_docs — compare diagrams/flowcharts to project source
-recall_memories, recall_all_memories — project memory
-ask_user — clarifying questions
+Only use tools if the user asks you to compare/verify against files or search the workspace. For direct questions about the image content, answer from the transcription alone.
 
 ### Rules
-- **Do NOT call web_search, fetch_webpage, or deep_research.** Answers come from the image and local codebase, not the public web.
-- For "verify", "check", or "compare" on a flowchart/diagram: read relevant files under `src/` and state whether the diagram matches the implementation.
-- Prefer one concise answer after at most 1–2 file reads. Do not run long research loops."""
+- **Do NOT call web_search, fetch_webpage, or deep_research.**
+- Answer image-content questions from the transcription without workspace searches.
+- Prefer one concise answer. Do not run long research loops."""
     + _TOOL_CALL_DISCIPLINE
 )
 
@@ -751,11 +737,8 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     security_decision = state.get("security_decision")
     security_reason = state.get("security_reason")
     profile = get_profile()
-    from src.agent.nodes.router import _check_cloud_available
 
-    route = state.get("route") or (
-        "complex-cloud" if _check_cloud_available() else "complex-default"
-    )
+    route = state.get("route") or "complex-cloud"
     has_images = _message_has_image_content(thread_messages) or bool(
         (state.get("router_metadata") or {}).get("has_images")
     )
@@ -911,74 +894,67 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     # Trim conversation history to fit context window.
     trimmed_messages = _trim_tool_history(thread_messages)
 
-    # ── 9.1: Route-based model selection ─────────────────────────────────
-    if route == "complex-cloud":
-        max_context = int(config.get("models.cloud.context_window", 1048576))
-    else:
-        max_context = int(config.get("models.medium.context_window", 16384))
-    model_label = "medium-default"
+    # ── 9.1: Cloud-only model selection ─────────────────────────────────
+    max_context = int(config.get("models.cloud.context_window", 1048576))
+    model_label = "large-cloud"
     anon_mapping = None
     api_tokens = None
     cloud_brief_tokens_est = 0
     anonymization_placeholders_count = 0
 
     original_trimmed_messages = list(trimmed_messages)
-    local_prompt_messages = with_system_for_local_server(system, trimmed_messages)
     fallback_chain: list[dict] = []
     vision_intake_mode = "text"
 
-    if route == "complex-cloud":
-        from .complex_utils.vision_proxy import process_vision_messages
+    from .complex_utils.vision_proxy import process_vision_messages
 
-        volatile_suffix = build_volatile_suffix(
-            memory_context=str(memory_context),
-            knowledge_context=str(knowledge_context),
-            persona=str(persona),
-            extra_suffix=volatile_extra,
-        )
-        payload = await prepare_cloud_payload(
-            state=state,
-            system_stable=stable_core,
-            volatile_suffix=volatile_suffix,
-            trimmed_messages=trimmed_messages,
-            vision_processor=process_vision_messages,
-        )
-        prompt_messages = payload.prompt_messages
-        system = payload.system
-        trimmed_messages = payload.messages
-        anon_mapping = payload.anon_mapping
-        cloud_brief_tokens_est = payload.cloud_brief_tokens_est
-        anonymization_placeholders_count = payload.anonymization_placeholders_count
-        vision_intake_mode = payload.vision_intake_mode
+    volatile_suffix = build_volatile_suffix(
+        memory_context=str(memory_context),
+        knowledge_context=str(knowledge_context),
+        persona=str(persona),
+        extra_suffix=volatile_extra,
+    )
+    payload = await prepare_cloud_payload(
+        state=state,
+        system_stable=stable_core,
+        volatile_suffix=volatile_suffix,
+        trimmed_messages=trimmed_messages,
+        vision_processor=process_vision_messages,
+    )
+    prompt_messages = payload.prompt_messages
+    system = payload.system
+    trimmed_messages = payload.messages
+    anon_mapping = payload.anon_mapping
+    cloud_brief_tokens_est = payload.cloud_brief_tokens_est
+    anonymization_placeholders_count = payload.anonymization_placeholders_count
+    vision_intake_mode = payload.vision_intake_mode
 
-        if not payload.vision_proxy_ok and has_images:
-            fallback_chain.append(
+    if not payload.vision_proxy_ok and has_images:
+        logger.warning(
+            "[complex] vision_proxy failed; cloud-only mode, returning error"
+        )
+        return {
+            "messages": [
+                AIMessage(
+                    content="Cloud unavailable — please try again or disable complex reasoning."
+                )
+            ],
+            "model_used": "large-cloud-failed",
+            "pending_tool_calls": False,
+            "security_decision": None,
+            "security_reason": None,
+            "api_tokens_used": state.get("api_tokens_used"),
+            "fallback_chain": [
                 {
                     "model": "large-cloud",
                     "status": "failed",
                     "reason": "vision_proxy_failed",
                 }
-            )
-            blocked = block_cloud_local_fallback(
-                fallback_chain=fallback_chain,
-                reason="vision_proxy_failed",
-                vision_intake_mode="proxy",
-                cloud_brief_tokens_est=cloud_brief_tokens_est,
-                anonymization_placeholders_count=anonymization_placeholders_count,
-            )
-            if blocked:
-                blocked.update(_vision_telemetry("proxy"))
-                return blocked
-            logger.warning(
-                "[complex] vision_proxy failed; falling back to complex-default"
-            )
-            route = "complex-default"
-            max_context = int(config.get("models.medium.context_window", 16384))
-            prompt_messages = normalize_messages_for_lm_studio(local_prompt_messages)
-            anon_mapping = None
-            vision_intake_mode = "fallback"
-    else:
-        prompt_messages = normalize_messages_for_lm_studio(local_prompt_messages)
+            ],
+            "cloud_brief_tokens_est": cloud_brief_tokens_est,
+            "anonymization_placeholders_count": anonymization_placeholders_count,
+            **_vision_telemetry("proxy"),
+        }
 
     audit_debug(
         "agent.vision",
@@ -992,43 +968,36 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     if mode == "tools_off":
         try:
             loop_start_time = asyncio.get_running_loop().time()
-            if route == "complex-cloud":
-                llm = await get_cloud_llm(profile.get("cloud_model_tier"))
-                model_label = "large-cloud"
-            else:
-                llm = await get_medium_llm("default")
-                model_label = "medium-default"
+            llm = await get_cloud_llm(profile.get("cloud_model_tier"))
+            model_label = "large-cloud"
             log_model_attempt(model_label, "success", reason="tools_off_direct")
         except CloudUnavailableError as e:
-            err_reason = _format_cloud_error_reason(e)
-            log_model_attempt(model_label or route, "failed", reason=err_reason)
+            err_reason = (str(e) or type(e).__name__)[:120]
+            log_model_attempt("large-cloud", "failed", reason=err_reason)
             fallback_chain.append(
                 {
-                    "model": model_label or route,
+                    "model": "large-cloud",
                     "status": "failed",
                     "reason": err_reason,
                 }
             )
-            blocked = block_cloud_local_fallback(
-                fallback_chain=fallback_chain,
-                reason="fallback_from_unavailable",
-                cloud_brief_tokens_est=cloud_brief_tokens_est,
-                anonymization_placeholders_count=anonymization_placeholders_count,
-                vision_intake_mode=vision_intake_mode,
-            )
-            if blocked:
-                blocked.update(_vision_telemetry(vision_intake_mode))
-                return blocked
-            logger.warning(
-                "[complex] Model %s unavailable (%s), falling back to medium-default",
-                route,
-                e,
-            )
-            llm = await get_medium_llm("default")
-            model_label = "medium-default-fallback"
-            log_model_attempt(
-                model_label, "success", reason="fallback_from_unavailable"
-            )
+            logger.warning("[complex] Cloud unavailable in tools_off mode: %s", e)
+            return {
+                "messages": [
+                    AIMessage(
+                        content="Cloud unavailable — please try again or disable complex reasoning."
+                    )
+                ],
+                "model_used": "large-cloud-failed",
+                "pending_tool_calls": False,
+                "security_decision": None,
+                "security_reason": None,
+                "api_tokens_used": state.get("api_tokens_used"),
+                "fallback_chain": fallback_chain,
+                "cloud_brief_tokens_est": cloud_brief_tokens_est,
+                "anonymization_placeholders_count": anonymization_placeholders_count,
+                **_vision_telemetry(vision_intake_mode),
+            }
 
         budget = _cap_budget_to_context(
             prompt_messages,
@@ -1037,21 +1006,18 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             max_context,
         )
         api_tokens = None
-        if route == "complex-cloud":
-            response, api_tokens = await _invoke_cloud_path(
-                llm=llm,
-                prompt_messages=prompt_messages,
-                tools=None,
-                budget=budget,
-                state=state,
-                profile=profile,
-                mode=mode,
-                tools_bound=False,
-            )
-            if anon_mapping:
-                response = _deanonymize_ai_message(response, anon_mapping)
-        else:
-            response = await llm.bind(max_tokens=budget).ainvoke(prompt_messages)
+        response, api_tokens = await _invoke_cloud_path(
+            llm=llm,
+            prompt_messages=prompt_messages,
+            tools=None,
+            budget=budget,
+            state=state,
+            profile=profile,
+            mode=mode,
+            tools_bound=False,
+        )
+        if anon_mapping:
+            response = _deanonymize_ai_message(response, anon_mapping)
         return {
             "messages": [
                 response
@@ -1095,61 +1061,40 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             web_budget.limits,
         )
 
-    # ── 9.4: Tiered fallback — model acquisition ────────────────────────
+    # ── 9.4: Cloud model acquisition ─────────────────────────────────────
     try:
-        if route == "complex-cloud":
-            loop_start_time = asyncio.get_running_loop().time()
-            llm = await get_cloud_llm(profile.get("cloud_model_tier"))
-            model_label = "large-cloud"
-            log_model_attempt("large-cloud", "success", reason="initial_route")
-        else:
-            loop_start_time = asyncio.get_running_loop().time()
-            llm = await get_medium_llm("default")
-            model_label = "medium-default"
-            log_model_attempt("medium-default", "success", reason="initial_route")
+        loop_start_time = asyncio.get_running_loop().time()
+        llm = await get_cloud_llm(profile.get("cloud_model_tier"))
+        model_label = "large-cloud"
+        log_model_attempt("large-cloud", "success", reason="initial_route")
     except CloudUnavailableError as e:
-        err_reason = _format_cloud_error_reason(e)
+        err_reason = (str(e) or type(e).__name__)[:120]
         fallback_chain.append(
             {
-                "model": model_label if model_label != "medium-default" else route,
+                "model": "large-cloud",
                 "status": "failed",
                 "reason": err_reason,
                 "duration_ms": 0,
             }
         )
-        log_model_attempt(
-            model_label if model_label != "medium-default" else route,
-            "failed",
-            reason=err_reason,
-        )
-        blocked = block_cloud_local_fallback(
-            fallback_chain=fallback_chain,
-            reason="fallback_from_unavailable",
-            cloud_brief_tokens_est=cloud_brief_tokens_est,
-            anonymization_placeholders_count=anonymization_placeholders_count,
-            vision_intake_mode=vision_intake_mode,
-        )
-        if blocked:
-            blocked.update(_vision_telemetry(vision_intake_mode))
-            return blocked
-        logger.warning(
-            "[complex] Model %s unavailable (%s), falling back to medium-default",
-            route,
-            e,
-        )
-        llm = await get_medium_llm("default")
-        model_label = "medium-default-fallback"
-        log_model_attempt(
-            "medium-default-fallback", "success", reason="fallback_from_unavailable"
-        )
-        fallback_chain.append(
-            {
-                "model": "medium-default-fallback",
-                "status": "success",
-                "reason": "fallback_from_unavailable",
-                "duration_ms": 0,
-            }
-        )
+        log_model_attempt("large-cloud", "failed", reason=err_reason)
+        logger.warning("[complex] Cloud unavailable: %s", e)
+        return {
+            "messages": [
+                AIMessage(
+                    content="Cloud unavailable — please try again or disable complex reasoning."
+                )
+            ],
+            "model_used": "large-cloud-failed",
+            "pending_tool_calls": False,
+            "security_decision": None,
+            "security_reason": None,
+            "api_tokens_used": state.get("api_tokens_used"),
+            "fallback_chain": fallback_chain,
+            "cloud_brief_tokens_est": cloud_brief_tokens_est,
+            "anonymization_placeholders_count": anonymization_placeholders_count,
+            **_vision_telemetry(vision_intake_mode),
+        }
 
     budget = _cap_budget_to_context(
         prompt_messages,
@@ -1158,304 +1103,130 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         max_context,
     )
     if tools_for_invoke:
-        if route == "complex-cloud":
-            bound_llm = llm.bind_tools(tools_for_invoke, strict=True).bind(
-                max_tokens=budget
-            )
-        else:
-            bound_llm = llm.bind_tools(tools_for_invoke).bind(max_tokens=budget)
+        bound_llm = llm.bind_tools(tools_for_invoke, strict=True).bind(
+            max_tokens=budget
+        )
     else:
         bound_llm = llm.bind(max_tokens=budget)
     audit_debug("agent.token", "budget_computed", token_budget=budget, route=route)
 
-    # ── 9.4: Tiered fallback — LLM invocation with error handling ────────
+    # ── Cloud LLM invocation with error handling ─────────────────────────
     try:
-        if route == "complex-cloud":
-            response, api_tokens = await _invoke_cloud_path(
-                llm=llm,
-                prompt_messages=prompt_messages,
-                tools=tools_for_invoke,
-                budget=budget,
-                state=state,
-                profile=profile,
-                mode=mode,
-                tools_bound=bool(tools_for_invoke),
-            )
-        else:
-            response = await bound_llm.ainvoke(prompt_messages)
+        response, api_tokens = await _invoke_cloud_path(
+            llm=llm,
+            prompt_messages=prompt_messages,
+            tools=tools_for_invoke,
+            budget=budget,
+            state=state,
+            profile=profile,
+            mode=mode,
+            tools_bound=bool(tools_for_invoke),
+        )
     except Exception as e:
         error_str = str(e).lower()
-        if route == "complex-cloud":
-            err_reason = _format_cloud_error_reason(e)
-            logger.exception("[complex] Cloud invocation failed: %s", err_reason)
-            if "429" in str(e) or "rate" in error_str:
-                # Rate limit: retry after delay
-                loop_start_time = asyncio.get_running_loop().time()
-                await asyncio.sleep(2)
-                try:
-                    response, api_tokens = await _invoke_cloud_path(
-                        llm=llm,
-                        prompt_messages=prompt_messages,
-                        tools=tools_for_invoke,
-                        budget=budget,
-                        state=state,
-                        profile=profile,
-                        mode=mode,
-                        tools_bound=bool(tools_for_invoke),
-                    )
-                except Exception:
-                    logger.warning(
-                        "[complex] Cloud retry failed, falling back to medium-default"
-                    )
-                    fallback_chain.append(
-                        {
-                            "model": "large-cloud",
-                            "status": "failed",
-                            "reason": "rate_limit_retry_failed",
-                            "duration_ms": max(
-                                0,
-                                int(
-                                    (
-                                        asyncio.get_running_loop().time()
-                                        - loop_start_time
-                                    )
-                                    * 1000
-                                ),
-                            )
-                            if loop_start_time
-                            else 0,
-                        }
-                    )
-                    blocked = block_cloud_local_fallback(
-                        fallback_chain=fallback_chain,
-                        reason="fallback_rate_limit",
-                        cloud_brief_tokens_est=cloud_brief_tokens_est,
-                        anonymization_placeholders_count=anonymization_placeholders_count,
-                        vision_intake_mode=vision_intake_mode,
-                    )
-                    if blocked:
-                        blocked.update(_vision_telemetry(vision_intake_mode))
-                        return blocked
-                    llm = await get_medium_llm("default")
-                    prompt_messages = strip_image_blocks_from_messages(
-                        with_system_for_local_server(system, original_trimmed_messages)
-                    )
-                    budget = _cap_budget_to_context(
-                        prompt_messages,
-                        state.get("token_budget")
-                        or int(config.get("complex.default_token_budget", 4096)),
-                        max_context,
-                    )
-                    fb_start = asyncio.get_running_loop().time()
-                    response = (
-                        await llm.bind_tools(tools)
-                        .bind(max_tokens=budget)
-                        .ainvoke(prompt_messages)
-                    )
-                    model_label = "medium-default-fallback"
-                    fallback_chain.append(
-                        {
-                            "model": "medium-default-fallback",
-                            "status": "success",
-                            "reason": "fallback_rate_limit",
-                            "duration_ms": max(
-                                0,
-                                int(
-                                    (asyncio.get_running_loop().time() - fb_start)
-                                    * 1000
-                                ),
-                            ),
-                        }
-                    )
-            elif "401" in str(e) or "403" in str(e):
-                # Auth error: fall back with note
+        err_reason = (str(e) or type(e).__name__)[:120]
+        logger.exception("[complex] Cloud invocation failed: %s", err_reason)
+        if "429" in str(e) or "rate" in error_str:
+            loop_start_time = asyncio.get_running_loop().time()
+            await asyncio.sleep(2)
+            try:
+                response, api_tokens = await _invoke_cloud_path(
+                    llm=llm,
+                    prompt_messages=prompt_messages,
+                    tools=tools_for_invoke,
+                    budget=budget,
+                    state=state,
+                    profile=profile,
+                    mode=mode,
+                    tools_bound=bool(tools_for_invoke),
+                )
+            except Exception:
+                logger.warning("[complex] Cloud retry failed, returning error")
                 fallback_chain.append(
                     {
                         "model": "large-cloud",
                         "status": "failed",
-                        "reason": "auth_error_401_403",
-                        "duration_ms": max(
-                            0,
-                            int(
-                                (
-                                    asyncio.get_running_loop().time()
-                                    - (
-                                        loop_start_time
-                                        or asyncio.get_running_loop().time()
-                                    )
-                                )
-                                * 1000
-                            ),
+                        "reason": "rate_limit_retry_failed",
+                    }
+                )
+                return {
+                    "messages": [
+                        AIMessage(
+                            content="Cloud unavailable — please try again or disable complex reasoning."
                         )
-                        if loop_start_time
-                        else 0,
-                    }
-                )
-                blocked = block_cloud_local_fallback(
-                    fallback_chain=fallback_chain,
-                    reason="fallback_auth_error",
-                    cloud_brief_tokens_est=cloud_brief_tokens_est,
-                    anonymization_placeholders_count=anonymization_placeholders_count,
-                    vision_intake_mode=vision_intake_mode,
-                )
-                if blocked:
-                    blocked.update(_vision_telemetry(vision_intake_mode))
-                    return blocked
-                llm = await get_medium_llm("default")
-                prompt_messages = strip_image_blocks_from_messages(
-                    with_system_for_local_server(system, original_trimmed_messages)
-                )
-                budget = _cap_budget_to_context(
-                    prompt_messages,
-                    state.get("token_budget", max_context)
-                    or int(config.get("complex.default_token_budget", 4096)),
-                    max_context,
-                )
-                fb_start = asyncio.get_running_loop().time()
-                response = (
-                    await llm.bind_tools(tools)
-                    .bind(max_tokens=budget)
-                    .ainvoke(prompt_messages)
-                )
-                content_str = str(getattr(response, "content", "") or "").strip()
-                if not content_str and not getattr(response, "tool_calls", None):
-                    synth_response = _fallback_for_blank_response(
-                        thread_messages, web_search_enabled=web_on
-                    )
-                    content_str = str(
-                        getattr(synth_response, "content", "") or ""
-                    ).strip()
-                response = AIMessage(
-                    content=content_str
-                    + "\n\n⚠️ Note: DeepSeek API key may be invalid. Check Settings → Profile → Cloud section."
-                )
-                model_label = "medium-default-fallback"
-                fallback_chain.append(
-                    {
-                        "model": "medium-default-fallback",
-                        "status": "success",
-                        "reason": "fallback_auth_error",
-                        "duration_ms": max(
-                            0,
-                            int((asyncio.get_running_loop().time() - fb_start) * 1000),
-                        ),
-                    }
-                )
-            else:
-                logger.warning(
-                    "[complex] Cloud error (%s), falling back to medium-default",
-                    err_reason,
-                )
-                fallback_chain.append(
-                    {
-                        "model": "large-cloud",
-                        "status": "failed",
-                        "reason": err_reason,
-                        "duration_ms": max(
-                            0,
-                            int(
-                                (
-                                    asyncio.get_running_loop().time()
-                                    - (
-                                        loop_start_time
-                                        or asyncio.get_running_loop().time()
-                                    )
-                                )
-                                * 1000
-                            ),
-                        )
-                        if loop_start_time
-                        else 0,
-                    }
-                )
-                blocked = block_cloud_local_fallback(
-                    fallback_chain=fallback_chain,
-                    reason="fallback_generic_cloud_error",
-                    cloud_brief_tokens_est=cloud_brief_tokens_est,
-                    anonymization_placeholders_count=anonymization_placeholders_count,
-                    vision_intake_mode=vision_intake_mode,
-                )
-                if blocked:
-                    blocked.update(_vision_telemetry(vision_intake_mode))
-                    return blocked
-                llm = await get_medium_llm("default")
-                prompt_messages = strip_image_blocks_from_messages(
-                    with_system_for_local_server(system, original_trimmed_messages)
-                )
-                budget = _cap_budget_to_context(
-                    prompt_messages,
-                    state.get("token_budget")
-                    or int(config.get("complex.default_token_budget", 4096)),
-                    max_context,
-                )
-                fb_start = asyncio.get_running_loop().time()
-                response = (
-                    await llm.bind_tools(tools)
-                    .bind(max_tokens=budget)
-                    .ainvoke(prompt_messages)
-                )
-                model_label = "medium-default-fallback"
-                fallback_chain.append(
-                    {
-                        "model": "medium-default-fallback",
-                        "status": "success",
-                        "reason": "fallback_generic_cloud_error",
-                        "duration_ms": max(
-                            0,
-                            int((asyncio.get_running_loop().time() - fb_start) * 1000),
-                        ),
-                    }
-                )
-        else:
-            # medium-default failure — produce a graceful error instead of crashing the graph
-            logger.error(
-                "[complex] Medium-default model failed with no fallback available: %s",
-                e,
-            )
+                    ],
+                    "model_used": "large-cloud-failed",
+                    "pending_tool_calls": False,
+                    "security_decision": None,
+                    "security_reason": None,
+                    "api_tokens_used": state.get("api_tokens_used"),
+                    "fallback_chain": fallback_chain,
+                    "cloud_brief_tokens_est": cloud_brief_tokens_est,
+                    "anonymization_placeholders_count": anonymization_placeholders_count,
+                    **_vision_telemetry(vision_intake_mode),
+                }
+        elif "401" in str(e) or "403" in str(e):
             fallback_chain.append(
                 {
-                    "model": route,
+                    "model": "large-cloud",
                     "status": "failed",
-                    "reason": str(e)[:120],
-                    "duration_ms": max(
-                        0,
-                        int(
-                            (
-                                asyncio.get_running_loop().time()
-                                - (loop_start_time or asyncio.get_running_loop().time())
-                            )
-                            * 1000
-                        ),
-                    )
-                    if loop_start_time
-                    else 0,
+                    "reason": "auth_error_401_403",
                 }
             )
-            return AgentState(  # type: ignore[call-arg]
-                messages=[
+            logger.warning("[complex] Cloud auth error, returning error")
+            return {
+                "messages": [
                     AIMessage(
-                        content="I encountered an error while processing your request. "
-                        "The language model is currently unavailable. "
-                        "Please check that LM Studio is running and try again."
+                        content="Unable to connect to the cloud model — your API key may be invalid or expired. "
+                        "Please check Settings and try again."
                     )
                 ],
-                fallback_chain=fallback_chain,
+                "model_used": "large-cloud-failed",
+                "pending_tool_calls": False,
+                "security_decision": None,
+                "security_reason": None,
+                "api_tokens_used": state.get("api_tokens_used"),
+                "fallback_chain": fallback_chain,
+                "cloud_brief_tokens_est": cloud_brief_tokens_est,
+                "anonymization_placeholders_count": anonymization_placeholders_count,
+                **_vision_telemetry(vision_intake_mode),
+            }
+        else:
+            logger.warning("[complex] Cloud error: %s", err_reason)
+            fallback_chain.append(
+                {
+                    "model": "large-cloud",
+                    "status": "failed",
+                    "reason": err_reason,
+                }
             )
+            return {
+                "messages": [
+                    AIMessage(
+                        content="Cloud unavailable — please try again or disable complex reasoning."
+                    )
+                ],
+                "model_used": "large-cloud-failed",
+                "pending_tool_calls": False,
+                "security_decision": None,
+                "security_reason": None,
+                "api_tokens_used": state.get("api_tokens_used"),
+                "fallback_chain": fallback_chain,
+                "cloud_brief_tokens_est": cloud_brief_tokens_est,
+                "anonymization_placeholders_count": anonymization_placeholders_count,
+                **_vision_telemetry(vision_intake_mode),
+            }
 
     # If we fell back from cloud, skip deanonymization — fallback model got non-anonymized input
     if "fallback" in model_label and anon_mapping:
         anon_mapping = None
 
     # ── 9.2 continued: Deanonymize response (before stripping think tags) ─
-    if anon_mapping and route == "complex-cloud":
+    if anon_mapping:
         response = _deanonymize_ai_message(response, anon_mapping)
 
     # ── 9.5: Cloud token usage tracking ──────────────────────────────────
-    if (
-        route == "complex-cloud"
-        and "fallback" not in model_label
-        and api_tokens is None
-    ):
+    if "fallback" not in model_label and api_tokens is None:
         usage = extract_api_token_usage(response)
         if usage.get("prompt_tokens"):
             api_tokens = {
@@ -1489,7 +1260,6 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         )
     synthesis_retry = False
     retry_still_dsml = False
-    local_synthesis = False
     if (
         force_web_synthesis
         and route == "complex-cloud"
@@ -1544,52 +1314,6 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                     api_tokens = retry_usage
         except Exception as exc:
             logger.warning("[complex] Cloud synthesis retry failed: %s", exc)
-
-    if (
-        force_web_synthesis
-        and not synthesis_retry
-        and needs_web_synthesis_retry(
-            has_tool_calls=has_tool_calls,
-            raw_visible=raw_visible,
-            cleaned_visible=cleaned_visible,
-        )
-    ):
-        user_query = _latest_user_text(thread_messages)
-        query_hint = (
-            f" Answer the user's question: {user_query[:300]}" if user_query else ""
-        )
-        synth_nudge = HumanMessage(
-            content=(
-                "[FINAL ANSWER REQUIRED] Use the search results and tool outputs already "
-                "in this thread."
-                f"{query_hint} "
-                "Write a complete answer in plain English. "
-                "Do NOT output DSML, tool_calls, or any tool invocation syntax."
-            )
-        )
-        try:
-            if not cloud_no_local_fallback_enabled():
-                local_prompt = strip_image_blocks_from_messages(
-                    with_system_for_local_server(
-                        system, thread_messages + [synth_nudge]
-                    )
-                )
-                local_budget = _cap_budget_to_context(local_prompt, budget, max_context)
-                local_llm = await get_medium_llm("default")
-                local_resp = await local_llm.bind(max_tokens=local_budget).ainvoke(
-                    local_prompt
-                )
-                local_text = _strip_dsml_blocks(
-                    _strip_thinking_tags(str(getattr(local_resp, "content", "") or ""))
-                )
-                if len(local_text.strip()) >= 80:
-                    response = AIMessage(content=local_text)
-                    local_synthesis = True
-                    model_label = "medium-default-synthesis"
-                    dsml_stall = False
-                    cleaned_visible = local_text
-        except Exception as exc:
-            logger.warning("[complex] Local synthesis fallback failed: %s", exc)
 
     if not has_tool_calls and (dsml_stall or not cleaned_visible.strip()):
         response = _fallback_for_blank_response(
@@ -1752,7 +1476,7 @@ async def complex_tool_action_node(state: AgentState) -> AgentState:
         web_on = True
     web_on = bool(web_on)
 
-    route = state.get("route") or "complex-default"
+    route = state.get("route") or "complex-cloud"
     has_images = _message_has_image_content(current_messages) or bool(
         (state.get("router_metadata") or {}).get("has_images")
     )

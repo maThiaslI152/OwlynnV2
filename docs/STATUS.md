@@ -12,7 +12,16 @@ audience: agent
 
 ## Overview
 
-Project status tracker. Last updated: 2026-06-18 — strict-cloud BUG-24..29 fixes; cloud tool-loop compaction; eval harness turn-scoped capture.
+Project status tracker. Last updated: 2026-06-19 — Qwen3-VL-4B vision proxy replaces Florence-2; cloud-only pivot stable.
+
+## Recent Changes (2026-06-19)
+
+| Change | Impact | Doc |
+|--------|--------|-----|
+| **Qwen3-VL-4B vision proxy** | Replaces Florence-2 (unloadable via LM Studio API). Full multimodal VLM; F9.1 100/100; 11 source files + 16 docs updated. LM Studio: 4 models, 7.5 GB. | [`changes/qwen3vl-vision-proxy/CHANGELOG.md`](changes/qwen3vl-vision-proxy/CHANGELOG.md) |
+| **Cloud-only pivot** | 3-tier → 2-tier cloud-only; `complex-default` removed; all complex reasoning → `complex-cloud`; local Qwen eliminated; medium slot removed from LLM pool; memory extraction → gemma-4-e2b; simple retry-once MiniCPM5; strict-cloud concept removed (`cloud_strict.py` deleted); 26 test files + 8 docs rewired | [`changes/cloud-only-pivot/CHANGELOG.md`](changes/cloud-only-pivot/CHANGELOG.md) |
+| **R5 coherence self-correction** | `coherence_retry.py` node + `coherence_retry_gate`; bounded by `coherence.max_retries: 1`; threshold 0.4; cloud-only (no local fallback) | [`changes/coherence-self-correction/CHANGELOG.md`](changes/coherence-self-correction/CHANGELOG.md) |
+| **Playwright MCP** | `@playwright/mcp` host-native (npx + cached Chromium); no podman container overhead | — |
 
 ## Recent Changes (2026-06-18)
 
@@ -42,16 +51,16 @@ Project status tracker. Last updated: 2026-06-18 — strict-cloud BUG-24..29 fix
 | **Chrome Search Bridge** | Browser extension search routing via Brave to bypass bot detection/CAPTCHAs | [`changes/browser-extension-search-bridge/CHANGELOG.md`](changes/browser-extension-search-bridge/CHANGELOG.md) |
 | **Frontier eval harness** | WS tool merge, idle stall exit, F4 fixture, M4 greeting gate, F8/F9 fixes; 82% → **~94%** | [`changes/frontier-eval-memory-session/CHANGELOG.md`](changes/frontier-eval-memory-session/CHANGELOG.md) |
 | **Scoring-only cloud strict** | Qwen fallback on cloud-intended turns caps grade at 49 (no runtime block) | `scripts/run_local_frontier_eval.py` |
-| **Florence vision hardening** | LM Studio auto-load, no Qwen OCR fallback, preflight + telemetry | `lm_studio_florence.py`, `vision_model_manager.py` |
+| **Vision proxy upgrade** | Qwen3-VL-4B replaces Florence-2; full multimodal VLM; LM Studio API load confirmed; F9.1 100/100 | — |
 | **Background memory extraction** | Qwen extraction defers until chat idle + lower CPU nice | `local_llm_scheduler.py` |
 
 ## Recent Changes (2026-06-04)
 
 | Change | Impact | Commits |
 |--------|--------|---------|
-| **DeepSeek V4 Upgrade** | 1M Context window, extra_body config, SwapManager removal, Vision guardrail | pending |
+| **DeepSeek V4 Upgrade** | 1M Context window, extra_body config, SwapManager removal, Vision guardrail | Complete |
 | **Config centralization** | ~100 settings → 1 file (`defaults.yaml`). Override chain: YAML → env → profile | `bb04b25` |
-| **MiniCPM5 router** | Router: minicpm5-1b. Complex: qwen3.5-9b Q6_K. | `dd69035` → `6367323` |
+| **MiniCPM5 router** | Router: minicpm5-1b. Complex: deepseek-v4-flash (cloud). | `dd69035` → `6367323` |
 | **14 bugs fixed** | HITL GraphInterrupt, keyword bypass, thinking budgets, request_timeout, startup race, context overflow | `2b907d2` → `acd9f8d` |
 | **Router bypasses** | Code review, creative writing, explain/compare → force complex (9B model) | `6da48bd` |
 | **Config audit** | 4 missing entries, 6 stale fallbacks synced, ConfigValidator (60+ paths) | `4011a27` |
@@ -63,8 +72,9 @@ Project status tracker. Last updated: 2026-06-18 — strict-cloud BUG-24..29 fix
 | Slot | Model | Context | Temp | Max Tokens |
 |------|-------|---------|------|------------|
 | Router | `minicpm5-1b` | 8192 | 0.2 | 512 |
-| Complex | `qwen3.5-9b-uncensored-hauhaucs-aggressive@q6_k` | 16384 | 0.7 | 16384 |
 | Cloud | `deepseek-v4-flash` | 1048576 | 0.4 | 8192 |
+| Vision | `qwen3-vl-4b-instruct-c_abliterated-v2-mlx` | 8192 | 0.1 | 2048 |
+| Extraction | `gemma-4-e2b-heretic-uncensored-mlx` | 8192 | 0.1 | 1024 |
 
 ## Evaluation Trajectory
 
@@ -82,11 +92,13 @@ Project status tracker. Last updated: 2026-06-18 — strict-cloud BUG-24..29 fix
 | v11 (2026-06-17) | **91.3%** strict cloud (1644/1800) | Runtime `cloud_no_local_fallback`; F5.1 only `qwen_fallback` — [`evaluations/strict-cloud-debug-2026-06-16.md`](evaluations/strict-cloud-debug-2026-06-16.md) |
 | v11b (2026-06-18) | **Fixes landed** (re-run pending) | BUG-27..29 + educator harness/product fixes committed |
 
+| v12b (2026-06-19) | **85.0%** cloud-only pivot (1615/1900) | First eval post-pivot. Effective ~93.2% (transient routing + Florence unavailable). No pivot regression. — [`evaluations/cloud-only-pivot-eval-2026-06-19.md`](evaluations/cloud-only-pivot-eval-2026-06-19.md) |
+| v12c (2026-06-19) | **Qwen3-VL-4B** replaces Florence-2. F9.1: 100/100. | Florence unloadable via LM Studio API — Qwen3-VL fixes this. |
+
 ## Remaining Tasks
 
 ### 🔴 High Impact
 - **R1**: One-turn lag — message correlation IDs in browser (✅ Fixed)
-- **R5**: Response coherence check — detect wrong answers, calibrate confidence
 - **R2**: Inference latency — 105-276s vs SLO <8s (✅ Fixed via context optimization for M4 Air)
 - **BUG-17**: Vision route not deterministic — image attach doesn't reliably trigger `vision_cloud` (F9.1 variance) (✅ Fixed)
 - **BUG-18**: Simple-path empty reply — streaming bubble doesn't surface even when route + model correct (F1.1) (✅ Fixed)
@@ -98,7 +110,6 @@ Project status tracker. Last updated: 2026-06-18 — strict-cloud BUG-24..29 fix
 
 ### 🟡 Medium Impact
 - **R10**: Frontier eval ≥97% — at **~94%** after harness fixes; F1/F6/F9 variance remains
-- **R3**: Cloud E2E with valid DeepSeek key (✅ `tests/test_cloud_e2e_network.py`, live `./scripts/ci.sh --network`, 2026-06-10)
 - **R7**: Web search aggregate timeout (✅ `tests/test_web_search_aggregate_timeout.py`)
 - **R9**: API thread_id in OpenAI compat config (✅ `tests/test_openai_thread_persistence.py`)
 - **R8**: Thermal throttling — run evals on AC power, not battery (✅ Mitigated via defaults.yaml)
@@ -139,15 +150,14 @@ frontend-v2/src/App.tsx        # Frontend runtime
 
 | Key | Value |
 |-----|-------|
-| `small_llm_model_name` | `ibm-grok4-ultrafast-coder-1b` |
-| `medium_models.default` | `gemma-4-e4b-uncensored-hauhaucs-aggressive` |
+| `small_llm_model_name` | `minicpm5-1b` |
 
 ### Core Capabilities Status
 
 | Capability | Status |
 |------------|--------|
 | LangGraph flow (memory \u2192 route \u2192 complex \u2192 tool \u2192 memory) | Active |
-| Hybrid model routing (small/medium/cloud) | Active |
+| Cloud-primary routing (router → vision → complex-cloud) | Active |
 | M-tier model swap logic | Removed (2026-06-05) |
 | Security proxy HITL approval | Active |
 | Backend API + WebSocket chat | Active |
@@ -244,7 +254,7 @@ frontend-v2/src/App.tsx        # Frontend runtime
 
 ## Next Plan
 
-All known Phase 8 bugs (BUG-1 through BUG-11) are fixed. Open work is remaining tasks R3, R5, R7, R9 (see above) and architectural concerns marked Open in the table.
+All known Phase 8 bugs (BUG-1 through BUG-29) are fixed. Open work is R10 (eval ≥97%) and architectural concerns marked Open in the table.
 
 ### Lingering Risks
 

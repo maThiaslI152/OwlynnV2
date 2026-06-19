@@ -517,6 +517,37 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                     }
                                 )
 
+                                # Signal that coherence_retry will run so the UI can
+                                # show a transient "Improving answer..." indicator.
+                                if (
+                                    isinstance(confidence, (int, float))
+                                    and float(confidence) < 0.4
+                                ):
+                                    await _send_ws(
+                                        {
+                                            "type": "coherence_retry_started",
+                                            "thread_id": thread_id,
+                                            "attempt": 1,
+                                            "original_confidence": confidence,
+                                            "original_reason": coherence.get(
+                                                "reason", ""
+                                            ),
+                                        }
+                                    )
+
+                        # When coherence_retry completes, emit a completion event so
+                        # the frontend can dismiss the transient retry indicator.
+                        if node == "coherence_retry":
+                            if isinstance(output, dict):
+                                await _send_ws(
+                                    {
+                                        "type": "coherence_retry_completed",
+                                        "thread_id": thread_id,
+                                        "attempt": output.get("_coherence_retry_round")
+                                        or 1,
+                                    }
+                                )
+
                                 if last_model_used:
                                     model_info_payload = {
                                         "type": "model_info",

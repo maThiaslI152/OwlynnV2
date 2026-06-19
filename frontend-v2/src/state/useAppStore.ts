@@ -161,6 +161,9 @@ interface AppState {
   responseStyle: string | null
   browserPageContext: import('../lib/browserPageContext').BrowserPageContext | null
   browserPageContextNonce: number
+  coherenceRetryActive: boolean
+  coherenceRetryAttempt: number
+  coherenceRetryOriginalConfidence: number | null
   setConnectionState: (state: ConnectionState) => void
   addMessage: (message: ChatMessage) => void
   appendStreamChunk: (chunk: string) => void
@@ -192,6 +195,7 @@ interface AppState {
   clearSession: () => void
   setActivePersonaId: (id: string) => void
   setPendingCorrelationId: (id: string | null) => void
+  setCoherenceRetryActive: (active: boolean, attempt?: number, confidence?: number | null) => void
   setEvalResponseStyle: (style: string | null) => void
   setResponseStyle: (style: string | null) => void
   applyBrowserPageContext: (ctx: import('../lib/browserPageContext').BrowserPageContext) => void
@@ -230,6 +234,9 @@ export const useAppStore = create<AppState>((set) => ({
   responseStyle: null,
   browserPageContext: null,
   browserPageContextNonce: 0,
+  coherenceRetryActive: false,
+  coherenceRetryAttempt: 0,
+  coherenceRetryOriginalConfidence: null,
   setConnectionState: (connectionState) => set({ connectionState }),
   addMessage: (message) =>
     set((state) => ({
@@ -355,9 +362,18 @@ export const useAppStore = create<AppState>((set) => ({
       interruptChoices: null,
       inlineSecurityPrompt: null,
       pendingCorrelationId: null,
+      coherenceRetryActive: false,
+      coherenceRetryAttempt: 0,
+      coherenceRetryOriginalConfidence: null,
     }),
   setActivePersonaId: (activePersonaId) => set({ activePersonaId }),
   setPendingCorrelationId: (pendingCorrelationId) => set({ pendingCorrelationId }),
+  setCoherenceRetryActive: (active, attempt = 1, confidence = null) =>
+    set({
+      coherenceRetryActive: active,
+      coherenceRetryAttempt: active ? attempt : 0,
+      coherenceRetryOriginalConfidence: active ? confidence : null,
+    }),
   setEvalResponseStyle: (evalResponseStyle) => set({ evalResponseStyle }),
   setResponseStyle: (responseStyle) => set({ responseStyle }),
   applyBrowserPageContext: (ctx) =>

@@ -22,14 +22,8 @@ from src.agent.state import AgentState
 
 VALID_MODEL_USED = [
     "small-local",
-    "medium-default",
-    "medium-vision",
-    "medium-longctx",
     "large-cloud",
     "small-local-fallback",
-    "medium-default-fallback",
-    "medium-vision-fallback",
-    "medium-longctx-fallback",
     "large-cloud-fallback",
 ]
 

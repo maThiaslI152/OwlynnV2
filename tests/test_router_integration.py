@@ -89,7 +89,7 @@ async def test_router_skill_hitl_round_trip(
     )
     mock_interrupt.return_value = {
         "toolbox": ["web_search"],
-        "route": "complex-default",
+        "route": "complex-cloud",
     }
 
     research_skill = _make_skill(
@@ -162,7 +162,7 @@ async def test_router_skill_hitl_resume(
     # Simulate user choosing the research skill
     mock_interrupt.return_value = {
         "toolbox": ["web_search"],
-        "route": "complex-default",
+        "route": "complex-cloud",
         "skill_name": "research_assistant.md",
     }
 
@@ -189,7 +189,7 @@ async def test_router_skill_hitl_resume(
     # ── Assert ───────────────────────────────────────────────────────
     assert result["router_clarification_used"] is True
     assert result["selected_toolboxes"] == ["web_search"]
-    assert result["route"] == "complex-default"
+    assert result["route"] == "complex-cloud"
     assert "router_metadata" in result
 
 
@@ -221,7 +221,7 @@ async def test_router_confident_ambiguous_skill_hitl(
     )
     mock_interrupt.return_value = {
         "toolbox": ["web_search"],
-        "route": "complex-default",
+        "route": "complex-cloud",
     }
 
     research_skill = _make_skill(

@@ -1,4 +1,4 @@
-"""Scoring-only strict cloud eval: Qwen fallback badges fail cloud-intended turns."""
+"""Scoring-only strict cloud eval: cloud-failure badges fail cloud-intended turns."""
 
 from __future__ import annotations
 
@@ -10,11 +10,11 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from run_local_frontier_eval import (  # noqa: E402
     WsEventLog,
-    eval_cloud_qwen_fallback,
     expected_tools_satisfied,
     merge_executed_tools,
-    score_exchange,
     should_exit_idle_tool_stall,
+    CLOUD_FAILURE_BADGES,
+    score_exchange,
 )
 
 
@@ -37,26 +37,17 @@ def test_ws_assistant_text_since_prefers_latest():
     assert log.assistant_message_seen_since(t0 + 3)
 
 
-def test_cloud_qwen_fallback_badges_fail_complex_cloud():
+def test_cloud_fallback_badges_fail_complex_cloud():
+    """Verify eval scoring detects cloud fallback badges."""
     exchange = {
         "route": "complex-cloud",
-        "model_badge": "medium-default-fallback",
+        "model_badge": "large-cloud-failed",
         "assistant_response_full": "x" * 20,
         "executed_tools": [],
     }
     expected = {"expected_route": "complex", "expected_tools": []}
-    assert eval_cloud_qwen_fallback(exchange, expected, profile="cloud")
-
-
-def test_synthesis_badge_also_fails():
-    exchange = {
-        "route": "complex-cloud",
-        "model_badge": "medium-default-synthesis",
-        "assistant_response_full": "answer " * 5,
-        "executed_tools": ["web_search"],
-    }
-    expected = {"expected_route": "complex", "expected_tools": ["web_search"]}
-    assert eval_cloud_qwen_fallback(exchange, expected, profile="cloud")
+    scores = score_exchange(exchange, expected, profile="cloud")
+    assert scores.get("cloud_fallback_fail")
 
 
 def test_large_cloud_failed_badge_fails_complex():
@@ -67,7 +58,6 @@ def test_large_cloud_failed_badge_fails_complex():
         "executed_tools": [],
     }
     expected = {"expected_route": "complex"}
-    assert eval_cloud_qwen_fallback(exchange, expected, profile="cloud")
     scores = score_exchange(exchange, expected, profile="cloud")
     assert scores["cloud_fallback_fail"]
     assert scores["grade"] <= 49
@@ -81,36 +71,28 @@ def test_simple_route_small_local_not_regression():
         "executed_tools": [],
     }
     expected = {"expected_route": "simple"}
-    assert not eval_cloud_qwen_fallback(exchange, expected, profile="cloud")
+    scores = score_exchange(exchange, expected, profile="cloud")
+    assert not scores.get("cloud_fallback_fail")
 
 
-def test_vision_medium_default_not_regression():
+def test_score_exchange_caps_grade_on_cloud_fallback():
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from run_local_frontier_eval import score_exchange
+
     exchange = {
         "route": "complex-cloud",
-        "model_badge": "medium-default",
-        "task_category": "vision_ocr",
-        "has_images": True,
-        "vision_intake_mode": "proxy",
-        "assistant_response_full": "EVAL_OCR_MARKER_42",
-        "executed_tools": [],
+        "model_badge": "large-cloud-failed",
+        "assistant_response_full": "a" * 50,
+        "executed_tools": ["web_search"],
     }
-    expected = {
-        "expected_route": "vision",
-        "expected_vision": True,
-        "expected_marker": "EVAL_OCR_MARKER_42",
-    }
-    assert not eval_cloud_qwen_fallback(exchange, expected, profile="cloud")
-
-
-def test_local_profile_never_cloud_regression():
-    exchange = {
-        "route": "complex-default",
-        "model_badge": "medium-default-fallback",
-        "assistant_response_full": "x" * 20,
-        "executed_tools": [],
-    }
-    expected = {"expected_route": "complex"}
-    assert not eval_cloud_qwen_fallback(exchange, expected, profile="local")
+    expected = {"expected_route": "complex", "expected_tools": ["web_search"]}
+    scores = score_exchange(exchange, expected, profile="cloud")
+    assert scores["cloud_regression"]
+    assert scores["cloud_fallback_fail"]
+    assert scores["grade"] <= 49
 
 
 def test_merge_executed_tools_prefers_ws():
@@ -154,20 +136,6 @@ def test_ws_running_tools_since():
     ]
     assert log.running_tools_since(base) == ["write_workspace_file"]
     assert log.tools_since(base) == ["web_search"]
-
-
-def test_score_exchange_caps_grade_on_cloud_fallback():
-    exchange = {
-        "route": "complex-cloud",
-        "model_badge": "medium-default-fallback",
-        "assistant_response_full": "a" * 50,
-        "executed_tools": ["web_search"],
-    }
-    expected = {"expected_route": "complex", "expected_tools": ["web_search"]}
-    scores = score_exchange(exchange, expected, profile="cloud")
-    assert scores["cloud_regression"]
-    assert scores["cloud_fallback_fail"]
-    assert scores["grade"] <= 49
 
 
 def test_should_exit_idle_tool_stall():

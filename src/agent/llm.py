@@ -27,7 +27,7 @@ class LLMPool:
     """Singleton pool for LLM instances to avoid re-initialization overhead."""
 
     _small_llm: Optional[ChatOpenAI] = None
-    _medium_llm: Optional[ChatOpenAI] = None
+    _extraction_llm: Optional[ChatOpenAI] = None
     _cloud_llm_flash: Optional[ChatOpenAI] = None
     _cloud_llm_pro: Optional[ChatOpenAI] = None
 
@@ -110,35 +110,32 @@ class LLMPool:
             audit_debug("agent.model", "pool_cache_hit", slot="small")
         return cls._small_llm
 
-    # ── medium (local default) ──────────────────────────────────────────
+    # ── extraction (gemma-4-e2b background) ──────────────────────────
 
     @classmethod
-    async def get_medium_llm(cls, variant: str = "default") -> ChatOpenAI:
-        """Get or create cached medium LLM instance.
-        Variants are ignored since complex-default natively handles all tasks.
-        """
-        if "medium" in cls._test_overrides:
-            return cls._test_overrides["medium"]
-        if cls._medium_llm is not None:
-            audit_debug("agent.model", "pool_cache_hit", slot="medium")
-            return cls._medium_llm
+    async def get_extraction_llm(cls, *, foreground: bool = True) -> ChatOpenAI:
+        """Get or create cached extraction LLM instance (Gemma-4-E2B)."""
+        if "extraction" in cls._test_overrides:
+            return cls._test_overrides["extraction"]
+        if cls._extraction_llm is not None:
+            audit_debug("agent.model", "pool_cache_hit", slot="extraction")
+            return cls._extraction_llm
 
         async with cls._lock:
-            # Double-check after acquiring lock
-            if cls._medium_llm is not None:
-                audit_debug("agent.model", "pool_cache_hit", slot="medium")
-                return cls._medium_llm
+            if cls._extraction_llm is not None:
+                audit_debug("agent.model", "pool_cache_hit", slot="extraction")
+                return cls._extraction_llm
 
-            model_cfg = get_model_config("medium", "default")
+            model_cfg = get_model_config("extraction")
 
             extra_body = dict(model_cfg.get("extra_body") or {})
-            extra_body["max_output_tokens"] = model_cfg.get("max_output_tokens", 4096)
+            extra_body["max_output_tokens"] = model_cfg.get("max_output_tokens", 1024)
 
-            cls._medium_llm = ChatOpenAI(
-                model=model_cfg.get("model_name", "qwen2.5-3b-instruct"),
+            cls._extraction_llm = ChatOpenAI(
+                model=model_cfg.get("model_name", "gemma-4-e2b-heretic-uncensored-mlx"),
                 api_key="sk-local-no-key-needed",
                 base_url=model_cfg.get("base_url", "http://127.0.0.1:1234/v1"),
-                temperature=model_cfg.get("temperature", 0.4),
+                temperature=model_cfg.get("temperature", 0.1),
                 max_tokens=model_cfg.get("max_tokens"),
                 extra_body=extra_body,
                 request_timeout=model_cfg.get("request_timeout")
@@ -148,11 +145,11 @@ class LLMPool:
             audit_info(
                 "agent.model",
                 "pool_instance_created",
-                slot="medium",
+                slot="extraction",
                 model=model_cfg.get("model_name"),
             )
 
-        return cls._medium_llm
+        return cls._extraction_llm
 
     # ── cloud (DeepSeek API) ──────────────────────────────────────────
 
@@ -230,20 +227,11 @@ class LLMPool:
             )
             return client
 
-    # ── backward-compat alias ────────────────────────────────────────────
-
-    @classmethod
-    async def get_large_llm(cls) -> ChatOpenAI:
-        """Alias kept for backward compatibility during migration."""
-        return await cls.get_medium_llm("default")
-
-    # ── housekeeping ─────────────────────────────────────────────────────
-
     @classmethod
     def clear(cls):
         """Clear cached instances (call when profile or config updates)."""
         cls._small_llm = None
-        cls._medium_llm = None
+        cls._extraction_llm = None
         cls._cloud_llm_flash = None
         cls._cloud_llm_pro = None
         cls._test_overrides = {}
@@ -273,20 +261,13 @@ async def get_small_llm() -> ChatOpenAI:
     return await LLMPool.get_small_llm()
 
 
-async def get_large_llm() -> ChatOpenAI:
-    """Get large LLM instance (pooled for efficiency)."""
-    return await LLMPool.get_large_llm()
-
-
-async def get_medium_llm(
-    variant: str = "default", *, foreground: bool = True
-) -> ChatOpenAI:
-    """Get medium LLM instance (pooled, swaps if needed).
+async def get_extraction_llm(*, foreground: bool = True) -> ChatOpenAI:
+    """Get extraction LLM instance (Gemma-4-E2B, pooled).
 
     Pass ``foreground=False`` for background callers (memory extraction) that
     manage deferral via ``invoke_medium_background`` instead of the wrapper.
     """
-    client = await LLMPool.get_medium_llm(variant)
+    client = await LLMPool.get_extraction_llm()
     if not foreground:
         return client
     from src.agent.local_llm_scheduler import wrap_medium_for_foreground

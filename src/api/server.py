@@ -78,14 +78,6 @@ async def lifespan(app: FastAPI):
         profile = get_profile()
         cloud_key = resolve_deepseek_api_key()
         cloud_on = bool(cloud_key) and profile.get("cloud_escalation_enabled", True)
-        from src.agent.cloud_strict import cloud_no_local_fallback_enabled
-
-        strict_no_fallback = cloud_no_local_fallback_enabled()
-        require_medium = (
-            bool(config.get("startup.require_medium_when_cloud_unavailable", True))
-            and not cloud_on
-            and not strict_no_fallback
-        )
 
         preload_slots = config.get("startup.preload") or ["small", "embedding"]
         warmup = bool(config.get("startup.warmup", True))
@@ -121,23 +113,13 @@ async def lifespan(app: FastAPI):
             except Exception as e:
                 logger.warning("[startup] Embedding warmup skipped: %s", e)
 
-        # 3. Medium — only when cloud unavailable (local fallback path)
-        if require_medium:
+        # 3. Extraction (gemma-4-e2b) — always available for background work
+        if "extraction" in preload_slots:
             try:
-                await LLMPool.get_medium_llm("default")
-                logger.info("[startup] Medium LLM client created (cloud unavailable)")
+                await LLMPool.get_extraction_llm()
+                logger.info("[startup] Extraction LLM client created")
             except Exception as e:
-                logger.warning("[startup] Medium LLM preload failed: %s", e)
-                return
-        else:
-            if strict_no_fallback:
-                logger.info(
-                    "[startup] Skipping medium preload (strict cloud — no local fallback)"
-                )
-            else:
-                logger.info(
-                    "[startup] Skipping medium preload (cloud available); lazy on fallback"
-                )
+                logger.warning("[startup] Extraction LLM preload failed: %s", e)
 
         if warmup:
             await _asyncio.sleep(2)
@@ -151,17 +133,6 @@ async def lifespan(app: FastAPI):
                 logger.info("[startup] Small LLM warmup complete")
             except Exception as e:
                 logger.warning("[startup] Small LLM warmup failed: %s", e)
-
-            if require_medium:
-                try:
-                    med_llm = await LLMPool.get_medium_llm("default")
-                    await _asyncio.wait_for(
-                        med_llm.ainvoke(warmup_text),
-                        timeout=120,
-                    )
-                    logger.info("[startup] Medium LLM warmup complete")
-                except Exception as e:
-                    logger.warning("[startup] Medium LLM warmup failed: %s", e)
 
         logger.info("[startup] LLM preload complete (cloud_on=%s)", cloud_on)
 

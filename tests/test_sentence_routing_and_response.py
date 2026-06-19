@@ -21,14 +21,14 @@ SIMPLE_CASES = [
 COMPLEX_CASES = [
     (
         "Design a migration strategy from monolith to microservices with rollout phases.",
-        "complex-default",
-        "medium-default",
+        "complex-cloud",
+        "large-cloud",
         "LARGE: architecture plan",
     ),
     (
         "Write and explain a Python quicksort implementation with complexity analysis.",
-        "complex-default",
-        "medium-default",
+        "complex-cloud",
+        "large-cloud",
         "LARGE: architecture plan",
     ),
 ]
@@ -108,7 +108,7 @@ async def test_sentence_matrix_complex_route_and_response(
     mock_large_base.bind = MagicMock(return_value=mock_bound)
     mock_large_base.bind_tools = MagicMock(return_value=mock_bound)
 
-    LLMPool.set_test_overrides({"small": mock_router_llm, "medium": mock_large_base})
+    LLMPool.set_test_overrides({"small": mock_router_llm, "cloud": mock_large_base})
     try:
         app = build_graph().compile()
 

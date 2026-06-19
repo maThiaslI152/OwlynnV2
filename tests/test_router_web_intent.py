@@ -150,7 +150,7 @@ async def test_image_attachment_routes_to_vision():
     with (
         patch("src.agent.nodes.router._check_cloud_available", return_value=True),
         patch(
-            "src.agent.nodes.complex_utils.lm_studio_florence.ensure_florence_loaded",
+            "src.agent.nodes.complex_utils.lm_studio_vision.ensure_vision_vlm_loaded",
             new_callable=AsyncMock,
             return_value=True,
         ),
@@ -181,7 +181,7 @@ async def test_image_only_attachment_skips_hitl():
     with (
         patch("src.agent.nodes.router._check_cloud_available", return_value=True),
         patch(
-            "src.agent.nodes.complex_utils.lm_studio_florence.ensure_florence_loaded",
+            "src.agent.nodes.complex_utils.lm_studio_vision.ensure_vision_vlm_loaded",
             new_callable=AsyncMock,
             return_value=True,
         ),
@@ -217,7 +217,7 @@ async def test_image_with_frontier_routes_cloud_for_proxy():
     with (
         patch("src.agent.nodes.router._check_cloud_available", return_value=True),
         patch(
-            "src.agent.nodes.complex_utils.lm_studio_florence.ensure_florence_loaded",
+            "src.agent.nodes.complex_utils.lm_studio_vision.ensure_vision_vlm_loaded",
             new_callable=AsyncMock,
             return_value=True,
         ),
@@ -315,7 +315,7 @@ async def test_long_context_boundary_routes_cloud_not_default():
         return_value=mock_llm,
     ):
         out = await router_node(state)
-    assert out["route"] in ("complex-cloud", "complex-default")
+    assert out["route"] == "complex-cloud"
 
 
 @pytest.mark.anyio

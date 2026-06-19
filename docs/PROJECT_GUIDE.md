@@ -38,12 +38,13 @@ Do **not** add new `.py` test or patch scripts at repo root.
 | `src/agent/router/classifier.py` | LLM JSON routing classifier |
 | `src/agent/router/budget.py` | Token budget tiers and input reserves |
 | `src/agent/router/selector.py` | Model/toolbox selection |
-| `src/agent/llm.py` | `LLMPool` singleton — small + medium + cloud slots |
+| `src/agent/llm.py` | `LLMPool` singleton — router + extraction + cloud slots |
 | `src/agent/nodes/simple.py` | Fast simple-path answers (no tools) |
 | `src/agent/nodes/complex.py` | Tool-calling cycle, local + cloud paths |
 | `src/agent/nodes/complex_utils/cloud_payload.py` | Cloud prompt layers, anonymization, tool-arg compaction on replay (BUG-27) |
-| `src/agent/nodes/complex_utils/vision_florence.py` | Florence OCR parser |
-| `src/agent/nodes/complex_utils/vision_*.py` | Vision proxy for cloud image path (Florence default) |
+| `src/agent/nodes/complex_utils/vision_qwen3vl.py` | Qwen3-VL output parser |
+| `src/agent/nodes/complex_utils/vision_*.py` | Vision proxy for cloud image path (Qwen3-VL default) |
+| `src/agent/nodes/complex_utils/lm_studio_vision.py` | LM Studio auto-load for vision VLM |
 | `src/tools/mcp_client.py` | MCP stdio client; tools merged via `merge_mcp_tools()` |
 | `mcp_config.json` | MCP server manifests (see `mcp_config.json.example`) |
 | `src/config/defaults.yaml` | Model names, routing, `mcp.*`, `startup.preload` (source of truth) |
@@ -51,7 +52,7 @@ Do **not** add new `.py` test or patch scripts at repo root.
 | `tests/test_router_web_intent.py` | Web-intent forcing tests |
 | `tests/test_llm_pool.py` | LLM pool tests |
 
-**Current models** (`defaults.yaml`): router `minicpm5-1b`, fallback complex `qwen3.5-9b-uncensored-hauhaucs-aggressive@q6_k`, vision proxy `florence-2-base-nsfw-v2-ext-mlx`, cloud `deepseek-v4-flash`. Startup preloads router + embedding only when cloud escalation is enabled.
+**Current models** (`defaults.yaml`): router `minicpm5-1b`, complex cloud `deepseek-v4-flash`, vision proxy `qwen3-vl-4b-instruct-c_abliterated-v2-mlx`, extraction `gemma-4-e2b-heretic-uncensored-mlx`. Startup preloads router + embedding only when cloud escalation is enabled.
 
 ## Complex / cloud path
 
@@ -193,7 +194,7 @@ START → memory_inject_lite → router → memory_retrieve → auto_summarize? 
 
 ### Swap a model
 
-1. Edit `src/config/defaults.yaml` — `models.small.model_name` or `models.medium.model_name`
+1. Edit `src/config/defaults.yaml` — `models.small.model_name` or `models.cloud.model_name`
 2. Match LM Studio loaded name exactly
 3. Run `pytest tests/test_llm_pool.py -q`
 

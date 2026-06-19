@@ -19,11 +19,10 @@ Usage::
 Module-level singletons are available for backward compatibility with the
 existing ``settings.py`` module-level constants.
 
-Note on Modernization (LangGraph/LangChain 1.x):
-While the agent architecture is actively being modernized to LangGraph 1.x, we deliberately
-did NOT rewrite the core config loader or the `models.medium` legacy schema. This preserves
-backward compatibility with the React frontend UI, the existing REST API, and `user_profile.json`
-state formats, preventing breaking changes while still supporting the new graph execution patterns.
+Note on Architecture:
+The agent runs a 2-tier architecture: router (MiniCPM5-1B, local) → vision proxy
+(Qwen3-VL-4B, lazy) → complex reasoning (DeepSeek V4, cloud). Background memory
+extraction uses Gemma-4-E2B (small, local). No local Qwen medium tier.
 """
 
 from __future__ import annotations
@@ -62,15 +61,9 @@ _ENV_OVERRIDE_MAP: dict[str, str] = {
     # Small model
     "SMALL_LLM_BASE_URL": "models.small.base_url",
     "SMALL_LLM_MODEL_NAME": "models.small.model_name",
-    # Medium model
-    "MEDIUM_LLM_BASE_URL": "models.medium.base_url",
-    "MEDIUM_LLM_MODEL_NAME": "models.medium.model_name",
     # Cloud model
     "CLOUD_LLM_BASE_URL": "models.cloud.base_url",
     "CLOUD_LLM_MODEL_NAME": "models.cloud.model_name",
-    "OWLYNN_CLOUD_NO_FALLBACK": "cloud.no_local_fallback",
-    # Longctx variant
-    "MEDIUM_LONGCTX_CONTEXT": "models.medium.context_window",
     # Voice
     "VOICE_WAKE_WORD": "server.voice.wake_word",
     "VOICE_AUTO_TTS": "server.voice.auto_tts",
@@ -97,13 +90,7 @@ _ENV_OVERRIDE_MAP: dict[str, str] = {
 # Maps user_profile.json fields to the centralized config structure.
 _PROFILE_OVERRIDE_MAP: dict[str, str] = {
     # LLM base URLs
-    "llm_base_url": "models.medium.base_url",
     "small_llm_base_url": "models.small.base_url",
-    "large_llm_base_url": "models.medium.base_url",
-    # LLM model names
-    "llm_model_name": "models.medium.model_name",
-    "small_llm_model_name": "models.small.model_name",
-    "large_llm_model_name": "models.medium.model_name",
     # Cloud
     "cloud_llm_base_url": "models.cloud.base_url",
     "cloud_llm_model_name": "models.cloud.model_name",
@@ -121,12 +108,6 @@ _PROFILE_OVERRIDE_MAP: dict[str, str] = {
     "cloud_anonymization_enabled": "cloud.anonymization_enabled",
     "cloud_brief_enabled": "cloud.escalation_enabled",
     "cloud_brief_max_chars": "cloud.budget.brief_max_chars",
-    "cloud_no_local_fallback": "cloud.no_local_fallback",
-    # LM Studio
-    "lm_studio_fold_system": "models.medium.fold_system",
-    # Inference defaults
-    "temperature": "models.medium.temperature",
-    "max_tokens": "models.medium.max_tokens",
 }
 
 
@@ -262,27 +243,14 @@ class ConfigLoader:
         for profile_key, dotpath in _PROFILE_OVERRIDE_MAP.items():
             val = profile.get(profile_key)
             if val is not None and val != "" and val != [] and val != {}:
-                # Special handling for medium_models dict
-                if profile_key == "medium_models" and isinstance(val, dict):
-                    existing_variants = cls._resolve_dotpath(result, dotpath) or {}
-                    if isinstance(existing_variants, dict):
-                        for variant_key, model_name in val.items():
-                            if variant_key in existing_variants:
-                                existing_variants[variant_key]["model_name"] = (
-                                    model_name
-                                )
-                        cls._set_dotpath(result, dotpath, existing_variants)
-                    continue
-
                 # Special handling for inference params
                 if profile_key == "temperature":
                     cls._set_dotpath(result, "models.small.temperature", val)
-                    cls._set_dotpath(result, "models.medium.temperature", val)
                     cls._set_dotpath(result, "models.cloud.temperature", val)
                     continue
                 if profile_key == "max_tokens":
-                    cls._set_dotpath(result, "models.medium.max_tokens", val)
-                    cls._set_dotpath(result, "models.medium.max_output_tokens", val)
+                    cls._set_dotpath(result, "models.cloud.max_tokens", val)
+                    cls._set_dotpath(result, "models.cloud.max_output_tokens", val)
                     continue
 
                 cls._set_dotpath(result, dotpath, val)
@@ -329,25 +297,14 @@ config = ConfigLoader()
 
 
 def get_model_config(tier: str, variant: str = "default") -> dict[str, Any]:
-    """Return the full model config dict for a given tier and variant.
+    """Return the full model config dict for a given tier.
 
     Args:
-        tier: ``"small"``, ``"medium"``, ``"cloud"``, ``"embedding"``, or ``"vision_proxy"``
-        variant: For medium tier, one of ``"default"``, ``"vision"``, ``"longctx"``
+        tier: ``"small"``, ``"cloud"``, ``"embedding"``, ``"vision_proxy"``, or ``"extraction"``
 
     Returns a dict with keys: model_name, base_url, temperature, max_tokens,
     max_output_tokens, timeout, context_window, extra_body, etc.
     """
-    if tier == "medium":
-        base = config.get("models.medium") or {}
-        variant_cfg = config.get(f"models.medium.variants.{variant}") or {}
-        result = {**base, **variant_cfg}
-        # Deep-merge extra_body: base values merged with variant-specific overrides
-        base_extra = base.get("extra_body") or {}
-        variant_extra = variant_cfg.get("extra_body") or {}
-        if base_extra or variant_extra:
-            result["extra_body"] = {**base_extra, **variant_extra}
-        return result
     return config.get(f"models.{tier}") or {}
 
 
@@ -365,30 +322,17 @@ def get_m4_optimization() -> dict[str, Any]:
             .get("temperature", 0.1),
             "timeout": cfg.get("models", {}).get("small", {}).get("timeout", 10),
         },
-        "medium_model": {
+        "extraction_model": {
+            "model_name": cfg.get("models", {})
+            .get("extraction", {})
+            .get("model_name", "gemma-4-e2b-heretic-uncensored-mlx"),
             "max_tokens": cfg.get("models", {})
-            .get("medium", {})
-            .get("max_tokens", 4096),
-            "context_length": cfg.get("models", {})
-            .get("medium", {})
-            .get("variants", {})
-            .get("default", {})
-            .get("context_window", 16384),
+            .get("extraction", {})
+            .get("max_tokens", 1024),
             "temperature": cfg.get("models", {})
-            .get("medium", {})
-            .get("temperature", 0.5),
-            "timeout": cfg.get("models", {}).get("medium", {}).get("timeout", 60),
-            "cloud_timeout": cfg.get("models", {}).get("cloud", {}).get("timeout", 180),
-        },
-        "medium_models": {
-            "swap_timeout": cfg.get("models", {})
-            .get("medium", {})
-            .get("swap", {})
-            .get("timeout", 120),
-            "poll_interval": cfg.get("models", {})
-            .get("medium", {})
-            .get("swap", {})
-            .get("poll_interval", 2),
+            .get("extraction", {})
+            .get("temperature", 0.1),
+            "timeout": cfg.get("models", {}).get("extraction", {}).get("timeout", 120),
         },
         "memory": {
             "max_facts": cfg.get("memory", {}).get("max_facts", 200),
@@ -435,14 +379,6 @@ _REQUIRED_PATHS: list[str] = [
     "models.small.max_tokens",
     "models.small.context_window",
     "models.small.timeout",
-    # Models — medium
-    "models.medium.base_url",
-    "models.medium.temperature",
-    "models.medium.max_tokens",
-    "models.medium.timeout",
-    "models.medium.request_timeout",
-    "models.medium.model_name",
-    "models.medium.context_window",
     # Models — cloud
     "models.cloud.base_url",
     "models.cloud.model_name",
@@ -459,7 +395,6 @@ _REQUIRED_PATHS: list[str] = [
     # Startup
     "startup.preload",
     "startup.warmup",
-    "startup.require_medium_when_cloud_unavailable",
     # Routing
     "routing.confidence_threshold",
     "routing.swap_threshold",

@@ -1,6 +1,9 @@
 """Unit tests for Florence-2 vision response parsing."""
 
-from src.agent.nodes.complex_utils.vision_florence import parse_florence_response
+from src.agent.nodes.complex_utils.vision_qwen3vl import parse_qwen3vl_response
+from src.agent.nodes.complex_utils.vision_florence import (
+    parse_florence_response,
+)  # legacy
 from src.agent.nodes.complex_utils.vision_schema import format_vision_for_cloud
 
 

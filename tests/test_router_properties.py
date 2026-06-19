@@ -31,15 +31,9 @@ from src.tools.skills import SkillDefinition
 # ── Valid route set ──────────────────────────────────────────────────────
 VALID_ROUTES = {
     "simple",
-    "complex-default",
-    "complex-cloud",
-    "complex-cloud",
     "complex-cloud",
 }
 VALID_COMPLEX_ROUTES = {
-    "complex-default",
-    "complex-cloud",
-    "complex-cloud",
     "complex-cloud",
 }
 
@@ -121,11 +115,11 @@ class TestRouteDecisionDomain:
 
     @given(text=user_text_st)
     @settings(max_examples=100, deadline=None)
-    def test_image_always_default_when_cloud_unavailable(self, text: str):
-        """Image + any text routes to complex-default when cloud is unavailable."""
+    def test_image_always_cloud_when_cloud_unavailable(self, text: str):
+        """Image + any text routes to complex-cloud even when cloud is unavailable."""
         state = _make_image_state(text)
         route, _ = _resolve_complex_route(text, state, ["all"], cloud_available=False)
-        assert route == "complex-default"
+        assert route == "complex-cloud"
 
     def test_image_with_frontier_routes_cloud_for_vision_proxy(self):
         """Image + frontier task routes to cloud so Qwen transcribes before DeepSeek."""
@@ -171,12 +165,12 @@ class TestRouteDecisionDomain:
         )
     )
     @settings(max_examples=100, deadline=None)
-    def test_short_text_routes_local_when_cloud_unavailable(self, text: str):
-        """Short text without frontier hints routes to complex-default when cloud is off."""
+    def test_short_text_routes_cloud_when_cloud_unavailable(self, text: str):
+        """Short text without frontier hints routes to complex-cloud even when cloud is off."""
         assume(not _needs_frontier_quality(text))
         state = _make_text_state(text)
         route, _ = _resolve_complex_route(text, state, ["all"], cloud_available=False)
-        assert route == "complex-default"
+        assert route == "complex-cloud"
 
     @given(
         text=st.text(
@@ -239,13 +233,6 @@ class TestTokenBudgetContextWindow:
 
     @given(text=user_text_st)
     @settings(max_examples=100, deadline=None)
-    def test_complex_default_budget_max_8192(self, text: str):
-        """complex-default budget never exceeds 8192."""
-        budget = estimate_token_budget(text, "complex-default")
-        assert 0 < budget <= 8192
-
-    @given(text=user_text_st)
-    @settings(max_examples=100, deadline=None)
     def test_complex_cloud_budget_max_16384(self, text: str):
         """complex-cloud budget never exceeds 16384."""
         budget = estimate_token_budget(text, "complex-cloud")
@@ -279,14 +266,6 @@ class TestTokenBudgetContextWindow:
                 f"Complex budget should be >= 512, got {budget} for {route}"
             )
 
-    def test_cloud_has_higher_budget_cap_than_default(self):
-        """Cloud route allows a higher max budget than default/longctx."""
-        text = "Write a comprehensive analysis of machine learning algorithms"
-        cloud_budget = estimate_token_budget(text, "complex-cloud")
-        default_budget = estimate_token_budget(text, "complex-default")
-        # Cloud budget_max is 16384 vs 8192 for default, so cloud >= default
-        assert cloud_budget >= default_budget
-
     def test_simple_budget_scales_with_length(self):
         """Longer simple messages get a higher budget (up to the cap)."""
         short_budget = estimate_token_budget("hi", "simple")
@@ -297,12 +276,7 @@ class TestTokenBudgetContextWindow:
         """When input is large, budget is capped by available context window space."""
         # Large input that eats into context window
         large_text = "x" * 200000
-        budget_default = estimate_token_budget(large_text, "complex-default")
         budget_cloud = estimate_token_budget(large_text, "complex-cloud")
-        # Cloud has same context (131072) but larger reserve (8000 vs 4000),
-        # so for very large inputs cloud may have less available space
-        # Both should still be positive and within their max
-        assert 512 <= budget_default <= 8192
         assert 512 <= budget_cloud <= 16384
 
 

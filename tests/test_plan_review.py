@@ -74,5 +74,5 @@ class TestGraphRouting:
     def test_route_decision_complex(self):
         from src.agent.graph import route_decision
 
-        assert route_decision({"route": "complex-default"}) == "scope_clarify"
+        assert route_decision({"route": "complex-cloud"}) == "scope_clarify"
         assert route_decision({"route": "simple"}) == "simple"

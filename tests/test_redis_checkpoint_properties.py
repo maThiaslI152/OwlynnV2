@@ -31,22 +31,13 @@ from src.agent.state import AgentState
 
 VALID_ROUTES = [
     "simple",
-    "complex-default",
-    "complex-cloud",
-    "complex-cloud",
     "complex-cloud",
 ]
 
 VALID_MODEL_USED = [
     "small-local",
-    "medium-default",
-    "large-cloud",
-    "medium-default",
     "large-cloud",
     "small-local-fallback",
-    "medium-default-fallback",
-    "large-cloud-fallback",
-    "medium-default-fallback",
     "large-cloud-fallback",
 ]
 
@@ -350,7 +341,7 @@ class TestRedisCheckpointRoundTrip:
         store.put(thread_id, initial_state)
 
         # Store updated state with different route
-        new_route = "simple" if route != "simple" else "complex-default"
+        new_route = "simple" if route != "simple" else "complex-cloud"
         updated_state = _build_checkpoint_state(
             messages_pairs, new_route, model_used, toolboxes, token_budget
         )

@@ -101,11 +101,11 @@ VOICE_AUTO_TTS = os.getenv("VOICE_AUTO_TTS", "true").strip().lower() in {
 
 # ── Context Windows ──────────────────────────────────────────────────────────
 
-MEDIUM_DEFAULT_CONTEXT = int(config.get("models.medium.context_window"))
-MEDIUM_LONGCTX_CONTEXT = int(
-    config.get("models.medium.context_window")  # longctx variant no longer exists
-)
+# All complex routes go to DeepSeek V4 (cloud); alias the legacy medium-context
+# constants so router/budget code still compiles during the pivot.
 CLOUD_CONTEXT = int(config.get("models.cloud.context_window"))
+MEDIUM_DEFAULT_CONTEXT = CLOUD_CONTEXT
+MEDIUM_LONGCTX_CONTEXT = CLOUD_CONTEXT
 
 # ── M4 Mac Optimization ──────────────────────────────────────────────────────
 
@@ -118,9 +118,9 @@ if (
     or os.getenv("OPTIMIZE_FOR_M4", "").lower() == "true"
 ):
     MODEL_TIMEOUT_SMALL = M4_MAC_OPTIMIZATION["small_model"]["timeout"]
-    MODEL_TIMEOUT_MEDIUM = M4_MAC_OPTIMIZATION["medium_model"]["timeout"]
+    MODEL_TIMEOUT_EXTRACTION = M4_MAC_OPTIMIZATION["extraction_model"]["timeout"]
     MAX_TOKENS_SMALL = M4_MAC_OPTIMIZATION["small_model"]["max_tokens"]
-    MAX_TOKENS_MEDIUM = M4_MAC_OPTIMIZATION["medium_model"]["max_tokens"]
+    MAX_TOKENS_EXTRACTION = M4_MAC_OPTIMIZATION["extraction_model"]["max_tokens"]
     MAX_MEMORIES = M4_MAC_OPTIMIZATION["memory"]["max_facts"]
     MEMORY_SEARCH_WINDOW = M4_MAC_OPTIMIZATION["memory"]["search_window"]
 else:
@@ -129,21 +129,13 @@ else:
         or config.get("models.standard.small.timeout")
         or 15
     )
-    MODEL_TIMEOUT_MEDIUM = int(
-        config.get("models.medium.timeout")
-        or config.get("models.standard.medium.timeout")
-        or 90
-    )
+    MODEL_TIMEOUT_EXTRACTION = int(config.get("models.extraction.timeout") or 120)
     MAX_TOKENS_SMALL = int(
         config.get("models.small.max_tokens")
         or config.get("models.standard.small.max_tokens")
         or 2048
     )
-    MAX_TOKENS_MEDIUM = int(
-        config.get("models.medium.max_tokens")
-        or config.get("models.standard.medium.max_tokens")
-        or 16384
-    )
+    MAX_TOKENS_EXTRACTION = int(config.get("models.extraction.max_tokens") or 1024)
     MAX_MEMORIES = int(config.get("memory.max_facts") or 200)
     MEMORY_SEARCH_WINDOW = int(config.get("memory.search_window") or 50)
 

@@ -29,20 +29,20 @@ Related Owlynn docs: [`CLOUD-LLM-ARCHITECTURE.md`](../CLOUD-LLM-ARCHITECTURE.md)
 - **Local MiniCPM5** (`models.small`): router + simple path; always preloaded at startup.
 - **Local nomic embedding** (`models.embedding`): memory/RAG/web-rank; preloaded at startup.
 - **Local Qwen9B** (`models.medium`): **fallback only** when cloud unavailable or invoke fails; lazy-loaded (not preloaded when DeepSeek key + escalation enabled).
-- **Florence-2** (`models.vision_proxy`): dedicated vision proxy for cloud+image; lazy on first attachment.
+- **Qwen3-VL-4B** (`models.vision_proxy`): dedicated vision proxy for cloud+image; lazy on first attachment.
 - **DeepSeek V4** (`models.cloud`): primary complex workhorse on route `complex-cloud` (default when cloud available).
 - The router can emit an `execution_plan` JSON block injected into the cloud system prompt.
 
 Entry points: [`src/agent/llm.py`](../../src/agent/llm.py) (`get_cloud_llm`), [`src/agent/nodes/complex.py`](../../src/agent/nodes/complex.py) (`complex_llm_node`), [`src/agent/nodes/router.py`](../../src/agent/nodes/router.py).
 
-### 2. Vision-to-text proxy (Florence-2)
+### 2. Vision-to-text proxy (Qwen3-VL-4B)
 
 DeepSeek V4 is **text-only**. Images never go to the API as multimodal input.
 
 When `route == complex-cloud` and the user attached images:
 
-1. [`vision_proxy.py`](../../src/agent/nodes/complex_utils/vision_proxy.py) runs Florence-2 (`models.vision_proxy`, lazy via `vision_model_manager.py`).
-2. Default mode: Florence task tokens (`<OCR>`, `<OCR_WITH_REGION>`) → [`vision_florence.py`](../../src/agent/nodes/complex_utils/vision_florence.py) parses OCR/layout into structured blocks; [`vision_schema.py`](../../src/agent/nodes/complex_utils/vision_schema.py) formats dense `[Vision sensor output …]` text.
+1. [`vision_proxy.py`](../../src/agent/nodes/complex_utils/vision_proxy.py) runs Qwen3-VL-4B (`models.vision_proxy`, lazy via `vision_model_manager.py`).
+2. Default mode: natural-language prompts → [`vision_qwen3vl.py`](../../src/agent/nodes/complex_utils/vision_qwen3vl.py) parses text/UI into structured blocks; [`vision_schema.py`](../../src/agent/nodes/complex_utils/vision_schema.py) formats `[Image content transcribed by vision sensor]` text.
 3. Fallback mode (`cloud.vision_prompt_mode: json_chat`): Qwen9B+mmproj JSON OCR prompt (legacy path).
 4. DeepSeek receives a normal text conversation (no `image_url`).
 
@@ -54,10 +54,10 @@ Before any DeepSeek call on `complex-cloud`, [`prepare_cloud_payload()`](../../s
 
 1. **Anonymization** — deterministic SHA-256 placeholders for PII/paths/emails.
 2. **Cloud brief** (first turn only) — compact HITL summary when no tool history; full anonymized history on tool-loop turns.
-3. **Vision proxy** — local Qwen transcription with hash cache; post-vision re-anonymization.
+3. **Vision proxy** — local Qwen3-VL-4B transcription with hash cache; post-vision re-anonymization.
 4. **Deanonymization** on response content, `reasoning_content`, and tool-call args.
 
-Routes are **`simple | complex-default | complex-cloud`** only (legacy `complex-vision` / `complex-longctx` removed).
+Routes are **`simple | complex-cloud`** (cloud-primary; legacy `complex-default` / `complex-vision` / `complex-longctx` removed).
 
 ### 4. Context, files, and config
 
@@ -313,7 +313,7 @@ Effort:       reasoning_effort = high|max  (only when thinking enabled)
 Tools:        bind_tools(strict=True); replay reasoning_content in loops
 Cache:        automatic prefix cache; put stable text first, volatile last
 Security:     anonymize → cloud → deanonymize
-Images:       vision_proxy (Florence OCR) → text block in prompt
+Images:       vision_proxy (Qwen3-VL) → text block in prompt
 KV cache:     OpenAI `user` param = thread_id for per-conversation prefix isolation
 Legacy:       deepseek-chat / deepseek-reasoner → migrate before 2026-07-24
 ```
@@ -326,4 +326,4 @@ Legacy:       deepseek-chat / deepseek-reasoner → migrate before 2026-07-24
 |------|--------|
 | 2026-06-07 | Initial integration summary (implementation details) |
 | 2026-06-07 | Expanded with V4 API research: thinking/non-thinking, tool replay, KV cache, gaps |
-| 2026-06-10 | Cloud-primary startup preload; Florence vision proxy; breaker on `invoke_cloud_chat`; `user` KV cache param; toolbox parity in tool loop |
+| 2026-06-19 | Qwen3-VL-4B vision proxy replaces Florence-2; natural-language transcription |

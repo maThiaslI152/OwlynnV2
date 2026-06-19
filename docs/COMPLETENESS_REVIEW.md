@@ -42,14 +42,14 @@ audience: agent
 
 ### Agent Orchestration
 - LangGraph: `memory_inject → router → simple/complex → tools → memory_write`
-- 3-way routing: `simple` (1B MiniCPM5) · `complex-default` (Qwen 9B) · `complex-cloud` (DeepSeek V4)
+- Cloud-primary routing: `simple` (MiniCPM5-1B) · `complex-cloud` (DeepSeek V4) · `vision` (Qwen3-VL-4B) · `scope_clarify`
 - Security proxy + plan review HITL — **no competitor has this**
 - Cloud payload: PII anonymization, stable/volatile layers, prefix-cache metrics
 
 ### Memory System (Unique vs frontier chat)
 - Three-tier: JSON STM · Qdrant/Mem0 LTM · personal topics/interests/conversations
 - Split inject: `memory_inject_lite` (fast, no vector) → router gate → `memory_retrieve`
-- Background Qwen extraction (Redis stream → idle-deferred LTM writes)
+- Background extraction (Gemma-4-E2B via Redis stream → idle-deferred LTM writes)
 - Validated in eval: session recall M1.2=100, LTM cross-thread M2.1=100
 
 ### Tool Suite (20+ tools)
@@ -67,7 +67,7 @@ audience: agent
 ### Cloud Architecture
 - DeepSeek V4 flash/pro, 1M token context, circuit breaker, jittered retries
 - macOS Keychain key storage; PII scrub before any cloud call
-- Vision proxy: Florence-2 → OCR text → DeepSeek text-only path
+- Vision proxy: Qwen3-VL-4B → text + UI → DeepSeek text-only path
 - Session cost tracker + cloud usage chip in UI
 
 ### Testing
@@ -80,8 +80,8 @@ audience: agent
 ## 3. Partially Built — Active Gaps ⚠️
 
 ### 3.1 Vision Route Fragility
-**What works:** Composer drag-and-drop, Florence-2 lazy load, vision proxy for cloud path.  
-**What's broken:** F9.1 eval only 60–100% depending on Florence load variance; image attach does not deterministically trigger `vision_cloud` route. Cloud + image = best path often missed.  
+**What works:** Composer drag-and-drop, Qwen3-VL-4B lazy load, vision proxy for cloud path.  
+**What's fixed:** F9.1 eval 100/100 with Qwen3-VL; Florence was unloadable via LM Studio API. Cloud + image path verified.  
 **Tracked as:** BUG-17 (see `BUG-TRACKER.md`)
 
 ### 3.2 Simple-Path Empty Reply

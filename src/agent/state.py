@@ -50,10 +50,9 @@ class AgentState(TypedDict):
     # Track if any tool execution was vetted/approved by security node
     execution_approved: bool | None
 
-    # Routing decision: 'simple', 'complex-default', or 'complex-cloud'
+    # Routing decision: 'simple' or 'complex-cloud'
     route: str | None
-    # Model provenance: 'small-local', 'medium-default', 'medium-vision', 'medium-longctx',
-    # 'large-cloud', or any of these with '-fallback' suffix
+    # Model provenance: 'small-local', 'large-cloud', or either with '-fallback' suffix
     model_used: str | None
     memory_context: str | None  # Formatted context string
     knowledge_context: str | None  # Synthesized facts from previous web searches
@@ -62,9 +61,6 @@ class AgentState(TypedDict):
     scenario_context: str | None  # Loaded scenario markdown block
     persona: str | None  # Persona summary string
     persona_id: str | None  # Active persona ID (e.g. 'coder', 'writer', 'default')
-
-    # Which M-tier variant is currently loaded ("default", "vision", "longctx", or None)
-    current_medium_model: str | None
 
     # Toolbox names selected by the router (e.g. ["web_search", "file_ops"] or ["all"])
     selected_toolboxes: list[str] | None
@@ -129,3 +125,8 @@ class AgentState(TypedDict):
     _cutoff_pending: bool | None
     _cutoff_round: int | None
     web_search_suggested: bool | None
+    # Coherence retry counter — incremented by coherence_retry_node; bounds the
+    # cycle coherence_check → coherence_retry → complex_llm to max_retries.
+    _coherence_retry_round: int | None
+    # Last coherence score observed before the retry; surfaced in WS event for UX
+    coherence_retry_reason: str | None

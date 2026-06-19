@@ -39,7 +39,7 @@ def query(prompt: str, project: str, approve_sensitive: bool):
     url = f"{get_base_url()}/v1/chat/completions"
 
     payload = {
-        "model": "qwen2.5-3b",
+        "model": "minicpm5-1b",
         "messages": [{"role": "user", "content": prompt}],
         "stream": False,
         "project_id": project,
@@ -89,7 +89,7 @@ def stream(prompt: str, project: str, approve_sensitive: bool):
     url = f"{get_base_url()}/v1/chat/completions"
 
     payload = {
-        "model": "qwen2.5-3b",
+        "model": "minicpm5-1b",
         "messages": [{"role": "user", "content": prompt}],
         "stream": True,
         "project_id": project,

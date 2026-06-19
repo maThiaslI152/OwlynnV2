@@ -35,13 +35,11 @@ SCREENSHOT_DIR = REPO_ROOT / "assets" / "frontier_eval_screenshots"
 OUTPUT_DATA_FILE = REPO_ROOT / "data" / "frontier_eval_run_data.json"
 WORKSPACE_DIR = REPO_ROOT / "workspace"
 
-COMPLEX_ROUTES = frozenset({"complex-default", "complex-cloud"})
+COMPLEX_ROUTES = frozenset({"complex-cloud"})
 VISION_ROUTES = frozenset({"vision", "vision_cloud"})
-# Cloud-intended complex turns that end on local Qwen are scored as failed (runtime may still fall back).
-CLOUD_QWEN_FALLBACK_BADGES = frozenset(
+# Cloud-intended complex turns that fail are scored as failed.
+CLOUD_FAILURE_BADGES = frozenset(
     {
-        "medium-default-fallback",
-        "medium-default-synthesis",
         "large-cloud-failed",
         "small-local-failed",
     }
@@ -60,7 +58,7 @@ MARKERS = {
     "ocr": "EVAL_OCR_MARKER",
 }
 
-# expected_route: simple | complex | complex-default | complex-cloud | vision
+# expected_route: simple | complex-cloud | vision
 TEST_PROMPTS: list[dict[str, Any]] = [
     {
         "id": "F1.1",
@@ -235,6 +233,7 @@ TEST_PROMPTS: list[dict[str, Any]] = [
         "forbid_ws_events": ["memory_updated"],
         "timeout_s": SIMPLE_TIMEOUT_S,
         "min_response_chars": 3,
+        "new_chat_before": True,
         "pipeline_notes": "simple route → needs_memory_retrieval=false",
     },
     {
@@ -598,11 +597,16 @@ async def mem0_available() -> bool:
 
 
 async def check_vision_vlm_available() -> bool:
-    """Return True when Florence-2 is loaded in LM Studio (vision_proxy OCR only)."""
-    from src.agent.nodes.complex_utils.lm_studio_florence import is_florence_loaded
+    """Return True when Qwen3-VL-4B (vision VLM) is loaded (or can be loaded) in LM Studio."""
+    from src.agent.nodes.complex_utils.lm_studio_vision import (
+        is_vision_vlm_loaded,
+        ensure_vision_vlm_loaded,
+    )
 
     try:
-        return await is_florence_loaded()
+        if await is_vision_vlm_loaded():
+            return True
+        return await ensure_vision_vlm_loaded()
     except Exception:
         return False
 
@@ -617,7 +621,7 @@ async def vision_available(profile: str) -> bool:
 
 def resolve_expected_route(expected: str, *, profile: str) -> str:
     if expected == "complex":
-        return "complex-cloud" if profile == "cloud" else "complex-default"
+        return "complex-cloud"
     if expected == "vision":
         return "vision_cloud" if profile == "cloud" else "vision"
     return expected
@@ -627,15 +631,11 @@ def route_matches(actual: str, expected: str, *, profile: str) -> bool:
     if not actual:
         return False
     if expected == "complex":
-        if profile == "cloud":
-            return actual == "complex-cloud"
-        return actual == "complex-default"
+        return actual == "complex-cloud"
     if expected == "vision":
         if profile == "cloud":
             return actual in VISION_ROUTES and actual == "vision_cloud"
         return actual in VISION_ROUTES
-    if expected == "complex-cloud" and profile == "local":
-        return actual in COMPLEX_ROUTES
     return actual == expected
 
 
@@ -1120,23 +1120,6 @@ def _vision_route_acceptable(exchange: dict) -> bool:
     return bool(exchange.get("has_images"))
 
 
-def eval_cloud_qwen_fallback(exchange: dict, expected: dict, *, profile: str) -> bool:
-    """True when a cloud-intended complex turn ended on local Qwen fallback/synthesis."""
-    if profile != "cloud":
-        return False
-    if expected.get("expected_route") == "simple":
-        badge = (exchange.get("model_badge") or "").strip()
-        return badge == "small-local-failed"
-    if expected.get("expected_vision"):
-        return False
-    badge = (exchange.get("model_badge") or "").strip()
-    if badge not in CLOUD_QWEN_FALLBACK_BADGES:
-        return False
-    route = exchange.get("route") or ""
-    expected_route = expected.get("expected_route", "")
-    return expected_route == "complex" or route == "complex-cloud"
-
-
 def should_skip_turn(
     item: dict, *, profile: str, mem0_ok: bool, vision_ok: bool
 ) -> str | None:
@@ -1286,7 +1269,8 @@ def score_exchange(exchange: dict, expected: dict, *, profile: str) -> dict:
             scores["grade"] += 10
 
     scores["grade"] = min(100, scores["grade"])
-    if eval_cloud_qwen_fallback(exchange, expected, profile=profile):
+    badge = (exchange.get("model_badge") or "").strip()
+    if profile == "cloud" and badge in CLOUD_FAILURE_BADGES:
         scores["cloud_regression"] = True
         scores["cloud_fallback_fail"] = True
         scores["grade"] = min(scores["grade"], 49)
@@ -1530,9 +1514,8 @@ async def main() -> None:
         "mem0_available": mem0_ok,
         "vision_vlm_ok": vision_vlm_ok,
         "vision_available": vision_ok,
-        "cloud_scoring": "qwen_fallback_fail",
+        "cloud_scoring": "cloud_failure",
         "strict_cloud": use_strict,
-        "qwen_fallback_turns": [],
         "hardware_profile": "Apple M4 Air 24GB",
         "turn_count": len(TEST_PROMPTS),
         "exchanges": [],
@@ -1603,22 +1586,6 @@ async def main() -> None:
                 scores = score_exchange(exchange, item, profile=profile)
                 exchange["scores"] = scores
                 exchange["cloud_regression"] = scores.get("cloud_regression", False)
-                if scores.get("cloud_fallback_fail"):
-                    chain = exchange.get("fallback_chain") or []
-                    reason = ""
-                    for step in reversed(chain):
-                        if isinstance(step, dict) and step.get("reason"):
-                            reason = str(step["reason"])
-                            break
-                    eval_data["qwen_fallback_turns"].append(
-                        {
-                            "id": prompt_id,
-                            "model_badge": exchange.get("model_badge"),
-                            "route": exchange.get("route"),
-                            "reason": reason,
-                            "fallback_chain": chain,
-                        }
-                    )
                 total_score += scores["grade"]
                 scored_turns += 1
 
@@ -1628,7 +1595,7 @@ async def main() -> None:
                 )
                 if scores.get("cloud_regression"):
                     print(
-                        "  CLOUD REGRESSION: Qwen fallback on cloud-intended turn "
+                        "  CLOUD FAILURE: cloud-intended turn "
                         f"(badge={exchange['model_badge']})"
                     )
                 print(

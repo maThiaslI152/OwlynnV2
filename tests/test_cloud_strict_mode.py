@@ -1,115 +1,117 @@
-"""Tests for strict cloud mode (no local Qwen fallback)."""
+"""Tests for cloud-only behavior (no local fallback)."""
 
 from __future__ import annotations
 
-from unittest.mock import patch
+import sys
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, HumanMessage
 
-from src.agent.cloud_strict import (
-    CLOUD_FAILED_MODEL,
-    SMALL_FAILED_MODEL,
-    block_cloud_local_fallback,
-    cloud_no_local_fallback_enabled,
-)
+sys.modules["mem0"] = MagicMock()
 
 
-@pytest.mark.parametrize(
-    "profile_val,config_val,expected",
-    [
-        (True, False, True),
-        (False, True, False),
-        (None, True, True),
-        (None, False, False),
-    ],
-)
-def test_cloud_no_local_fallback_enabled(profile_val, config_val, expected):
-    profile = {}
-    if profile_val is not None:
-        profile["cloud_no_local_fallback"] = profile_val
-    with (
-        patch("src.memory.user_profile.get_profile", return_value=profile),
-        patch("src.agent.cloud_strict.config.get", return_value=config_val),
-    ):
-        assert cloud_no_local_fallback_enabled() is expected
+@pytest.mark.anyio
+async def test_complex_node_blocks_fallback_on_cloud_failure():
+    """When cloud LLM fails, the complex node produces a graceful error
+    without falling back to any local model."""
+    from src.agent.llm import CloudUnavailableError
+    from src.agent.nodes.complex import complex_llm_node
 
-
-def test_block_cloud_local_fallback_when_disabled():
-    with patch(
-        "src.agent.cloud_strict.cloud_no_local_fallback_enabled", return_value=False
-    ):
-        assert block_cloud_local_fallback(fallback_chain=[], reason="test") is None
-
-
-def test_block_cloud_local_fallback_returns_failure_state():
-    with patch(
-        "src.agent.cloud_strict.cloud_no_local_fallback_enabled", return_value=True
-    ):
-        out = block_cloud_local_fallback(
-            fallback_chain=[{"model": "large-cloud", "status": "failed"}],
-            reason="vision_proxy_failed",
-        )
-    assert out is not None
-    assert out["model_used"] == CLOUD_FAILED_MODEL
-    assert isinstance(out["messages"][0], AIMessage)
-    assert "Strict cloud mode" in out["messages"][0].content
-    assert out["fallback_chain"][-1]["status"] == "blocked"
-    assert out["fallback_chain"][-1]["reason"] == "vision_proxy_failed"
-
-
-@pytest.mark.asyncio
-async def test_simple_node_blocks_medium_fallback_when_strict():
-    from src.agent.nodes import simple as simple_mod
+    async def _cloud_raises(*_args, **_kwargs):
+        raise CloudUnavailableError("No API key")
 
     state = {
-        "messages": [AIMessage(content="hi")],
+        "messages": [HumanMessage(content="Write a Python function")],
+        "route": "complex-cloud",
+        "mode": "tools_on",
+        "web_search_enabled": True,
+        "memory_context": "None",
         "persona": "Owlynn",
-        "token_budget": 256,
+        "token_budget": 4096,
+        "selected_toolboxes": ["all"],
     }
+    profile = {
+        "name": "TestUser",
+        "cloud_anonymization_enabled": False,
+        "cloud_brief_enabled": False,
+        "custom_sensitive_terms": [],
+        "lm_studio_fold_system": True,
+    }
+
     with (
-        patch(
-            "src.agent.nodes.simple.cloud_no_local_fallback_enabled",
-            return_value=True,
-        ),
-        patch(
-            "src.agent.nodes.simple.get_small_llm",
-            side_effect=RuntimeError("small down"),
-        ),
+        patch("src.agent.nodes.complex.get_cloud_llm", side_effect=_cloud_raises),
+        patch("src.agent.nodes.complex.get_profile", return_value=profile),
     ):
-        out = await simple_mod.simple_node(state)
-    assert out["model_used"] == SMALL_FAILED_MODEL
-    assert "Strict cloud mode" in out["messages"][0].content
+        result = await complex_llm_node(state)
+
+    assert result["model_used"] == "large-cloud-failed"
+    msgs = result.get("messages", [])
+    assert len(msgs) > 0
+    assert any(
+        word in msgs[0].content.lower()
+        for word in ("error", "unavailable", "try again")
+    )
 
 
-def test_eval_cloud_qwen_fallback_large_cloud_failed():
-    import sys
-    from pathlib import Path
+@pytest.mark.anyio
+async def test_coherence_retry_blocks_fallback_on_cloud_failure():
+    """Coherence retry node returns graceful failure when cloud is unavailable."""
+    from src.agent.llm import CloudUnavailableError
+    from src.agent.nodes.coherence_retry import coherence_retry_node
 
+    async def fake_get_cloud_llm(_tier):
+        raise CloudUnavailableError("circuit open")
+
+    with patch("src.agent.nodes.coherence_retry.get_cloud_llm", fake_get_cloud_llm):
+        out = await coherence_retry_node(
+            {
+                "messages": [
+                    HumanMessage(content="What is photosynthesis?"),
+                    AIMessage(content="It is a thing plants do."),
+                ],
+                "route": "complex-cloud",
+                "response_confidence": 0.2,
+                "response_coherence": {
+                    "coherent": False,
+                    "score": 0.2,
+                    "reason": "Off-topic and short",
+                },
+                "_coherence_retry_round": 0,
+            }
+        )
+
+    assert any(
+        entry.get("reason") == "coherence_retry_cloud_unavailable:CloudUnavailableError"
+        for entry in out.get("fallback_chain", [])
+    )
+
+
+def test_eval_cloud_fallback_detection():
+    """Verify eval scoring detects cloud failures via CLOUD_FAILURE_BADGES."""
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-    from run_local_frontier_eval import eval_cloud_qwen_fallback
+    from run_local_frontier_eval import score_exchange
 
     exchange = {
         "route": "complex-cloud",
         "model_badge": "large-cloud-failed",
-        "fallback_chain": [
-            {"reason": "fallback_generic_cloud_error", "status": "blocked"}
-        ],
     }
     expected = {"expected_route": "complex"}
-    assert eval_cloud_qwen_fallback(exchange, expected, profile="cloud")
+    scores = score_exchange(exchange, expected, profile="cloud")
+    assert scores.get("cloud_fallback_fail")
+    assert scores.get("cloud_regression")
 
 
-def test_eval_cloud_qwen_fallback_simple_strict_fail():
-    import sys
-    from pathlib import Path
-
+def test_eval_simple_route_small_local_not_regression():
+    """Simple route with small-local badge should NOT trigger regression."""
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-    from run_local_frontier_eval import eval_cloud_qwen_fallback
+    from run_local_frontier_eval import score_exchange
 
     exchange = {
         "route": "simple",
-        "model_badge": "small-local-failed",
+        "model_badge": "small-local",
     }
     expected = {"expected_route": "simple"}
-    assert eval_cloud_qwen_fallback(exchange, expected, profile="cloud")
+    scores = score_exchange(exchange, expected, profile="cloud")
+    assert not scores.get("cloud_fallback_fail")

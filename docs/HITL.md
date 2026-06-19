@@ -46,7 +46,7 @@ routing:
 
 When `mode == "api"`, interrupts are disabled. This prevents `GraphInterrupt` exceptions from producing empty responses. Instead:
 - Ambiguous skill matches → auto-select top skill or "all" toolbox
-- Low router confidence → use best-effort route (complex-default)
+- Low router confidence → use `complex-cloud` route (best-effort, HITL gating by security proxy)
 - Sensitive tool calls → **denied by default** unless the client sets `auto_approve_sensitive: true` on the OpenAI-compat request (see `security_proxy.py`)
 
 ## Known Issues

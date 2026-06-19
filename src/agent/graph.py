@@ -18,6 +18,7 @@ from src.agent.nodes.memory import (
 )
 from src.agent.nodes.summarize import auto_summarize_node
 from src.agent.nodes.coherence import coherence_check_node
+from src.agent.nodes.coherence_retry import coherence_retry_node
 
 
 import logging
@@ -33,6 +34,9 @@ _DEFAULT_CONTEXT_WINDOW = int(
     config.get("models.medium.variants.default.context_window", 16384)
 )
 _SUMMARIZE_THRESHOLD = float(config.get("summarization.threshold_ratio", 0.85))
+
+_COHERENCE_THRESHOLD = float(config.get("coherence.retry_threshold", 0.4))
+_COHERENCE_MAX_RETRIES = int(config.get("coherence.max_retries", 1))
 
 
 def summarize_gate(state: AgentState) -> str:
@@ -72,31 +76,19 @@ def summarize_gate(state: AgentState) -> str:
 
 
 def route_decision(state: AgentState) -> str:
-    route = state.get("route", "complex-default")
+    route = state.get("route", "complex-cloud")
     set_route(route)
     if route == "simple":
         audit_debug(
             "agent.lifecycle", "edge_traversal", edge="router→simple", route=route
         )
         return "simple"
-    valid_complex = {
-        "complex-default",
-        "complex-cloud",
-    }
-    if route in valid_complex:
-        audit_debug(
-            "agent.lifecycle",
-            "edge_traversal",
-            edge="router→scope_clarify",
-            route=route,
-        )
-        return "scope_clarify"
+    # All complex routes go to scope_clarify → complex_llm (cloud-only)
     audit_debug(
         "agent.lifecycle",
         "edge_traversal",
         edge="router→scope_clarify",
         route=route,
-        reason="unrecognised_fallback",
     )
     return "scope_clarify"
 
@@ -191,6 +183,43 @@ def security_next_step(state: AgentState) -> str:
     return go
 
 
+def coherence_retry_gate(state: AgentState) -> str:
+    """After coherence_check: route to coherence_retry when confidence is below
+    the configured threshold AND the retry budget remains. Otherwise proceed
+    to memory_write.
+
+    Mirrors the cutoff-continuation pattern in llm_next_step: a single bounded
+    cycle that cannot spin.
+    """
+    enabled = bool(config.get("coherence.enabled", True))
+    confidence = state.get("response_confidence")
+    rounds_done = int(state.get("_coherence_retry_round") or 0)
+    below_threshold = (
+        confidence is not None and float(confidence) < _COHERENCE_THRESHOLD
+    )
+    budget_left = rounds_done < _COHERENCE_MAX_RETRIES
+    if enabled and below_threshold and budget_left:
+        audit_debug(
+            "agent.lifecycle",
+            "edge_traversal",
+            edge="coherence_check→coherence_retry",
+            confidence=confidence,
+            rounds_done=rounds_done,
+            threshold=_COHERENCE_THRESHOLD,
+            reason="low_coherence_retry",
+        )
+        return "coherence_retry"
+    audit_debug(
+        "agent.lifecycle",
+        "edge_traversal",
+        edge="coherence_check→memory_write",
+        confidence=confidence,
+        rounds_done=rounds_done,
+        reason="retry_skipped_or_exhausted",
+    )
+    return "memory_write"
+
+
 def build_graph():
     """
     Stateful cyclic LangGraph with HITL gates:
@@ -218,6 +247,7 @@ def build_graph():
     builder.add_node("security_proxy", security_proxy_node)
     builder.add_node("tool_action", complex_tool_action_node)
     builder.add_node("coherence_check", coherence_check_node)
+    builder.add_node("coherence_retry", coherence_retry_node)
     builder.add_node("memory_write", memory_write_node)
 
     builder.set_entry_point("memory_inject_lite")
@@ -279,7 +309,21 @@ def build_graph():
 
     builder.add_edge("tool_action", "complex_llm")
     builder.add_edge("simple", "coherence_check")
-    builder.add_edge("coherence_check", "memory_write")
+
+    # coherence_check → coherence_retry (low confidence + budget left) | memory_write
+    builder.add_conditional_edges(
+        "coherence_check",
+        coherence_retry_gate,
+        {
+            "coherence_retry": "coherence_retry",
+            "memory_write": "memory_write",
+        },
+    )
+    # coherence_retry cycles back through complex_llm so the new response
+    # flows through the normal tool/HITL/coherence pipeline. _coherence_retry_round
+    # is incremented by the retry node so the gate accepts at most max_retries
+    # attempts per turn.
+    builder.add_edge("coherence_retry", "complex_llm")
     builder.add_edge("memory_write", END)
 
     return builder

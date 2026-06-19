@@ -16,7 +16,6 @@ VALID_TASK_CATEGORIES = frozenset({"general", "document", "vision", "code", "ana
 VALID_ROUTES = frozenset(
     {
         "simple",
-        "complex-default",
         "complex-cloud",
     }
 )

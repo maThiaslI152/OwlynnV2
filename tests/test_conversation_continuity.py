@@ -54,7 +54,7 @@ class TestMessageHistoryPreservation:
         """Messages list grows correctly across simulated turns."""
         state = _build_state()
 
-        # Turn 1: user asks, medium-default responds
+        # Turn 1: user asks, large-cloud responds
         turn1_messages = add_messages(
             state["messages"],
             [
@@ -63,10 +63,10 @@ class TestMessageHistoryPreservation:
             ],
         )
         state["messages"] = turn1_messages
-        state["model_used"] = "medium-default"
+        state["model_used"] = "large-cloud"
         assert len(state["messages"]) == 2
 
-        # Turn 2: user asks about image, medium-vision responds
+        # Turn 2: user asks complex question, large-cloud responds again
         turn2_messages = add_messages(
             state["messages"],
             [
@@ -75,10 +75,10 @@ class TestMessageHistoryPreservation:
             ],
         )
         state["messages"] = turn2_messages
-        state["model_used"] = "medium-vision"
+        state["model_used"] = "large-cloud"
         assert len(state["messages"]) == 4
 
-        # Turn 3: user asks complex question, medium-default responds again
+        # Turn 3: user asks complex question, large-cloud responds again
         turn3_messages = add_messages(
             state["messages"],
             [
@@ -87,7 +87,7 @@ class TestMessageHistoryPreservation:
             ],
         )
         state["messages"] = turn3_messages
-        state["model_used"] = "medium-default"
+        state["model_used"] = "large-cloud"
         assert len(state["messages"]) == 6
 
     def test_message_content_preserved(self):
@@ -135,21 +135,21 @@ class TestModelUsedProvenance:
         # Simulate a conversation where we track model_used per turn
         turn_records = []
 
-        # Turn 1: medium-default
+        # Turn 1: large-cloud
         turn_records.append(
             {
                 "turn": 1,
-                "model_used": "medium-default",
+                "model_used": "large-cloud",
                 "user_msg": "What is Python?",
                 "ai_msg": "Python is a programming language.",
             }
         )
 
-        # Turn 2: medium-vision
+        # Turn 2: large-cloud
         turn_records.append(
             {
                 "turn": 2,
-                "model_used": "medium-vision",
+                "model_used": "large-cloud",
                 "user_msg": "Describe this image.",
                 "ai_msg": "The image shows a sunset.",
             }
@@ -165,21 +165,21 @@ class TestModelUsedProvenance:
             }
         )
 
-        # Turn 4: medium-default again
+        # Turn 4: large-cloud again
         turn_records.append(
             {
                 "turn": 4,
-                "model_used": "medium-default",
+                "model_used": "large-cloud",
                 "user_msg": "Summarize our conversation.",
                 "ai_msg": "We discussed Python, an image, and a theorem.",
             }
         )
 
         # Verify provenance is preserved
-        assert turn_records[0]["model_used"] == "medium-default"
-        assert turn_records[1]["model_used"] == "medium-vision"
+        assert turn_records[0]["model_used"] == "large-cloud"
+        assert turn_records[1]["model_used"] == "large-cloud"
         assert turn_records[2]["model_used"] == "large-cloud"
-        assert turn_records[3]["model_used"] == "medium-default"
+        assert turn_records[3]["model_used"] == "large-cloud"
 
         # Verify all messages are present
         all_messages = []
@@ -192,21 +192,19 @@ class TestModelUsedProvenance:
         """Fallback model_used values are tracked correctly."""
         state = _build_state()
 
-        # Simulate a turn where cloud failed and fell back to medium-default
-        state["model_used"] = "medium-default-fallback"
+        # Simulate a turn where cloud failed and fell back
+        state["model_used"] = "large-cloud-fallback"
         assert "fallback" in state["model_used"]
-        assert state["model_used"] == "medium-default-fallback"
+        assert state["model_used"] == "large-cloud-fallback"
 
     def test_state_preserves_model_used_across_updates(self):
         """model_used in state is correctly updated each turn."""
         state = _build_state()
 
         model_sequence = [
-            "medium-default",
-            "medium-vision",
-            "medium-default",
             "large-cloud",
-            "medium-default-fallback",
+            "large-cloud",
+            "large-cloud-fallback",
         ]
 
         for model in model_sequence:

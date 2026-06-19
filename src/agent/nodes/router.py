@@ -92,7 +92,7 @@ def estimate_token_budget(user_text: str, route: str) -> int:
     Uses per-tier context windows:
     - simple → _SMALL_MODEL_CONTEXT (4096) with 1500 reserve
     - complex-cloud → _CLOUD_CONTEXT (131072) with 8000 reserve, budget_max 16384
-    - complex-default → _MEDIUM_DEFAULT_CONTEXT (100000) with 4000 reserve, budget_max 8192
+    - complex-cloud → _MEDIUM_DEFAULT_CONTEXT (100000) with 4000 reserve, budget_max 8192
     """
     reserves_cfg = config.get("routing.input_reserves", {})
     budget_max_cfg = config.get("routing.budget_max", {})
@@ -573,7 +573,7 @@ def _preferred_complex_route(cloud_available: bool | None = None) -> str:
     """Default complex route: cloud when escalation is available, else local."""
     if cloud_available is None:
         cloud_available = _check_cloud_available()
-    return "complex-cloud" if cloud_available else "complex-default"
+    return "complex-cloud" if cloud_available else "complex-cloud"
 
 
 def _build_low_confidence_router_choices(
@@ -644,7 +644,7 @@ def _resolve_complex_route(
     if _has_image_content(state):
         if cloud_available:
             return "complex-cloud", toolbox
-        return "complex-default", toolbox
+        return "complex-cloud", toolbox
 
     # 2. Web-search toolbox — cloud orchestration (DeepSeek) when escalation is on
     if cloud_available and "web_search" in toolbox:
@@ -654,24 +654,24 @@ def _resolve_complex_route(
     if estimated_input > _MEDIUM_LONGCTX_CONTEXT * 0.80:
         if cloud_available:
             return "complex-cloud", toolbox
-        return "complex-default", toolbox
+        return "complex-cloud", toolbox
 
     # 4. Exceeds 80% of Medium_Default → cloud when available, else local default
     if estimated_input > _MEDIUM_DEFAULT_CONTEXT * 0.80:
         if cloud_available:
             return "complex-cloud", toolbox
-        return "complex-default", toolbox
+        return "complex-cloud", toolbox
 
     # 5. Frontier-quality indicators → cloud when available
     if _needs_frontier_quality(user_text):
         if cloud_available:
             return "complex-cloud", toolbox
-        return "complex-default", toolbox
+        return "complex-cloud", toolbox
 
     # 6. Default — cloud-first when escalation is available
     if cloud_available:
         return "complex-cloud", toolbox
-    return "complex-default", toolbox
+    return "complex-cloud", toolbox
 
 
 def _check_cloud_available() -> bool:
@@ -719,21 +719,21 @@ async def router_node(state: AgentState) -> AgentState:
     # Image attachments — deterministic vision route; skip LLM/HITL clarification.
     # Image attachments — deterministic vision route; skip LLM/HITL clarification.
     if has_images:
-        from src.agent.nodes.complex_utils.lm_studio_florence import (
-            ensure_florence_loaded,
+        from src.agent.nodes.complex_utils.lm_studio_vision import (
+            ensure_vision_vlm_loaded,
         )
 
         vision_ready = False
         try:
-            vision_ready = await ensure_florence_loaded()
+            vision_ready = await ensure_vision_vlm_loaded()
         except Exception as e:
-            logger.warning("[router] Florence load preflight failed: %s", e)
+            logger.warning("[router] Vision VLM load preflight failed: %s", e)
 
         if not vision_ready:
             logger.warning(
-                "[router] Florence VLM is not ready. Falling back to complex-default."
+                "[router] Vision VLM is not ready. Falling back to complex-cloud."
             )
-            route = "complex-default"
+            route = "complex-cloud"
             toolbox = list(_VISION_TOOLBOX)
             task_category = "vision_fallback"
             reasoning = "image_attachment_vision_proxy_unavailable"
@@ -1526,15 +1526,15 @@ async def router_node(state: AgentState) -> AgentState:
                     )
                     budget = estimate_token_budget(user_text, route_override)
                 if route_override == "complex-cloud" and not cloud_available:
-                    route_override = "complex-default"
+                    route_override = "complex-cloud"
                     logger.warning(
-                        "[router] Cloud unavailable, falling back to complex-default"
+                        "[router] Cloud unavailable, falling back to complex-cloud"
                     )
                     audit_warn(
                         "agent.hitl",
                         "router_hitl_cloud_unavailable",
                         requested="complex-cloud",
-                        fallback="complex-default",
+                        fallback="complex-cloud",
                     )
                 metadata = _build_router_metadata(
                     route_override,
@@ -1637,9 +1637,9 @@ async def router_node(state: AgentState) -> AgentState:
     # If cloud route but cloud unavailable, downgrade
     swap_from_route = route
     if route == "complex-cloud" and not cloud_available:
-        route = "complex-default"
+        route = "complex-cloud"
         logger.warning(
-            "[router] Cloud unavailable, downgraded from complex-cloud to complex-default"
+            "[router] Cloud unavailable, downgraded from complex-cloud to complex-cloud"
         )
         audit_warn(
             "agent.model",

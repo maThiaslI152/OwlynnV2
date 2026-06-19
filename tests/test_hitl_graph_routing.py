@@ -7,13 +7,7 @@ class TestGraphRouting:
     def test_complex_route_goes_to_scope_clarify(self):
         from src.agent.graph import route_decision
 
-        for route in (
-            "complex-default",
-            "complex-cloud",
-            "complex-cloud",
-            "complex-cloud",
-        ):
-            assert route_decision({"route": route}) == "scope_clarify"
+        assert route_decision({"route": "complex-cloud"}) == "scope_clarify"
 
     def test_simple_route_skips_scope_clarify(self):
         from src.agent.graph import route_decision

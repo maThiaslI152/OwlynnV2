@@ -45,18 +45,15 @@ external_services:
 startup:
   preload:
     - small      # MiniCPM5 router — always
-    - embedding  # nomic embed — always; Florence VLM is lazy on first image
+    - embedding  # nomic embed — always; vision VLM is lazy on first image
   warmup: true
-  require_medium_when_cloud_unavailable: true
-
 # ── Models — AI/LLM Configuration ────────────────────────────────────────────
-# Router: MiniCPM5-1B — routing/classification
-# Medium: Qwen3.5-9B — local fallback when cloud unavailable
-# Cloud: DeepSeek V4 — primary complex workhorse (route complex-cloud)
-# Vision proxy: Florence-2 — lazy OCR for cloud+image path only
+# Router: MiniCPM5-1B — routing/classification + coherence grading
+# Cloud: DeepSeek V4 — primary workhorse for all complex reasoning
+# Vision proxy: Qwen3-VL-4B — lazy VLM for cloud+image path
+# Extraction: Gemma-4-E2B — background memory extraction (small, always loaded)
 # See: https://huggingface.co/mlx-community/MiniCPM5-1B-8bit
 #      https://huggingface.co/openbmb/MiniCPM5-1B
-#      https://huggingface.co/HauhauCS/Qwen3.5-9B-Uncensored-HauhauCS-Aggressive
 models:
   small:
     base_url: "http://127.0.0.1:1234/v1"      # SMALL_LLM_BASE_URL env
@@ -71,23 +68,6 @@ models:
       chat_template_kwargs:
         enable_thinking: false               # CRITICAL: disable MiniCPM5 hybrid-think for fast routing
       top_p: 0.95                            # MiniCPM5 recommended for no-think mode
-      keep_alive: -1                         # Ask LM Studio/Ollama to keep model loaded
-
-  medium:
-    base_url: "http://127.0.0.1:1234/v1"      # MEDIUM_LLM_BASE_URL env
-    model_name: "qwen3.5-9b-uncensored-hauhaucs-aggressive@q6_k"
-    context_window: 16384                   # Practical limit — 32K is too slow on M4 Air Q6_K
-    temperature: 0.7                         # Qwen non-thinking rec: 0.7, top_p=0.8, top_k=20
-    max_tokens: 16384                       # Ample room for reasoning_content + output
-    max_output_tokens: 16384
-    timeout: 600                             # M4: 600s — Qwen3.5 9B@Q6_K 32K ctx is slow
-    request_timeout: 600                     # HTTP request timeout — prevents infinite hangs
-    fold_system: true                        # LM Studio Jinja compat
-    extra_body:
-      chat_template_kwargs:
-        enable_thinking: false               # Non-thinking agent mode
-      top_p: 0.8                             # Qwen recommended
-      top_k: 20                              # Qwen recommended
       keep_alive: -1                         # Ask LM Studio/Ollama to keep model loaded
 
   cloud:
@@ -113,17 +93,31 @@ models:
 
   vision_proxy:
     base_url: "http://127.0.0.1:1234/v1"
-    model_name: "florence-2-base-nsfw-v2-ext-mlx"
+    model_name: "qwen3-vl-4b-instruct-c_abliterated-v2-mlx"
     # Native LM Studio catalog key (defaults to model_name). Must match My Models entry.
-    lm_studio_model_key: "florence-2-base-nsfw-v2-ext-mlx"
-    temperature: 0.0
-    max_tokens: 512                       # OCR-only: short task output
-    max_output_tokens: 512
+    lm_studio_model_key: "qwen3-vl-4b-instruct-c_abliterated-v2-mlx"
+    temperature: 0.1
+    max_tokens: 2048                      # Qwen3-VL: natural language descriptions
+    max_output_tokens: 2048
     timeout: 120
     request_timeout: 120
-    context_window: 4096
+    context_window: 8192
     extra_body:
-      top_p: 1.0
+      keep_alive: -1
+      chat_template_kwargs:
+        enable_thinking: false              # Suppress Qwen thinking mode for fast vision
+
+  extraction:
+    base_url: "http://127.0.0.1:1234/v1"
+    model_name: "gemma-4-e2b-heretic-uncensored-mlx"
+    context_window: 8192
+    temperature: 0.1
+    max_tokens: 1024
+    max_output_tokens: 1024
+    timeout: 120
+    request_timeout: 120
+    extra_body:
+      top_p: 0.95
       keep_alive: -1
 
   embedding:
@@ -138,10 +132,6 @@ models:
       timeout: 15
       max_tokens: 2048
       max_output_tokens: 2048
-    medium:
-      timeout: 90
-      max_tokens: 16384
-      max_output_tokens: 16384
 
 # ── Routing ──────────────────────────────────────────────────────────────────
 routing:
@@ -205,7 +195,7 @@ memory:
   extraction:
     temperature: 0.1
     max_tokens: 1024
-    # Background Qwen extraction — defer until agent idle (no GPU throttle in LM Studio API)
+    # Background extraction — defer until agent idle (no GPU throttle in LM Studio API)
     idle_cooldown_seconds: 8               # Wait after turn before starting extraction
     idle_poll_seconds: 2                   # Poll interval while waiting for idle window
     max_idle_wait_seconds: 600             # Run anyway after 10m (avoid stuck queue)
@@ -317,6 +307,13 @@ complex:
   synthetic_answer_max_chars: 4500        # Max chars for synthetic answers
   recursion_limit: 100                    # LangGraph recursion limit to prevent crashes in loops
 
+# ── Coherence self-correction loop ────────────────────────────────────────────
+coherence:
+  retry_threshold: 0.4                    # Confidence below this triggers a retry
+  max_retries: 1                          # Hard cap per turn (mirrors max_cutoff_retries)
+  retry_token_budget: 2048                # Output budget for retry synthesis call
+  enabled: true                           # Set false to disable retry cycle (telemetry-only)
+
 # ── Cloud ────────────────────────────────────────────────────────────────────
 cloud:
   escalation_enabled: true
@@ -327,18 +324,16 @@ cloud:
   tool_loop_force_thinking: true
   vision_transcription_cache_ttl: 3600
   vision_idle_unload_seconds: 300            # Drop lazy VLM client after idle
-  vision_max_tokens: 512                     # Florence OCR-only cap (not chat)
-  vision_temperature: 0.0                      # Florence OCR: deterministic
-  vision_prompt_mode: florence                 # florence | json_chat (legacy Qwen — do not use)
-  vision_lm_studio_auto_load: true             # Load Florence via native API before OCR
+  vision_max_tokens: 2048                    # Qwen3-VL natural language cap
+  vision_temperature: 0.1                     # Qwen3-VL: slight variation for descriptions
+  vision_prompt_mode: qwen3vl                 # qwen3vl | florence (legacy OCR — do not use)
+  vision_lm_studio_auto_load: true             # Load Qwen3-VL via native API before vision
   vision_lm_studio_load_timeout: 120
-  vision_florence_task: "<OCR>"                # Single-line OCR; layout uses OCR_WITH_REGION retry
-  vision_florence_region_task: "<OCR_WITH_REGION>"
-  vision_florence_caption_task: "<DETAILED_CAPTION>"
+  vision_qwen3vl_system: "You are an OCR sensor. Output ALL visible text exactly as it appears — transcribe every word, number, symbol, and code snippet verbatim. Then list any UI elements (buttons, fields, menus). Do NOT describe the image, do NOT add interpretation, do NOT say 'the image shows' — output raw transcription only."
+  vision_qwen3vl_user: "Extract the exact text from this image. List all visible text, UI elements (buttons, fields, menus), and code verbatim."
   circuit_breaker:
     failure_threshold: 3
     cooldown_seconds: 60
-  no_local_fallback: false                 # OWLYNN_CLOUD_NO_FALLBACK env; profile override: cloud_no_local_fallback
   budget:
     daily_token_limit: 500000
     warning_thresholds: [0.5, 0.8, 0.95]
@@ -398,7 +393,7 @@ chat_title:
 
 # ── Router LLM Bind Params ──────────────────────────────────────────────────
 # MiniCPM5 in no-think mode produces clean JSON without <think> preamble.
-# Budget can be tighter than Qwen3.5 since no reasoning_content overhead.
+# Budget is tighter since the small model doesn't waste tokens on reasoning_content.
 # Note: MiniCPM5 may still emit <think> tags inline — parse_routing() strips them.
 router_llm:
   temperature: 0.05

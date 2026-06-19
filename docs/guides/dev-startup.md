@@ -72,7 +72,7 @@ To swap a model, change 1-2 lines in `defaults.yaml`. No code changes needed.
 | Section | What it controls |
 |---------|-----------------|
 | `models.small` | Router/model for simple tasks (name, base_url, temp, max_tokens, context_window) |
-| `models.medium` | Complex local task model (Qwen 9B) |
+| `models.extraction` | Background memory extraction model (Gemma-4-E2B) |
 | `models.cloud` | DeepSeek V4 API (`deepseek-v4-flash` / `deepseek-v4-pro`) |
 | `cloud` | Thinking mode, reasoning effort, vision cache TTL |
 | `routing` | Confidence thresholds, budget tiers, keyword bypasses |
@@ -92,10 +92,8 @@ python3 -c "from src.config.config_loader import validate_config; print(validate
 | `HOST` | `server.host` | `127.0.0.1` |
 | `PORT` | `server.port` | `8000` |
 | `SMALL_LLM_BASE_URL` | `models.small.base_url` | `http://127.0.0.1:1234/v1` |
-| `MEDIUM_LLM_BASE_URL` | `models.medium.base_url` | same |
 | `CLOUD_LLM_BASE_URL` | `models.cloud.base_url` | `https://api.deepseek.com/v1` |
 | `SMALL_LLM_MODEL_NAME` | `models.small.model_name` | `minicpm5-1b` |
-| `MEDIUM_LLM_MODEL_NAME` | `models.medium.model_name` | `qwen3.5-9b-...@q6_k` |
 | `CLOUD_LLM_MODEL_NAME` | `models.cloud.model_name` | `deepseek-v4-flash` |
 | `DEEPSEEK_API_KEY` | env (or `.env.local`) | — |
 | `QDRANT_HOST` / `QDRANT_PORT` | `external_services.qdrant.*` | `localhost:6333` |
@@ -111,9 +109,7 @@ python3 -c "from src.config.config_loader import validate_config; print(validate
 | Variable | What to set | Where to get the value |
 |----------|-------------|----------------------|
 | `SMALL_LLM_BASE_URL` | `http://127.0.0.1:1234/v1` | LM Studio default |
-| `MEDIUM_LLM_BASE_URL` | `http://127.0.0.1:1234/v1` | Same LM Studio instance |
 | `SMALL_LLM_MODEL_NAME` | Exact model name | LM Studio → Models tab → loaded model name |
-| `MEDIUM_LLM_MODEL_NAME` | Exact model name | LM Studio → Models tab → loaded model name |
 | `HOST` | `127.0.0.1` | Default (no change needed) |
 | `PORT` | `8000` | Default (no change needed) |
 
@@ -165,8 +161,9 @@ See [`docs/guides/lm_studio.md`](lm_studio.md) for full model setup instructions
 1. Open LM Studio
 2. Download and load models:
    - Router: `minicpm5-1b` (small slot)
-   - Worker: `qwen3.5-9b-uncensored-hauhaucs-aggressive@q6_k` (medium slot)
-   - **Vision:** also load `mmproj-Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-BF16.gguf` for chat image attachments
+   - Extraction: `gemma-4-e2b-heretic-uncensored-mlx` (background memory extraction)
+   - **Complex reasoning**: no local model needed — DeepSeek V4 cloud handles all complex tasks
+   - **Vision**: Qwen3-VL-4B (auto-loaded by LM Studio on first image; `models.vision_proxy`)
    - **RAG only:** `text-embedding-nomic-embed-text-v1.5-embedding` (not used for chat images)
 3. Start the local server (button in the top bar) — listens on port `1234`
 4. Verify: `curl -s http://127.0.0.1:1234/v1/models | python3 -m json.tool`
@@ -272,7 +269,7 @@ Browser (http://127.0.0.1:5173)
   │     └─► Tool execution (web search, file ops, MCP)
   │
   ├─► LM Studio (port 1234)
-  │     └─► Local LLM inference (small/medium models)
+  │     └─► Local LLM inference (router + extraction models)
   │
   ├─► Qdrant (port 6333)
   │     └─► Long-term memory (mem0 embeddings)

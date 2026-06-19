@@ -105,7 +105,7 @@ def audit_context(**ctx: Any):
     Example::
 
         with audit_context(thread_id="abc-123", node="router"):
-            audit_event("agent.lifecycle", "decision", route="complex-default")
+            audit_event("agent.lifecycle", "decision", route="complex-cloud")
     """
     # Merge with existing extras
     existing = _extra_var.get().copy()

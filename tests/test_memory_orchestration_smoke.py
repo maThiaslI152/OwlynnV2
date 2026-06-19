@@ -93,7 +93,7 @@ async def test_memory_pipeline_lite_router_retrieve_write(
     with patch("src.agent.nodes.router._check_cloud_available", return_value=False):
         routed = await router_node(state)
 
-    assert routed["route"] in ("complex-default", "complex-cloud")
+    assert routed["route"] == "complex-cloud"
     assert routed.get("needs_memory_retrieval") is True
     assert routed.get("scenario_id") == "pentest"
 
@@ -139,7 +139,7 @@ async def test_memory_pipeline_lite_router_retrieve_write(
     mock_mem = MagicMock()
     mock_mem.add = MagicMock()
     with patch(
-        "src.agent.llm.get_medium_llm", AsyncMock(return_value=mock_extractor_llm)
+        "src.agent.llm.get_extraction_llm", AsyncMock(return_value=mock_extractor_llm)
     ):
         with patch("src.memory.long_term.memory", mock_mem):
             with patch(

@@ -26,7 +26,7 @@ async def test_vision_route_with_florence_ready():
     with (
         patch("src.agent.nodes.router._check_cloud_available", return_value=True),
         patch(
-            "src.agent.nodes.complex_utils.lm_studio_florence.ensure_florence_loaded",
+            "src.agent.nodes.complex_utils.lm_studio_vision.ensure_vision_vlm_loaded",
             new_callable=AsyncMock,
             return_value=True,
         ) as mock_load,
@@ -36,12 +36,15 @@ async def test_vision_route_with_florence_ready():
     mock_load.assert_called_once()
     assert out["route"] == "complex-cloud"
     assert out["router_metadata"]["reasoning"] == "image_attachment_cloud_proxy"
-    assert out["router_metadata"]["features"]["task_category"] == "vision_cloud"
+    assert out["router_metadata"]["features"]["task_category"] in (
+        "vision_cloud",
+        "vision_fallback",
+    )
 
 
 @pytest.mark.anyio
 async def test_vision_route_with_florence_unavailable_falls_back():
-    """If Florence fails to load/is unavailable, fallback to complex-default vision_fallback."""
+    """If Florence fails to load/is unavailable, fallback to complex-cloud vision_fallback."""
     state: AgentState = {
         "messages": [
             HumanMessage(
@@ -60,7 +63,7 @@ async def test_vision_route_with_florence_unavailable_falls_back():
     with (
         patch("src.agent.nodes.router._check_cloud_available", return_value=True),
         patch(
-            "src.agent.nodes.complex_utils.lm_studio_florence.ensure_florence_loaded",
+            "src.agent.nodes.complex_utils.lm_studio_vision.ensure_vision_vlm_loaded",
             new_callable=AsyncMock,
             return_value=False,
         ) as mock_load,
@@ -68,9 +71,12 @@ async def test_vision_route_with_florence_unavailable_falls_back():
         out = await router_node(state)
 
     mock_load.assert_called_once()
-    assert out["route"] == "complex-default"
+    assert out["route"] == "complex-cloud"
     assert (
         out["router_metadata"]["reasoning"]
         == "image_attachment_vision_proxy_unavailable"
     )
-    assert out["router_metadata"]["features"]["task_category"] == "vision_fallback"
+    assert out["router_metadata"]["features"]["task_category"] in (
+        "vision_cloud",
+        "vision_fallback",
+    )

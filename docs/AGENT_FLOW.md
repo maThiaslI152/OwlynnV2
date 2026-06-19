@@ -102,20 +102,20 @@ HITL interrupt nodes (highlighted):
 
 | Concern | Detail |
 |---------|--------|
-| Model | Small_LLM (LFM2.5-1.2B) |
+| Model | Router LLM (MiniCPM5-1B) |
 | Tools | None bound |
 | Memory context | Not injected into prompt |
 | Artifact cleaning | Strips `<think>` tags and reasoning artifacts |
 | Current date | Injected into prompt |
 | Response style | Injected from user settings |
-| Fallback | Falls back to Medium_Default on model failure |
+| Fallback | Retries once on failure (same model) |
 | Output | Single `AIMessage` |
 
 ### complex_llm
 
 | Concern | Detail |
 |---------|--------|
-| Model | Selected M-tier or Cloud model with dynamically-bound tools |
+| Model | Cloud model (DeepSeek V4) with dynamically-bound tools |
 | Tool count | Up to 22 tools (with web) or 20 (without web) |
 | Context | Injects current date, memory context, persona, response style |
 | Artifact cleaning | Strips `<think>` tags from output |
@@ -208,7 +208,6 @@ pytest tests/test_memory_nodes.py -v
 | `router_clarification_threshold` | float | `0.6` | router |
 | `cloud_escalation_enabled` | boolean | `true` | complex_llm |
 | `cloud_anonymization_enabled` | boolean | `true` | complex_llm (cloud path) |
-| `medium_models` | object | Three variant keys | complex_llm (model selection) |
 | `recursion_limit` | integer | `100` | graph (global) |
 
 ## Graph Run Limits

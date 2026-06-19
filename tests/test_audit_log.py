@@ -142,16 +142,16 @@ class TestAuditEvent:
         assert entries[0]["node"] == "router"
 
     def test_route_injection(self, captured_audit):
-        set_route("complex-default")
+        set_route("complex-cloud")
         audit_event("agent.lifecycle", "node_entry", level=logging.DEBUG)
         entries = captured_audit()
-        assert entries[0]["route"] == "complex-default"
+        assert entries[0]["route"] == "complex-cloud"
 
     def test_model_injection(self, captured_audit):
-        set_model("medium-vision")
+        set_model("large-cloud")
         audit_event("agent.model", "model_selected", level=logging.INFO)
         entries = captured_audit()
-        assert entries[0]["model"] == "medium-vision"
+        assert entries[0]["model"] == "large-cloud"
 
 
 # ── Tests: context enrichment ───────────────────────────────────────────────
@@ -305,7 +305,7 @@ class TestLogModelAttempt:
         assert entries[0]["status"] == "success"
 
     def test_failure(self, captured_audit):
-        log_model_attempt("medium-vision", "failed", reason="auth_error_401_403")
+        log_model_attempt("large-cloud", "failed", reason="auth_error_401_403")
         entries = captured_audit()
         assert entries[0]["status"] == "failed"
 

@@ -111,11 +111,11 @@ async def process_extraction_job(payload: dict[str, Any]) -> None:
     mem0_uid = str(payload.get("mem0_uid", "owner"))
     project_id = payload.get("project_id", "default")
 
-    from src.agent.llm import get_medium_llm
+    from src.agent.llm import get_extraction_llm
     from src.agent.local_llm_scheduler import invoke_medium_background
 
     messages_spec = build_extraction_messages(scrubbed, scenario_id)
-    llm = await get_medium_llm("default", foreground=False)
+    llm = await get_extraction_llm(foreground=False)
     bound = llm.bind(
         temperature=float(config.get("memory.extraction.temperature", 0.1)),
         max_tokens=int(config.get("memory.extraction.max_tokens", 1024)),

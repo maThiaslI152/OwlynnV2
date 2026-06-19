@@ -65,6 +65,7 @@ function App() {
   const applyBrowserPageContext = useAppStore((s) => s.applyBrowserPageContext)
   const setRouterMetadata = useAppStore((s) => s.setRouterMetadata)
   const setModelInfo = useAppStore((s) => s.setModelInfo)
+  const setCoherenceRetryActive = useAppStore((s) => s.setCoherenceRetryActive)
   const setContextCompression = useAppStore((s) => s.setContextCompression)
   const setCloudUsage = useAppStore((s) => s.setCloudUsage)
   const setContextBreakdown = useAppStore((s) => s.setContextBreakdown)
@@ -446,6 +447,14 @@ function App() {
             selection: String((event as any).selection || ''),
           }
           applyBrowserPageContext(ctx)
+        } else if (event.type === 'coherence_retry_started') {
+          setCoherenceRetryActive(
+            true,
+            Number((event as any).attempt ?? 1),
+            Number((event as any).original_confidence ?? null) || null,
+          )
+        } else if (event.type === 'coherence_retry_completed') {
+          setCoherenceRetryActive(false)
         }
       },
     })
@@ -455,7 +464,7 @@ function App() {
       disconnect()
       wsClientRef.current = null
     }
-  }, [activeProjectId, addMessage, appendStreamChunk, applyBrowserPageContext, currentThreadId, executionPolicy, pushToolExecution, setConnection, setLatestToolExecution, setPendingCorrelationId, setMemoryUpdatedAt, setModelInfo, setContextCompression, setContextBreakdown, setCloudUsage, setOperatorNote, setRouterMetadata, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setTtsSpeaking, upsertActionProposal, updateActionProposalStatus, isTauriRuntime, wsBaseUrl])
+  }, [activeProjectId, addMessage, appendStreamChunk, applyBrowserPageContext, currentThreadId, executionPolicy, pushToolExecution, setConnection, setLatestToolExecution, setPendingCorrelationId, setMemoryUpdatedAt, setModelInfo, setContextCompression, setContextBreakdown, setCloudUsage, setCoherenceRetryActive, setOperatorNote, setRouterMetadata, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setTtsSpeaking, upsertActionProposal, updateActionProposalStatus, isTauriRuntime, wsBaseUrl])
 
   // Listen for Tauri runtime events (TTS state, screen assist, etc.)
   useEffect(() => {

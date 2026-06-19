@@ -137,20 +137,20 @@ class TestProfileUpdateRuntimeBehavior:
         from src.agent.llm import LLMPool
 
         old_small = LLMPool._small_llm
-        old_medium = LLMPool._medium_llm
+        old_medium = LLMPool._extraction_llm
         try:
             LLMPool._small_llm = object()
-            LLMPool._medium_llm = object()
+            LLMPool._extraction_llm = object()
             resp = client.post(
                 "/api/profile",
                 json={"small_llm_model_name": "qwen2.5-1.5b-instruct"},
             )
             assert resp.status_code == 200
             assert LLMPool._small_llm is None
-            assert LLMPool._medium_llm is None
+            assert LLMPool._extraction_llm is None
         finally:
             LLMPool._small_llm = old_small
-            LLMPool._medium_llm = old_medium
+            LLMPool._extraction_llm = old_medium
 
     def test_post_profile_does_not_clear_llm_pool_for_non_sensitive_fields(
         self, client

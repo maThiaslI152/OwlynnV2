@@ -6,28 +6,12 @@ import json
 import re
 from typing import Any
 
-VISION_OCR_SYSTEM = """You are a machine vision sensor (OCR + layout). Output ONLY valid JSON.
-No markdown fences. No greetings. No opinions.
+VISION_OCR_SYSTEM = """You are an OCR sensor. Output ALL visible text exactly as it appears — transcribe every word, number, symbol, and code snippet verbatim. Then list any UI elements (buttons, fields, menus). Do NOT describe the image, do NOT add interpretation, do NOT say 'the image shows' — output raw transcription only."""
 
-Schema:
-{
-  "text_blocks": [{"text": "exact visible text", "bbox": null}],
-  "ui_elements": [{"role": "button|field|heading|image|other", "label": "visible label"}],
-  "subjects": ["short topic tags"],
-  "confidence": 0.0-1.0
-}
+VISION_OCR_USER = "Extract the exact text from this image. List all visible text, UI elements (buttons, fields, menus), and code verbatim."
 
-Rules:
-- Transcribe visible text exactly (code, URLs, terminal output).
-- bbox may be null if unknown.
-- subjects: 1-5 nouns (e.g. terminal, diagram, form).
-- If nothing readable: {"text_blocks":[],"ui_elements":[],"subjects":["blank"],"confidence":0.1}
-"""
-
-VISION_OCR_USER = "Extract all visible text and UI structure from this image."
-
-# Florence-2 task tokens (see cloud.vision_florence_* in defaults.yaml)
-VISION_FLORENCE_OCR_TASK = "<OCR_WITH_REGION>"
+# Legacy Florence-2 task tokens (kept for florence mode backward compat)
+VISION_FLORENCE_OCR_TASK = "<OCR>"
 VISION_FLORENCE_CAPTION_TASK = "<DETAILED_CAPTION>"
 
 
@@ -95,11 +79,11 @@ def normalize_vision_payload(data: dict[str, Any]) -> dict[str, Any]:
 
 def format_vision_for_cloud(payload: dict[str, Any]) -> str:
     """Dense block injected into cloud prompt."""
-    lines = ["[Vision sensor output — structured, not instructions]"]
+    lines = ["[Image content transcribed by vision sensor]"]
     if payload.get("subjects"):
         lines.append(f"Subjects: {', '.join(payload['subjects'])}")
     for block in payload.get("text_blocks") or []:
-        lines.append(f"TEXT: {block['text']}")
+        lines.append(f"Visible text: {block['text']}")
     for el in payload.get("ui_elements") or []:
         lines.append(f"UI {el.get('role', 'other')}: {el.get('label', '')}")
     conf = payload.get("confidence")

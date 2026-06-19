@@ -50,14 +50,8 @@ VALID_BADGE_CLASSES = set(BADGE_COLORS.keys())
 
 KNOWN_MODELS = [
     "small-local",
-    "medium-default",
-    "medium-vision",
-    "medium-longctx",
     "large-cloud",
     "small-local-fallback",
-    "medium-default-fallback",
-    "medium-vision-fallback",
-    "medium-longctx-fallback",
     "large-cloud-fallback",
 ]
 

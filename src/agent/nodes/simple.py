@@ -12,11 +12,6 @@ import re
 
 from langchain_core.messages import AIMessage, SystemMessage
 from src.agent.llm import get_small_llm
-from src.agent.cloud_strict import (
-    SMALL_FAILED_MODEL,
-    cloud_failure_message,
-    cloud_no_local_fallback_enabled,
-)
 from src.agent.response_styles import style_instruction_for_prompt
 from src.agent.lm_studio_compat import with_system_for_local_server
 from src.agent.state import AgentState
@@ -216,43 +211,45 @@ async def simple_node(state: AgentState) -> AgentState:
                 "duration_ms": 0,
             }
         )
-        if cloud_no_local_fallback_enabled():
+        logger.warning(
+            "[simple] Small model failed (%s), retrying once with lower temperature", e
+        )
+        try:
+            fb_start = asyncio.get_running_loop().time()
+            llm = await get_small_llm()
+            response_content = await _get_llm_response(
+                llm.bind(
+                    temperature=0.1,
+                    max_tokens=output_tokens,
+                    extra_body=small_extra,
+                ),
+                prompt,
+            )
+            content = _clean_response(response_content)
+            model = "small-local-retry"
             fallback_chain.append(
                 {
-                    "model": SMALL_FAILED_MODEL,
-                    "status": "blocked",
-                    "reason": "fallback_simple_failed",
+                    "model": "small-local-retry",
+                    "status": "success",
+                    "reason": "fallback_simple_retry",
+                    "duration_ms": max(
+                        0, int((asyncio.get_running_loop().time() - fb_start) * 1000)
+                    ),
                 }
             )
-            content = cloud_failure_message("fallback_simple_failed")
-            return {
-                "messages": [AIMessage(content=content)],
-                "model_used": SMALL_FAILED_MODEL,
-                "fallback_chain": fallback_chain,
-            }
-        logger.warning(
-            "[simple] Small model failed (%s), falling back to medium-default", e
-        )
-        from src.agent.llm import get_medium_llm
-
-        fb_start = asyncio.get_running_loop().time()
-        llm = await get_medium_llm("default")
-        response_content = await _get_llm_response(
-            llm.bind(temperature=0.4, max_tokens=output_tokens),
-            prompt,
-        )
-        content = _clean_response(response_content)
-        model = "medium-default-fallback"
-        fallback_chain.append(
-            {
-                "model": "medium-default-fallback",
-                "status": "success",
-                "reason": "fallback_simple_failed",
-                "duration_ms": max(
-                    0, int((asyncio.get_running_loop().time() - fb_start) * 1000)
-                ),
-            }
-        )
+        except Exception as retry_err:
+            logger.warning("[simple] Retry also failed: %s", retry_err)
+            content = (
+                "Sorry, I could not process that request. Please try again or rephrase."
+            )
+            model = "small-local-failed"
+            fallback_chain.append(
+                {
+                    "model": "small-local-failed",
+                    "status": "failed",
+                    "reason": str(retry_err)[:120],
+                }
+            )
 
     return {
         "messages": [AIMessage(content=content)],

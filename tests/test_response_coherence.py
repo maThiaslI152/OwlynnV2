@@ -108,7 +108,7 @@ async def test_coherence_check_node_tool_failures(monkeypatch):
             ),
         ],
         "turn_start_time": time.time() - 1.0,
-        "route": "complex-default",
+        "route": "complex-cloud",
     }
 
     out = await coherence_check_node(state)
@@ -146,7 +146,7 @@ async def test_coherence_check_node_short_response(monkeypatch):
             AIMessage(content="Done."),
         ],
         "turn_start_time": time.time() - 0.5,
-        "route": "complex-default",
+        "route": "complex-cloud",
     }
 
     out = await coherence_check_node(state)
@@ -155,6 +155,38 @@ async def test_coherence_check_node_short_response(monkeypatch):
     # short response check in complex turn -> deduct 0.3, set coherent = False
     assert out["response_confidence"] == pytest.approx(0.4)
     assert out["response_coherence"]["coherent"] is False
+
+
+@pytest.mark.anyio
+async def test_coherence_check_node_below_retry_threshold(monkeypatch):
+    """Below 0.4 the response_confidence triggers the coherence_retry gate."""
+
+    class FakeLLM:
+        def bind(self, **kwargs):
+            return self
+
+        async def ainvoke(self, prompt, **kwargs):
+            class Response:
+                content = '{"coherent": false, "score": 0.2, "reason": "Off-topic"}'
+
+            return Response()
+
+    async def fake_get_small_llm():
+        return FakeLLM()
+
+    monkeypatch.setattr("src.agent.nodes.coherence.get_small_llm", fake_get_small_llm)
+
+    state: AgentState = {
+        "messages": [
+            HumanMessage(content="Explain quantum entanglement"),
+            AIMessage(content="It is fast."),
+        ],
+        "turn_start_time": time.time() - 0.5,
+        "route": "complex-cloud",
+    }
+
+    out = await coherence_check_node(state)
+    assert out["response_confidence"] < 0.4
 
 
 @pytest.mark.anyio

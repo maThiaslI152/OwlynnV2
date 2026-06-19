@@ -129,13 +129,13 @@ Frontend should send `type` (MIME) on each file; Composer infers from `file.type
 
 | MIME/Type | Behavior |
 |-----------|----------|
-| `image/png`, `image/jpeg`, `image/webp`, `image/gif` | **Local route (`complex-default`):** forwarded as multimodal `image_url` to local Qwen. **Cloud route (`complex-cloud`):** transcribed via `vision_proxy` before DeepSeek (text-only API). UI shows thumbnail in composer + message bubble. **Not** indexed into Qdrant/RAG. |
+| `image/png`, `image/jpeg`, `image/webp`, `image/gif` | **Cloud route (`complex-cloud`):** transcribed via `vision_proxy` (Qwen3-VL-4B) before DeepSeek (text-only API). UI shows thumbnail in composer + message bubble. **Not** indexed into Qdrant/RAG. |
 | `application/pdf` / `.pdf` | Text extracted inline when possible; otherwise agent calls `read_workspace_file` |
 | `application/vnd.openxmlformats-officedocument.wordprocessingml.document` / `.docx`, `.doc` | Text and table contents extracted inline on upload; otherwise agent calls `read_workspace_file` |
 | Other UTF-8 text/code | Inlined in prompt as fenced block |
 | Other binary | Saved to workspace; agent instructed to call `read_workspace_file` |
 
-Cloud route (`complex-cloud`) with images: lazy-loaded Florence-2 (`models.vision_proxy`) OCR via `vision_proxy` → formatted text block for DeepSeek; on proxy failure, route falls back to `complex-default` direct multimodal (legacy `complex-vision` route removed).
+Cloud route (`complex-cloud`) with images: lazy-loaded Qwen3-VL-4B (`models.vision_proxy`) via `vision_proxy` → formatted text block for DeepSeek; on proxy failure, retries `complex-cloud` with text-only prompt.
 
 ### Server → Client: Event Types
 
@@ -289,7 +289,7 @@ Native `<details><summary>` collapsibles are also supported in sanitized markdow
       "duration_ms": 42
     },
     {
-      "model": "medium-default-fallback",
+      "model": "large-cloud",
       "status": "success",
       "reason": "fallback",
       "duration_ms": 8
@@ -302,7 +302,7 @@ Sent after `complex_llm` or `simple` node completes when `model_used` is present
 
 | Field | Description |
 |-------|-------------|
-| `model` | Model that produced the response (e.g. `"medium-default"`, `"large-cloud"`). Route `complex-cloud` maps to `"large-cloud"` in `model_info` (not `medium-cloud`). |
+| `model` | Model that produced the response (e.g. `"large-cloud"`, `"small-local"`). Route `complex-cloud` maps to `"large-cloud"` in `model_info`. |
 | `swapping` | Whether a model swap occurred |
 | `token_usage` | Optional prompt/completion counts; cloud turns may include cache fields and `context_breakdown` (system/conversation/tools/output/reasoning vs `max_context`) — see [`changes/cloud-usage-context-chip/CHANGELOG.md`](changes/cloud-usage-context-chip/CHANGELOG.md) |
 | `fallback_chain` | Optional ordered list of model attempts. Always has ≥1 entry and exactly one with `status == "success"`. Entries are chronological |
@@ -315,7 +315,7 @@ Populated by `complex_llm_node` and `simple_node` in every node output.
 {
   "type": "router_info",
   "metadata": {
-    "route": "complex-default",
+    "route": "complex-cloud",
     "confidence": 0.87,
     "reasoning": "Code generation task detected",
     "swap_decision": "not_needed",
@@ -338,7 +338,7 @@ Sent after router node completes, before the first `chunk` event.
 
 | Field | Values |
 |-------|--------|
-| `route` | `"simple"`, `"complex-default"`, `"complex-cloud"` |
+| `route` | `"simple"`, `"complex-cloud"` |
 | `confidence` | [0.0, 1.0] |
 | `classification_source` | `"keyword_bypass"`, `"deterministic"`, `"llm_classifier"`, `"hitl"` |
 | `swap_decision` | `"kept"`, `"swapped"`, `"not_needed"` |
@@ -500,10 +500,9 @@ Returns all user-facing settings merged from `GET /api/profile` and `GET /api/ad
   "preferred_language": "en",
   "response_style": "concise",
   "small_llm_base_url": "http://127.0.0.1:1234/v1",
-  "small_llm_model_name": "liquid/lfm2.5-1.2b",
+  "small_llm_model_name": "minicpm5-1b",
   "llm_base_url": "http://127.0.0.1:1234/v1",
-  "llm_model_name": "gemma-4-e4b-uncensored-hauhaucs-aggressive",
-  "medium_models": {},
+  "llm_model_name": "gemma-4-e2b-heretic-uncensored-mlx",
   "cloud_llm_base_url": "https://api.deepseek.com/v1",
   "cloud_llm_model_name": "deepseek-v4-flash",
   "deepseek_api_key": "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022",
@@ -570,4 +569,4 @@ cd frontend-v2 && npx vitest run
 
 ## Last updated
 
-2026-06-10 — Florence vision proxy; `complex-cloud` → `large-cloud` in `model_info`
+2026-06-19 — Qwen3-VL-4B vision proxy replaces Florence-2; `complex-cloud` → `large-cloud` in `model_info`

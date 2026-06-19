@@ -30,7 +30,7 @@ class _ChunkMessageAgent:
             "data": {
                 "output": {
                     "router_metadata": {
-                        "route": "complex-default",
+                        "route": "complex-cloud",
                         "confidence": 0.87,
                         "reasoning": "llm_classified_complex:coding",
                         "classification_source": "llm_classifier",
@@ -130,7 +130,7 @@ class _FallbackChainAgent:
             "data": {
                 "output": {
                     "messages": [AIMessage(content="fallback response")],
-                    "model_used": "medium-default-fallback",
+                    "model_used": "large-cloud-fallback",
                     "fallback_chain": [
                         {
                             "model": "large-cloud",
@@ -139,7 +139,7 @@ class _FallbackChainAgent:
                             "duration_ms": 42,
                         },
                         {
-                            "model": "medium-default-fallback",
+                            "model": "large-cloud-fallback",
                             "status": "success",
                             "reason": "fallback",
                             "duration_ms": 8,
@@ -884,7 +884,7 @@ def test_ws_model_info_includes_fallback_chain(tmp_path):
     model_info_events = [e for e in events if e.get("type") == "model_info"]
     assert model_info_events
     model_info = model_info_events[-1]
-    assert model_info.get("model") == "medium-default-fallback"
+    assert model_info.get("model") == "large-cloud-fallback"
     fallback_chain = model_info.get("fallback_chain")
     assert fallback_chain and isinstance(fallback_chain, list)
     assert len(fallback_chain) >= 2
@@ -894,7 +894,7 @@ def test_ws_model_info_includes_fallback_chain(tmp_path):
     assert "reason" in fallback_chain[0]
     # Last entry is success
     assert fallback_chain[-1].get("status") == "success"
-    assert fallback_chain[-1].get("model") == "medium-default-fallback"
+    assert fallback_chain[-1].get("model") == "large-cloud-fallback"
 
 
 def test_ws_fallback_chain_entry_shape(tmp_path):

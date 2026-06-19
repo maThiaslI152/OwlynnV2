@@ -82,8 +82,8 @@ async def main():
                 {"type": "human", "content": "Hello from test"},
                 {"type": "ai", "content": "Hi! I'm a test response."},
             ],
-            "route": "complex-default",
-            "model_used": "medium-default",
+            "route": "complex-cloud",
+            "model_used": "large-cloud",
         },
         "channel_versions": {},
         "versions_seen": {},
@@ -105,10 +105,10 @@ async def main():
             sys.exit(1)
 
         stored_values = retrieved.checkpoint.get("channel_values", {})
-        assert stored_values.get("route") == "complex-default", (
+        assert stored_values.get("route") == "complex-cloud", (
             f"Route mismatch: {stored_values.get('route')}"
         )
-        assert stored_values.get("model_used") == "medium-default", (
+        assert stored_values.get("model_used") == "large-cloud", (
             f"model_used mismatch: {stored_values.get('model_used')}"
         )
         print("OK: Retrieved checkpoint matches stored state.")
@@ -146,7 +146,7 @@ async def main():
         vals_1 = retrieved_1.checkpoint.get("channel_values", {})
         vals_2 = retrieved_2.checkpoint.get("channel_values", {})
 
-        assert vals_1.get("route") == "complex-default", (
+        assert vals_1.get("route") == "complex-cloud", (
             f"Thread 1 route contaminated: {vals_1.get('route')}"
         )
         assert vals_2.get("route") == "simple", (

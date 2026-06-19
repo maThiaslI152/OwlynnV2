@@ -12,32 +12,31 @@ owner: human
 
 ## Models to Download
 
-Owlynn uses a **router** (always loaded) plus one **medium** model for complex local work. Chat image attachments use native multimodal on the medium model — not the nomic embedding model.
+Owlynn uses a **router** (always loaded) plus an **extraction** model for background memory. Complex reasoning is handled entirely by DeepSeek V4 cloud — no local complex model needed.
 
-### Router (Small, Always Loaded)
+### Router (Always Loaded)
 
 - `minicpm5-1b` (or `mlx-community/MiniCPM5-1B-8bit`) — routing, simple answers, chat titles
 
-### Medium (Local fallback when cloud unavailable)
+### Extraction (Background memory, lazy-loaded)
 
-- **Main weights:** `HauhauCS/Qwen3.5-9B-Uncensored-HauhauCS-Aggressive` — load the **Q6_K** GGUF in LM Studio
-- **Vision encoder (mmproj):** required only for **`complex-default`** local multimodal fallback — not for cloud+image (uses Florence proxy below)
+- `gemma-4-e2b-heretic-uncensored-mlx` — background memory extraction (STM → LTM writes, idle-deferred)
+- Config: `models.extraction` in [`defaults.yaml`](../../src/config/defaults.yaml)
 
-### Vision proxy (Cloud + image path — Florence only)
+### Vision proxy (Cloud + image path — Qwen3-VL-4B)
 
-- **`florence-2-base-nsfw-v2-ext-mlx`** — lazy-loaded on first image; **OCR sensor only** via task tokens (`<OCR>`, `<OCR_WITH_REGION>`)
-- **Not Qwen** — Qwen mmproj is for `complex-default` multimodal fallback when Florence fails
+- **`qwen3-vl-4b-instruct-c_abliterated-v2-mlx`** — lazy-loaded on first image; **full multimodal VLM** (describes images, transcribes text, identifies UI)
+- On proxy failure: `complex-cloud` retries text-only (no local multimodal fallback)
 - Config: `models.vision_proxy` in [`defaults.yaml`](../../src/config/defaults.yaml)
-- LM Studio must load Florence before OCR (`cloud.vision_lm_studio_auto_load: true`) — see [`model-quirks-and-routing.md`](../technical/model-quirks-and-routing.md)
 
 ### Embeddings (RAG / Memory Only)
 
 - `text-embedding-nomic-embed-text-v1.5-embedding` — Qdrant vector search for **text documents only**
-- Chat images are **not** embedded; they go directly to Qwen as `image_url` multimodal input
+- Chat images go through Qwen3-VL-4B vision proxy → DeepSeek text (not local multimodal)
 
 ### Legacy note
 
-Older docs referenced separate vision/longctx model slots and Gemma variants. Current defaults use one Qwen3.5-9B instance for default, vision, and long-context routes (`src/config/defaults.yaml`).
+Older docs referenced separate vision/longctx model slots, Qwen 9B medium models, and Gemma variants. Current architecture is cloud-primary: only `minicpm5-1b` (router) and `gemma-4-e2b` (extraction) run locally in LM Studio. All complex reasoning goes to DeepSeek V4 cloud.
 
 ## Jinja Template Issues — `No user query found in messages`
 

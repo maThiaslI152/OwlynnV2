@@ -7,9 +7,9 @@ purpose: "Cloud LLM connection architecture: key resolution, security, circuit b
 
 ### Overview
 
-The system uses a three-tier LLM pool (`small` / `medium` / `cloud`) managed by `LLMPool` in [`src/agent/llm.py`](src/agent/llm.py). The cloud tier connects to **DeepSeek V4** (`deepseek-v4-flash` default, `deepseek-v4-pro` optional) via the OpenAI-compatible API at `https://api.deepseek.com/v1`.
+The system uses a two-tier LLM pool (`small` / `cloud`) managed by `LLMPool` in [`src/agent/llm.py`](src/agent/llm.py). The cloud tier connects to **DeepSeek V4** (`deepseek-v4-flash` default, `deepseek-v4-pro` optional) via the OpenAI-compatible API at `https://api.deepseek.com/v1`.
 
-Routes: **`simple | complex-default | complex-cloud`** only. Legacy `complex-vision` / `complex-longctx` routes were removed (2026-06).
+Routes: **`simple | complex-cloud`** only. Legacy `complex-default` / `complex-vision` / `complex-longctx` routes were removed (2026-06).
 
 **DeepSeek API behavior (thinking mode, KV prefix cache, tool loops, payload structure):** see [`docs/architecture/DEEPSEEK_V4_INTEGRATION.md`](architecture/DEEPSEEK_V4_INTEGRATION.md).
 
@@ -40,8 +40,8 @@ complex_llm_node
 | [`cloud_payload.py`](src/agent/nodes/complex_utils/cloud_payload.py) | Stable/volatile prompt layers, brief cache (300s TTL), thinking config, cache metrics extraction |
 | [`cloud_invoke.py`](src/agent/nodes/complex_utils/cloud_invoke.py) | Raw OpenAI client, `/v1` + `/beta` fallback, `reasoning_content` on tool loops |
 | [`complex.py`](src/agent/nodes/complex.py) | `api_tokens_used` populated on all cloud paths including `tools_off` (BUG-12) |
-| [`vision_proxy.py`](src/agent/nodes/complex_utils/vision_proxy.py) | Lazy Florence-2 VLM (`models.vision_proxy`) → OCR/layout text for DeepSeek; hash cache + idle unload |
-| [`vision_florence.py`](src/agent/nodes/complex_utils/vision_florence.py) | Parse Florence task-token OCR / OCR_WITH_REGION output |
+| [`vision_proxy.py`](src/agent/nodes/complex_utils/vision_proxy.py) | Lazy Qwen3-VL-4B VLM (`models.vision_proxy`) → text/UI transcription for DeepSeek; hash cache + idle unload |
+| [`vision_qwen3vl.py`](src/agent/nodes/complex_utils/vision_qwen3vl.py) | Parse Qwen3-VL natural-language output into structured blocks |
 | [`vision_schema.py`](src/agent/nodes/complex_utils/vision_schema.py) | OCR/layout JSON parse + cloud formatting |
 | [`vision_model_manager.py`](src/agent/nodes/complex_utils/vision_model_manager.py) | Lazy load / idle unload of local VLM client |
 | [`cloud_cost_tracker.py`](src/agent/cloud_cost_tracker.py) | Per-session tokens, cache hit ratio, USD estimate |
@@ -102,7 +102,7 @@ Cloud LLM calls use `_invoke_cloud_path()` → [`invoke_cloud_chat()`](src/agent
 - No retry on 401/403 — immediate fallback to local with auth warning
 - Circuit breaker opens after 3 consecutive failures for 60s; reset when cloud settings or API key change ([`settings.py`](src/api/routes/settings.py))
 - Router `_check_cloud_available()` treats open breaker as cloud unavailable → avoids routing to `complex-cloud`
-- Fallback to `complex-default` (medium local Qwen9B)
+- No local fallback — cloud failure produces graceful error message
 - `thread_id` passed as OpenAI `user` param for per-conversation KV cache isolation
 
 ### Related

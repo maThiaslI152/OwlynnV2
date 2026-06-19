@@ -317,7 +317,6 @@ async def main():
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         "runtime_profile": profile,
         "strict_cloud": use_strict,
-        "qwen_fallback_turns": [],
         "exchanges": [],
     }
 
@@ -399,17 +398,6 @@ async def main():
                     "duration_seconds": duration,
                     "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
                 }
-                if (
-                    profile == "cloud"
-                    and (model_badge or "").strip() in fe.CLOUD_QWEN_FALLBACK_BADGES
-                ):
-                    eval_data["qwen_fallback_turns"].append(
-                        {
-                            "id": prompt_id,
-                            "model_badge": model_badge,
-                            "route": orch_data.get("route"),
-                        }
-                    )
                 eval_data["exchanges"].append(exchange)
 
                 # Incrementally save data after each exchange

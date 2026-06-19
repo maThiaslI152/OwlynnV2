@@ -23,20 +23,17 @@ from src.agent.state import AgentState
 
 VALID_ROUTES = {
     "simple",
-    "complex-default",
     "complex-cloud",
 }
 COMPLEX_ROUTES = {
-    "complex-default",
     "complex-cloud",
 }
 
 ROUTE_TO_MODEL = {
-    "complex-default": "medium-default",
     "complex-cloud": "large-cloud",
 }
 
-LOCAL_ROUTES = {"complex-default"}
+LOCAL_ROUTES: set[str] = set()
 
 
 # ── Strategies ───────────────────────────────────────────────────────────
@@ -142,11 +139,6 @@ class TestModelProvenanceMatchesRoute:
         profile = _mock_profile()
         with (
             patch(
-                "src.agent.nodes.complex.get_medium_llm",
-                new_callable=AsyncMock,
-                return_value=mock_llm,
-            ),
-            patch(
                 "src.agent.nodes.complex.get_cloud_llm",
                 new_callable=AsyncMock,
                 return_value=mock_llm,
@@ -167,36 +159,6 @@ class TestModelProvenanceMatchesRoute:
             f"got {result['model_used']!r}"
         )
 
-    @given(route=local_route_st, text=user_text_st)
-    @settings(max_examples=100, deadline=10000)
-    @pytest.mark.asyncio
-    async def test_local_routes_never_produce_cloud_label(self, route: str, text: str):
-        """Local routes must never set model_used to large-cloud."""
-        state = _make_state(route, text)
-        mock_llm = _make_mock_llm()
-        profile = _mock_profile()
-        with (
-            patch(
-                "src.agent.nodes.complex.get_medium_llm",
-                new_callable=AsyncMock,
-                return_value=mock_llm,
-            ),
-            patch(
-                "src.agent.nodes.complex.get_cloud_llm",
-                new_callable=AsyncMock,
-                return_value=mock_llm,
-            ),
-            patch("src.agent.nodes.complex.get_profile", return_value=profile),
-        ):
-            from src.agent.nodes.complex import complex_llm_node
-
-            result = await complex_llm_node(state)
-
-        assert "cloud" not in result["model_used"], (
-            f"Local route {route!r} should not produce cloud model_used, "
-            f"got {result['model_used']!r}"
-        )
-
     @pytest.mark.asyncio
     async def test_cloud_route_produces_large_cloud(self):
         """complex-cloud route must set model_used to large-cloud."""
@@ -204,11 +166,6 @@ class TestModelProvenanceMatchesRoute:
         mock_llm = _make_mock_llm()
         profile = _mock_profile()
         with (
-            patch(
-                "src.agent.nodes.complex.get_medium_llm",
-                new_callable=AsyncMock,
-                return_value=mock_llm,
-            ),
             patch(
                 "src.agent.nodes.complex.get_cloud_llm",
                 new_callable=AsyncMock,
@@ -225,28 +182,3 @@ class TestModelProvenanceMatchesRoute:
             result = await complex_llm_node(state)
 
         assert result["model_used"] == "large-cloud"
-
-    @pytest.mark.asyncio
-    async def test_default_route_produces_medium_default(self):
-        """complex-default route must set model_used to medium-default."""
-        state = _make_state("complex-default")
-        mock_llm = _make_mock_llm()
-        profile = _mock_profile()
-        with (
-            patch(
-                "src.agent.nodes.complex.get_medium_llm",
-                new_callable=AsyncMock,
-                return_value=mock_llm,
-            ),
-            patch(
-                "src.agent.nodes.complex.get_cloud_llm",
-                new_callable=AsyncMock,
-                return_value=mock_llm,
-            ),
-            patch("src.agent.nodes.complex.get_profile", return_value=profile),
-        ):
-            from src.agent.nodes.complex import complex_llm_node
-
-            result = await complex_llm_node(state)
-
-        assert result["model_used"] == "medium-default"

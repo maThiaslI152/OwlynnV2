@@ -20,23 +20,11 @@ def test_build_graph_compiles_with_memory_saver():
 
 
 class TestRouteDecision:
-    """Verify route_decision maps all 5 routes correctly."""
+    """Verify route_decision maps routes correctly."""
 
     def test_simple_route(self):
         state = {"route": "simple"}
         assert route_decision(state) == "simple"
-
-    def test_complex_default_route(self):
-        state = {"route": "complex-default"}
-        assert route_decision(state) == "scope_clarify"
-
-    def test_complex_vision_route(self):
-        state = {"route": "complex-cloud"}
-        assert route_decision(state) == "scope_clarify"
-
-    def test_complex_longctx_route(self):
-        state = {"route": "complex-cloud"}
-        assert route_decision(state) == "scope_clarify"
 
     def test_complex_cloud_route(self):
         state = {"route": "complex-cloud"}
