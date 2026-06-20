@@ -15,7 +15,7 @@
   "audit_log_enabled": true,
   "audit_log_levels": {},
   "audit_log_dir": "",
-  "cloud_model_tier": "flash",
+  "cloud_model_tier": "large-cloud",
   "eval_cloud_no_fallback": true,
   "scope_clarification_enabled": false,
   "plan_review_enabled": false

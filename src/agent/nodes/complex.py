@@ -311,7 +311,7 @@ You are equipped with powerful tools that override your standard AI limitations.
 - **Browser Bridge Tools** (when user asks about their active browser tab, page, or screen):
   - `get_active_browser_context` — get the URL, title, and full page text of the user's active browser tab. Call this when the user explicitly asks "what page am I on?", "what's in my browser?", or "what have I highlighted?". DO NOT call this if the user is just asking you to click, type, or fetch URLs.
   - `get_active_browser_screenshot` — capture a screenshot of the user's active browser tab. Call this when the user asks to "see my screen", "look at my browser", or "take a screenshot".
-  - `active_browser_action` — perform click/type/scroll in the user's browser. Call this directly when the user asks you to interact with, click, or type in their browser.
+  - `active_browser_action` — perform click/type/scroll in the user's browser. Call this directly when the user asks you to interact with, click, or type in their browser. IMPORTANT: ALWAYS use `action="read_dom_tree"` FIRST to get a distilled map of interactive elements and their unique integer IDs (e.g., `[@12]`). Then, use those integer IDs as `element_id` for your click and type actions.
   - `browser_background_fetch` — fetch multiple URLs via the user's browser (bypasses bot protections). Use for bulk URL reading or when `fetch_webpage` fails."""
     + _TOOL_CALL_DISCIPLINE
 )

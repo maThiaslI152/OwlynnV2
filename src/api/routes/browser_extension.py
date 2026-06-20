@@ -141,10 +141,16 @@ async def dispatch_extension_capture_screenshot() -> str | None:
 
 
 async def dispatch_extension_browser_action(
-    action: str, selector: str = "", text: str = "", y: int = 0
+    action: str, selector: str = "", text: str = "", y: int = 0, element_id: int = -1
 ) -> dict:
     """Execute a DOM interaction (click, type, scroll) on the active tab."""
-    payload = {"action": action, "selector": selector, "text": text, "y": y}
+    payload = {
+        "action": action,
+        "selector": selector,
+        "text": text,
+        "y": y,
+        "element_id": element_id,
+    }
     data = await dispatch_extension_request("browser_action", {"payload": payload})
     if "error" in data:
         return {"success": False, "error": data["error"]}

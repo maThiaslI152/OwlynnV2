@@ -77,15 +77,16 @@ async def get_active_browser_screenshot() -> str:
 
 @tool
 async def active_browser_action(
-    action: str, selector: str = "", text: str = "", y: int = 0
+    action: str, selector: str = "", text: str = "", y: int = 0, element_id: int = -1
 ) -> str:
     """
     Perform an action in the user's active browser tab (Brave/Chrome extension only).
 
     Supported actions:
+    - 'read_dom_tree': Returns a distilled map of interactive elements with unique IDs (e.g., [@12]). Use this FIRST.
+    - 'click': Click element matching 'selector' OR 'element_id'. If using the DOM tree map, provide the element_id (e.g., 12).
+    - 'type': Type 'text' into input matching 'selector' OR 'element_id'.
     - 'show_hints': Draws numbered overlays over all clickable elements. Returns the total count. Call this BEFORE taking a screenshot to see numbers!
-    - 'click': Click element(s) matching 'selector'. You can use a comma-separated list of selectors to click multiple elements simultaneously (e.g., 'input[value="1"], input[value="4"]'). WARNING: Do NOT use Playwright pseudo-selectors like ':has-text()'. Use standard CSS only!
-    - 'type': Type 'text' into input element(s) matching 'selector'. Also supports batching via comma-separated selectors.
     - 'get_html': Returns the raw outerHTML of all elements matching 'selector'. Use this to read the DOM structure (like radio button values) before clicking.
     - 'scroll': Scroll the page down by 'y' pixels.
     - 'go_back': Navigate back in browser history.
@@ -102,10 +103,14 @@ async def active_browser_action(
         if not is_extension_connected():
             return "Error: Browser extension is not connected."
 
-        res = await dispatch_extension_browser_action(action, selector, text, y)
+        res = await dispatch_extension_browser_action(
+            action, selector, text, y, element_id
+        )
         if res.get("success"):
             extras = {k: v for k, v in res.items() if k != "success"}
             if extras:
+                if "dom_tree" in extras and len(extras) == 1:
+                    return f"Action '{action}' executed successfully.\nDOM Tree:\n{extras['dom_tree']}"
                 import json
 
                 return f"Action '{action}' executed successfully.\nResult:\n{json.dumps(extras, indent=2)}"

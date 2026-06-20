@@ -2,7 +2,7 @@
   const args = window.__owlynn_interact_args;
   if (!args) return { success: false, error: "No arguments provided." };
 
-  const { action, selector, text, y } = args;
+  const { action, selector, text, y, element_id } = args;
 
   try {
     if (action === "scroll") {
@@ -10,10 +10,17 @@
       return { success: true };
     }
 
-    if (!selector) return { success: false, error: "Selector is required for action: " + action };
+    let els = [];
+    if (element_id !== undefined && element_id !== -1 && window.__owlynn_dom_map) {
+      const el = window.__owlynn_dom_map.get(element_id);
+      if (el) els = [el];
+      else return { success: false, error: "Element ID " + element_id + " not found in DOM map." };
+    } else {
+      if (!selector) return { success: false, error: "Selector or element_id is required for action: " + action };
+      els = Array.from(document.querySelectorAll(selector));
+    }
     
-    const els = document.querySelectorAll(selector);
-    if (els.length === 0) return { success: false, error: "Element not found: " + selector };
+    if (els.length === 0) return { success: false, error: "Element not found" };
 
     if (action === "get_html") {
       const htmls = Array.from(els).map(el => el.outerHTML);

@@ -176,6 +176,17 @@ async function handleBrowserActionRequest(requestId, payload) {
     const tab = await getActiveTab();
     if (!tab) throw new Error("No active tab.");
     
+    if (payload.action === "read_dom_tree") {
+      const [{ result }] = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ["buildDomTree.js"]
+      });
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ id: requestId, result: { success: true, dom_tree: result } }));
+      }
+      return;
+    }
+    
     if (payload.action === "show_hints") {
       const [{ result }] = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
