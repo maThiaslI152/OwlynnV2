@@ -10,9 +10,6 @@ VISION_OCR_SYSTEM = """You are an OCR sensor. Output ALL visible text exactly as
 
 VISION_OCR_USER = "Extract the exact text from this image. List all visible text, UI elements (buttons, fields, menus), and code verbatim."
 
-# Legacy Florence-2 task tokens (kept for florence mode backward compat)
-VISION_FLORENCE_OCR_TASK = "<OCR>"
-VISION_FLORENCE_CAPTION_TASK = "<DETAILED_CAPTION>"
 
 
 def _strip_fences(raw: str) -> str:

@@ -49,13 +49,7 @@ def _store_transcription(key: str, text: str) -> None:
 
 
 def _vision_prompt_mode() -> str:
-    mode = str(config.get("cloud.vision_prompt_mode", "qwen3vl")).lower()
-    if mode == "florence":
-        logger.warning(
-            "[vision_proxy] cloud.vision_prompt_mode=florence — legacy OCR mode; "
-            "qwen3vl is the default and recommended."
-        )
-    return mode
+    return str(config.get("cloud.vision_prompt_mode", "qwen3vl")).lower()
 
 
 def _raw_to_cloud_text(raw: str) -> str:
@@ -63,12 +57,6 @@ def _raw_to_cloud_text(raw: str) -> str:
     payload = None
     if mode in ("qwen3vl", "standard", "gemma4"):
         payload = parse_qwen3vl_response(raw)
-    elif mode == "florence":
-        from src.agent.nodes.complex_utils.vision_florence import (
-            parse_florence_response,
-        )
-
-        payload = parse_florence_response(raw)
     if payload is None:
         payload = parse_vision_payload(raw)
     if payload is None:
@@ -82,23 +70,7 @@ def _raw_to_cloud_text(raw: str) -> str:
 
 
 def _build_vlm_messages(image_url: str) -> list:
-    """Build VLM messages for qwen3vl (default) or florence (legacy) mode."""
-    mode = _vision_prompt_mode()
-    if mode == "florence":
-        from src.agent.nodes.complex_utils.vision_florence import (
-            VISION_FLORENCE_OCR_TASK,
-        )
-
-        task = str(config.get("cloud.vision_florence_task", "<OCR>"))
-        return [
-            HumanMessage(
-                content=[
-                    {"type": "text", "text": task},
-                    {"type": "image_url", "image_url": {"url": image_url}},
-                ]
-            )
-        ]
-
+    """Build VLM messages for qwen3vl (default) mode."""
     # standard mode (default): natural-language system + user with image
     system_text = str(
         config.get(

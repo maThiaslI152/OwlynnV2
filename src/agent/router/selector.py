@@ -2,7 +2,7 @@
 Swap-aware route selector for the Multi-LLM Router.
 
 Makes the final routing decision. Cloud routes pass through; images on
-complex-cloud use the local vision_proxy (Florence) before DeepSeek.
+complex-cloud use the local vision_proxy before DeepSeek.
 """
 
 from __future__ import annotations

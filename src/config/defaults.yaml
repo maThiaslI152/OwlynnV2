@@ -327,7 +327,7 @@ cloud:
   vision_idle_unload_seconds: 300            # Drop lazy VLM client after idle
   vision_max_tokens: 2048                    # Qwen3-VL natural language cap
   vision_temperature: 0.1                     # slight variation for descriptions
-  vision_prompt_mode: standard                # standard | qwen3vl | florence
+  vision_prompt_mode: standard                # standard | qwen3vl
   vision_lm_studio_auto_load: true             # Load model via native API before vision
   vision_lm_studio_load_timeout: 120
   vision_qwen3vl_system: "You are an OCR sensor. Output ALL visible text exactly as it appears — transcribe every word, number, symbol, and code snippet verbatim. Then list any UI elements (buttons, fields, menus). Do NOT describe the image, do NOT add interpretation, do NOT say 'the image shows' — output raw transcription only."
