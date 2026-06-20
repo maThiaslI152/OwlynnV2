@@ -61,7 +61,7 @@ def _vision_prompt_mode() -> str:
 def _raw_to_cloud_text(raw: str) -> str:
     mode = _vision_prompt_mode()
     payload = None
-    if mode == "qwen3vl":
+    if mode in ("qwen3vl", "standard", "gemma4"):
         payload = parse_qwen3vl_response(raw)
     elif mode == "florence":
         from src.agent.nodes.complex_utils.vision_florence import (
@@ -99,7 +99,7 @@ def _build_vlm_messages(image_url: str) -> list:
             )
         ]
 
-    # qwen3vl mode (default): natural-language system + user with image
+    # standard mode (default): natural-language system + user with image
     system_text = str(
         config.get(
             "cloud.vision_qwen3vl_system",

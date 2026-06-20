@@ -58,12 +58,12 @@ startup:
 models:
   small:
     base_url: "http://127.0.0.1:1234/v1"      # SMALL_LLM_BASE_URL env
-    model_name: "minicpm5-1b"                # Router — MiniCPM5 1B MLX 8-bit, swap-loaded
-    temperature: 0.2                         # Low temp for consistent routing classification
-    max_tokens: 512                          # MiniCPM5 doesn't waste tokens on reasoning_content
+    model_name: "google/gemma-4-e2b"          # Router — Gemma 4 E2B, swap-loaded
+    temperature: 0.1                          # Low temp for consistent routing classification
+    max_tokens: 512                           # Gemma JSON reasoning limit
     max_output_tokens: 512
-    context_window: 8192                     # Practical limit for routing (native: 131K)
-    timeout: 60                              # Allow up to 60s for LM Studio swap-load
+    context_window: 8192                      # Practical limit for routing (native: 128K)
+    timeout: 60                               # Allow up to 60s for LM Studio swap-load
     request_timeout: 60                      # HTTP request timeout
     extra_body:
       chat_template_kwargs:
@@ -94,11 +94,11 @@ models:
 
   vision_proxy:
     base_url: "http://127.0.0.1:1234/v1"
-    model_name: "qwen3-vl-4b-instruct-c_abliterated-v2-mlx"
+    model_name: "google/gemma-4-e2b"
     # Native LM Studio catalog key (defaults to model_name). Must match My Models entry.
-    lm_studio_model_key: "qwen3-vl-4b-instruct-c_abliterated-v2-mlx"
+    lm_studio_model_key: "google/gemma-4-e2b"
     temperature: 0.1
-    max_tokens: 2048                      # Qwen3-VL: natural language descriptions
+    max_tokens: 2048                      # Gemma: natural language descriptions
     max_output_tokens: 2048
     timeout: 120
     request_timeout: 120
@@ -326,9 +326,9 @@ cloud:
   vision_transcription_cache_ttl: 3600
   vision_idle_unload_seconds: 300            # Drop lazy VLM client after idle
   vision_max_tokens: 2048                    # Qwen3-VL natural language cap
-  vision_temperature: 0.1                     # Qwen3-VL: slight variation for descriptions
-  vision_prompt_mode: qwen3vl                 # qwen3vl | florence (legacy OCR — do not use)
-  vision_lm_studio_auto_load: true             # Load Qwen3-VL via native API before vision
+  vision_temperature: 0.1                     # slight variation for descriptions
+  vision_prompt_mode: standard                # standard | qwen3vl | florence
+  vision_lm_studio_auto_load: true             # Load model via native API before vision
   vision_lm_studio_load_timeout: 120
   vision_qwen3vl_system: "You are an OCR sensor. Output ALL visible text exactly as it appears — transcribe every word, number, symbol, and code snippet verbatim. Then list any UI elements (buttons, fields, menus). Do NOT describe the image, do NOT add interpretation, do NOT say 'the image shows' — output raw transcription only."
   vision_qwen3vl_user: "Extract the exact text from this image. List all visible text, UI elements (buttons, fields, menus), and code verbatim."

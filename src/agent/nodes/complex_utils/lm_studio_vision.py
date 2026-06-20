@@ -21,7 +21,7 @@ def configured_vision_model_name() -> str:
     return str(
         config.get(
             "models.vision_proxy.model_name",
-            "qwen3-vl-4b-instruct-c_abliterated-v2-mlx",
+            "google/gemma-4-e2b",
         )
     )
 
