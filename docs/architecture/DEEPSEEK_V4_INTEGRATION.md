@@ -313,7 +313,7 @@ Effort:       reasoning_effort = high|max  (only when thinking enabled)
 Tools:        bind_tools(strict=True); replay reasoning_content in loops
 Cache:        automatic prefix cache; put stable text first, volatile last
 Security:     anonymize → cloud → deanonymize
-Images:       vision_proxy (Qwen3-VL) → text block in prompt
+Images:       vision_proxy (Gemma-4-e2b) → text block in prompt
 KV cache:     OpenAI `user` param = thread_id for per-conversation prefix isolation
 Legacy:       deepseek-chat / deepseek-reasoner → migrate before 2026-07-24
 ```

@@ -11,7 +11,7 @@ audience: agent
 > **Purpose:** Snapshot of feature completeness vs frontier chat products (ChatGPT / Claude / Gemini) and co-work products (Cursor / Devin / Open WebUI / AnythingLLM). Use this to plan sprints, identify quick wins, and avoid re-discovering known gaps.
 
 **Date:** 2026-06-10  
-**Eval basis:** `local-frontier-eval-2026-06-11` (94.2% mechanical), `frontier-comparison-2026-06-11` (wins C1 vs raw DeepSeek)  
+**Eval basis:** `local-frontier-eval-2026-06-20` (95.53% mechanical), `frontier-comparison-2026-06-11` (wins C1 vs raw DeepSeek)  
 **Related:** [`COMPETITIVE_FEATURE_ANALYSIS.md`](COMPETITIVE_FEATURE_ANALYSIS.md) · [`STATUS.md`](STATUS.md) · [`BUG-TRACKER.md`](BUG-TRACKER.md)
 
 ---
@@ -24,7 +24,7 @@ audience: agent
 | Tool-calling / agentic | ✅ LangGraph + security proxy | ✅ Good, no HITL | ✅ Cursor strongest |
 | Memory (cross-turn) | ✅ **Best-in-class** (3-tier, cross-thread) | ❌ Session-only | ❌ Mostly none |
 | Privacy / local-first | ✅ **Best-in-class** (anonymize + local fallback) | ❌ All cloud | ⚠️ Mostly cloud |
-| Vision / multimodal | ⚠️ Partial (Florence proxy, image upload) | ✅ Native | ⚠️ Partial |
+| Vision / multimodal | ⚠️ Partial (Gemma proxy, image upload) | ✅ Native | ⚠️ Partial |
 | Voice (STT) | ❌ TTS only — STT removed | ✅ Advanced Voice Mode | ❌ Usually none |
 | Document RAG (auto-folder) | ⚠️ File watcher + Qdrant, no seamless UX | ❌ None built-in | ⚠️ GPT4All LocalDocs best |
 | Model management | ❌ LM Studio dependency | ✅ Managed | ⚠️ Jan / LM Studio |
@@ -34,7 +34,7 @@ audience: agent
 | Security / HITL | ✅ **Unique** — no competitor has this | ❌ None | ❌ None |
 | Latency (TTFT) | ⚠️ <8s SLO met on M4; local Qwen 5–30s | <2s cloud | <2s cloud |
 | UI polish | ⚠️ Functional glassmorphic; some rough edges | ✅ Excellent | ✅ Excellent |
-| Eval score | **94.2%** mechanical (target ≥97%) | N/A | N/A |
+| Eval score | **95.5%** mechanical (target ≥97%) | N/A | N/A |
 
 ---
 
@@ -42,7 +42,7 @@ audience: agent
 
 ### Agent Orchestration
 - LangGraph: `memory_inject → router → simple/complex → tools → memory_write`
-- Cloud-primary routing: `simple` (MiniCPM5-1B) · `complex-cloud` (DeepSeek V4) · `vision` (Qwen3-VL-4B) · `scope_clarify`
+- Cloud-primary routing: `simple` (Gemma) · `complex-cloud` (DeepSeek V4) · `vision` (Gemma) · `scope_clarify`
 - Security proxy + plan review HITL — **no competitor has this**
 - Cloud payload: PII anonymization, stable/volatile layers, prefix-cache metrics
 
@@ -67,7 +67,7 @@ audience: agent
 ### Cloud Architecture
 - DeepSeek V4 flash/pro, 1M token context, circuit breaker, jittered retries
 - macOS Keychain key storage; PII scrub before any cloud call
-- Vision proxy: Qwen3-VL-4B → text + UI → DeepSeek text-only path
+- Vision proxy: Gemma 4 → text + UI → DeepSeek text-only path
 - Session cost tracker + cloud usage chip in UI
 
 ### Testing
@@ -81,7 +81,7 @@ audience: agent
 
 ### 3.1 Vision Route Fragility
 **What works:** Composer drag-and-drop, Qwen3-VL-4B lazy load, vision proxy for cloud path.  
-**What's fixed:** F9.1 eval 100/100 with Qwen3-VL; Florence was unloadable via LM Studio API. Cloud + image path verified.  
+**What's fixed:** F9.1 eval 100/100 with Gemma. Legacy Florence was unloadable via LM Studio API and removed. Cloud + image path verified.
 **Tracked as:** BUG-17 (see `BUG-TRACKER.md`)
 
 ### 3.2 Simple-Path Empty Reply

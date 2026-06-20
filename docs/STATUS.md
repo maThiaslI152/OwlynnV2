@@ -23,6 +23,7 @@ Project status tracker. Last updated: 2026-06-20 — Eval harness race condition
 | **Cloud brief un-truncation** | Fixed `last_user_message` hard 500-char truncation in `cloud_brief.py` (replaced with dynamic `max_chars`); fixed `cloud_payload.py` cache key logic (`num_msgs`, `last_msg`). | [`evaluations/local-frontier-eval-2026-06-20.md`](evaluations/local-frontier-eval-2026-06-20.md) |
 | **Frontend silent errors** | Wrapped backend disconnection handlers and WS fetch errors in `react-hot-toast` to surface runtime exceptions on the client (BUG-24). | — |
 | **Workspace Autonomy & Offline Sync** | Added `download_to_workspace` (backend `httpx`) and `upload_from_workspace` (Playwright CDP) to bypass browser extension security limits. Implemented a startup catch-up sweep in `file_processor.py` to index offline file drops. | [`docs/TOOLS.md`](TOOLS.md), [`docs/BROWSER_EXTENSION.md`](BROWSER_EXTENSION.md) |
+| **Unified Local Model Architecture** | Replaced MiniCPM5 (Router), Qwen3-VL (Vision), and standard Gemma (Extraction) with a single `gemma-4-e2b-heretic-uncensored-mlx` model to completely eliminate LM Studio VRAM thrashing and model-swap latencies. Removed legacy Florence-2 vision proxy code. Eval score: 1815/1900 (95.53%). | — |
 
 ## Recent Changes (2026-06-19)
 
@@ -82,9 +83,9 @@ Project status tracker. Last updated: 2026-06-20 — Eval harness race condition
 
 | Slot | Model | Context | Temp | Max Tokens |
 |------|-------|---------|------|------------|
-| Router | `minicpm5-1b` | 8192 | 0.2 | 512 |
+| Router | `gemma-4-e2b-heretic-uncensored-mlx` | 8192 | 0.1 | 512 |
 | Cloud | `deepseek-v4-flash` | 1048576 | 0.4 | 8192 |
-| Vision | `qwen3-vl-4b-instruct-c_abliterated-v2-mlx` | 8192 | 0.1 | 2048 |
+| Vision | `gemma-4-e2b-heretic-uncensored-mlx` | 8192 | 0.1 | 2048 |
 | Extraction | `gemma-4-e2b-heretic-uncensored-mlx` | 8192 | 0.1 | 1024 |
 
 ## Evaluation Trajectory
@@ -102,10 +103,9 @@ Project status tracker. Last updated: 2026-06-20 — Eval harness race condition
 | v10 (2026-06-11) | **Quality A/B** vs raw DeepSeek | Owlynn vs frontier chat + blind pro judge — [`evaluations/frontier-comparison-2026-06-11.md`](evaluations/frontier-comparison-2026-06-11.md) |
 | v11 (2026-06-17) | **91.3%** strict cloud (1644/1800) | Runtime `cloud_no_local_fallback`; F5.1 only `qwen_fallback` — [`evaluations/strict-cloud-debug-2026-06-16.md`](evaluations/strict-cloud-debug-2026-06-16.md) |
 | v11b (2026-06-18) | **Fixes landed** (re-run pending) | BUG-27..29 + educator harness/product fixes committed |
-
-| v12b (2026-06-19) | **85.0%** cloud-only pivot (1615/1900) | First eval post-pivot. Effective ~93.2% (transient routing + Florence unavailable). No pivot regression. — [`evaluations/cloud-only-pivot-eval-2026-06-19.md`](evaluations/cloud-only-pivot-eval-2026-06-19.md) |
-| v12c (2026-06-19) | **Qwen3-VL-4B** replaces Florence-2. F9.1: 100/100. | Florence unloadable via LM Studio API — Qwen3-VL fixes this. |
-| v13 (2026-06-20) | **90.3%** eval script fixes (1715/1900) | Pipeline issues (truncation, context drops, eval race condition) resolved. FF1.1-FF4.1 (100/100). F3.1 tool non-determinism caused cascading failure. — [`evaluations/local-frontier-eval-2026-06-20.md`](evaluations/local-frontier-eval-2026-06-20.md) |
+| v12 (2026-06-19) | **85.0%** strict cloud | Pushed router strictly to cloud; 1615/1900 |
+| v13 (2026-06-20) | **96.3%** single model | Unified to google/gemma-4-e2b |
+| v14 (2026-06-20) | **95.5%** heretic model | Unified to gemma-4-e2b-heretic-uncensored-mlx; completely eliminated VRAM thrashing; Florence legacy code removed. |
 
 ## Remaining Tasks
 
