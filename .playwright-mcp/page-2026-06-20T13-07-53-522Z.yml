@@ -1,0 +1,75 @@
+- generic [active] [ref=e1]:
+  - link "Skip to main content" [ref=e2] [cursor=pointer]:
+    - /url: "#maincontent"
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - navigation [ref=e7]:
+        - list [ref=e9]:
+          - generic:
+            - list
+          - text: 
+          - listitem
+          - listitem [ref=e10]:
+            - button " English ‎(en)‎" [ref=e11] [cursor=pointer]:
+              - generic [ref=e12]: 
+              - text: English ‎(en)‎
+          - listitem
+      - generic [ref=e14]:
+        - heading "DLearning SPU" [level=1] [ref=e19]
+        - generic [ref=e22]:
+          - textbox "Search courses" [ref=e23]:
+            - /placeholder: Search Courses
+          - button "" [ref=e24] [cursor=pointer]:
+            - generic "Search Courses" [ref=e25]: 
+    - main [ref=e32]:
+      - generic [ref=e39]:
+        - generic [ref=e41]:
+          - generic [ref=e42]:
+            - generic [ref=e43]: Username
+            - textbox "Username" [ref=e44]
+          - generic [ref=e45]:
+            - generic [ref=e46]: Password
+            - textbox "Password" [ref=e47]
+          - generic [ref=e48]:
+            - checkbox "Remember username" [ref=e49]
+            - generic [ref=e50]: Remember username
+          - button "Log in" [ref=e51] [cursor=pointer]
+        - generic [ref=e52]:
+          - paragraph [ref=e54]:
+            - link "Forgotten your username or password?" [ref=e55] [cursor=pointer]:
+              - /url: https://dlearning.spu.ac.th/login/forgot_password.php
+          - generic [ref=e56]:
+            - text: Cookies must be enabled in your browser
+            - button "Help with Cookies must be enabled in your browser" [ref=e57] [cursor=pointer]:
+              - generic "Help with Cookies must be enabled in your browser" [ref=e58]: 
+          - heading "Log in using your account on:" [level=6] [ref=e59]
+          - link "Google (SPU mail)" [ref=e62] [cursor=pointer]:
+            - /url: https://dlearning.spu.ac.th/auth/oauth2/login.php?id=1&wantsurl=https%3A%2F%2Fdlearning.spu.ac.th%2Fmod%2Fquiz%2Fattempt.php%3Fattempt%3D10072118%26cmid%3D2823439&sesskey=WgRpxKaKdn
+      - generic [ref=e66]:
+        - heading "Is this your first time here?" [level=2] [ref=e68]
+        - generic [ref=e69]:
+          - paragraph [ref=e70]:
+            - img "ooehelp" [ref=e71]
+          - paragraph [ref=e72]:
+            - text: "นักศึกษาสามารถ สอบถามเกี่ยวกับการใช้งานระบบ d-Learning ได้ที่ Line@ ID : @bbe3877w หรือที่ลิงค์"
+            - link "https://lin.ee/tJke1n5" [ref=e73] [cursor=pointer]:
+              - /url: https://lin.ee/tJke1n5
+              - text: https://lin.ee/tJke1n5
+            - text: กรณีมีปัญาการ Login หรืออื่น ๆ นักศึกษาสามารถดูข้อมูลเพื่อแก้ปัญหาเบื้องต้นด้วยตัวเองได้ที่
+            - link "https://bit.ly/dlearning_help_students" [ref=e74] [cursor=pointer]:
+              - /url: https://bit.ly/dlearning_help_students
+    - contentinfo [ref=e78]:
+      - link "" [ref=e83] [cursor=pointer]:
+        - /url: https://facebook.com/
+        - generic [ref=e84]: 
+      - generic [ref=e87]:
+        - table [ref=e89]:
+          - rowgroup [ref=e90]:
+            - 'row "spu มหาวิทยาลัยศรีปทุม 2410/2 ถ.พหลโยธิน เขตจตุจักร กรุงเทพฯ 10900 Tel: (662) 579 1111,(662) 561 2222 Fax: (662) 561 1721" [ref=e91]':
+              - cell "spu" [ref=e92]:
+                - img "spu" [ref=e93]
+              - cell [ref=e94]
+              - 'cell "มหาวิทยาลัยศรีปทุม 2410/2 ถ.พหลโยธิน เขตจตุจักร กรุงเทพฯ 10900 Tel: (662) 579 1111,(662) 561 2222 Fax: (662) 561 1721" [ref=e95]'
+        - link "Get the mobile app" [ref=e98] [cursor=pointer]:
+          - /url: https://download.moodle.org/mobile?version=2019111802.07&lang=en&iosappid=633359593&androidappid=com.moodle.moodlemobile
+    - text: 

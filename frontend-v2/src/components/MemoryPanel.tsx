@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useAppStore } from '../state/useAppStore'
+import toast from 'react-hot-toast'
 
 interface TopicTuple {
   category: string
@@ -104,6 +105,7 @@ export function MemoryPanel() {
       }
     } catch (e) {
       console.warn('[loadMem0Memories]', e)
+      toast.error('Network error loading memories')
       setMem0Error('Network error')
     } finally {
       setMem0Loading(false)
@@ -130,6 +132,7 @@ export function MemoryPanel() {
       }
     } catch (e) {
       console.warn('[deleteMemory]', e)
+      toast.error('Failed to delete memory')
     }
   }
 
@@ -147,6 +150,7 @@ export function MemoryPanel() {
       }
     } catch (e) {
       console.warn('[loadContext]', e)
+      toast.error('Failed to load memory context')
     } finally {
       setContextLoading(false)
     }

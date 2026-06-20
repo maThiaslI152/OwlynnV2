@@ -57,7 +57,7 @@ async def test_process_vision_messages_transcribes_image(monkeypatch):
         if b.get("type") == "text"
     )
     assert any(
-        "[Vision sensor output" in b.get("text", "")
+        "[Image content transcribed by vision sensor]" in b.get("text", "")
         for b in human.content
         if b.get("type") == "text"
     )

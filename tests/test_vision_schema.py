@@ -41,6 +41,6 @@ def test_format_vision_for_cloud_dense_block():
         }
     )
     text = format_vision_for_cloud(payload)
-    assert "[Vision sensor output" in text
-    assert "TEXT: error: connection refused" in text
+    assert "[Image content transcribed by vision sensor]" in text
+    assert "Visible text: error: connection refused" in text
     assert "terminal" in text

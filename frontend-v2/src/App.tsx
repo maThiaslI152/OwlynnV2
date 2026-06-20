@@ -25,6 +25,7 @@ import { toWsFilePayload, type AttachedFile, isWorkspaceRef } from './lib/attach
 import { isToolPreambleText } from './lib/toolPreamble'
 import type { BrowserPageContext } from './lib/browserPageContext'
 import type { ChatMessage, ServerEvent } from './types/protocol'
+import toast from 'react-hot-toast'
 
 interface ProjectChat {
   id: string
@@ -136,6 +137,7 @@ function App() {
       }
     } catch (e) {
       console.warn('[loadProjects]', e)
+      toast.error('Failed to load workspaces')
       setProjects([{ id: 'default', name: 'General Workspace', chats: [] }])
     }
   }, [])
@@ -295,13 +297,15 @@ function App() {
         const isIdleStatus =
           event.type === 'status' && (event as any).content === 'idle'
 
-        if (!isIdleStatus && eventId && pendingId && eventId !== pendingId) {
+        if (eventId && pendingId && eventId !== pendingId) {
             console.debug("Ignoring mismatched correlation id", eventId)
             return
         }
 
         if (isIdleStatus && pendingId) {
             useAppStore.setState({ pendingCorrelationId: null })
+        } else if (!isIdleStatus && eventId && !pendingId) {
+            useAppStore.setState({ pendingCorrelationId: eventId })
         }
 
         if (event.type === 'assistant.message') {
@@ -445,6 +449,7 @@ function App() {
             title: String((event as any).title || ''),
             text: String((event as any).text || ''),
             selection: String((event as any).selection || ''),
+            intent: String((event as any).intent || 'default'),
           }
           applyBrowserPageContext(ctx)
         } else if (event.type === 'coherence_retry_started') {
@@ -721,6 +726,7 @@ function App() {
         setOperatorNote('Chat deleted.')
       }
     } catch (e: any) {
+      toast.error('Failed to delete chat.')
       setOperatorNote('Failed to delete chat.')
     }
   }, [activeProjectId, activeChatId, loadProjects, handleNewChat])
@@ -735,6 +741,7 @@ function App() {
       await loadProjects()
     } catch (e) {
       console.warn('[renameChat]', e)
+      toast.error('Failed to rename chat.')
     }
   }, [activeProjectId, loadProjects])
 
@@ -770,6 +777,7 @@ function App() {
       await loadProjects()
     } catch (e) {
       console.error('[createWorkspace]', e)
+      toast.error('Failed to create workspace.')
       setOperatorNote('Failed to create workspace.')
     }
   }, [clearSession, loadProjects])
@@ -784,6 +792,7 @@ function App() {
       await loadProjects()
     } catch (e) {
       console.warn('[editProject]', e)
+      toast.error('Failed to rename workspace.')
     }
   }, [loadProjects])
 
@@ -810,6 +819,7 @@ function App() {
       }
       await loadProjects()
     } catch (e: any) {
+      toast.error('Failed to delete workspace.')
       setOperatorNote('Failed to delete workspace.')
     }
   }, [clearSession, loadProjects])  // activeProjectId removed — uses ref for latest value

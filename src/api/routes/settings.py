@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from src.config.settings_constants import (
     _ADVANCED_SETTINGS_DEFAULTS,
     _UNIFIED_SETTINGS_CLOUD_BUDGET_DEFAULTS,
@@ -26,8 +26,8 @@ async def api_get_system_settings():
             "tone": persona.get("tone", "friendly"),
         }
     except Exception as e:
-        logger.warning("Error suppressed: %s", e)
-        return {"error": str(e)}
+        logger.error("Error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/api/system-settings")
@@ -42,8 +42,8 @@ async def api_update_system_settings(body: dict):
             update_persona_field("tone", body["tone"])
         return {"status": "ok", "message": "System settings saved"}
     except Exception as e:
-        logger.warning("Error suppressed: %s", e)
-        return {"status": "error", "message": str(e)}
+        logger.error("Error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/api/memory-settings")
@@ -56,8 +56,8 @@ async def api_get_memory_settings():
             "long_term_enabled": profile.get("long_term_enabled", True),
         }
     except Exception as e:
-        logger.warning("Error suppressed: %s", e)
-        return {"error": str(e)}
+        logger.error("Error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/api/memory-settings")
@@ -70,8 +70,8 @@ async def api_update_memory_settings(body: dict):
             update_profile("long_term_enabled", body["long_term_enabled"])
         return {"status": "ok", "message": "Memory settings saved"}
     except Exception as e:
-        logger.warning("Error suppressed: %s", e)
-        return {"status": "error", "message": str(e)}
+        logger.error("Error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/api/advanced-settings")
@@ -84,8 +84,8 @@ async def api_get_advanced_settings():
             for field, default in _ADVANCED_SETTINGS_DEFAULTS.items()
         }
     except Exception as e:
-        logger.warning("Error suppressed: %s", e)
-        return {"error": str(e)}
+        logger.error("Error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/api/unified-settings")
@@ -143,8 +143,8 @@ async def api_get_unified_settings():
         unified["deepseek_api_key"] = "••••••••" if deepseek_key else ""
         return unified
     except Exception as e:
-        logger.warning("Error suppressed: %s", e)
-        return {"error": str(e)}
+        logger.error("Error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.put("/api/unified-settings")
@@ -199,8 +199,8 @@ async def api_update_unified_settings(body: dict):
             reset_circuit_breaker()
         return {"status": "ok", "updated": updated}
     except Exception as e:
-        logger.warning("Error suppressed: %s", e)
-        return {"status": "error", "message": str(e)}
+        logger.error("Error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/api/advanced-settings")
@@ -212,5 +212,5 @@ async def api_update_advanced_settings(body: dict):
                 update_profile(field, body[field])
         return {"status": "ok", "message": "Advanced settings saved"}
     except Exception as e:
-        logger.warning("Error suppressed: %s", e)
-        return {"status": "error", "message": str(e)}
+        logger.error("Error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))

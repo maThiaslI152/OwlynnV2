@@ -3,13 +3,19 @@
 See docs/TOOLS.md; implement tools in src/tools/ and register here.
 """
 
-from src.tools.web_tools import web_search, fetch_webpage, deep_research
+from src.tools.web_tools import (
+    web_search,
+    fetch_webpage,
+    deep_research,
+    browser_background_fetch,
+)
 from src.tools.core_tools import (
     read_workspace_file,
     write_workspace_file,
     edit_workspace_file,
     list_workspace_files,
     delete_workspace_file,
+    download_to_workspace,
 )
 from src.tools.core_tools import recall_memories, recall_all_memories, forget_memory
 from src.tools.doc_generator import create_docx, create_xlsx, create_pptx, create_pdf
@@ -40,6 +46,7 @@ COMPLEX_TOOLS_WITH_WEB: list = [
     # Web
     web_search,
     fetch_webpage,
+    browser_background_fetch,
     deep_research,
     # File management
     read_workspace_file,
@@ -47,6 +54,7 @@ COMPLEX_TOOLS_WITH_WEB: list = [
     edit_workspace_file,
     list_workspace_files,
     delete_workspace_file,
+    download_to_workspace,
     # Memory
     recall_memories,
     recall_all_memories,
@@ -86,6 +94,8 @@ COMPLEX_TOOLS_WITH_WEB: list = [
     quiz_session_answer,
     mastery_record,
     export_study_sheet,
+    # Screen assist / browser bridge
+    *SCREEN_ASSIST_TOOLS,
     # HITL
     ask_user,
 ]
@@ -97,6 +107,7 @@ COMPLEX_TOOLS_NO_WEB: list = [
     edit_workspace_file,
     list_workspace_files,
     delete_workspace_file,
+    download_to_workspace,
     recall_memories,
     recall_all_memories,
     forget_memory,
@@ -130,19 +141,22 @@ COMPLEX_TOOLS_NO_WEB: list = [
     quiz_session_answer,
     mastery_record,
     export_study_sheet,
+    # Screen assist / browser bridge
+    *SCREEN_ASSIST_TOOLS,
     ask_user,
 ]
 
 
 # ─── Dynamic Tool Loading: Toolbox Registry ─────────────────────────────
 TOOLBOX_REGISTRY: dict[str, list] = {
-    "web_search": [web_search, fetch_webpage, deep_research],
+    "web_search": [web_search, fetch_webpage, deep_research, browser_background_fetch],
     "file_ops": [
         read_workspace_file,
         write_workspace_file,
         edit_workspace_file,
         list_workspace_files,
         delete_workspace_file,
+        download_to_workspace,
     ],
     "data_viz": [
         create_docx,

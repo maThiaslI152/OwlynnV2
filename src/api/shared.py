@@ -257,7 +257,7 @@ async def build_message_content(text: str, files: list):
             logger.info("Uploaded '%s'. Extracting text for chat context.", name)
             docx_text = await asyncio.to_thread(extract_docx_text, raw_bytes)
             docx_text = (docx_text or "").strip()
-            if len(docx_text) >= 50:
+            if len(docx_text) >= 10:
                 excerpt = docx_text[:MAX_INLINE_PDF_CHARS]
                 if len(docx_text) > MAX_INLINE_PDF_CHARS:
                     excerpt += (
@@ -278,7 +278,7 @@ async def build_message_content(text: str, files: list):
             logger.info("Uploaded '%s'. Extracting text for chat context.", name)
             doc_text = await asyncio.to_thread(extract_doc_text, raw_bytes)
             doc_text = (doc_text or "").strip()
-            if len(doc_text) >= 50:
+            if len(doc_text) >= 10:
                 excerpt = doc_text[:MAX_INLINE_PDF_CHARS]
                 if len(doc_text) > MAX_INLINE_PDF_CHARS:
                     excerpt += (

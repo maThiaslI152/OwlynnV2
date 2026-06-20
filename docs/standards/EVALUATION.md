@@ -21,10 +21,71 @@ audience: agent
 | **Educator eval** | `python scripts/run_educator_eval.py` | 8-turn UID10667 study session (EDU1–EDU8); optional, needs fixtures |
 | **Frontier comparison** | `python scripts/run_frontier_comparison_eval.py` | Quality A/B: Owlynn vs raw DeepSeek V4 + blind pro judge |
 | **Conversation eval** | `python scripts/run_browser_eval.py` | 12-prompt multi-topic run (qualitative) |
+| **Extension eval** | `python scripts/run_extension_eval.py` | 14-turn scored browser extension feature test (EX1–EX6; uses Python mock extension) |
 
 Eval scripts are **not** in the CI gate — they need LM Studio + running stack (+ optional DeepSeek key).
 
 **Checklist before eval:** `./scripts/ci.sh --quick` → `./start.sh` → confirm `:8000` + `:5173` connected.
+
+---
+
+## Browser Extension Eval (`run_extension_eval.py`)
+
+Tests all four Browser Bridge feature tracks with a **Python mock extension client** — no real Brave/Chrome is needed.
+
+### Pass Standard
+
+| Band | Score | Signal |
+|------|-------|--------|
+| ✅ Pass | ≥ 75% | Extension suite healthy |
+| ⚠️ Marginal | 60–74% | Investigate specific tracks |
+| ❌ Fail | < 60% | Regression |
+
+Track 6 (Connection Lifecycle) must always score **100%**.
+
+### Tracks
+
+| Track | ID range | What is tested |
+|-------|----------|----------------|
+| Active Tab Context | EX1.x | Tab URL/title/text retrieval, selected text |
+| Visual Context | EX2.x | Screenshot → vision proxy invocation |
+| Interactive DOM | EX3.x | click, type, scroll dispatch via `active_browser_action` |
+| Background Scraping | EX4.x | Multi-URL fetch via `browser_background_fetch` |
+| Moodle Extraction | EX5.x | Moodle-structured tab context, grades, assignments |
+| Connection Lifecycle | EX6.x | Auto-connect, graceful missing extension |
+
+### Per-turn scoring rubric
+
+| Criterion | Points |
+|-----------|--------|
+| Correct tool called | +40 |
+| Non-empty response | +20 |
+| Marker found in reply | +25 |
+| No DSML leak | +10 |
+| No crash / graceful reply | +5 |
+| Wrong/missing tool | −20 |
+| Tool returned error | −10 |
+| DSML leak | −15 |
+| Premature complete (tool stall) | −10 |
+| Extension required but disconnected | cap 30 |
+
+### Usage
+
+```bash
+# Standard run (Python mock extension)
+python scripts/run_extension_eval.py
+
+# Single track
+python scripts/run_extension_eval.py --track EX5
+
+# Real Brave extension (must be open and connected)
+python scripts/run_extension_eval.py --no-mock
+```
+
+Report is written to `docs/evaluations/extension-eval-<date>.md`.
+
+---
+
 
 ## Architecture assumptions (2026-06-11)
 

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import toast from 'react-hot-toast'
 
 interface Course {
   course_id: string
@@ -54,7 +55,9 @@ export function StudyPanel() {
         setError(json.message || 'Failed to load study dashboard')
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load')
+      const msg = e instanceof Error ? e.message : 'Failed to load'
+      setError(msg)
+      toast.error(`Study Panel: ${msg}`)
     } finally {
       setLoading(false)
     }

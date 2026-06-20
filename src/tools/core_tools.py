@@ -387,3 +387,50 @@ def forget_memory(memory_hashes: str) -> str:
     if errors:
         result += f" Errors: {'; '.join(errors)}"
     return result
+
+
+@tool
+async def download_to_workspace(url: str, filename: str) -> str:
+    """
+    Download a file from a URL directly into the active workspace.
+    Automatically syncs cookies from the active browser tab to support private downloads (e.g. LMS PDFs).
+
+    Args:
+        url: The web URL to download.
+        filename: The name to save the file as in the workspace.
+    """
+    import urllib.request
+    from src.api.routes.browser_extension import (
+        is_extension_connected,
+        dispatch_extension_get_cookies,
+    )
+
+    filepath, err = get_safe_workspace_path(filename)
+    if err:
+        return err
+
+    headers = {"User-Agent": "Mozilla/5.0"}
+
+    if is_extension_connected():
+        try:
+            cookie_string = await dispatch_extension_get_cookies(url)
+            if cookie_string:
+                headers["Cookie"] = cookie_string
+                logger.info(f"Attached browser cookies for {url} download.")
+        except Exception as e:
+            logger.warning(f"Failed to fetch cookies for download: {e}")
+
+    try:
+        req = urllib.request.Request(url, headers=headers)
+        with (
+            urllib.request.urlopen(req, timeout=30) as response,
+            open(filepath, "wb") as out_file,
+        ):
+            data = response.read()
+            out_file.write(data)
+        return (
+            f"Successfully downloaded {len(data)} bytes to {os.path.basename(filepath)}"
+        )
+    except Exception as e:
+        logger.warning(f"Failed to download {url}: {e}")
+        return f"Error downloading file: {e}"

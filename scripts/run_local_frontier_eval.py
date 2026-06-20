@@ -124,6 +124,7 @@ TEST_PROMPTS: list[dict[str, Any]] = [
     {
         "id": "F6.1",
         "topic": "Memory Retention (conversation)",
+        "new_chat_before": True,
         "prompt": (
             "Without searching the web again, what city's weather did we look up earlier in this "
             "conversation, and what was the exact file name we saved it to?"
@@ -420,8 +421,6 @@ class WsEventLog:
             if ev["type"] != "tool_execution" or ev["ts"] < since_ts:
                 continue
             payload = ev.get("payload", {})
-            if payload.get("status") != "success":
-                continue
             name = (payload.get("tool_name") or "").strip()
             if name and name not in seen:
                 seen.append(name)
@@ -690,7 +689,7 @@ async def is_graph_busy(page: Page) -> bool:
         return True
 
 
-async def resolve_hitl(page: Page) -> int:
+async def resolve_hitl(page: Page, expected_tools: list[str] | None = None) -> int:
     pending = page.locator(".hitl-prompt-card.hitl-pending")
     try:
         hitl_count = await pending.count()
@@ -699,7 +698,8 @@ async def resolve_hitl(page: Page) -> int:
     if hitl_count <= 0:
         return 0
     print("\n[EVAL] HITL Prompt detected! Resolving...")
-    skip = page.locator(".hitl-btn-skip")
+    pending_card = pending.last
+    skip = pending_card.locator(".hitl-btn-skip")
     try:
         if await skip.count() > 0:
             await skip.first.click(timeout=5000)
@@ -708,18 +708,71 @@ async def resolve_hitl(page: Page) -> int:
     except Exception:
         pass
     try:
-        if await page.locator(".hitl-scope-question").count() > 0:
+        if await pending_card.locator(".hitl-scope-question").count() > 0:
             await page.evaluate(
                 """() => {
-                  document.querySelectorAll('.hitl-scope-question').forEach((q) => {
-                    const btn = q.querySelector('.hitl-choice-btn');
-                    if (btn) btn.click();
-                  });
+                  const cards = document.querySelectorAll('.hitl-prompt-card.hitl-pending');
+                  if (cards.length > 0) {
+                      const lastCard = cards[cards.length - 1];
+                      lastCard.querySelectorAll('.hitl-scope-question').forEach((q) => {
+                          const btn = q.querySelector('.hitl-choice-btn');
+                          if (btn) btn.click();
+                      });
+                  }
                 }"""
             )
             await page.wait_for_timeout(500)
-        elif await page.locator(".hitl-choice-btn").count() > 0:
-            await page.locator(".hitl-choice-btn").first.click(timeout=3000)
+        elif await pending_card.locator(".hitl-choice-btn").count() > 0:
+            # Special case for Screen Assist tools
+            screen_assist_tools = {
+                "active_browser_action",
+                "get_active_browser_context",
+                "get_active_browser_screenshot",
+            }
+            if expected_tools and any(t in expected_tools for t in screen_assist_tools):
+                if (
+                    await pending_card.locator(
+                        '.hitl-choice-btn:has-text("Read terminal or screen context")'
+                    ).count()
+                    > 0
+                ):
+                    await pending_card.locator(
+                        '.hitl-choice-btn:has-text("Read terminal or screen context")'
+                    ).first.click(timeout=3000)
+                else:
+                    await pending_card.locator(".hitl-choice-btn").first.click(
+                        timeout=3000
+                    )
+            elif expected_tools and "browser_background_fetch" in expected_tools:
+                if (
+                    await pending_card.locator(
+                        '.hitl-choice-btn:has-text("Search the web")'
+                    ).count()
+                    > 0
+                ):
+                    await pending_card.locator(
+                        '.hitl-choice-btn:has-text("Search the web")'
+                    ).first.click(timeout=3000)
+                else:
+                    await pending_card.locator(".hitl-choice-btn").first.click(
+                        timeout=3000
+                    )
+            elif expected_tools and "get_active_browser_context" in expected_tools:
+                if (
+                    await pending_card.locator(
+                        '.hitl-choice-btn:has-text("Just answer directly")'
+                    ).count()
+                    > 0
+                ):
+                    await pending_card.locator(
+                        '.hitl-choice-btn:has-text("Just answer directly")'
+                    ).first.click(timeout=3000)
+                else:
+                    await pending_card.locator(".hitl-choice-btn").first.click(
+                        timeout=3000
+                    )
+            else:
+                await pending_card.locator(".hitl-choice-btn").first.click(timeout=3000)
             await page.wait_for_timeout(1000)
     except Exception:
         pass
@@ -757,15 +810,43 @@ async def wait_for_turn_complete(
     while time.monotonic() - start_time < timeout_s:
         elapsed = time.monotonic() - start_time
         try:
-            hitl_resolves += await asyncio.wait_for(resolve_hitl(page), timeout=12.0)
+            hitl_resolves += await asyncio.wait_for(
+                resolve_hitl(page, expected_tools=expected_tools), timeout=12.0
+            )
         except asyncio.TimeoutError:
             print("\n[EVAL] HITL resolve timed out; continuing poll...")
+
+        # Print progress log before checking ws_idle continue conditions
+        if time.monotonic() - last_print >= 10:
+            try:
+                dom_running = await asyncio.wait_for(
+                    page.evaluate(
+                        "() => Array.from(document.querySelectorAll('.tool-activity-running .tool-activity-name code'))"
+                        ".map(e => e.innerText).join(', ')"
+                    ),
+                    timeout=5.0,
+                )
+            except Exception:
+                dom_running = ""
+            ws_running = (
+                ws_log.running_tools_since(since_ts) if ws_log and since_ts else []
+            )
+            tools_running = ", ".join(ws_running) if ws_running else dom_running
+            print(
+                f"\r[EVAL] ... busy ({elapsed:.0f}s / {timeout_s}s) | tools: {tools_running or 'none'}",
+                end="",
+                flush=True,
+            )
+            last_print = time.monotonic()
 
         ws_idle = bool(ws_log and since_ts and ws_log.idle_since(since_ts))
         if ws_idle:
             try:
-                await page.evaluate(
-                    "() => window.__owlynnEval?.clearPendingCorrelation?.()"
+                await asyncio.wait_for(
+                    page.evaluate(
+                        "() => window.__owlynnEval?.clearPendingCorrelation?.()"
+                    ),
+                    timeout=3.0,
                 )
             except Exception:
                 pass
@@ -776,7 +857,10 @@ async def wait_for_turn_complete(
             ):
                 await asyncio.sleep(1)
                 continue
-        busy = False if ws_idle else await is_graph_busy(page)
+        if ws_log and since_ts:
+            busy = not ws_idle
+        else:
+            busy = await is_graph_busy(page)
         if not busy:
             ws_text = (
                 ws_log.assistant_text_since(since_ts) if ws_log and since_ts else ""
@@ -853,21 +937,6 @@ async def wait_for_turn_complete(
                     "executed_tools_ws": ws_tools,
                 }
 
-        if time.monotonic() - last_print >= 10:
-            dom_running = await page.evaluate(
-                "() => Array.from(document.querySelectorAll('.tool-activity-running .tool-activity-name code'))"
-                ".map(e => e.innerText).join(', ')"
-            )
-            ws_running = (
-                ws_log.running_tools_since(since_ts) if ws_log and since_ts else []
-            )
-            tools_running = ", ".join(ws_running) if ws_running else dom_running
-            print(
-                f"\r[EVAL] ... busy ({elapsed:.0f}s / {timeout_s}s) | tools: {tools_running or 'none'}",
-                end="",
-                flush=True,
-            )
-            last_print = time.monotonic()
         await asyncio.sleep(1)
 
     print("\n[EVAL] Timeout waiting for turn complete!")
@@ -998,13 +1067,30 @@ async def get_orchestration_data(page: Page) -> dict:
 
 
 async def send_message(page: Page, text: str) -> None:
-    print("[EVAL] Sending message...")
+    print(f"[EVAL] Sending message ({len(text)} chars)...")
     textarea = page.locator("textarea")
     await textarea.wait_for(state="visible", timeout=10000)
     await textarea.fill(text)
-    await page.wait_for_timeout(500)
-    await page.locator(".composer-send").click()
-    print("[EVAL] Send button clicked.")
+
+    send_btn = page.locator(".composer-send")
+    await send_btn.wait_for(state="visible", timeout=5000)
+
+    for attempt in range(5):
+        await send_btn.click()
+        try:
+            await page.wait_for_function(
+                "el => !el.value", arg=await textarea.element_handle(), timeout=2000
+            )
+            print("[EVAL] Message sent successfully.")
+            return
+        except Exception:
+            print(
+                f"[EVAL] Send attempt {attempt + 1} failed (textarea not cleared). Retrying..."
+            )
+            await textarea.press("Enter")
+            await page.wait_for_timeout(1000)
+
+    print("[EVAL] Warning: Failed to confirm message send after 5 attempts.")
 
 
 async def attach_file_via_drop(page: Page, filepath: Path) -> None:

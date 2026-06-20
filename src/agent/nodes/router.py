@@ -467,6 +467,11 @@ _SCREEN_ASSIST_HINTS = (
     "kali terminal",
     "capture pane",
     "iterm",
+    "browser page",
+    "current page",
+    "on the page",
+    "my browser",
+    "screenshot",
 )
 
 _DATA_VIZ_HINTS = (
@@ -823,12 +828,13 @@ async def router_node(state: AgentState) -> AgentState:
         or "from the workspace" in user_lower
         or "read the file" in user_lower
     )
+    has_screen_intent = any(h in user_lower for h in _SCREEN_ASSIST_HINTS)
 
     if (
         cleaned_user in _greeting_phrases
         or _greeting_pattern.search(user_text)
         or _time_date_pattern.search(user_text)
-    ) and not (has_web_intent or has_file_intent):
+    ) and not (has_web_intent or has_file_intent or has_screen_intent):
         logger.info("[router] Simple path - keyword match (greeting/bypass)")
         budget = estimate_token_budget(user_text, "simple")
         metadata = _build_router_metadata(

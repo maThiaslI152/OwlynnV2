@@ -1089,6 +1089,9 @@ async def fetch_webpage_dynamic(url: str, focus_query: str = "") -> str:
     Fetches a dynamic (JavaScript-rendered) webpage and returns its text content.
 
     Use when fetch_webpage returns little text (SPA). Same ``focus_query`` behavior as fetch_webpage.
+
+    WARNING: This opens a headless (incognito-style) browser in the background. It does NOT have the user's cookies or login sessions.
+    Do NOT use this tool for authenticated sites (like Moodle, LMS, Banking, or internal dashboards). For authenticated sites, ALWAYS rely on the browser extension tools and `download_to_workspace`.
     """
     from src.tools.url_policy import url_fetch_blocked_reason
     from src.tools.web_retrieval import rank_chunks_to_source_pack
@@ -1160,6 +1163,41 @@ async def _crawl_urls(urls: list[str]) -> str:
     except Exception as e:
         logger.error(f"_crawl_urls error: {e}")
         return f"[deep_research crawl error]: {e}"
+
+
+@tool
+async def browser_background_fetch(urls: list[str]) -> str:
+    """
+    Fetch the text content of multiple URLs concurrently in the background using the browser extension.
+    Use this when you need to read multiple pages quickly, such as opening several search results at once.
+    Requires the Owlynn Browser Bridge extension to be connected.
+    """
+    try:
+        from src.api.routes.browser_extension import (
+            dispatch_extension_fetch_urls,
+            is_extension_connected,
+        )
+
+        if not is_extension_connected():
+            return "Error: Browser extension is not connected."
+
+        results = await dispatch_extension_fetch_urls(urls)
+        if not results:
+            return "No results returned."
+
+        out = []
+        for r in results:
+            url = r.get("url", "")
+            title = r.get("title", "")
+            text = r.get("text", "")
+            err = r.get("error")
+            if err:
+                out.append(f"=== URL: {url} ===\nError: {text}\n")
+            else:
+                out.append(f"=== URL: {url} | Title: {title} ===\n{text}\n")
+        return "\n".join(out)
+    except Exception as e:
+        return f"Error: {str(e)}"
 
 
 @tool

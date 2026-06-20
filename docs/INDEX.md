@@ -85,6 +85,11 @@ manifest:
       category: guide
       audience: agent
       last_updated: 2026-06-10
+    - path: docs/FUTURE_WORKS.md
+      status: active
+      category: planning
+      audience: human
+      last_updated: 2026-06-19
     - path: docs/HITL.md
       status: active
       category: architecture
@@ -130,6 +135,11 @@ manifest:
       category: guide
       audience: agent
       last_updated: 2026-05-31
+    - path: docs/BROWSER_EXTENSION.md
+      status: active
+      category: reference
+      audience: agent
+      last_updated: 2026-06-19
     - path: docs/STATUS.md
       status: active
       category: standards

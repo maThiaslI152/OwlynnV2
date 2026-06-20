@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAppStore } from '../state/useAppStore'
+import toast from 'react-hot-toast'
 
 type CloudModelTier = 'flash' | 'pro'
 type CloudThinkingMode = 'auto' | 'always' | 'never'
@@ -32,6 +33,7 @@ export function CloudSettingsPanel() {
         setEscalationEnabled(payload.cloud_escalation_enabled !== false)
       } catch (e) {
         console.warn('[CloudSettingsPanel]', e)
+        toast.error('Failed to load cloud settings')
       } finally {
         if (!disposed) setLoading(false)
       }
@@ -50,8 +52,7 @@ export function CloudSettingsPanel() {
         body: JSON.stringify(fields),
       })
       if (!response.ok) {
-        setOperatorNote(`Cloud settings error (${response.status})`)
-        return
+        throw new Error(`Cloud settings error (${response.status})`)
       }
       setOperatorNote('Cloud settings updated')
       const statusResponse = await fetch('/api/cloud-status')
@@ -59,6 +60,7 @@ export function CloudSettingsPanel() {
         setCloudStatus(await statusResponse.json())
       }
     } catch (error) {
+      toast.error(`Cloud settings error: ${(error as Error).message}`)
       setOperatorNote(`Cloud settings error: ${(error as Error).message}`)
     }
   }

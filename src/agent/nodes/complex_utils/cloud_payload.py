@@ -482,8 +482,18 @@ def _brief_cache_key(state: dict) -> str:
     scope = state.get("clarified_scope") or {}
     plan = state.get("plan_review_approved")
     thread = state.get("thread_id") or state.get("conversation_id") or ""
+    msgs = state.get("messages", [])
+    last_msg = msgs[-1].content if msgs else ""
     raw = json.dumps(
-        {"scope": scope, "plan": plan, "thread": thread}, sort_keys=True, default=str
+        {
+            "scope": scope,
+            "plan": plan,
+            "thread": thread,
+            "num_msgs": len(msgs),
+            "last_msg": str(last_msg)[:100],
+        },
+        sort_keys=True,
+        default=str,
     )
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
@@ -554,6 +564,7 @@ async def prepare_cloud_payload(
     if use_brief:
         cache_key = _brief_cache_key(state)
         brief = _get_cached_brief(cache_key)
+        images_to_append = []
         if not brief:
             plan_review_summary: dict[str, Any] | None = None
             if state.get("plan_review_approved") is not None:
@@ -567,7 +578,17 @@ async def prepare_cloud_payload(
             last_assistant_summary = ""
             for msg in reversed(trimmed_messages):
                 if isinstance(msg, HumanMessage) and not last_user_message:
-                    last_user_message = str(msg.content)
+                    if isinstance(msg.content, list):
+                        parts = []
+                        for b in msg.content:
+                            if isinstance(b, dict):
+                                if b.get("type") == "text":
+                                    parts.append(str(b.get("text", "")))
+                                elif b.get("type") == "image_url":
+                                    images_to_append.append(b)
+                        last_user_message = " ".join(parts).strip()
+                    else:
+                        last_user_message = str(msg.content)
                 if isinstance(msg, AIMessage) and not last_assistant_summary:
                     c = str(msg.content)
                     last_assistant_summary = c[:300] if len(c) > 300 else c
@@ -596,7 +617,12 @@ async def prepare_cloud_payload(
                     anon_mapping = {**(anon_mapping or {}), **brief_mapping}
                     placeholder_count = len(anon_mapping)
             cloud_brief_tokens_est = estimate_brief_tokens(brief)
-            anon_messages = [HumanMessage(content=brief)]
+            if images_to_append:
+                content_list = [{"type": "text", "text": brief}]
+                content_list.extend(reversed(images_to_append))
+                anon_messages = [HumanMessage(content=content_list)]
+            else:
+                anon_messages = [HumanMessage(content=brief)]
             audit_debug(
                 "agent.cloud",
                 "brief_applied",

@@ -28,8 +28,8 @@ async def api_get_topics():
         topics = get_relevant_topics(limit=10)
         return {"status": "ok", "topics": topics}
     except Exception as e:
-        logger.warning("Error suppressed: %s", e)
-        return {"status": "error", "message": str(e)}
+        logger.error("Error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/api/interests")
@@ -39,8 +39,8 @@ async def api_get_interests():
         interests = get_user_interests_summary()
         return {"status": "ok", "interests": interests}
     except Exception as e:
-        logger.warning("Error suppressed: %s", e)
-        return {"status": "error", "message": str(e)}
+        logger.error("Error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/api/conversations")
@@ -50,8 +50,8 @@ async def api_get_conversations(limit: int = 10):
         conversations = load_conversations_history(limit=limit)
         return {"status": "ok", "conversations": conversations}
     except Exception as e:
-        logger.warning("Error suppressed: %s", e)
-        return {"status": "error", "message": str(e)}
+        logger.error("Error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/api/chats/generate-title")
@@ -76,8 +76,8 @@ async def api_generate_chat_title(body: dict):
         title = await generate_chat_title_router_llm(message, file_names=file_names)
         return {"status": "ok", "title": title or ""}
     except Exception as e:
-        logger.warning("Error suppressed: %s", e)
-        return {"status": "error", "message": str(e), "title": ""}
+        logger.error("Error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/api/topics/track")
@@ -92,8 +92,8 @@ async def api_track_topic(body: dict):
         topics = get_relevant_topics(limit=10)
         return {"status": "ok", "message": result, "topics": topics}
     except Exception as e:
-        logger.warning("Error suppressed: %s", e)
-        return {"status": "error", "message": str(e)}
+        logger.error("Error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/api/interests/update")
@@ -107,8 +107,8 @@ async def api_update_interests(body: dict):
         updated = get_user_interests_summary()
         return {"status": "ok", "interests": updated}
     except Exception as e:
-        logger.warning("Error suppressed: %s", e)
-        return {"status": "error", "message": str(e)}
+        logger.error("Error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/api/projects")
@@ -164,8 +164,8 @@ async def api_delete_project_chat(project_id: str, chat_id: str):
         project_manager.delete_chat_from_project(project_id, chat_id)
         return {"status": "ok"}
     except Exception as e:
-        logger.warning("Error suppressed: %s", e)
-        return {"status": "error", "message": str(e)}
+        logger.error("Error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.put("/api/projects/{project_id}/chats/{chat_id}")
@@ -189,8 +189,8 @@ async def api_delete_project(project_id: str):
                 "message": "Failed to delete project or cannot delete default project",
             }
     except Exception as e:
-        logger.warning("Error suppressed: %s", e)
-        return {"status": "error", "message": str(e)}
+        logger.error("Error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/api/projects/{project_id}/knowledge")

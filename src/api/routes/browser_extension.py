@@ -31,6 +31,7 @@ def _broadcast_page_context(payload: dict) -> None:
     title = str(payload.get("title") or "")
     text = str(payload.get("text") or "")
     selection = str(payload.get("selection") or "")
+    intent = str(payload.get("intent") or "default")
 
     max_chars = int(config.get("browser_extension.max_tab_text_chars", 12000) or 12000)
     if len(text) > max_chars:
@@ -42,6 +43,7 @@ def _broadcast_page_context(payload: dict) -> None:
         "title": title,
         "text": text,
         "selection": selection,
+        "intent": intent,
     }
 
     try:
@@ -73,7 +75,8 @@ async def dispatch_extension_request(action: str, payload: dict | None = None) -
     if not is_extension_connected():
         raise RuntimeError("No browser extension is currently connected.")
 
-    ws = active_connections[0]
+    # Always use the most recently connected extension (e.g., MockExtensionClient)
+    ws = active_connections[-1]
     request_id = str(uuid.uuid4())
     loop = asyncio.get_running_loop()
     future = loop.create_future()
@@ -117,6 +120,50 @@ async def dispatch_extension_get_active_tab() -> dict:
     return tab if isinstance(tab, dict) else {}
 
 
+async def dispatch_extension_get_cookies(url: str) -> str:
+    """Request cookie string for a specific URL from the extension."""
+    try:
+        data = await dispatch_extension_request("get_cookies", {"url": url})
+        return data.get("cookies", "")
+    except Exception as exc:
+        logger.warning(f"Failed to fetch cookies for {url}: {exc}")
+        return ""
+
+
+async def dispatch_extension_capture_screenshot() -> str | None:
+    """Request a base64 jpeg screenshot of the user's active browser tab."""
+    data = await dispatch_extension_request("capture_screenshot", {})
+    error = data.get("error")
+    if error:
+        logger.warning("Browser screenshot capture failed: %s", error)
+        return None
+    return data.get("image_data")
+
+
+async def dispatch_extension_browser_action(
+    action: str, selector: str = "", text: str = "", y: int = 0
+) -> dict:
+    """Execute a DOM interaction (click, type, scroll) on the active tab."""
+    payload = {"action": action, "selector": selector, "text": text, "y": y}
+    data = await dispatch_extension_request("browser_action", {"payload": payload})
+    if "error" in data:
+        return {"success": False, "error": data["error"]}
+    return data.get("result", {"success": False, "error": "Unknown error"})
+
+
+async def dispatch_extension_fetch_urls(urls: list[str]) -> list[dict]:
+    """Fetch multiple URLs in the background via the extension."""
+    # We must allow a longer timeout since multiple tabs are loaded.
+    original_timeout = config.get("web_search.timeouts.extension")
+    config["web_search.timeouts.extension"] = 30.0 + (len(urls) * 5.0)
+    try:
+        data = await dispatch_extension_request("fetch_urls", {"urls": urls})
+        results = data.get("results", [])
+        return results if isinstance(results, list) else []
+    finally:
+        config["web_search.timeouts.extension"] = original_timeout
+
+
 def format_active_tab_context(tab: dict) -> str:
     """Format extension active-tab payload for agent tools."""
     url = str(tab.get("url") or "")
@@ -152,7 +199,29 @@ async def websocket_endpoint(websocket: WebSocket):
             data = await websocket.receive_json()
 
             if data.get("type") == "page_context_push":
-                _broadcast_page_context(data)
+                if data.get("is_live_tracking"):
+                    from src.memory.long_term import memory as mem0_memory
+
+                    if mem0_memory:
+                        text = str(data.get("text") or "")
+                        url = str(data.get("url") or "")
+                        title = str(data.get("title") or "")
+                        if len(text) > 200:
+                            # Compress text to avoid overwhelming memory
+                            content = f"Page: {title} ({url})\n\n{text[:4000]}"
+                            try:
+                                mem0_memory.add(
+                                    content,
+                                    user_id="owner",
+                                    metadata={"url": url, "source": "live_tracking"},
+                                )
+                                logger.info(f"Saved live tracking context for {url}")
+                            except Exception as e:
+                                logger.warning(
+                                    f"Failed to save live tracking to memory: {e}"
+                                )
+                else:
+                    _broadcast_page_context(data)
                 continue
 
             request_id = data.get("id")

@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 import logging
 
@@ -77,8 +77,8 @@ async def api_mem0_search(query: str = "", limit: int = 50, project_id: str = ""
                 )
         return {"status": "ok", "memories": memories, "count": len(memories)}
     except Exception as e:
-        logger.warning("Error suppressed: %s", e)
-        return {"status": "error", "message": str(e), "memories": [], "count": 0}
+        logger.error("Error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/api/mem0/count")
@@ -101,8 +101,8 @@ async def api_mem0_count(project_id: str = ""):
         count = len(results) if isinstance(results, list) else 0
         return {"status": "ok", "count": count, "user_id": user_id}
     except Exception as e:
-        logger.warning("Error suppressed: %s", e)
-        return {"status": "error", "message": str(e), "count": 0}
+        logger.error("Error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/api/mem0/delete")
@@ -120,8 +120,8 @@ async def api_mem0_delete(body: dict):
         mem0_memory.delete(memory_id=memory_id)
         return {"status": "ok", "message": f"Deleted memory {memory_id}"}
     except Exception as e:
-        logger.warning("Error suppressed: %s", e)
-        return {"status": "error", "message": str(e)}
+        logger.error("Error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/api/mem0/clear")
@@ -141,8 +141,8 @@ async def api_mem0_clear(body: dict):
             else {"status": "error", "message": "user_id required"}
         )
     except Exception as e:
-        logger.warning("Error suppressed: %s", e)
-        return {"status": "error", "message": str(e)}
+        logger.error("Error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/api/mem0/reset")
@@ -154,5 +154,5 @@ async def api_mem0_reset():
         mem0_memory.reset()
         return {"status": "ok", "message": "All Mem0 memories reset"}
     except Exception as e:
-        logger.warning("Error suppressed: %s", e)
-        return {"status": "error", "message": str(e)}
+        logger.error("Error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))

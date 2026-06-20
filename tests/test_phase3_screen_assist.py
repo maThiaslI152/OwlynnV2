@@ -73,7 +73,10 @@ def test_screen_assist_toolbox_registered():
         "capture_local_terminal",
         "read_screen_element",
         "get_active_browser_context",
+        "get_active_browser_screenshot",
+        "active_browser_action",
         "capture_kali_terminal",
+        "upload_from_workspace",
     }
 
 

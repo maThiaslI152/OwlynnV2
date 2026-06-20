@@ -7,6 +7,7 @@ import {
   workspaceRefAttachment,
 } from '../lib/attachments'
 import { buildPageContextDraft } from '../lib/browserPageContext'
+import toast from 'react-hot-toast'
 
 interface Persona {
   id: string
@@ -74,6 +75,7 @@ export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitl
         }
       } catch (err) {
         console.error('Failed to fetch personas', err)
+        toast.error('Failed to fetch personas')
       }
     }
     void fetchPersonas()
@@ -120,9 +122,9 @@ export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitl
 
   useEffect(() => {
     if (!browserPageContextNonce || !browserPageContext) return
-    setValue(buildPageContextDraft(browserPageContext))
-    textareaRef.current?.focus()
-  }, [browserPageContextNonce, browserPageContext])
+    const content = buildPageContextDraft(browserPageContext)
+    onSend(content)
+  }, [browserPageContextNonce, browserPageContext, onSend])
 
   const handleSubmit = (event?: React.FormEvent<HTMLFormElement>) => {
     if (event) event.preventDefault()

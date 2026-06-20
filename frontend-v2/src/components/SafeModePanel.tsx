@@ -1,5 +1,6 @@
 import { useAppStore, type ExecutionPolicy, type SafeModeLevel } from '../state/useAppStore'
 import { electronBridge as tauriBridge } from '../lib/electronBridge'
+import toast from 'react-hot-toast'
 
 const SAFE_MODES: SafeModeLevel[] = ['normal', 'safe_readonly', 'safe_confirmed_exec', 'safe_isolated']
 
@@ -35,11 +36,11 @@ export function SafeModePanel() {
         body: JSON.stringify({ safe_mode: mode }),
       })
       if (!response.ok) {
-        setOperatorNote(`Safe Mode error: request failed (${response.status})`)
-        return
+        throw new Error(`request failed (${response.status})`)
       }
       setOperatorNote(`Safe Mode set to ${mode}`)
     } catch (error) {
+      toast.error(`Safe Mode error: ${(error as Error).message}`)
       setOperatorNote(`Safe Mode error: ${(error as Error).message}`)
     }
   }
@@ -53,8 +54,7 @@ export function SafeModePanel() {
           body: JSON.stringify({ execution_policy: policy }),
         })
         if (!response.ok) {
-          setOperatorNote(`Execution policy error: request failed (${response.status})`)
-          return
+          throw new Error(`request failed (${response.status})`)
         }
         const payload = (await response.json()) as { status?: string; message?: string }
         if (payload.status === 'error') {
@@ -68,6 +68,7 @@ export function SafeModePanel() {
             : 'Execution policy: manual HITL approval'
         )
       } catch (error) {
+        toast.error(`Execution policy error: ${(error as Error).message}`)
         setOperatorNote(`Execution policy error: ${(error as Error).message}`)
       }
     })()

@@ -47,6 +47,20 @@ class MacScreenAssistGateway:
                 return f"{tab}\n--- dom ---\n{dom}"
         return tab
 
+    async def capture_browser_screenshot(self) -> str | None:
+        if bool(config.get("browser_extension.active_tab_enabled", True)):
+            try:
+                from src.api.routes.browser_extension import (
+                    dispatch_extension_capture_screenshot,
+                    is_extension_connected,
+                )
+
+                if is_extension_connected():
+                    return await dispatch_extension_capture_screenshot()
+            except Exception:
+                pass
+        return None
+
     async def capture_kali_pane(self, session: str | None = None) -> str:
         kali = config.get("screen_assist.kali") or {}
         return await capture_remote_tmux_pane(

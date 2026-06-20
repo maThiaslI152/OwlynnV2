@@ -46,6 +46,7 @@ startup:
   preload:
     - small      # MiniCPM5 router — always
     - embedding  # nomic embed — always; vision VLM is lazy on first image
+    - vision_proxy  # Pre-loads the 4B VLM model to avoid dynamic load stalls
   warmup: true
 # ── Models — AI/LLM Configuration ────────────────────────────────────────────
 # Router: MiniCPM5-1B — routing/classification + coherence grading

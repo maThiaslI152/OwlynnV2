@@ -70,7 +70,7 @@ async def test_vision_pipeline_json_to_cloud_block(mock_vlm):
     human = processed[1]
     text = " ".join(b.get("text", "") for b in human.content if b.get("type") == "text")
     assert not any(b.get("type") == "image_url" for b in human.content)
-    assert "[Vision sensor output" in text
+    assert "[Image content transcribed by vision sensor]" in text
     assert "connection refused" in text
     assert "Terminal" in text
 
@@ -119,7 +119,7 @@ def test_unparsed_vlm_prose_fallback():
     """Non-JSON VLM output still becomes a cloud block."""
     block = vision_proxy._raw_to_cloud_text("Plain OCR line without JSON")
     assert "Plain OCR line" in block
-    assert "[Vision sensor output" in block
+    assert "[Image content transcribed by vision sensor]" in block
 
 
 def test_image_routes_complex_cloud_for_vision_proxy():
@@ -157,4 +157,4 @@ def test_schema_roundtrip():
     payload = parse_vision_payload(OCR_JSON)
     assert payload is not None
     cloud = format_vision_for_cloud(payload)
-    assert "TEXT: ERROR: connection refused" in cloud
+    assert "Visible text: ERROR: connection refused" in cloud

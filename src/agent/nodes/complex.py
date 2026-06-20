@@ -307,7 +307,12 @@ You are equipped with powerful tools that override your standard AI limitations.
 - Use [1] [2] citations from excerpts when applicable.
 - If tools genuinely return nothing useful after multiple exhaustive attempts, say so honestly and provide the context of what you tried.
 - Prefer workspace files and project knowledge over web search for project-specific work.
-- If browser MCP tools (browser_snapshot, browser_take_screenshot, etc.) are available, use them when the user asks what's on a web page or in their browser window."""
+- If browser MCP tools (browser_snapshot, browser_take_screenshot, etc.) are available, use them when the user asks what's on a web page or in their browser window.
+- **Browser Bridge Tools** (when user asks about their active browser tab, page, or screen):
+  - `get_active_browser_context` — get the URL, title, and full page text of the user's active browser tab. Call this when the user explicitly asks "what page am I on?", "what's in my browser?", or "what have I highlighted?". DO NOT call this if the user is just asking you to click, type, or fetch URLs.
+  - `get_active_browser_screenshot` — capture a screenshot of the user's active browser tab. Call this when the user asks to "see my screen", "look at my browser", or "take a screenshot".
+  - `active_browser_action` — perform click/type/scroll in the user's browser. Call this directly when the user asks you to interact with, click, or type in their browser.
+  - `browser_background_fetch` — fetch multiple URLs via the user's browser (bypasses bot protections). Use for bulk URL reading or when `fetch_webpage` fails."""
     + _TOOL_CALL_DISCIPLINE
 )
 

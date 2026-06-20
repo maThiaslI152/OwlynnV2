@@ -120,8 +120,8 @@ class TestUnifiedSettings:
         ):
             with TestClient(app, raise_server_exceptions=False) as c:
                 data = c.get("/api/unified-settings").json()
-                assert "error" in data
-                assert "boom" in data["error"]
+                assert "detail" in data
+                assert "boom" in data["detail"]
 
 
 class TestProfileUpdateRuntimeBehavior:

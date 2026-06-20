@@ -135,7 +135,7 @@ def test_ws_running_tools_since():
         },
     ]
     assert log.running_tools_since(base) == ["write_workspace_file"]
-    assert log.tools_since(base) == ["web_search"]
+    assert log.tools_since(base) == ["web_search", "write_workspace_file"]
 
 
 def test_should_exit_idle_tool_stall():

@@ -12,12 +12,23 @@ audience: agent
 
 ## Overview
 
-Project status tracker. Last updated: 2026-06-19 — Qwen3-VL-4B vision proxy replaces Florence-2; cloud-only pivot stable.
+Project status tracker. Last updated: 2026-06-20 — Eval harness race conditions fixed; short file context injection threshold lowered; context truncation fixed; file formatting perfectly scoring.
+
+## Recent Changes (2026-06-20)
+
+| Change | Impact | Doc |
+|--------|--------|-----|
+| **Eval script wait logic** | `is_graph_busy` DOM polling abandoned; test harness now strictly trusts WebSocket `idle` events, fixing premature exit race conditions (BUG-28). | [`evaluations/local-frontier-eval-2026-06-20.md`](evaluations/local-frontier-eval-2026-06-20.md) |
+| **Short context injection cutoff** | `shared.py` inline context threshold for DOC/DOCX reduced from 50 to 10 characters to prevent short eval markers from being dropped (BUG-29). | [`evaluations/local-frontier-eval-2026-06-20.md`](evaluations/local-frontier-eval-2026-06-20.md) |
+| **Cloud brief un-truncation** | Fixed `last_user_message` hard 500-char truncation in `cloud_brief.py` (replaced with dynamic `max_chars`); fixed `cloud_payload.py` cache key logic (`num_msgs`, `last_msg`). | [`evaluations/local-frontier-eval-2026-06-20.md`](evaluations/local-frontier-eval-2026-06-20.md) |
+| **Frontend silent errors** | Wrapped backend disconnection handlers and WS fetch errors in `react-hot-toast` to surface runtime exceptions on the client (BUG-24). | — |
+| **Workspace Autonomy & Offline Sync** | Added `download_to_workspace` (backend `httpx`) and `upload_from_workspace` (Playwright CDP) to bypass browser extension security limits. Implemented a startup catch-up sweep in `file_processor.py` to index offline file drops. | [`docs/TOOLS.md`](TOOLS.md), [`docs/BROWSER_EXTENSION.md`](BROWSER_EXTENSION.md) |
 
 ## Recent Changes (2026-06-19)
 
 | Change | Impact | Doc |
 |--------|--------|-----|
+| **Browser Extension Enhancements** | P0-P3 implemented: Visual Context (screenshots), Interactive DOM execution (click/type/scroll), Deep Background Scraping (`fetch_urls`), and Specialized Moodle Extractor. Extension automatically connects to backend on startup. | [`docs/BROWSER_EXTENSION.md`](BROWSER_EXTENSION.md) |
 | **Qwen3-VL-4B vision proxy** | Replaces Florence-2 (unloadable via LM Studio API). Full multimodal VLM; F9.1 100/100; 11 source files + 16 docs updated. LM Studio: 4 models, 7.5 GB. | [`changes/qwen3vl-vision-proxy/CHANGELOG.md`](changes/qwen3vl-vision-proxy/CHANGELOG.md) |
 | **Cloud-only pivot** | 3-tier → 2-tier cloud-only; `complex-default` removed; all complex reasoning → `complex-cloud`; local Qwen eliminated; medium slot removed from LLM pool; memory extraction → gemma-4-e2b; simple retry-once MiniCPM5; strict-cloud concept removed (`cloud_strict.py` deleted); 26 test files + 8 docs rewired | [`changes/cloud-only-pivot/CHANGELOG.md`](changes/cloud-only-pivot/CHANGELOG.md) |
 | **R5 coherence self-correction** | `coherence_retry.py` node + `coherence_retry_gate`; bounded by `coherence.max_retries: 1`; threshold 0.4; cloud-only (no local fallback) | [`changes/coherence-self-correction/CHANGELOG.md`](changes/coherence-self-correction/CHANGELOG.md) |
@@ -94,6 +105,7 @@ Project status tracker. Last updated: 2026-06-19 — Qwen3-VL-4B vision proxy re
 
 | v12b (2026-06-19) | **85.0%** cloud-only pivot (1615/1900) | First eval post-pivot. Effective ~93.2% (transient routing + Florence unavailable). No pivot regression. — [`evaluations/cloud-only-pivot-eval-2026-06-19.md`](evaluations/cloud-only-pivot-eval-2026-06-19.md) |
 | v12c (2026-06-19) | **Qwen3-VL-4B** replaces Florence-2. F9.1: 100/100. | Florence unloadable via LM Studio API — Qwen3-VL fixes this. |
+| v13 (2026-06-20) | **90.3%** eval script fixes (1715/1900) | Pipeline issues (truncation, context drops, eval race condition) resolved. FF1.1-FF4.1 (100/100). F3.1 tool non-determinism caused cascading failure. — [`evaluations/local-frontier-eval-2026-06-20.md`](evaluations/local-frontier-eval-2026-06-20.md) |
 
 ## Remaining Tasks
 
@@ -254,7 +266,9 @@ frontend-v2/src/App.tsx        # Frontend runtime
 
 ## Next Plan
 
-All known Phase 8 bugs (BUG-1 through BUG-29) are fixed. Open work is R10 (eval ≥97%) and architectural concerns marked Open in the table.
+All known Phase 8 bugs (BUG-1 through BUG-29) are fixed. Open work is R10 (eval ≥97%) and architectural concerns marked Open in the table. 
+
+For a strictly prioritized list of what to tackle next, see [`docs/FUTURE_WORKS.md`](FUTURE_WORKS.md).
 
 ### Lingering Risks
 

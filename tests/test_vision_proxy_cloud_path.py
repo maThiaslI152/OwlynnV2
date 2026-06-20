@@ -65,4 +65,4 @@ async def test_vision_proxy_replaces_image_with_transcription_text(monkeypatch):
         b.get("text", "") for b in human.content if b.get("type") == "text"
     )
     assert "red circle" in joined
-    assert "[Vision sensor output" in joined
+    assert "[Image content transcribed by vision sensor]" in joined

@@ -243,6 +243,29 @@ class GraphSession:
         self.event_buffer = []  # Store all events for the current turn
         self.is_running = False
         self.last_project_id = "default"
+        self._run_queue = asyncio.Queue()
+        self._queue_processor = asyncio.create_task(self._process_queue())
+
+    async def _process_queue(self):
+        while True:
+            try:
+                input_data, config, correlation_id = await self._run_queue.get()
+                self.is_running = True
+                self.event_buffer = []
+                self.task = asyncio.current_task()
+                try:
+                    await self._execute(input_data, config, correlation_id)
+                except asyncio.CancelledError:
+                    pass
+                except Exception as e:
+                    logger.error("Error in queued run: %s", e)
+                finally:
+                    self.is_running = False
+                    self._run_queue.task_done()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error("Error in queue processor: %s", e)
 
     async def add_listener(self):
         q = asyncio.Queue()
@@ -256,20 +279,14 @@ class GraphSession:
         self.listeners.discard(q)
 
     def is_active(self):
-        return self.is_running or len(self.listeners) > 0
+        return self.is_running or len(self.listeners) > 0 or not self._run_queue.empty()
 
     async def start_run(self, input_data, config, correlation_id=None):
-        if self.is_running:
-            return
         if isinstance(input_data, dict):
             pid = input_data.get("project_id")
             if pid is not None:
                 self.last_project_id = normalize_project_id(pid)
-        self.event_buffer = []
-        self.is_running = True
-        self.task = asyncio.create_task(
-            self._execute(input_data, config, correlation_id)
-        )
+        await self._run_queue.put((input_data, config, correlation_id))
 
     async def _execute(self, input_data, config, correlation_id=None):
         # Propagate thread_id into audit context for this graph run
@@ -1010,6 +1027,12 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                 sessions = websocket.app.state.sessions
                 if thread_id in sessions:
                     session = sessions[thread_id]
+                    while not session._run_queue.empty():
+                        try:
+                            session._run_queue.get_nowait()
+                            session._run_queue.task_done()
+                        except asyncio.QueueEmpty:
+                            break
                     if session.task and not session.task.done():
                         session.task.cancel()
                         session.is_running = False

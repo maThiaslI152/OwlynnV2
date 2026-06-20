@@ -1,4 +1,4 @@
-from fastapi import APIRouter, File, UploadFile
+from fastapi import APIRouter, HTTPException, File, UploadFile
 from fastapi.responses import FileResponse, PlainTextResponse
 
 import logging
@@ -264,8 +264,8 @@ def extract_text_file(name: str, mime: str, raw_bytes: bytes) -> str:
                 : int(config.get("file_decode.max_chars", 8000))
             ]
         except Exception as e:
-            logger.warning("Error suppressed: %s", e)
-            return ""
+            logger.error("Error: %s", e)
+            raise HTTPException(status_code=500, detail=str(e))
     return ""
 
 
@@ -374,8 +374,8 @@ async def api_list_files(sub_path: str = "", project_id: str = "default"):
             )
         return sorted(files, key=lambda x: (x["type"] == "file", x["name"].lower()))
     except Exception as e:
-        logger.warning("Error suppressed: %s", e)
-        return {"status": "error", "message": str(e)}
+        logger.error("Error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/api/files/{filename}")
@@ -418,8 +418,8 @@ async def api_get_file(
             with open(filepath, "r", encoding="utf-8") as f:
                 return PlainTextResponse(f.read())
         except Exception as e:
-            logger.warning("Error suppressed: %s", e)
-            return PlainTextResponse("Could not read file as text.", status_code=400)
+            logger.error("Error: %s", e)
+            raise HTTPException(status_code=500, detail=str(e))
 
     return FileResponse(filepath)
 
@@ -462,8 +462,8 @@ async def api_delete_file(
         notify_file_processed(filename, status="deleted")
         return {"status": "ok", "message": f"Deleted {filename}"}
     except Exception as e:
-        logger.warning("Error suppressed: %s", e)
-        return {"status": "error", "message": str(e)}
+        logger.error("Error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/api/files/{filename}/rename")
@@ -512,8 +512,8 @@ async def api_rename_file(filename: str, body: dict):
 
         return {"status": "ok", "message": f"Renamed to {new_name}"}
     except Exception as e:
-        logger.warning("Error suppressed: %s", e)
-        return {"status": "error", "message": str(e)}
+        logger.error("Error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/api/files/{filename}/move")
@@ -554,8 +554,8 @@ async def api_move_file(filename: str, body: dict):
         os.rename(old_path, new_path)
         return {"status": "ok", "message": f"Moved {filename} to {target_sub_path}"}
     except Exception as e:
-        logger.warning("Error suppressed: %s", e)
-        return {"status": "error", "message": str(e)}
+        logger.error("Error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/api/upload")
@@ -601,14 +601,14 @@ async def api_upload_file(
         )
         return {"status": "ok", "message": f"Uploaded {file.filename}"}
     except Exception as e:
-        logger.warning("Error suppressed: %s", e)
+        logger.error("Error: %s", e)
         audit_info(
             "api.file",
             "file_upload_failed",
             name=file.filename if file else "unknown",
             error=str(e)[:120],
         )
-        return {"status": "error", "message": str(e)}
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/api/folders")
@@ -635,5 +635,5 @@ async def api_create_folder(body: dict):
         os.makedirs(target_dir, exist_ok=True)
         return {"status": "ok", "message": f"Created folder {name}"}
     except Exception as e:
-        logger.warning("Error suppressed: %s", e)
-        return {"status": "error", "message": str(e)}
+        logger.error("Error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))

@@ -59,6 +59,8 @@ src/api/routes/files.py            # Tool discovery (GET /api/tools)
 | `edit_workspace_file` | Search-and-replace in a file. Exact pattern match required |
 | `list_workspace_files` | List directory contents with file sizes |
 | `delete_workspace_file` | Delete a file |
+| `download_to_workspace` | Download a file from a URL directly into the isolated workspace directory |
+| `upload_from_workspace` | Force an `<input type="file">` upload to a browser tab using Playwright CDP bypass (registered via `SCREEN_ASSIST_TOOLS`) |
 
 ### Toolbox: `data_viz`
 

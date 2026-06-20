@@ -55,6 +55,67 @@ async def get_active_browser_context() -> str:
 
 
 @tool
+async def get_active_browser_screenshot() -> str:
+    """
+    Return a base64 encoded jpeg screenshot of the user's active browser tab.
+
+    This command requires the Owlynn Browser Bridge extension. Use this when you
+    need visual context of the user's active page.
+    """
+    if not _enabled():
+        return "Error: screen assist is disabled in configuration."
+    gw = get_screen_assist_gateway()
+    b64 = await gw.capture_browser_screenshot()
+    if not b64:
+        return "Error: Could not capture browser screenshot (extension may be disconnected)."
+    # The vision proxy interceptor expects image_urls in dict block format
+    # In LangChain tools, we return a JSON string or dict that indicates an image.
+    import json
+
+    return json.dumps({"vision_interception_required": True, "image_url": b64})
+
+
+@tool
+async def active_browser_action(
+    action: str, selector: str = "", text: str = "", y: int = 0
+) -> str:
+    """
+    Perform an action in the user's active browser tab (Brave/Chrome extension only).
+
+    Supported actions:
+    - 'show_hints': Draws numbered overlays over all clickable elements. Returns the total count. Call this BEFORE taking a screenshot to see numbers!
+    - 'click': Click element(s) matching 'selector'. You can use a comma-separated list of selectors to click multiple elements simultaneously (e.g., 'input[value="1"], input[value="4"]'). WARNING: Do NOT use Playwright pseudo-selectors like ':has-text()'. Use standard CSS only!
+    - 'type': Type 'text' into input element(s) matching 'selector'. Also supports batching via comma-separated selectors.
+    - 'get_html': Returns the raw outerHTML of all elements matching 'selector'. Use this to read the DOM structure (like radio button values) before clicking.
+    - 'scroll': Scroll the page down by 'y' pixels.
+    - 'go_back': Navigate back in browser history.
+    - 'go_forward': Navigate forward in browser history.
+    """
+    if not _enabled():
+        return "Error: screen assist is disabled in configuration."
+    try:
+        from src.api.routes.browser_extension import (
+            dispatch_extension_browser_action,
+            is_extension_connected,
+        )
+
+        if not is_extension_connected():
+            return "Error: Browser extension is not connected."
+
+        res = await dispatch_extension_browser_action(action, selector, text, y)
+        if res.get("success"):
+            extras = {k: v for k, v in res.items() if k != "success"}
+            if extras:
+                import json
+
+                return f"Action '{action}' executed successfully.\nResult:\n{json.dumps(extras, indent=2)}"
+            return f"Action '{action}' executed successfully."
+        return f"Error: {res.get('error')}"
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+
+@tool
 async def capture_kali_terminal(session: str = "") -> str:
     """
     Capture tmux pane output from a remote Kali VM over SSH.
@@ -67,9 +128,62 @@ async def capture_kali_terminal(session: str = "") -> str:
     return await gw.capture_kali_pane(session or None)
 
 
+@tool
+async def upload_from_workspace(selector: str, filename: str) -> str:
+    """
+    Upload a file from the active workspace into a file input on the active browser tab.
+    This bypasses extension restrictions by using Playwright CDP.
+
+    Args:
+        selector: The CSS selector for the <input type="file"> element.
+        filename: The filename from the workspace to upload.
+    """
+    if not _enabled():
+        return "Error: screen assist is disabled in configuration."
+
+    from src.tools.core_tools import get_safe_workspace_path
+
+    filepath, err = get_safe_workspace_path(filename)
+    if err:
+        return err
+
+    import os
+
+    if not os.path.exists(filepath):
+        return f"Error: File '{filename}' not found in workspace."
+
+    from src.config.config_loader import config
+
+    cdp_url = config.get("screen_assist.browser_cdp_url", "")
+    if not cdp_url.strip():
+        return "Error: browser_cdp_url is not configured. Start browser with --remote-debugging-port=9222 and set config."
+
+    try:
+        from playwright.async_api import async_playwright
+    except ImportError:
+        return "Error: playwright not installed."
+
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.connect_over_cdp(cdp_url)
+            if not browser.contexts:
+                return "Error: no browser contexts on CDP endpoint."
+            page = browser.contexts[0].pages[0] if browser.contexts[0].pages else None
+            if page is None:
+                return "Error: no active page on CDP endpoint."
+
+            await page.set_input_files(selector, filepath)
+            return f"Successfully set file input '{selector}' to '{filename}'."
+    except Exception as exc:
+        return f"Error: CDP upload failed ({exc})"
+
+
 SCREEN_ASSIST_TOOLS = [
     capture_local_terminal,
     read_screen_element,
     get_active_browser_context,
+    get_active_browser_screenshot,
+    active_browser_action,
     capture_kali_terminal,
+    upload_from_workspace,
 ]

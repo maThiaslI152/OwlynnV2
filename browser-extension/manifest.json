@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "Owlynn Browser Bridge",
-  "version": "1.1.0",
-  "description": "Bridges Owlynn with your Brave browser: search, active tab context, and page sharing.",
-  "permissions": ["tabs", "scripting", "contextMenus", "activeTab"],
+  "version": "1.2.0",
+  "description": "Bridges Owlynn with your Brave browser: search, screenshots, interaction, and Moodle extraction.",
+  "permissions": ["tabs", "scripting", "contextMenus", "activeTab", "storage", "cookies"],
   "host_permissions": [
     "<all_urls>",
     "*://www.google.com/*",

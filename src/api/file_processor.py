@@ -816,6 +816,70 @@ class FileWatcherHandler(FileSystemEventHandler):
                 f.write(f"# Error Reading File\n\nCould not read file: {e}\n")
 
 
+def _catchup_unprocessed_files(workspace_dir, handler):
+    """Scan workspace for files modified while the watcher was offline."""
+    logger.info(f"[Watcher] Scanning for offline modifications in {workspace_dir}...")
+    try:
+        count = 0
+        for root, dirs, files in os.walk(workspace_dir):
+            # Skip hidden directories and .processed cache
+            dirs[:] = [d for d in dirs if not d.startswith(".") and d != ".processed"]
+
+            for filename in files:
+                if filename.startswith("."):
+                    continue
+
+                filepath = os.path.join(root, filename)
+                try:
+                    src_mtime = os.path.getmtime(filepath)
+
+                    # Determine expected processed file path
+                    # By default it's filename + .txt
+                    expected_txt = os.path.join(
+                        handler.processed_dir, filename + ".txt"
+                    )
+
+                    # For tables, it's filename + .txt replaced with .md in the code,
+                    # which effectively means filename + .md for files that originally end with .csv, etc?
+                    # Wait, the code does: output_path.replace('.txt', '.md')
+                    # So if output_path is `filename + '.txt'`, then it becomes `filename + '.md'`
+                    expected_md = os.path.join(handler.processed_dir, filename + ".md")
+
+                    needs_processing = False
+
+                    # Check if either txt or md exists
+                    if os.path.exists(expected_txt):
+                        proc_mtime = os.path.getmtime(expected_txt)
+                        if src_mtime > proc_mtime:
+                            needs_processing = True
+                    elif os.path.exists(expected_md):
+                        proc_mtime = os.path.getmtime(expected_md)
+                        if src_mtime > proc_mtime:
+                            needs_processing = True
+                    else:
+                        # Neither exists
+                        needs_processing = True
+
+                    if needs_processing:
+                        logger.info(
+                            f"[Watcher] Catch-up processing required for: {filepath}"
+                        )
+                        # Process synchronously to avoid spawning thousands of threads on first boot
+                        handler.process_file(filepath)
+                        count += 1
+                except Exception as e:
+                    logger.warning(
+                        f"[Watcher] Error checking mtime for {filepath}: {e}"
+                    )
+
+        if count > 0:
+            logger.info(f"[Watcher] Catch-up complete. Processed {count} missed files.")
+        else:
+            logger.info("[Watcher] Catch-up complete. No missed files found.")
+    except Exception as e:
+        logger.error(f"[Watcher] Error during offline catch-up scan: {e}")
+
+
 def start_watcher(workspace_dir, on_processed_callback=None):
     """Start the watchdog observer thread in the background.
 
@@ -831,6 +895,10 @@ def start_watcher(workspace_dir, on_processed_callback=None):
     event_handler = FileWatcherHandler(
         workspace_dir, on_processed_callback=on_processed_callback
     )
+
+    # Sweep for files that were added/modified while the server was offline
+    _catchup_unprocessed_files(workspace_dir, event_handler)
+
     observer = Observer()
     observer.schedule(event_handler, path=workspace_dir, recursive=True)
     observer.start()

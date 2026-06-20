@@ -62,6 +62,17 @@
 
 Pre-push hook runs this automatically. Skip only when intentional: `git push -o no-ci`.
 
+## Learned Rules
+
+### Evaluation Harness Modifications
+When modifying or extending `scripts/run_local_frontier_eval.py` or any UI-driven test harness, **never rely on DOM element polling (e.g., `is_graph_busy`) to determine if a conversational turn is complete.** Always use the WebSocket event stream (specifically the `idle` status event) as the definitive source of truth to avoid race conditions during parallel tool execution or streaming delays.
+
+### Frontend Error Handling
+Do not allow API fetches or WebSocket unhandled promise rejections to fail silently with console warnings. Always surface operational and network failures visibly to the user using the project's toast notification library (e.g., `react-hot-toast`).
+
+### Cache Key Generation for Chat Contexts
+When generating cache keys for chat histories or context gatekeepers (e.g., in `cloud_payload.py`), ensure the key is resilient to follow-up messages. Always include the total message count (`len(messages)`) and a slice of the final message's content to guarantee cache invalidation on new turns.
+
 ## Related
 
 - [`docs/README.md`](docs/README.md) — full documentation map
@@ -69,4 +80,4 @@ Pre-push hook runs this automatically. Skip only when intentional: `git push -o 
 
 ## Last updated
 
-2026-06-18 — Strict-cloud BUG-27..29; cloud tool-loop compaction; eval harness fixes
+2026-06-20 — Added learned rules for eval synchronization, frontend error handling, and cache key invalidation.

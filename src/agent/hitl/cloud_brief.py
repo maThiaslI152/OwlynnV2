@@ -32,7 +32,9 @@ def build_cloud_brief(
     """
     scope_text = "Not provided"
     constraint_lines: list[str] = []
-    task = _truncate(last_user_message, 500) if last_user_message else "Not provided"
+    task = (
+        _truncate(last_user_message, max_chars) if last_user_message else "Not provided"
+    )
     prior_context = (
         _truncate(last_assistant_summary, 300) if last_assistant_summary else "None"
     )

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useAppStore } from '../state/useAppStore'
+import toast from 'react-hot-toast'
 
 interface VerifyReport {
   schema_version: 'owlynn.audit.verify-report.v1'
@@ -164,6 +165,7 @@ console.log('Verification OK')`
       setOperatorNote(`Verification OK: ${rows.length} records`)
       setLastVerifyReport({schema_version:'owlynn.audit.verify-report.v1', ts:Date.now(), status:'pass', reason:'Verification completed successfully.', records_checked:rows.length, root_hash:prev, manifest_file:verifyManifestFile.name, bundle_file:verifyJsonlFile.name, trace})
     } catch (error) {
+      toast.error(`Verify failed: ${(error as Error).message}`)
       setOperatorNote(`Verify failed: ${(error as Error).message}`)
       setLastVerifyReport(prev => prev?.status === 'fail' ? prev : ({schema_version:'owlynn.audit.verify-report.v1', ts:Date.now(), status:'fail', reason:(error as Error).message, records_checked:0, manifest_file:verifyManifestFile?.name??'', bundle_file:verifyJsonlFile?.name??'', trace:['failed']}))
     }
