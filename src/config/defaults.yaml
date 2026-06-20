@@ -58,7 +58,7 @@ startup:
 models:
   small:
     base_url: "http://127.0.0.1:1234/v1"      # SMALL_LLM_BASE_URL env
-    model_name: "google/gemma-4-e2b"          # Router — Gemma 4 E2B, swap-loaded
+    model_name: "gemma-4-e2b-heretic-uncensored-mlx"          # Router — Gemma 4 E2B, swap-loaded
     temperature: 0.1                          # Low temp for consistent routing classification
     max_tokens: 512                           # Gemma JSON reasoning limit
     max_output_tokens: 512
@@ -94,9 +94,9 @@ models:
 
   vision_proxy:
     base_url: "http://127.0.0.1:1234/v1"
-    model_name: "google/gemma-4-e2b"
+    model_name: "gemma-4-e2b-heretic-uncensored-mlx"
     # Native LM Studio catalog key (defaults to model_name). Must match My Models entry.
-    lm_studio_model_key: "google/gemma-4-e2b"
+    lm_studio_model_key: "gemma-4-e2b-heretic-uncensored-mlx"
     temperature: 0.1
     max_tokens: 2048                      # Gemma: natural language descriptions
     max_output_tokens: 2048
