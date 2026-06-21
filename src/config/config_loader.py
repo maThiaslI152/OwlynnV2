@@ -20,9 +20,7 @@ Module-level singletons are available for backward compatibility with the
 existing ``settings.py`` module-level constants.
 
 Note on Architecture:
-The agent runs a 2-tier architecture: router (MiniCPM5-1B, local) → vision proxy
-(Qwen3-VL-4B, lazy) → complex reasoning (DeepSeek V4, cloud). Background memory
-extraction uses Gemma-4-E2B (small, local). No local Qwen medium tier.
+The agent runs a unified local small tier for routing, vision proxying, and extraction, backed by DeepSeek V4 for complex reasoning.
 """
 
 from __future__ import annotations
@@ -300,7 +298,7 @@ def get_model_config(tier: str, variant: str = "default") -> dict[str, Any]:
     """Return the full model config dict for a given tier.
 
     Args:
-        tier: ``"small"``, ``"cloud"``, ``"embedding"``, ``"vision_proxy"``, or ``"extraction"``
+        tier: ``"small"``, ``"cloud"``, or ``"embedding"``
 
     Returns a dict with keys: model_name, base_url, temperature, max_tokens,
     max_output_tokens, timeout, context_window, extra_body, etc.
@@ -388,10 +386,7 @@ _REQUIRED_PATHS: list[str] = [
     "models.embedding.base_url",
     "models.embedding.model_name",
     "models.embedding.timeout",
-    # Models — vision proxy
-    "models.vision_proxy.base_url",
-    "models.vision_proxy.model_name",
-    "models.vision_proxy.timeout",
+
     # Startup
     "startup.preload",
     "startup.warmup",

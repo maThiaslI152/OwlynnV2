@@ -57,7 +57,7 @@ class VisionModelManager:
         self._inflight += 1
         try:
             if self._client is None:
-                model_cfg = get_model_config("vision_proxy")
+                model_cfg = get_model_config("small")
                 model_name = str(
                     model_cfg.get("model_name") or configured_vision_model_name()
                 )

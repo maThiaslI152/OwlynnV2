@@ -27,7 +27,7 @@ class LLMPool:
     """Singleton pool for LLM instances to avoid re-initialization overhead."""
 
     _small_llm: Optional[ChatOpenAI] = None
-    _extraction_llm: Optional[ChatOpenAI] = None
+
     _cloud_llm_flash: Optional[ChatOpenAI] = None
     _cloud_llm_pro: Optional[ChatOpenAI] = None
 
@@ -63,7 +63,7 @@ class LLMPool:
                             "max_output_tokens", 512
                         )
                         cls._small_llm = ChatOpenAI(
-                            model=model_cfg.get("model_name", "liquid/lfm2.5-1.2b"),
+                            model=model_cfg.get("model_name", "gemma-4-e2b-heretic-uncensored-mlx"),
                             api_key="sk-local-no-key-needed",
                             base_url=model_cfg.get(
                                 "base_url", "http://127.0.0.1:1234/v1"
@@ -96,7 +96,7 @@ class LLMPool:
                     source="fallback",
                 )
                 return ChatOpenAI(
-                    model=model_cfg.get("model_name", "liquid/lfm2.5-1.2b"),
+                    model=model_cfg.get("model_name", "gemma-4-e2b-heretic-uncensored-mlx"),
                     api_key="sk-local-no-key-needed",
                     base_url=model_cfg.get("base_url", "http://127.0.0.1:1234/v1"),
                     temperature=model_cfg.get("temperature", 0.2),
@@ -114,42 +114,10 @@ class LLMPool:
 
     @classmethod
     async def get_extraction_llm(cls, *, foreground: bool = True) -> ChatOpenAI:
-        """Get or create cached extraction LLM instance (Gemma-4-E2B)."""
+        """Get or create cached extraction LLM instance. Maps to small LLM in unified architecture."""
         if "extraction" in cls._test_overrides:
             return cls._test_overrides["extraction"]
-        if cls._extraction_llm is not None:
-            audit_debug("agent.model", "pool_cache_hit", slot="extraction")
-            return cls._extraction_llm
-
-        async with cls._lock:
-            if cls._extraction_llm is not None:
-                audit_debug("agent.model", "pool_cache_hit", slot="extraction")
-                return cls._extraction_llm
-
-            model_cfg = get_model_config("extraction")
-
-            extra_body = dict(model_cfg.get("extra_body") or {})
-            extra_body["max_output_tokens"] = model_cfg.get("max_output_tokens", 1024)
-
-            cls._extraction_llm = ChatOpenAI(
-                model=model_cfg.get("model_name", "gemma-4-e2b-heretic-uncensored-mlx"),
-                api_key="sk-local-no-key-needed",
-                base_url=model_cfg.get("base_url", "http://127.0.0.1:1234/v1"),
-                temperature=model_cfg.get("temperature", 0.1),
-                max_tokens=model_cfg.get("max_tokens"),
-                extra_body=extra_body,
-                request_timeout=model_cfg.get("request_timeout")
-                or model_cfg.get("timeout", 120),
-                stream_chunk_timeout=None,
-            )
-            audit_info(
-                "agent.model",
-                "pool_instance_created",
-                slot="extraction",
-                model=model_cfg.get("model_name"),
-            )
-
-        return cls._extraction_llm
+        return await cls.get_small_llm()
 
     # ── cloud (DeepSeek API) ──────────────────────────────────────────
 

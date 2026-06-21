@@ -129,13 +129,13 @@ else:
         or config.get("models.standard.small.timeout")
         or 15
     )
-    MODEL_TIMEOUT_EXTRACTION = int(config.get("models.extraction.timeout") or 120)
+    MODEL_TIMEOUT_EXTRACTION = int(config.get("models.small.timeout") or 120)
     MAX_TOKENS_SMALL = int(
         config.get("models.small.max_tokens")
         or config.get("models.standard.small.max_tokens")
         or 2048
     )
-    MAX_TOKENS_EXTRACTION = int(config.get("models.extraction.max_tokens") or 1024)
+    MAX_TOKENS_EXTRACTION = int(config.get("models.small.max_tokens") or 8192)
     MAX_MEMORIES = int(config.get("memory.max_facts") or 200)
     MEMORY_SEARCH_WINDOW = int(config.get("memory.search_window") or 50)
 

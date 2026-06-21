@@ -20,7 +20,7 @@ def configured_vision_model_name() -> str:
     """OpenAI-compatible model id used in /v1/chat/completions."""
     return str(
         config.get(
-            "models.vision_proxy.model_name",
+            "models.small.model_name",
             "gemma-4-e2b-heretic-uncensored-mlx",
         )
     )
@@ -28,7 +28,7 @@ def configured_vision_model_name() -> str:
 
 def configured_vision_lm_studio_key() -> str:
     """Native LM Studio catalog key for /api/v1/models/load."""
-    override = config.get("models.vision_proxy.lm_studio_model_key")
+    override = config.get("models.small.lm_studio_model_key")
     if override:
         return str(override)
     return configured_vision_model_name()

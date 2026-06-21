@@ -1,5 +1,5 @@
 """
-Simple Node — Fast answers via the small LLM (LFM2.5-1.2B or similar).
+Simple Node — Fast answers via the small LLM (Gemma-4-E2B or similar).
 
 Handles greetings, small talk, and direct knowledge questions.
 Injects condensed memory context (topics/interests profile) without full past context
@@ -97,7 +97,7 @@ def _extract_llm_text(chunk_or_message) -> str:
 
 
 def _simple_output_max_tokens(budget: int | None) -> int:
-    """MiniCPM can fill reasoning_content and leave content empty below ~512 tokens."""
+    """Gemma can fill reasoning_content and leave content empty below ~512 tokens."""
     small_cfg = get_model_config("small")
     floor = int(small_cfg.get("max_tokens") or 512)
     return max(int(budget or 256), floor)

@@ -208,7 +208,7 @@ def parse_routing(
     content: str,
 ) -> tuple[str, float, list[str], str | None, bool | None, str | None]:
     """Extract routing decision, confidence, toolbox, plan, memory gate, and scenario."""
-    # MiniCPM5 hybrid-think safety: strip any <think>...</think> blocks that may
+    # Gemma safety: strip any <think>...</think> blocks that may
     # leak through even when enable_thinking=false is set via chat_template_kwargs.
     content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
     try:

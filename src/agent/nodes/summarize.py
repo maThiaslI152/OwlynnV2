@@ -2,9 +2,9 @@
 Auto-Summarize Node — Compresses older conversation history when context usage
 exceeds 85% of the active model's context window.
 
-Uses the always-loaded Small_LLM (lfm2.5-1.2b, 4K context) to produce a
-structured summary with categorized takeaways. Preserves tool call results,
-user-provided facts, pinned messages, and prior auto-summaries.
+Uses the always-loaded small model (Gemma-4-E2B) to produce a
+bulleted summary of the reasoning history. This summary is injected at the start
+of the conversation. Preserves tool call results,
 
 Features:
 - **Multi-level compression**: Prior summaries are fed back into subsequent
