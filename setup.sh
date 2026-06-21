@@ -28,21 +28,9 @@ echo "      Ready."
 echo "[2/4] Python environment..."
 rm -rf .venv
 
-if command -v python3.12 &>/dev/null; then
-    PYTHON=python3.12
-elif command -v python3.13 &>/dev/null; then
-    PYTHON=python3.13
-elif command -v python3.11 &>/dev/null; then
-    PYTHON=python3.11
-else
-    PYTHON=python3
-fi
-
-echo "      Using $PYTHON"
-$PYTHON -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip -q
-pip install -r requirements.txt
+echo "      Using uv"
+uv venv
+uv sync
 echo "      Dependencies installed."
 
 # ═══════════════════════════════════════════════════════════════════
@@ -58,8 +46,7 @@ else
     echo "      Downloading document processing models (~2 GB)..."
     echo "      This is a one-time download. Models are stored in .models/docling/"
     echo ""
-    source .venv/bin/activate
-    python3 -c "
+    uv run python -c "
 from docling.utils.model_downloader import download_models
 from pathlib import Path
 download_models(output_dir=Path('$MODEL_DIR'))

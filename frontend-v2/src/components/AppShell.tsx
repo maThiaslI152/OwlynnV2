@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback, type ReactNode } from 'react'
-// @ts-ignore - vitest requires the default import to resolve named exports correctly
+// @ts-expect-error - vitest requires the default import to resolve named exports correctly
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
 import type { Options } from 'rehype-sanitize'
 import { Composer } from './Composer'
@@ -445,6 +446,7 @@ export function AppShell({
     const last = messages[messages.length - 1]
     if (last && last.role === 'assistant' && last.id?.startsWith('stream-')) {
       isStreamingRef.current = true
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setStreamActive(true)
     } else {
       isStreamingRef.current = false

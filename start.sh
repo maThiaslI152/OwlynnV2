@@ -85,10 +85,10 @@ export PYTHONPATH="$(pwd):$PYTHONPATH"
 export STIRLING_PDF_URL="${STIRLING_PDF_URL:-http://localhost:8090}"
 export STIRLING_PDF_API_KEY="${STIRLING_PDF_API_KEY:-owlynn-local-dev}"
 
-source .venv/bin/activate 2>/dev/null || {
-    echo "      ERROR: .venv not found. Run ./setup.sh first."
+if ! command -v uv &>/dev/null; then
+    echo "      ERROR: uv is not installed. Please install uv first."
     exit 1
-}
+fi
 
 # Kill stale ports
 lsof -ti:8000 2>/dev/null | xargs kill -9 2>/dev/null
@@ -97,10 +97,10 @@ sleep 1
 
 # Start backend
 if [ "$DEBUG_MODE" == "1" ]; then
-    .venv/bin/python -m uvicorn src.api.server:app \
+    uv run python -m uvicorn src.api.server:app \
         --host 127.0.0.1 --port 8000 &
 else
-    .venv/bin/python -m uvicorn src.api.server:app \
+    uv run python -m uvicorn src.api.server:app \
         --host 127.0.0.1 --port 8000 \
         --no-access-log &
 fi
