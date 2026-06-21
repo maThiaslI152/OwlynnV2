@@ -17,7 +17,7 @@ from hypothesis import given, settings, assume, HealthCheck
 from hypothesis import strategies as st
 from langchain_core.messages import HumanMessage
 
-from src.agent.nodes.router import (
+from src.agent.routing.router import (
     estimate_token_budget,
     parse_routing,
     _has_image_content,

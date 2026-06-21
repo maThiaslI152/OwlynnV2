@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 sys.modules["mem0"] = MagicMock()
 
-from src.agent.nodes.complex import (  # noqa: E402
+from src.agent.core.complex import (  # noqa: E402
     _latest_user_text,
     _looks_like_prose_tool_stall,
     _user_intent_needs_workspace_read,

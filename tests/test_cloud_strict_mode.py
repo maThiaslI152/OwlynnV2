@@ -17,7 +17,7 @@ async def test_complex_node_blocks_fallback_on_cloud_failure():
     """When cloud LLM fails, the complex node produces a graceful error
     without falling back to any local model."""
     from src.agent.llm import CloudUnavailableError
-    from src.agent.nodes.complex import complex_llm_node
+    from src.agent.core.complex import complex_llm_node
 
     async def _cloud_raises(*_args, **_kwargs):
         raise CloudUnavailableError("No API key")
@@ -41,8 +41,8 @@ async def test_complex_node_blocks_fallback_on_cloud_failure():
     }
 
     with (
-        patch("src.agent.nodes.complex.get_cloud_llm", side_effect=_cloud_raises),
-        patch("src.agent.nodes.complex.get_profile", return_value=profile),
+        patch("src.agent.core.complex.get_cloud_llm", side_effect=_cloud_raises),
+        patch("src.agent.core.complex.get_profile", return_value=profile),
     ):
         result = await complex_llm_node(state)
 

@@ -38,6 +38,12 @@
       ],
       "js": ["content_ddg.js"],
       "run_at": "document_end"
+    },
+    {
+      "matches": ["<all_urls>"],
+      "css": ["content_ui.css"],
+      "js": ["content_ui.js"],
+      "run_at": "document_end"
     }
   ]
 }

@@ -14,7 +14,7 @@ import pytest
 from hypothesis import given, settings, assume
 from hypothesis import strategies as st
 
-from src.agent.anonymization import anonymize, deanonymize
+from src.agent.cloud.anonymization import anonymize, deanonymize
 
 # ── Constants ────────────────────────────────────────────────────────────
 

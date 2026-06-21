@@ -1,7 +1,7 @@
 import pytest
 from langchain_core.messages import HumanMessage, AIMessage
-from src.agent.nodes.simple import simple_node, _simple_output_max_tokens
-from src.agent.state import AgentState
+from src.agent.core.simple import simple_node, _simple_output_max_tokens
+from src.agent.core.state import AgentState
 
 
 def test_simple_output_max_tokens_respects_minicpm_floor():
@@ -29,7 +29,7 @@ async def test_simple_node_streams_and_aggregates(monkeypatch):
     async def fake_get_small_llm():
         return FakeLLM()
 
-    monkeypatch.setattr("src.agent.nodes.simple.get_small_llm", fake_get_small_llm)
+    monkeypatch.setattr("src.agent.core.simple.get_small_llm", fake_get_small_llm)
 
     state: AgentState = {
         "messages": [HumanMessage(content="Hi")],

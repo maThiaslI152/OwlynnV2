@@ -16,7 +16,7 @@ export function ProjectKnowledgePanel({
   const [files, setFiles] = useState<KnowledgeFile[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [indexingStates, setIndexingStates] = useState<Record<string, { status: string; chunks?: number; error?: string }>>({})
+  const [indexingStates, setIndexingStates] = useState<Record<string, { status: string; chunks?: number; error?: string; timestamp?: number }>>({})
 
   const loadKnowledgeFiles = useCallback(async () => {
     setLoading(true)

@@ -91,7 +91,7 @@ async def read_ax_context(x: int, y: int) -> tuple[str, bool]:
 
 async def _vision_crop_fallback(x: int, y: int) -> str:
     """512×512 crop around cursor when AX returns no text."""
-    from src.agent.nodes.complex_utils.vision_proxy import transcribe_crop
+    from src.agent.core.complex_utils.vision_proxy import transcribe_crop
 
     size = int(config.get("screen_assist.ax_blindspot_crop_size", 512))
     half = size // 2

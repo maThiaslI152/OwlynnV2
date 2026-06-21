@@ -28,7 +28,7 @@ from langchain_core.messages import (
 )
 
 from src.agent.llm import get_small_llm
-from src.agent.state import AgentState
+from src.agent.core.state import AgentState
 
 logger = logging.getLogger(__name__)
 

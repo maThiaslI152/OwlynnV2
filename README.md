@@ -218,7 +218,7 @@ Output: `frontend-v2/dist/` (`.app` / `.dmg` on macOS).
 | Tasks / skills | `todo_*`, `list_skills`, `invoke_skill` |
 | HITL | `ask_user` |
 
-Toolbox categories: `web_search`, `file_ops`, `data_viz`, `productivity`, `memory`, `screen_assist`, `all`. See [`docs/TOOLS.md`](docs/TOOLS.md).
+Toolbox categories: `web_search`, `file_ops`, `data_viz`, `productivity`, `memory`, `screen_assist`, `all`. See [`docs/features/TOOLS.md`](docs/features/TOOLS.md).
 
 ## Memory System
 
@@ -234,7 +234,7 @@ Toolbox categories: `web_search`, `file_ops`, `data_viz`, `productivity`, `memor
 
 **Write path:** PII scrub → enqueue Redis stream `owlynn:memory:extract` → 8B worker → Qdrant.
 
-Details: [`docs/MEMORY.md`](docs/MEMORY.md) · [`docs/guides/memory-orchestration-phase1.md`](docs/guides/memory-orchestration-phase1.md)
+Details: [`docs/features/MEMORY.md`](docs/features/MEMORY.md) · [`docs/guides/memory-orchestration-phase1.md`](docs/guides/memory-orchestration-phase1.md)
 
 ## API
 
@@ -247,24 +247,24 @@ Details: [`docs/MEMORY.md`](docs/MEMORY.md) · [`docs/guides/memory-orchestratio
 | `GET`/`POST` | `/api/projects` | Project CRUD |
 | `WS` | `/ws/chat/{thread_id}` | Streaming chat |
 
-Full reference: [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md) · WebSocket contract: [`docs/CHAT_PROTOCOL.md`](docs/CHAT_PROTOCOL.md)
+Full reference: [`docs/development/API_REFERENCE.md`](docs/development/API_REFERENCE.md) · WebSocket contract: [`docs/development/CHAT_PROTOCOL.md`](docs/development/CHAT_PROTOCOL.md)
 
 ## Documentation
 
-**AI agents:** start at [`AGENTS.md`](AGENTS.md) → [`docs/PROJECT_GUIDE.md`](docs/PROJECT_GUIDE.md).
+**AI agents:** start at [`AGENTS.md`](AGENTS.md) → [`docs/development/PROJECT_GUIDE.md`](docs/development/PROJECT_GUIDE.md).
 
 | Doc | Topic |
 |-----|-------|
 | [`AGENTS.md`](AGENTS.md) | Agent onboarding and task routing |
-| [`docs/PROJECT_GUIDE.md`](docs/PROJECT_GUIDE.md) | File map by task |
+| [`docs/development/PROJECT_GUIDE.md`](docs/development/PROJECT_GUIDE.md) | File map by task |
 | [`docs/architecture/overview.md`](docs/architecture/overview.md) | System overview |
-| [`docs/AGENT_FLOW.md`](docs/AGENT_FLOW.md) | LangGraph nodes and edges |
+| [`docs/architecture/AGENT_FLOW.md`](docs/architecture/AGENT_FLOW.md) | LangGraph nodes and edges |
 | [`docs/guides/memory-vision-screen-roadmap.md`](docs/guides/memory-vision-screen-roadmap.md) | Memory + vision + screen assist |
 | [`docs/architecture/VISION_PROXY.md`](docs/architecture/VISION_PROXY.md) | Cloud vision / OCR pipeline |
 | [`docs/guides/screen-assist-phase3.md`](docs/guides/screen-assist-phase3.md) | Terminal / AX / Kali tools |
 | [`docs/architecture/DEEPSEEK_V4_INTEGRATION.md`](docs/architecture/DEEPSEEK_V4_INTEGRATION.md) | Cloud routing and security |
-| [`docs/CLOUD-LLM-ARCHITECTURE.md`](docs/CLOUD-LLM-ARCHITECTURE.md) | Cloud payload and anonymization |
-| [`docs/WEB_SEARCH.md`](docs/WEB_SEARCH.md) | Search tier fallbacks |
+| [`docs/architecture/CLOUD-LLM-ARCHITECTURE.md`](docs/architecture/CLOUD-LLM-ARCHITECTURE.md) | Cloud payload and anonymization |
+| [`docs/features/WEB_SEARCH.md`](docs/features/WEB_SEARCH.md) | Search tier fallbacks |
 | [`docs/STATUS.md`](docs/STATUS.md) | Project status and known issues |
 | [`docs/INDEX.md`](docs/INDEX.md) | Full doc manifest |
 

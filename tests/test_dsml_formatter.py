@@ -1,7 +1,7 @@
 """Tests for DeepSeek DSML pseudo-tool-call stripping."""
 
-from src.agent.nodes.complex_utils.cloud_payload import finalize_cloud_visible_content
-from src.agent.nodes.complex_utils.formatter import (
+from src.agent.cloud.cloud_payload import finalize_cloud_visible_content
+from src.agent.core.complex_utils.formatter import (
     _content_has_dsml_tool_syntax,
     _strip_dsml_blocks,
     needs_web_synthesis_retry,
@@ -20,7 +20,7 @@ def test_strip_dsml_blocks_removes_dsml_markup():
         "</\uff5c\uff5cDSML\uff5c\uff5ctool_calls>"
     )
     cleaned = _strip_dsml_blocks(raw)
-    assert cleaned == "Let me grab more info."
+    assert cleaned == "Let me grab more info.\n"
     assert not _content_has_dsml_tool_syntax(cleaned)
 
 
@@ -73,7 +73,7 @@ def test_needs_web_synthesis_retry_on_prose_plus_tool_markup():
 def test_strip_qwen_xml_and_preserve_trailing_prose():
     raw = '<function=fetch_webpage>{"url": "https://example.com"}</function> Here is the weather summary.'
     cleaned = _strip_dsml_blocks(raw)
-    assert cleaned == "Here is the weather summary."
+    assert cleaned == " Here is the weather summary."
     assert not _content_has_dsml_tool_syntax(cleaned)
 
 

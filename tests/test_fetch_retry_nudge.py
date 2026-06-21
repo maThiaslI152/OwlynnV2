@@ -2,7 +2,7 @@
 
 from langchain_core.messages import ToolMessage
 
-from src.agent.nodes.complex import (
+from src.agent.core.complex import (
     _fallback_for_blank_response,
     build_fetch_retry_nudge_messages,
     build_web_search_answer_nudge_messages,

@@ -19,13 +19,13 @@ from typing import Any
 from langchain_core.messages import AIMessage, HumanMessage
 
 from src.agent.llm import get_cloud_llm, CloudUnavailableError
-from src.agent.state import AgentState
-from src.agent.nodes.complex import _invoke_cloud_path
-from src.agent.nodes.complex_utils.formatter import (
+from src.agent.core.state import AgentState
+from src.agent.core.complex import _invoke_cloud_path
+from src.agent.core.complex_utils.formatter import (
     _strip_dsml_blocks,
     _strip_thinking_tags,
 )
-from src.agent.nodes.complex_utils.fallback import _latest_user_text
+from src.agent.core.complex_utils.fallback import _latest_user_text
 from src.memory.user_profile import get_profile
 
 from src.config.audit_log import audit_info, audit_warn

@@ -26,7 +26,7 @@ from .complex_utils.formatter import (
 # Insert imports after the other local imports (e.g., around line 24)
 insert_idx = 0
 for i, line in enumerate(kept_lines):
-    if "from src.agent.anonymization" in line:
+    if "from src.agent.cloud.anonymization" in line:
         insert_idx = i + 1
         break
 

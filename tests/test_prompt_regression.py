@@ -7,9 +7,9 @@ sys.modules["mem0"] = MagicMock()
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from src.agent.graph import build_graph
+from src.agent.core.graph import build_graph
 from src.agent.nodes.memory import memory_inject_node
-from src.agent.state import AgentState
+from src.agent.core.state import AgentState
 from src.agent.llm import LLMPool
 
 
@@ -112,7 +112,9 @@ async def test_prompt_regression_complex_route():
             ),
             patch("src.agent.nodes.memory.record_conversation", return_value=None),
             patch("src.memory.long_term.memory", None),
-            patch("src.agent.nodes.router._check_cloud_available", return_value=False),
+            patch(
+                "src.agent.routing.router._check_cloud_available", return_value=False
+            ),
         ):
             state: AgentState = {
                 "messages": [HumanMessage(content=COMPLEX_PROMPT)],

@@ -25,7 +25,7 @@ def test_tool_status_prefix_not_substring():
 
 
 def test_workspace_paths_attached_pattern():
-    from src.agent.nodes.complex import _workspace_paths_from_text
+    from src.agent.core.complex import _workspace_paths_from_text
 
     paths = _workspace_paths_from_text(
         "Help me study\n[Attached: chapter 1 Digital Literacy.pdf]"

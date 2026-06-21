@@ -5,7 +5,7 @@ import base64
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
-from src.agent.graph import init_agent
+from src.agent.core.graph import init_agent
 from src.api.server import build_message_content
 from langchain_core.messages import HumanMessage
 

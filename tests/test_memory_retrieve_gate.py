@@ -9,8 +9,8 @@ import pytest
 from langchain_core.messages import HumanMessage
 
 from src.agent.nodes.memory import memory_inject_lite_node, memory_retrieve_node
-from src.agent.nodes.router import router_node
-from src.agent.state import AgentState
+from src.agent.routing.router import router_node
+from src.agent.core.state import AgentState
 
 
 @pytest.mark.anyio

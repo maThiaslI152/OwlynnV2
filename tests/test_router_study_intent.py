@@ -1,6 +1,6 @@
 """Router / skill intent for workspace PDF study."""
 
-from src.agent.nodes.router import _toolbox_for_skill
+from src.agent.routing.router import _toolbox_for_skill
 from src.tools.skills import SkillMatcher, _default_loader
 
 

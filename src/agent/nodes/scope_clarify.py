@@ -14,9 +14,9 @@ from typing import Any
 
 from langgraph.types import interrupt, Command
 
-from src.agent.state import AgentState
+from src.agent.core.state import AgentState
 from src.agent.hitl.scope_heuristics import needs_clarification
-from src.agent.nodes.router import _has_image_content
+from src.agent.routing.router import _has_image_content
 from src.memory.user_profile import get_profile
 
 logger = logging.getLogger(__name__)

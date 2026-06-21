@@ -13,7 +13,7 @@ from typing import Any
 from langgraph.types import interrupt
 from langchain_core.messages import AIMessage
 
-from src.agent.state import AgentState
+from src.agent.core.state import AgentState
 from src.agent.hitl.policy import is_sensitive_call
 from src.memory.user_profile import get_profile
 

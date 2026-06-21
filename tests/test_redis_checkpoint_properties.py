@@ -25,7 +25,7 @@ from hypothesis import strategies as st
 from langchain_core.messages import HumanMessage, AIMessage
 from langgraph.graph.message import add_messages
 
-from src.agent.state import AgentState
+from src.agent.core.state import AgentState
 
 # ── Constants ────────────────────────────────────────────────────────────
 

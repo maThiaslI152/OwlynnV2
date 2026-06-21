@@ -14,7 +14,7 @@ Memory scoping:
 - Default project uses the user's profile name or ``"owner"`` (shared global).
 """
 
-from src.agent.state import AgentState
+from src.agent.core.state import AgentState
 from src.memory.user_profile import get_profile
 from src.memory.persona_manager import get_persona_by_id
 from src.config.config_loader import config
@@ -863,7 +863,7 @@ async def memory_write_node(state: AgentState) -> AgentState:
             # Invalidate memory context cache since memory was updated (M4 optimization)
             # Uses invalidate_on_write to signal WebSocket forwarder
             MemoryContextCache.invalidate_on_write(thread_id)
-            from src.agent.nodes.complex_utils.cloud_payload import (
+            from src.agent.cloud.cloud_payload import (
                 invalidate_brief_cache,
             )
 

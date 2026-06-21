@@ -352,7 +352,7 @@ async def main():
                 topic = item["topic"]
                 prompt_text = item["prompt"]
 
-                from src.agent.cloud_circuit_breaker import reset_circuit_breaker
+                from src.agent.cloud.cloud_circuit_breaker import reset_circuit_breaker
 
                 reset_circuit_breaker()
 

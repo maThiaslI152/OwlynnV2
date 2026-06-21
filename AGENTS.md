@@ -8,7 +8,7 @@
 
 ## Before editing code (required reads)
 
-1. [`docs/PROJECT_GUIDE.md`](docs/PROJECT_GUIDE.md) — file map by task
+1. [`docs/development/PROJECT_GUIDE.md`](docs/development/PROJECT_GUIDE.md) — file map by task
 2. [`docs/architecture/overview.md`](docs/architecture/overview.md) — system shape, modules, data flow
 3. [`docs/standards/coding-style.md`](docs/standards/coding-style.md) — naming, patterns, lint
 
@@ -37,14 +37,14 @@
 
 | I want to… | Read | Edit |
 |------------|------|------|
-| Change routing / model selection | [`docs/EXTENDING_AGENT.md`](docs/EXTENDING_AGENT.md) | `src/agent/nodes/router.py`, `src/agent/router/`, `src/config/defaults.yaml` |
+| Change routing / model selection | [`docs/development/EXTENDING_AGENT.md`](docs/development/EXTENDING_AGENT.md) | `src/agent/nodes/router.py`, `src/agent/router/`, `src/config/defaults.yaml` |
 | Change PDF intake / OCR | [`docs/guides/dev-startup.md`](docs/guides/dev-startup.md) | `src/pdf/intake.py`, `src/integrations/stirling_pdf.py`, `docker-compose.yml` |
-| Add or change a tool | [`docs/TOOLS.md`](docs/TOOLS.md) | `src/tools/`, `src/agent/tool_sets.py` |
-| Change WebSocket events | [`docs/CHAT_PROTOCOL.md`](docs/CHAT_PROTOCOL.md) | `src/api/ws/handler.py`, `frontend-v2/src/` |
-| Fix memory / context injection | [`docs/MEMORY.md`](docs/MEMORY.md) | `src/agent/nodes/memory.py`, `src/memory/` |
+| Add or change a tool | [`docs/features/TOOLS.md`](docs/features/TOOLS.md) | `src/tools/`, `src/agent/tool_sets.py` |
+| Change WebSocket events | [`docs/development/CHAT_PROTOCOL.md`](docs/development/CHAT_PROTOCOL.md) | `src/api/ws/handler.py`, `frontend-v2/src/` |
+| Fix memory / context injection | [`docs/features/MEMORY.md`](docs/features/MEMORY.md) | `src/agent/nodes/memory.py`, `src/memory/` |
 | Change HITL / approvals | [`docs/HITL.md`](docs/HITL.md) | `src/agent/hitl/`, `src/agent/nodes/{scope_clarify,plan_review,security_proxy}.py` |
 | Debug a symptom | [`docs/debugging/README.md`](docs/debugging/README.md) | Follow symptom → file table |
-| Change cloud / anonymization | [`docs/CLOUD-LLM-ARCHITECTURE.md`](docs/CLOUD-LLM-ARCHITECTURE.md) | `src/agent/nodes/complex.py`, `src/agent/nodes/complex_utils/` |
+| Change cloud / anonymization | [`docs/architecture/CLOUD-LLM-ARCHITECTURE.md`](docs/architecture/CLOUD-LLM-ARCHITECTURE.md) | `src/agent/nodes/complex.py`, `src/agent/nodes/complex_utils/` |
 | Run or configure the app | [`docs/guides/dev-startup.md`](docs/guides/dev-startup.md) | `start.sh`, `setup.sh`, `.env` |
 | Run CI / tests / evaluation | [`docs/standards/EVALUATION.md`](docs/standards/EVALUATION.md) | `scripts/ci.sh`, `scripts/run_*_eval.py` |
 

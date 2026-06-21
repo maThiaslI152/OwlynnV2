@@ -77,15 +77,22 @@ async def get_active_browser_screenshot() -> str:
 
 @tool
 async def active_browser_action(
-    action: str, selector: str = "", text: str = "", y: int = 0, element_id: int = -1
+    action: str,
+    selector: str = "",
+    text: str = "",
+    y: int = 0,
+    element_id: int = -1,
+    element_ids: list[int] = None,
 ) -> str:
     """
     Perform an action in the user's active browser tab (Brave/Chrome extension only).
 
     Supported actions:
     - 'read_dom_tree': Returns a distilled map of interactive elements with unique IDs (e.g., [@12]). Use this FIRST.
-    - 'click': Click element matching 'selector' OR 'element_id'. If using the DOM tree map, provide the element_id (e.g., 12).
-    - 'type': Type 'text' into input matching 'selector' OR 'element_id'.
+    - 'read_full_dom_tree': Same as read_dom_tree, but also includes all visible text on the page. Use this to read quiz questions or full context.
+    - 'click': Click element matching 'selector' OR 'element_id'. Can also accept 'element_ids' list to batch-click multiple elements (e.g., answering a quiz).
+    - 'hover': Hover over element matching 'selector' OR 'element_id' without clicking. Useful for expanding menus or revealing tooltips.
+    - 'type': Type 'text' into input matching 'selector' OR 'element_id'. Can also batch-type into 'element_ids'.
     - 'show_hints': Draws numbered overlays over all clickable elements. Returns the total count. Call this BEFORE taking a screenshot to see numbers!
     - 'get_html': Returns the raw outerHTML of all elements matching 'selector'. Use this to read the DOM structure (like radio button values) before clicking.
     - 'scroll': Scroll the page down by 'y' pixels.
@@ -104,7 +111,7 @@ async def active_browser_action(
             return "Error: Browser extension is not connected."
 
         res = await dispatch_extension_browser_action(
-            action, selector, text, y, element_id
+            action, selector, text, y, element_id, element_ids
         )
         if res.get("success"):
             extras = {k: v for k, v in res.items() if k != "success"}

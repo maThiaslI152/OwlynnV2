@@ -4,7 +4,7 @@ interface BridgeResult<T = string> {
   error?: string
 }
 
-function electronAvailable(): boolean {
+export function electronAvailable(): boolean {
   try {
     return typeof (window as any).electronAPI !== 'undefined'
   } catch {

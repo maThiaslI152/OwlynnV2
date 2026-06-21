@@ -244,9 +244,12 @@ function App() {
   }, [loadProjects])
 
   useEffect(() => {
+    const controller = new AbortController()
     const loadHistory = async () => {
       try {
-        const response = await fetch(`/api/history/${encodeURIComponent(currentThreadId)}`)
+        const response = await fetch(`/api/history/${encodeURIComponent(currentThreadId)}`, {
+          signal: controller.signal
+        })
         if (!response.ok) return
         const history = (await response.json()) as Array<{ type: string; content: string; tool_calls?: unknown[] }>
         if (!Array.isArray(history)) return
@@ -267,7 +270,8 @@ function App() {
             })
           }
         }
-      } catch (e) {
+      } catch (e: any) {
+        if (e.name === 'AbortError') return
         console.warn('[loadHistory]', e)
         // History unavailable — non-critical
       }
@@ -466,6 +470,7 @@ function App() {
 
     setConnection('connecting')
     return () => {
+      controller.abort()
       disconnect()
       wsClientRef.current = null
     }

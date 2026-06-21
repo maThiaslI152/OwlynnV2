@@ -511,8 +511,10 @@ export function AppShell({
   }, [safeModePopoverOpen])
 
   const activeProject = projects.find((p) => p.id === activeProjectId)
-  const isCompact = windowMode === 'compact'
-  const showInspector = !isCompact || inspectorOpen
+  const searchParams = new URLSearchParams(window.location.search)
+  const isSidebarMode = searchParams.get('mode') === 'sidebar'
+  const isCompact = windowMode === 'compact' || isSidebarMode
+  const showInspector = (!isCompact || inspectorOpen) && !isSidebarMode
   const projectChats = activeProject?.chats ?? []
   const showDragStrip = isTauriRuntime()
 
@@ -701,65 +703,67 @@ export function AppShell({
       {/* ── Center Panel ── */}
       <main className={`panel center-panel${isCompact ? ' center-panel-compact' : ''}`}>
         {showDragStrip && <div className="window-drag-strip" data-tauri-drag-region />}
-        <header className="topbar" data-tauri-drag-region>
-          <h1>
-            <span className="logo-dot" />
-            Owlynn
-          </h1>
-          {isCompact && (
-            <div className="topbar-actions">
-              <div className="safe-mode-popover-container" style={{ position: 'relative' }}>
+        {!isSidebarMode && (
+          <header className="topbar" data-tauri-drag-region>
+            <h1>
+              <span className="logo-dot" />
+              Owlynn
+            </h1>
+            {isCompact && (
+              <div className="topbar-actions">
+                <div className="safe-mode-popover-container" style={{ position: 'relative' }}>
+                  <button
+                    type="button"
+                    className="topbar-btn"
+                    onClick={() => setSafeModePopoverOpen(!safeModePopoverOpen)}
+                    title="Security & Safe Mode"
+                  >
+                    🛡
+                  </button>
+                  {safeModePopoverOpen && (
+                    <div className="topbar-popover">
+                      <SafeModePanel />
+                      <CloudSettingsPanel />
+                    </div>
+                  )}
+                </div>
                 <button
                   type="button"
                   className="topbar-btn"
-                  onClick={() => setSafeModePopoverOpen(!safeModePopoverOpen)}
-                  title="Security & Safe Mode"
+                  onClick={() => setInspectorOpen(!inspectorOpen)}
+                  title="Toggle inspector"
                 >
-                  🛡
+                  {inspectorOpen ? '✕' : '☰'}
                 </button>
-                {safeModePopoverOpen && (
-                  <div className="topbar-popover">
-                    <SafeModePanel />
-                    <CloudSettingsPanel />
-                  </div>
+                <button
+                  type="button"
+                  className="topbar-btn"
+                  onClick={() => handleToggleMode('full')}
+                  title="Full workspace"
+                >
+                  ⛶
+                </button>
+                <span className={`connection-status`}>
+                  <span className={`connection-dot connection-dot-${connectionState}`} />
+                  <span className="connection-label">{connectionState}</span>
+                </span>
+                <CloudUsageChip />
+                {cloudStatus && (
+                  <span className="connection-status" title={
+                    cloudStatus.available && cloudStatus.key_valid
+                      ? `Cloud: ${cloudStatus.model} (connected)` 
+                      : cloudStatus.error || 'Cloud unavailable'
+                  }>
+                    <span className={`connection-dot ${
+                      cloudStatus.available && cloudStatus.key_valid ? 'connection-dot-connected' : 'connection-dot-error'
+                    }`} />
+                    <span className="connection-label">cloud</span>
+                  </span>
                 )}
               </div>
-              <button
-                type="button"
-                className="topbar-btn"
-                onClick={() => setInspectorOpen(!inspectorOpen)}
-                title="Toggle inspector"
-              >
-                {inspectorOpen ? '✕' : '☰'}
-              </button>
-              <button
-                type="button"
-                className="topbar-btn"
-                onClick={() => handleToggleMode('full')}
-                title="Full workspace"
-              >
-                ⛶
-              </button>
-              <span className={`connection-status`}>
-                <span className={`connection-dot connection-dot-${connectionState}`} />
-                <span className="connection-label">{connectionState}</span>
-              </span>
-              <CloudUsageChip />
-              {cloudStatus && (
-                <span className="connection-status" title={
-                  cloudStatus.available && cloudStatus.key_valid
-                    ? `Cloud: ${cloudStatus.model} (connected)` 
-                    : cloudStatus.error || 'Cloud unavailable'
-                }>
-                  <span className={`connection-dot ${
-                    cloudStatus.available && cloudStatus.key_valid ? 'connection-dot-connected' : 'connection-dot-error'
-                  }`} />
-                  <span className="connection-label">cloud</span>
-                </span>
-              )}
-            </div>
-          )}
-        </header>
+            )}
+          </header>
+        )}
         {operatorNote ? <p className="operator-note">ⓘ {operatorNote}</p> : null}
         <div className="messages-container" ref={messagesContainerRef}>
           <div className="messages">

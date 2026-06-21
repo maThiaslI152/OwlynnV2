@@ -14,6 +14,13 @@ audience: agent
 
 Project status tracker. Last updated: 2026-06-20 — Eval harness race conditions fixed; short file context injection threshold lowered; context truncation fixed; file formatting perfectly scoring.
 
+## Recent Changes (2026-06-21)
+
+| Change | Impact | Doc |
+|--------|--------|-----|
+| **Extension Cursor Hardening** | Replaced simple `.click()` with full pointer/mouse event synthesis to support modern frameworks (React/Vue). Added `hover` action to trigger tooltips without clicking. | [`docs/changes/extension-cursor-and-batching.md`](changes/extension-cursor-and-batching.md) |
+| **Batch Selection & Full DOM** | Agent can now simultaneously interact with multiple elements (e.g. quiz radio buttons) by sending an `element_ids` array. Added `read_full_dom_tree` to fetch the complete DOM (with text nodes) for adjacent reading context. | [`docs/changes/extension-cursor-and-batching.md`](changes/extension-cursor-and-batching.md) |
+
 ## Recent Changes (2026-06-20)
 
 | Change | Impact | Doc |

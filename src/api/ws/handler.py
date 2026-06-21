@@ -12,6 +12,11 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 router = APIRouter()
 
+from src.agent.routing.router import generate_chat_title_router_llm
+from src.config.settings import get_project_workspace, normalize_project_id
+from src.tools.notebook_libs import parse_chart_artifact
+from src.tools.workspace_context import set_active_project_for_run, reset_active_project
+from src.config.audit_log import set_thread_id, audit_info
 import json
 import asyncio
 import os
@@ -32,7 +37,7 @@ from src.api.shared import (
     logger,
 )
 
-from src.agent.nodes.complex_utils.formatter import (
+from src.agent.core.complex_utils.formatter import (
     _strip_dsml_blocks,
     _strip_thinking_tags,
     _TOOL_ONLY_PLACEHOLDERS,
@@ -40,316 +45,23 @@ from src.agent.nodes.complex_utils.formatter import (
 from src.memory.project import project_manager
 
 
-def _sanitize_assistant_text(text: str) -> str:
-    """Strip DSML pseudo-tool markup before sending assistant text to the UI."""
-    return _strip_dsml_blocks(_strip_thinking_tags(text or ""))
-
-
-def _is_tool_preamble_text(text: str) -> bool:
-    """True when assistant text is only a short tool-running placeholder."""
-    cleaned = _sanitize_assistant_text(text).strip()
-    if not cleaned:
-        return True
-    if cleaned in _TOOL_ONLY_PLACEHOLDERS.values():
-        return True
-    for placeholder in _TOOL_ONLY_PLACEHOLDERS.values():
-        # Strip markdown bold markers for comparison
-        plain = placeholder.replace("**", "")
-        if cleaned == plain or cleaned.startswith(plain.rstrip("…")):
-            return True
-    if cleaned.lower().startswith("reading workspace file"):
-        return True
-    if cleaned.lower().startswith("running **") and cleaned.endswith("…"):
-        return True
-    return False
-
-
-def _last_ai_message(messages: list) -> AIMessage | None:
-    """Pick the newest assistant message from a node output batch."""
-    for msg in reversed(messages or []):
-        if isinstance(msg, AIMessage):
-            return msg
-    return None
-
-
-from src.agent.nodes.router import generate_chat_title_router_llm
-from src.config.settings import get_project_workspace, normalize_project_id
-from src.tools.notebook_libs import parse_chart_artifact
-from src.tools.workspace_context import set_active_project_for_run, reset_active_project
-from src.config.audit_log import set_thread_id, audit_info
-
-
-def _files_for_message_content(files: list, base_dir: str) -> list:
-    """Expand workspace_ref vision files into inline attachments for multimodal intake."""
-    import base64
-    import urllib.parse
-
-    from src.api.attachment_intake import infer_mime_from_name, is_vision_filename
-
-    enriched: list = []
-    abs_base = os.path.abspath(base_dir)
-    for f in files or []:
-        if f.get("type") != "workspace_ref":
-            enriched.append(f)
-            continue
-        rel_path = f.get("path") or f.get("name") or ""
-        safe_name = urllib.parse.unquote(str(rel_path)).lstrip("/")
-        if not safe_name or not is_vision_filename(safe_name):
-            enriched.append(f)
-            continue
-        filepath = os.path.abspath(os.path.join(abs_base, safe_name))
-        if not filepath.startswith(abs_base) or not os.path.isfile(filepath):
-            enriched.append(f)
-            continue
-        try:
-            with open(filepath, "rb") as fp:
-                raw_bytes = fp.read()
-            mime = infer_mime_from_name(safe_name)
-            enriched.append(
-                {
-                    "name": os.path.basename(safe_name),
-                    "type": mime,
-                    "data": base64.b64encode(raw_bytes).decode("ascii"),
-                }
-            )
-        except OSError as exc:
-            logger.warning("Failed to load workspace vision ref %s: %s", safe_name, exc)
-            enriched.append(f)
-    return enriched
-
-
-def serialize_interrupt_item(item):
-    """Convert LangGraph interrupt payload items into JSON-safe values."""
-    value = getattr(item, "value", item)
-    if isinstance(value, (str, int, float, bool)) or value is None:
-        return value
-    if isinstance(value, dict):
-        interrupt_type = value.get("type", "")
-
-        if interrupt_type == "security_approval_required":
-            sensitive_calls = value.get("sensitive_tool_calls") or []
-            primary_call = (
-                sensitive_calls[0]
-                if isinstance(sensitive_calls, list) and sensitive_calls
-                else {}
-            )
-            tool_name = str(primary_call.get("name", "unknown"))
-            tool_args = _stringify_tool_input(primary_call.get("args"))
-            enriched = dict(value)
-            enriched["risk_label"] = str(
-                primary_call.get("risk_label") or "sensitive_tool_execution"
-            )
-            enriched["risk_confidence"] = float(
-                primary_call.get("risk_confidence", 0.95)
-            )
-            if primary_call.get("risk_rationale"):
-                enriched["risk_rationale"] = str(primary_call.get("risk_rationale"))
-            if primary_call.get("remediation_hint"):
-                enriched["remediation_hint"] = str(primary_call.get("remediation_hint"))
-            enriched["tool_name"] = tool_name
-            enriched["tool_args"] = tool_args
-            enriched["sensitive_count"] = (
-                len(sensitive_calls) if isinstance(sensitive_calls, list) else 0
-            )
-            return enriched
-
-        if interrupt_type == "plan_review_required":
-            # Pass through with enriched context fields for frontend rendering
-            enriched = dict(value)
-            return enriched
-
-        if interrupt_type == "scope_clarification_required":
-            enriched = dict(value)
-            return enriched
-
-        if interrupt_type == "ask_user":
-            # Pass through; may already have enriched fields from router
-            return dict(value)
-
-        return value
-    if isinstance(value, list):
-        return value
-    return str(value)
-
-
-def _stringify_tool_input(value) -> str | None:
-    """Convert tool args payload into a compact UI-safe string."""
-    if value is None:
-        return None
-    if isinstance(value, str):
-        return value
-    try:
-        return json.dumps(value, ensure_ascii=False)
-    except Exception as e:
-        logger.warning("Error suppressed: %s", e)
-        return str(value)
-
-
-def _tool_status_from_content(content: str) -> str:
-    """Best-effort status detection for tool outputs."""
-    if not isinstance(content, str):
-        return "success"
-    stripped = content.strip()
-    lowered = stripped.lower()
-    if lowered.startswith("error:") or lowered.startswith("error "):
-        return "error"
-    if stripped.startswith("Error:") or stripped.startswith("Error "):
-        return "error"
-    if lowered.startswith("execution error") or lowered.startswith("sandbox error"):
-        return "error"
-    if "traceback" in lowered or "permission denied" in lowered:
-        return "error"
-    if "command not found" in lowered:
-        return "error"
-    return "success"
-
-
-def _tool_risk_metadata(tool_name: str, tool_input: str | None) -> dict | None:
-    """Best-effort risk metadata for pre-execution tool visibility."""
-    hay = f"{tool_name} {tool_input or ''}"
-    if _TOOL_DESTRUCTIVE_RE.search(hay) or tool_name == "delete_workspace_file":
-        return {
-            "risk_label": "destructive_action",
-            "risk_confidence": 0.98,
-            "risk_rationale": "Delete/drop semantics detected before tool execution.",
-            "remediation_hint": "Confirm target path and snapshot before continuing.",
-        }
-    if _TOOL_NETWORK_RE.search(hay):
-        return {
-            "risk_label": "network_exfiltration",
-            "risk_confidence": 0.9,
-            "risk_rationale": "Outbound network indicators detected in tool arguments.",
-            "remediation_hint": "Verify destination allowlist and redact sensitive data.",
-        }
-    if _TOOL_PRIV_RE.search(hay):
-        return {
-            "risk_label": "privilege_escalation",
-            "risk_confidence": 0.92,
-            "risk_rationale": "Privilege-elevation markers detected in tool arguments.",
-            "remediation_hint": "Run with least privilege and minimal scope.",
-        }
-    return None
-
-
-class GraphSession:
-    """Manages the graph execution for a specific thread in a background task."""
-
-    def __init__(self, thread_id, agent, sessions_registry):
-        self.thread_id = thread_id
-        self.agent = agent
-        self.sessions_registry = sessions_registry
-        self.listeners = set()  # asyncio.Queues
-        self.task = None
-        self.event_buffer = []  # Store all events for the current turn
-        self.is_running = False
-        self.last_project_id = "default"
-        self._run_queue = asyncio.Queue()
-        self._queue_processor = asyncio.create_task(self._process_queue())
-
-    async def _process_queue(self):
-        while True:
-            try:
-                input_data, config, correlation_id = await self._run_queue.get()
-                self.is_running = True
-                self.event_buffer = []
-                self.task = asyncio.current_task()
-                try:
-                    await self._execute(input_data, config, correlation_id)
-                except asyncio.CancelledError:
-                    pass
-                except Exception as e:
-                    logger.error("Error in queued run: %s", e)
-                finally:
-                    self.is_running = False
-                    self._run_queue.task_done()
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.error("Error in queue processor: %s", e)
-
-    async def add_listener(self):
-        q = asyncio.Queue()
-        self.listeners.add(q)
-        # Replay all events of the current turn to catch up
-        for event in self.event_buffer:
-            await q.put(event)
-        return q
-
-    def remove_listener(self, q: asyncio.Queue):
-        self.listeners.discard(q)
-
-    def is_active(self):
-        return self.is_running or len(self.listeners) > 0 or not self._run_queue.empty()
-
-    async def start_run(self, input_data, config, correlation_id=None):
-        if isinstance(input_data, dict):
-            pid = input_data.get("project_id")
-            if pid is not None:
-                self.last_project_id = normalize_project_id(pid)
-        await self._run_queue.put((input_data, config, correlation_id))
-
-    async def _execute(self, input_data, config, correlation_id=None):
-        # Propagate thread_id into audit context for this graph run
-        set_thread_id(self.thread_id)
-
-        from src.agent.local_llm_scheduler import LocalLLMScheduler
-
-        LocalLLMScheduler.graph_run_started()
-        token = set_active_project_for_run(self.last_project_id)
-        try:
-            # Initial status
-            start_msg = {"type": "status", "content": "reasoning"}
-            self.event_buffer.append((start_msg, correlation_id))
-            for q in list(self.listeners):
-                await q.put((start_msg, correlation_id))
-
-            async for event in self.agent.astream_events(
-                input_data, config=config, version="v2"
-            ):
-                self.event_buffer.append((event, correlation_id))
-                if len(self.event_buffer) > 2000:
-                    self.event_buffer.pop(0)
-                # Broadcast
-                for q in list(self.listeners):
-                    await q.put((event, correlation_id))
-        except asyncio.CancelledError:
-            logger.info("GraphExecution cancelled for thread %s", self.thread_id)
-            err_msg = {"type": "status", "content": "stopped"}
-            self.event_buffer.append((err_msg, correlation_id))
-            for q in list(self.listeners):
-                q.put_nowait((err_msg, correlation_id))
-            raise
-        except Exception as e:
-            logger.warning("Error suppressed: %s", e)
-            import traceback
-
-            traceback.print_exc()
-            err_msg = {"type": "error", "content": f"Graph Execution Error: {str(e)}"}
-            self.event_buffer.append((err_msg, correlation_id))
-            for q in list(self.listeners):
-                await q.put((err_msg, correlation_id))
-        finally:
-            LocalLLMScheduler.graph_run_finished()
-            reset_active_project(token)
-            self.is_running = False
-            # Final status update
-            done_msg = {"type": "status", "content": "idle"}
-            logger.debug(
-                "GraphSession._execute for thread %s FINISHED. Putting done_msg.",
-                self.thread_id,
-            )
-            self.event_buffer.append((done_msg, correlation_id))
-            for q in list(self.listeners):
-                q.put_nowait((done_msg, correlation_id))
-
-            # If no one is listening anymore, remove from registry
-            if not self.listeners and self.thread_id in self.sessions_registry:
-                del self.sessions_registry[self.thread_id]
+from src.api.controllers.ws_helpers import (
+    _sanitize_assistant_text,
+    _is_tool_preamble_text,
+    _last_ai_message,
+    _files_for_message_content,
+    serialize_interrupt_item,
+    _stringify_tool_input,
+    _tool_status_from_content,
+    _tool_risk_metadata,
+)
+from src.api.controllers.graph_session import GraphSession
 
 
 @router.websocket("/ws/chat/{thread_id}")
 async def websocket_endpoint(websocket: WebSocket, thread_id: str):
     await websocket.accept()
+    websocket.scope["thread_id"] = thread_id
     connected_websockets.add(websocket)  # Track connection
 
     from src.config.config_loader import config as app_config
@@ -400,6 +112,16 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                 async def _send_ws(payload):
                     if correlation_id and isinstance(payload, dict):
                         payload["correlation_id"] = correlation_id
+
+                    try:
+                        from src.api.ws.schemas import ServerEventAdapter
+
+                        ServerEventAdapter.validate_python(payload)
+                    except Exception as e:
+                        logger.error(
+                            f"WS Payload Drift Detected (Server -> Client): {e} | Payload: {payload}"
+                        )
+
                     await websocket.send_json(payload)
 
                 # Handle standard LangGraph events vs our custom wrapped events
@@ -884,7 +606,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                                 }
                                             )
                                     elif raw_content.strip():
-                                        from src.agent.nodes.simple import (
+                                        from src.agent.core.simple import (
                                             _clean_response,
                                         )
 
@@ -1019,8 +741,20 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
             data = await websocket.receive_text()
             try:
                 payload = json.loads(data)
+
+                # Validate WS Payload Drift
+                from src.api.ws.schemas import ClientEventAdapter
+
+                ClientEventAdapter.validate_python(payload)
+
             except json.JSONDecodeError:
                 continue
+            except Exception as e:
+                logger.error(
+                    f"WS Payload Drift Detected (Client -> Server): {e} | Payload: {payload}"
+                )
+                # We log but continue, dropping the invalid payload or attempting to process it anyway
+                # In strict mode, we might `continue` here to drop it, but we'll let it pass for now and rely on backend handlers to fail safely.
 
             # Handle explicit STOP command to cancel executing GraphSession
             if payload.get("type") == "stop":
@@ -1189,3 +923,4 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
         # But we should stop the forwarder.
         forwarder_task.cancel()
         # The forwarder cleanup will check if it should delete the session.
+        await websocket.close(code=1000)

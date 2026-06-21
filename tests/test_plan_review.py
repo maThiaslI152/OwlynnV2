@@ -43,13 +43,13 @@ class TestPlanReviewPolicy:
 
 class TestGraphRouting:
     def test_llm_next_step_no_tools(self):
-        from src.agent.graph import llm_next_step
+        from src.agent.core.graph import llm_next_step
 
         state = {"pending_tool_calls": False, "messages": []}
         assert llm_next_step(state) == "coherence_check"
 
     def test_llm_next_step_with_safe_tools(self):
-        from src.agent.graph import llm_next_step
+        from src.agent.core.graph import llm_next_step
         from langchain_core.messages import AIMessage
 
         state = {
@@ -72,7 +72,7 @@ class TestGraphRouting:
         assert result in ("security_proxy", "plan_review")
 
     def test_route_decision_complex(self):
-        from src.agent.graph import route_decision
+        from src.agent.core.graph import route_decision
 
         assert route_decision({"route": "complex-cloud"}) == "scope_clarify"
         assert route_decision({"route": "simple"}) == "simple"

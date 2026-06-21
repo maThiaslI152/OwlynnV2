@@ -63,7 +63,7 @@ class TestRouterThroughput:
     )
     async def test_router_latency_by_input_size(self, input_text: str):
         """p50/p95/p99 latency for router_node at different input lengths."""
-        from src.agent.nodes.router import router_node
+        from src.agent.routing.router import router_node
         from src.agent.llm import LLMPool
 
         mock_small = make_mock_llm(
@@ -74,8 +74,10 @@ class TestRouterThroughput:
         profile = ProfileBuilder().build()
 
         with (
-            patch("src.agent.nodes.router.get_profile", return_value=profile),
-            patch("src.agent.nodes.router._check_cloud_available", return_value=False),
+            patch("src.agent.routing.router.get_profile", return_value=profile),
+            patch(
+                "src.agent.routing.router._check_cloud_available", return_value=False
+            ),
         ):
             state = make_router_state(text=input_text)
 
@@ -107,7 +109,7 @@ class TestRouterThroughput:
     @pytest.mark.asyncio
     async def test_router_batch_throughput(self):
         """Throughput: invoke router_node 50x with varied inputs."""
-        from src.agent.nodes.router import router_node
+        from src.agent.routing.router import router_node
 
         mock_small = make_mock_llm(
             delay_ms=15,
@@ -119,8 +121,10 @@ class TestRouterThroughput:
         states = [make_router_state(text=t) for t in ROUTER_INPUTS * 5]
 
         with (
-            patch("src.agent.nodes.router.get_profile", return_value=profile),
-            patch("src.agent.nodes.router._check_cloud_available", return_value=False),
+            patch("src.agent.routing.router.get_profile", return_value=profile),
+            patch(
+                "src.agent.routing.router._check_cloud_available", return_value=False
+            ),
         ):
             # Warmup
             for _ in range(BENCH_WARMUP):
@@ -165,7 +169,7 @@ class TestTokenBudgetAccuracy:
     )
     def test_budget_within_route_cap(self, route: str, budget_max: int):
         """Token budget never exceeds the route's max."""
-        from src.agent.nodes.router import estimate_token_budget
+        from src.agent.routing.router import estimate_token_budget
 
         for text in ROUTER_INPUTS + LARGE_INPUTS:
             budget = estimate_token_budget(text, route)
@@ -176,7 +180,7 @@ class TestTokenBudgetAccuracy:
 
     def test_budget_scale_with_input_length(self):
         """Longer inputs produce larger budgets (up to the cap)."""
-        from src.agent.nodes.router import estimate_token_budget
+        from src.agent.routing.router import estimate_token_budget
 
         short_budget = estimate_token_budget("hi", "complex-default")
         long_budget = estimate_token_budget("x" * 2000, "complex-default")
@@ -186,7 +190,7 @@ class TestTokenBudgetAccuracy:
 
     def test_budget_floor_512_for_complex(self):
         """Complex routes never drop below 512 token budget."""
-        from src.agent.nodes.router import estimate_token_budget
+        from src.agent.routing.router import estimate_token_budget
 
         for route in [
             "complex-default",
@@ -212,7 +216,7 @@ class TestHITLInterceptRate:
     @pytest.mark.parametrize("confidence_threshold", [0.3, 0.5, 0.7, 0.9])
     def test_hitl_rate_by_threshold(self, confidence_threshold: float):
         """HITL should trigger when confidence < threshold and HITL enabled."""
-        from src.agent.nodes.router import parse_routing
+        from src.agent.routing.router import parse_routing
 
         # Simulate LLM responses at different confidence levels
         confidences = [0.1, 0.2, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95]
@@ -296,7 +300,7 @@ class TestRouterConcurrency:
     @pytest.mark.parametrize("concurrency", [1, 2, 4, 8])
     async def test_router_concurrent_throughput(self, concurrency: int):
         """Throughput at different concurrency levels."""
-        from src.agent.nodes.router import router_node
+        from src.agent.routing.router import router_node
 
         mock_small = make_mock_llm(
             delay_ms=15,
@@ -311,8 +315,10 @@ class TestRouterConcurrency:
         ]
 
         with (
-            patch("src.agent.nodes.router.get_profile", return_value=profile),
-            patch("src.agent.nodes.router._check_cloud_available", return_value=False),
+            patch("src.agent.routing.router.get_profile", return_value=profile),
+            patch(
+                "src.agent.routing.router._check_cloud_available", return_value=False
+            ),
         ):
             tracker = await time_concurrent(
                 router_node,

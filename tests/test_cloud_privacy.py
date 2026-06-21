@@ -1,6 +1,6 @@
 """Tests for cloud privacy helpers."""
 
-from src.agent.cloud_privacy import cloud_user_fingerprint
+from src.agent.cloud.cloud_privacy import cloud_user_fingerprint
 
 
 def test_cloud_user_fingerprint_opaque():

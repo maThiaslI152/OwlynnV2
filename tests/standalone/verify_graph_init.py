@@ -9,7 +9,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".
 async def main():
     print("Initializing agent...")
     try:
-        from src.agent.graph import init_agent
+        from src.agent.core.graph import init_agent
 
         agent = await init_agent()
         print("✅ Graph initialized successfully!")

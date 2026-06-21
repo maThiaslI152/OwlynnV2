@@ -11,13 +11,13 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 sys.modules.setdefault("mem0", MagicMock())
 
-from src.agent.nodes.complex_utils import vision_proxy
-from src.agent.nodes.complex_utils.vision_model_manager import VisionModelManager
-from src.agent.nodes.complex_utils.vision_schema import (
+from src.agent.core.complex_utils import vision_proxy
+from src.agent.core.complex_utils.vision_model_manager import VisionModelManager
+from src.agent.core.complex_utils.vision_schema import (
     format_vision_for_cloud,
     parse_vision_payload,
 )
-from src.agent.nodes.router import _resolve_complex_route
+from src.agent.routing.router import _resolve_complex_route
 
 OCR_JSON = json.dumps(
     {
@@ -52,7 +52,7 @@ def mock_vlm():
 async def test_vision_pipeline_json_to_cloud_block(mock_vlm):
     """VLM JSON → formatted block; no image_url in output."""
     with patch(
-        "src.agent.nodes.complex_utils.vision_proxy.get_vision_llm",
+        "src.agent.core.complex_utils.vision_proxy.get_vision_llm",
         AsyncMock(return_value=mock_vlm),
     ):
         messages = [
@@ -78,7 +78,7 @@ async def test_vision_pipeline_json_to_cloud_block(mock_vlm):
 @pytest.mark.asyncio
 async def test_transcribe_crop_and_cache(mock_vlm):
     with patch(
-        "src.agent.nodes.complex_utils.vision_proxy.get_vision_llm",
+        "src.agent.core.complex_utils.vision_proxy.get_vision_llm",
         AsyncMock(return_value=mock_vlm),
     ):
         blob = b"\x89PNG\x01smoke"
@@ -99,7 +99,7 @@ async def test_vlm_failure_preserves_image_for_fallback():
         return Fail()
 
     with patch(
-        "src.agent.nodes.complex_utils.vision_proxy.get_vision_llm",
+        "src.agent.core.complex_utils.vision_proxy.get_vision_llm",
         broken_llm,
     ):
         messages = [

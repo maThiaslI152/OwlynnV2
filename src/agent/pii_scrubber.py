@@ -8,7 +8,7 @@ patterns from ``anonymization`` but replaces values with redaction tokens
 
 from __future__ import annotations
 
-from src.agent.anonymization import anonymize
+from src.agent.cloud.anonymization import anonymize
 from src.memory.user_profile import get_profile
 
 

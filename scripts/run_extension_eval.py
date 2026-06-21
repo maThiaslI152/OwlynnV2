@@ -295,6 +295,20 @@ TEST_CASES: list[dict[str, Any]] = [
         "min_response_chars": 8,
         "requires_extension": True,
     },
+    {
+        "id": "EX3.4",
+        "track": "Track 3 — Interactive DOM",
+        "topic": "Hover Element",
+        "prompt": "Hover over the hidden menu to reveal options on my current browser page.",
+        "expected_tool": "active_browser_action",
+        "alternative_tools": ["playwright_browser_tabs"],
+        "expected_marker": None,
+        "mock_action": "browser_action",
+        "mock_fixture": _make_action_payload,
+        "timeout_s": COMPLEX_TIMEOUT_S,
+        "min_response_chars": 8,
+        "requires_extension": True,
+    },
     # ── Track 4: Deep Background Scraping ────────────────────────────────────
     {
         "id": "EX4.1",

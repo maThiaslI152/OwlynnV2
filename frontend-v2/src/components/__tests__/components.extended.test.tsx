@@ -16,6 +16,7 @@ vi.mock('../../lib/electronBridge', () => ({
   electronBridge: {
     setSafeMode: mockSetSafeMode,
   },
+  electronAvailable: vi.fn().mockReturnValue(true)
 }))
 
 

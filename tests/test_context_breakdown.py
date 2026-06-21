@@ -2,7 +2,7 @@
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
-from src.agent.nodes.complex_utils.context_breakdown import (
+from src.agent.core.complex_utils.context_breakdown import (
     enrich_token_usage_with_breakdown,
     estimate_context_breakdown,
 )

@@ -22,7 +22,7 @@
     
     function isInteractive(el) {
         const tagName = el.tagName.toLowerCase();
-        const interactiveTags = ['a', 'button', 'input', 'select', 'textarea'];
+        const interactiveTags = ['a', 'button', 'input', 'select', 'textarea', 'option'];
         if (interactiveTags.includes(tagName)) return true;
         
         if (el.hasAttribute('onclick')) return true;
@@ -35,14 +35,38 @@
     }
     
     function extractText(el) {
-        // Simple text extraction for the label
-        let text = el.innerText || el.value || el.getAttribute('placeholder') || el.getAttribute('aria-label') || '';
-        return text.trim().replace(/\n/g, ' ').substring(0, 50);
+        let extra = '';
+        const tagName = el.tagName.toLowerCase();
+        if (tagName === 'input' && (el.type === 'checkbox' || el.type === 'radio')) {
+            extra = el.checked ? ' [checked]' : ' [unchecked]';
+        } else if (tagName === 'select') {
+            const selectedOption = el.options[el.selectedIndex];
+            extra = selectedOption ? ` [selected: ${selectedOption.text}]` : '';
+        } else if (tagName === 'option') {
+            extra = el.selected ? ' [selected]' : '';
+        }
+        
+        let text = '';
+        if (tagName === 'input' || tagName === 'textarea') {
+            text = el.placeholder || el.name || el.id;
+            if (el.value) text += ` (Value: ${el.value})`;
+        } else if (tagName === 'select') {
+            text = el.name || el.id || '';
+        } else {
+            text = el.innerText || el.getAttribute('aria-label') || el.getAttribute('title') || '';
+        }
+        return (text.trim().replace(/\n/g, ' ').substring(0, 50) + extra).trim();
     }
     
     function traverse(node, depth = 0) {
         if (!node) return '';
-        if (node.nodeType === Node.TEXT_NODE) return ''; // We handle text inside elements
+        if (node.nodeType === Node.TEXT_NODE) {
+            if (window.__owlynn_include_text) {
+                const txt = node.textContent.trim().replace(/\n/g, ' ');
+                if (txt.length > 0) return `text: "${txt}"\n`;
+            }
+            return '';
+        }
         if (node.nodeType !== Node.ELEMENT_NODE) return '';
         
         if (!isVisible(node)) return '';

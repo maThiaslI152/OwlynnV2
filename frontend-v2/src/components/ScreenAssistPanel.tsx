@@ -1,5 +1,5 @@
 import { useAppStore } from '../state/useAppStore'
-import { electronBridge as defaultBridge } from '../lib/electronBridge'
+import { electronBridge as defaultBridge, electronAvailable } from '../lib/electronBridge'
 
 interface ScreenAssistPanelProps {
   bridge?: {
@@ -16,6 +16,14 @@ export function ScreenAssistPanel({ bridge }: ScreenAssistPanelProps) {
   const setOperatorNote = useAppStore((s) => s.setOperatorNote)
   const activeBridge = bridge ?? defaultBridge
   const previewSrc = screenAssist.previewPath ? activeBridge.convertFileSrc(screenAssist.previewPath) : ''
+
+  if (!electronAvailable()) {
+    return (
+      <div className="panel-disabled-overlay" style={{ padding: '20px', textAlign: 'center', color: '#888' }}>
+        <p>⚠️ Desktop App Required for Screen Assist</p>
+      </div>
+    )
+  }
 
   const startPreview = async () => {
     const result = await activeBridge.startScreenPreview(screenAssist.source)

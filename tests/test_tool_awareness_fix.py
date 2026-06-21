@@ -19,7 +19,7 @@ sys.modules["mem0"] = MagicMock()
 import pytest
 from langchain_core.messages import AIMessage
 
-from src.agent.nodes.complex import (
+from src.agent.core.complex import (
     _looks_like_prose_tool_stall,
     COMPLEX_TOOL_GUIDANCE_WEB,
 )

@@ -16,7 +16,7 @@ sys.modules["mem0"] = MagicMock()
 
 from langgraph.checkpoint.memory import MemorySaver
 
-from src.agent.graph import build_graph, coherence_retry_gate
+from src.agent.core.graph import build_graph, coherence_retry_gate
 
 
 class TestGraphStructure:

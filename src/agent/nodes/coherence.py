@@ -13,7 +13,7 @@ from typing import Dict, Any
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from src.agent.llm import get_small_llm
-from src.agent.state import AgentState
+from src.agent.core.state import AgentState
 from src.config.log_middleware import log_node
 from src.config.audit_log import audit_warn, audit_info
 

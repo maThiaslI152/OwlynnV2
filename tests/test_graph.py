@@ -8,7 +8,7 @@ sys.modules["mem0"] = MagicMock()
 import pytest
 from langgraph.checkpoint.memory import MemorySaver
 
-from src.agent.graph import build_graph, route_decision
+from src.agent.core.graph import build_graph, route_decision
 
 
 def test_build_graph_compiles_with_memory_saver():

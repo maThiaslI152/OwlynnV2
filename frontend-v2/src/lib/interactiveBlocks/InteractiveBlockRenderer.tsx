@@ -1,9 +1,8 @@
-import ReactMarkdown from 'react-markdown'
+import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize from 'rehype-sanitize'
 import type { Options } from 'rehype-sanitize'
-import type { ComponentType } from 'react'
 import { InteractiveQuiz } from './InteractiveQuiz'
 import { InteractiveSteps } from './InteractiveSteps'
 import { InteractiveCallout } from './InteractiveCallout'
@@ -97,7 +96,7 @@ export interface MarkdownRenderProps {
   content: string
   projectId: string
   markdownSchema: Options
-  markdownComponents: ComponentType<any>
+  markdownComponents: Components
 }
 
 export function renderMarkdownSegment(

@@ -7,7 +7,7 @@ sys.modules["mem0"] = MagicMock()
 
 import pytest
 from src.config.config_loader import config
-from src.agent.graph import build_graph
+from src.agent.core.graph import build_graph
 from langgraph.checkpoint.memory import MemorySaver
 
 

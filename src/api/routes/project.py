@@ -3,7 +3,7 @@ from fastapi import APIRouter
 router = APIRouter()
 from fastapi import Response
 from fastapi import HTTPException
-from src.agent.nodes.router import generate_chat_title_router_llm
+from src.agent.routing.router import generate_chat_title_router_llm
 import logging
 
 logger = logging.getLogger(__name__)

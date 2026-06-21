@@ -201,6 +201,10 @@ export type ServerEvent =
   | CloudBudgetWarningEvent
   | ContextSummarizedEvent
   | MemoryUpdatedEvent
+  | FileStatusEvent
+  | BrowserPageContextEvent
+  | CoherenceRetryStartedEvent
+  | CoherenceRetryCompletedEvent
 
 export interface RouterInfoEvent {
   type: 'router_info'
@@ -249,4 +253,31 @@ export interface ContextSummarizedEvent {
 export interface MemoryUpdatedEvent {
   type: 'memory_updated'
   thread_id?: string
+}
+
+export interface FileStatusEvent {
+  type: 'file_status'
+  name?: string
+  status?: string
+  chunks?: number
+  error?: string
+}
+
+export interface BrowserPageContextEvent {
+  type: 'browser.page_context'
+  url?: string
+  title?: string
+  text?: string
+  selection?: string
+  intent?: string
+}
+
+export interface CoherenceRetryStartedEvent {
+  type: 'coherence_retry_started'
+  attempt?: number
+  original_confidence?: number
+}
+
+export interface CoherenceRetryCompletedEvent {
+  type: 'coherence_retry_completed'
 }

@@ -8,8 +8,8 @@ sys.modules["mem0"] = MagicMock()
 import pytest
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 
-from src.agent.nodes.router import router_node
-from src.agent.state import AgentState
+from src.agent.routing.router import router_node
+from src.agent.core.state import AgentState
 
 
 @pytest.mark.anyio
@@ -106,7 +106,7 @@ async def test_web_query_routes_cloud_when_available():
         "messages": [HumanMessage(content="Search the web for Python tutorials")],
         "web_search_enabled": True,
     }
-    with patch("src.agent.nodes.router._check_cloud_available", return_value=True):
+    with patch("src.agent.routing.router._check_cloud_available", return_value=True):
         out = await router_node(state)
     assert out["route"] == "complex-cloud"
     assert "web_search" in out.get("selected_toolboxes", [])
@@ -148,9 +148,9 @@ async def test_image_attachment_routes_to_vision():
         "web_search_enabled": True,
     }
     with (
-        patch("src.agent.nodes.router._check_cloud_available", return_value=True),
+        patch("src.agent.routing.router._check_cloud_available", return_value=True),
         patch(
-            "src.agent.nodes.complex_utils.lm_studio_vision.ensure_vision_vlm_loaded",
+            "src.agent.core.complex_utils.lm_studio_vision.ensure_vision_vlm_loaded",
             new_callable=AsyncMock,
             return_value=True,
         ),
@@ -179,9 +179,9 @@ async def test_image_only_attachment_skips_hitl():
         "web_search_enabled": True,
     }
     with (
-        patch("src.agent.nodes.router._check_cloud_available", return_value=True),
+        patch("src.agent.routing.router._check_cloud_available", return_value=True),
         patch(
-            "src.agent.nodes.complex_utils.lm_studio_vision.ensure_vision_vlm_loaded",
+            "src.agent.core.complex_utils.lm_studio_vision.ensure_vision_vlm_loaded",
             new_callable=AsyncMock,
             return_value=True,
         ),
@@ -215,9 +215,9 @@ async def test_image_with_frontier_routes_cloud_for_proxy():
         "web_search_enabled": True,
     }
     with (
-        patch("src.agent.nodes.router._check_cloud_available", return_value=True),
+        patch("src.agent.routing.router._check_cloud_available", return_value=True),
         patch(
-            "src.agent.nodes.complex_utils.lm_studio_vision.ensure_vision_vlm_loaded",
+            "src.agent.core.complex_utils.lm_studio_vision.ensure_vision_vlm_loaded",
             new_callable=AsyncMock,
             return_value=True,
         ),
@@ -253,11 +253,11 @@ async def test_frontier_quality_request_routes_cloud():
     )
     with (
         patch(
-            "src.agent.nodes.router.get_small_llm",
+            "src.agent.routing.router.get_small_llm",
             new_callable=AsyncMock,
             return_value=mock_llm,
         ),
-        patch("src.agent.nodes.router._check_cloud_available", return_value=True),
+        patch("src.agent.routing.router._check_cloud_available", return_value=True),
     ):
         out = await router_node(state)
     assert out["route"] == "complex-cloud"
@@ -310,7 +310,7 @@ async def test_long_context_boundary_routes_cloud_not_default():
         )
     )
     with patch(
-        "src.agent.nodes.router.get_small_llm",
+        "src.agent.routing.router.get_small_llm",
         new_callable=AsyncMock,
         return_value=mock_llm,
     ):
@@ -344,7 +344,7 @@ async def test_tool_history_data_viz_followup_uses_data_viz_toolbox():
         ],
         "web_search_enabled": True,
     }
-    with patch("src.agent.nodes.router._check_cloud_available", return_value=True):
+    with patch("src.agent.routing.router._check_cloud_available", return_value=True):
         out = await router_node(state)
     assert out["route"].startswith("complex")
     assert out["selected_toolboxes"] == ["data_viz"]

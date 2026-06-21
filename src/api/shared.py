@@ -16,7 +16,7 @@ _session_usage = {
 
 async def emit_cloud_usage_events(send_ws, *, turn_usage=None, model_used=None):
     """Emit cloud_usage and any newly crossed budget warnings over WebSocket."""
-    from src.agent.cloud_cost_tracker import (
+    from src.agent.cloud.cloud_cost_tracker import (
         build_cloud_usage_payload,
         get_cost_tracker,
     )
@@ -82,7 +82,7 @@ def serialize_message(msg):
         content_ui = _stringify_lc_message_content(msg.content)
         # Strip DSML/Qwen XML tags from assistant messages
         try:
-            from src.agent.nodes.complex_utils.formatter import (
+            from src.agent.core.complex_utils.formatter import (
                 _strip_dsml_blocks,
                 _strip_thinking_tags,
             )

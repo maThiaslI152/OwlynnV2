@@ -1,8 +1,8 @@
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 from langchain_core.messages import HumanMessage
-from src.agent.nodes.router import router_node
-from src.agent.state import AgentState
+from src.agent.routing.router import router_node
+from src.agent.core.state import AgentState
 
 
 @pytest.mark.anyio
@@ -24,9 +24,9 @@ async def test_vision_route_with_florence_ready():
     }
 
     with (
-        patch("src.agent.nodes.router._check_cloud_available", return_value=True),
+        patch("src.agent.routing.router._check_cloud_available", return_value=True),
         patch(
-            "src.agent.nodes.complex_utils.lm_studio_vision.ensure_vision_vlm_loaded",
+            "src.agent.core.complex_utils.lm_studio_vision.ensure_vision_vlm_loaded",
             new_callable=AsyncMock,
             return_value=True,
         ) as mock_load,
@@ -61,9 +61,9 @@ async def test_vision_route_with_florence_unavailable_falls_back():
     }
 
     with (
-        patch("src.agent.nodes.router._check_cloud_available", return_value=True),
+        patch("src.agent.routing.router._check_cloud_available", return_value=True),
         patch(
-            "src.agent.nodes.complex_utils.lm_studio_vision.ensure_vision_vlm_loaded",
+            "src.agent.core.complex_utils.lm_studio_vision.ensure_vision_vlm_loaded",
             new_callable=AsyncMock,
             return_value=False,
         ) as mock_load,

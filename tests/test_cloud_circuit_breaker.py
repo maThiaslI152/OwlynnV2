@@ -10,7 +10,7 @@ sys.modules["mem0"] = MagicMock()
 
 @pytest.fixture
 def fresh_breaker():
-    from src.agent.cloud_circuit_breaker import (
+    from src.agent.cloud.cloud_circuit_breaker import (
         CloudCircuitBreaker,
         reset_circuit_breaker,
     )
@@ -90,7 +90,7 @@ class TestCloudCircuitBreaker:
         assert fresh_breaker.remaining_cooldown == 0
 
     def test_singleton_is_shared(self):
-        from src.agent.cloud_circuit_breaker import (
+        from src.agent.cloud.cloud_circuit_breaker import (
             get_circuit_breaker,
             reset_circuit_breaker,
         )

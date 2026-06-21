@@ -62,7 +62,7 @@ class TestComplexPerRouteLatency:
     )
     async def test_complex_latency_per_route(self, route: str, model_delay: int):
         """p50/p95/p99 per route with realistic mock delays."""
-        from src.agent.nodes.complex import complex_llm_node
+        from src.agent.core.complex import complex_llm_node
 
         mock_llm = make_mock_llm(
             delay_ms=model_delay,
@@ -78,14 +78,14 @@ class TestComplexPerRouteLatency:
         )
 
         with (
-            patch("src.agent.nodes.complex.get_profile", return_value=profile),
+            patch("src.agent.core.complex.get_profile", return_value=profile),
             patch(
-                "src.agent.nodes.complex.get_medium_llm",
+                "src.agent.core.complex.get_medium_llm",
                 new_callable=AsyncMock,
                 return_value=mock_llm,
             ),
             patch(
-                "src.agent.nodes.complex.get_cloud_llm",
+                "src.agent.core.complex.get_cloud_llm",
                 new_callable=AsyncMock,
                 return_value=mock_llm,
             ),
@@ -129,7 +129,7 @@ class TestFallbackChainCoverage:
     async def test_cloud_fallback_on_unavailable(self):
         """Cloud route falls back to medium-default when CloudUnavailableError raised."""
         from src.agent.llm import CloudUnavailableError
-        from src.agent.nodes.complex import complex_llm_node
+        from src.agent.core.complex import complex_llm_node
 
         mock_medium = make_mock_llm(delay_ms=80, content="Fallback response")
 
@@ -143,12 +143,12 @@ class TestFallbackChainCoverage:
 
         with (
             patch(
-                "src.agent.nodes.complex.get_medium_llm",
+                "src.agent.core.complex.get_medium_llm",
                 new_callable=AsyncMock,
                 return_value=mock_medium,
             ),
-            patch("src.agent.nodes.complex.get_cloud_llm", side_effect=_cloud_raises),
-            patch("src.agent.nodes.complex.get_profile", return_value=profile),
+            patch("src.agent.core.complex.get_cloud_llm", side_effect=_cloud_raises),
+            patch("src.agent.core.complex.get_profile", return_value=profile),
         ):
             tracker = LatencyTracker()
             for _ in range(BENCH_ITERATIONS):
@@ -171,7 +171,7 @@ class TestFallbackChainCoverage:
     @pytest.mark.asyncio
     async def test_medium_default_graceful_error(self):
         """Medium-default route without fallback produces graceful error."""
-        from src.agent.nodes.complex import complex_llm_node
+        from src.agent.core.complex import complex_llm_node
 
         mock_fail = MockDelayLLM(
             delay_ms=0,
@@ -185,16 +185,16 @@ class TestFallbackChainCoverage:
 
         with (
             patch(
-                "src.agent.nodes.complex.get_medium_llm",
+                "src.agent.core.complex.get_medium_llm",
                 new_callable=AsyncMock,
                 return_value=mock_fail,
             ),
             patch(
-                "src.agent.nodes.complex.get_cloud_llm",
+                "src.agent.core.complex.get_cloud_llm",
                 new_callable=AsyncMock,
                 return_value=mock_fail,
             ),
-            patch("src.agent.nodes.complex.get_profile", return_value=profile),
+            patch("src.agent.core.complex.get_profile", return_value=profile),
         ):
             tracker = LatencyTracker()
             for _ in range(BENCH_ITERATIONS):
@@ -230,7 +230,7 @@ class TestContextTrimEfficiency:
 
     def test_trim_reduces_message_count(self):
         """Trim with 20 tool cycles should reduce message count."""
-        from src.agent.nodes.complex import _trim_tool_history
+        from src.agent.core.complex import _trim_tool_history
 
         # Build a conversation with many tool cycles
         messages = [HumanMessage(content="Do something complex")]
@@ -272,7 +272,7 @@ class TestContextTrimEfficiency:
 
     def test_trim_preserves_recent_cycles(self):
         """Recent tool cycles are preserved, old ones compressed."""
-        from src.agent.nodes.complex import _trim_tool_history
+        from src.agent.core.complex import _trim_tool_history
 
         messages = [HumanMessage(content="Task")]
         for i in range(10):
@@ -318,7 +318,7 @@ class TestPostProcessingOverhead:
 
     def test_anonymize_latency(self):
         """Anonymize with typical user data."""
-        from src.agent.anonymization import anonymize
+        from src.agent.cloud.anonymization import anonymize
 
         text = "Hello, my email is user@example.com and my IP is 192.168.1.1"
         context = {"name": "John Doe", "custom_sensitive_terms": []}
@@ -345,7 +345,7 @@ class TestPostProcessingOverhead:
 
     def test_deanonymize_latency(self):
         """Deanonymize with 10 mappings."""
-        from src.agent.anonymization import anonymize, deanonymize
+        from src.agent.cloud.anonymization import anonymize, deanonymize
 
         text = "Hello, my email is user@example.com and my IP is 192.168.1.1"
         _, mapping = anonymize(text, {"name": "John Doe"})
@@ -375,7 +375,7 @@ class TestPostProcessingOverhead:
 
     def test_think_tag_strip_latency(self):
         """_strip_thinking_tags with embedded <think> blocks."""
-        from src.agent.nodes.complex import _strip_thinking_tags
+        from src.agent.core.complex import _strip_thinking_tags
 
         text = (
             "<think>Let me think about this carefully. "
@@ -416,7 +416,7 @@ class TestToolActionThroughput:
     @pytest.mark.asyncio
     async def test_tool_action_throughput(self):
         """Throughput for tool action execution with empty tool env."""
-        from src.agent.nodes.complex import complex_tool_action_node
+        from src.agent.core.complex import complex_tool_action_node
 
         # Build a state where the last message has no tool_calls (fast skip)
         state = {
@@ -464,7 +464,7 @@ class TestGraphE2ELatency:
     async def test_graph_e2e_per_route(self, route: str, model_delay: int):
         """End-to-end graph invocation per route."""
         from langgraph.checkpoint.memory import MemorySaver
-        from src.agent.graph import build_graph
+        from src.agent.core.graph import build_graph
         from langchain_core.messages import HumanMessage
 
         mock_llm = make_mock_llm(
@@ -493,19 +493,19 @@ class TestGraphE2ELatency:
         config = {"configurable": {"thread_id": f"e2e-bench-{route}"}}
 
         with (
-            patch("src.agent.nodes.router.get_profile", return_value=profile),
+            patch("src.agent.routing.router.get_profile", return_value=profile),
             patch(
-                "src.agent.nodes.router._check_cloud_available",
+                "src.agent.routing.router._check_cloud_available",
                 return_value=(route == "complex-cloud"),
             ),
-            patch("src.agent.nodes.complex.get_profile", return_value=profile),
+            patch("src.agent.core.complex.get_profile", return_value=profile),
             patch(
-                "src.agent.nodes.complex.get_medium_llm",
+                "src.agent.core.complex.get_medium_llm",
                 new_callable=AsyncMock,
                 return_value=mock_llm,
             ),
             patch(
-                "src.agent.nodes.complex.get_cloud_llm",
+                "src.agent.core.complex.get_cloud_llm",
                 new_callable=AsyncMock,
                 return_value=mock_llm,
             ),

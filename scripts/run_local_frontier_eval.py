@@ -18,10 +18,20 @@ import argparse
 import asyncio
 import base64
 import json
-import mimetypes
+import logging
+import os
+import random
+import re
+import shutil
+import sys
+import tempfile
 import time
+import mimetypes
 import uuid
 from pathlib import Path
+
+# Add project root to path so we can import src
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from typing import Any
 
 import httpx
@@ -323,7 +333,6 @@ def _is_premature_dsml(text: str) -> bool:
 
 
 def _normalize_response(text: str) -> str:
-    import re
 
     lines = [
         ln
@@ -597,7 +606,7 @@ async def mem0_available() -> bool:
 
 async def check_vision_vlm_available() -> bool:
     """Return True when Qwen3-VL-4B (vision VLM) is loaded (or can be loaded) in LM Studio."""
-    from src.agent.nodes.complex_utils.lm_studio_vision import (
+    from src.agent.core.complex_utils.lm_studio_vision import (
         is_vision_vlm_loaded,
         ensure_vision_vlm_loaded,
     )
@@ -1372,7 +1381,7 @@ async def run_turn(
     ws_log: WsEventLog,
     index: int,
 ) -> dict:
-    from src.agent.cloud_circuit_breaker import reset_circuit_breaker
+    from src.agent.cloud.cloud_circuit_breaker import reset_circuit_breaker
 
     reset_circuit_breaker()
 

@@ -5,7 +5,7 @@ import json
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
-from src.agent.nodes.complex_utils import vision_proxy
+from src.agent.core.complex_utils import vision_proxy
 
 
 @pytest.fixture(autouse=True)

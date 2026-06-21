@@ -23,6 +23,30 @@ def is_extension_connected() -> bool:
     return len(active_connections) > 0
 
 
+def push_extension_ui_status(action: str, value: str = "") -> None:
+    """Fire-and-forget push of a UI status update to the active extension."""
+    if not is_extension_connected():
+        return
+    ws = active_connections[-1]
+    message = {
+        "id": str(uuid.uuid4()),
+        "action": "ui_status",
+        "payload": {
+            "action": action,
+            "value": value,
+        },
+    }
+    try:
+        from src.api.server import app
+
+        loop = getattr(app.state, "loop", None)
+        if loop:
+            coro = ws.send_json(message)
+            asyncio.run_coroutine_threadsafe(coro, loop)
+    except Exception as exc:
+        logger.warning("Failed to push extension UI status: %s", exc)
+
+
 def _broadcast_page_context(payload: dict) -> None:
     """Push user-initiated page context to all chat WebSocket clients."""
     from src.api.shared import connected_websockets, logger as shared_logger
@@ -141,7 +165,12 @@ async def dispatch_extension_capture_screenshot() -> str | None:
 
 
 async def dispatch_extension_browser_action(
-    action: str, selector: str = "", text: str = "", y: int = 0, element_id: int = -1
+    action: str,
+    selector: str = "",
+    text: str = "",
+    y: int = 0,
+    element_id: int = -1,
+    element_ids: list[int] = None,
 ) -> dict:
     """Execute a DOM interaction (click, type, scroll) on the active tab."""
     payload = {
@@ -150,6 +179,7 @@ async def dispatch_extension_browser_action(
         "text": text,
         "y": y,
         "element_id": element_id,
+        "element_ids": element_ids or [],
     }
     data = await dispatch_extension_request("browser_action", {"payload": payload})
     if "error" in data:
@@ -228,6 +258,26 @@ async def websocket_endpoint(websocket: WebSocket):
                                 )
                 else:
                     _broadcast_page_context(data)
+
+                    # Return the active thread_id back to the extension
+                    from src.api.shared import connected_websockets
+
+                    active_thread_id = None
+                    for ws in list(connected_websockets):
+                        tid = ws.scope.get("thread_id")
+                        if tid:
+                            active_thread_id = tid
+
+                    if active_thread_id:
+                        try:
+                            await websocket.send_json(
+                                {
+                                    "type": "page_context_response",
+                                    "thread_id": active_thread_id,
+                                }
+                            )
+                        except Exception as e:
+                            logger.warning(f"Failed to send page_context_response: {e}")
                 continue
 
             request_id = data.get("id")
@@ -254,3 +304,19 @@ async def websocket_endpoint(websocket: WebSocket):
                     future.set_exception(
                         RuntimeError("Extension client disconnected during request.")
                     )
+
+
+@router.post("/reload")
+async def trigger_extension_reload():
+    """Trigger the connected browser extension to reload itself."""
+    if not is_extension_connected():
+        return {"success": False, "error": "No extension connected"}
+
+    ws = active_connections[-1]
+    message = {"type": "RELOAD"}
+    try:
+        await ws.send_json(message)
+        return {"success": True}
+    except Exception as exc:
+        logger.warning("Failed to push reload command: %s", exc)
+        return {"success": False, "error": str(exc)}

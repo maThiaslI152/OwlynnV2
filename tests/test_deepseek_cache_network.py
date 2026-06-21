@@ -19,7 +19,7 @@ async def test_deepseek_prompt_cache_hit_on_repeated_prefix():
 
     from openai import AsyncOpenAI
 
-    from src.agent.nodes.complex_utils.cloud_payload import COMPLEX_PROMPT_STABLE
+    from src.agent.cloud.cloud_payload import COMPLEX_PROMPT_STABLE
     from src.config.config_loader import config
 
     base_url = config.get("models.cloud.base_url", "https://api.deepseek.com/v1")

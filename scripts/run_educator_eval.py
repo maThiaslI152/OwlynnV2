@@ -367,7 +367,7 @@ async def run_edu_turn(
     ws_log: fe.WsEventLog,
     index: int,
 ) -> dict:
-    from src.agent.cloud_circuit_breaker import reset_circuit_breaker
+    from src.agent.cloud.cloud_circuit_breaker import reset_circuit_breaker
 
     reset_circuit_breaker()
     turn_start = time.time()

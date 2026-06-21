@@ -16,7 +16,7 @@ from hypothesis import given, settings, assume
 from hypothesis import strategies as st
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
-from src.agent.state import AgentState
+from src.agent.core.state import AgentState
 
 
 # ── Valid domains ────────────────────────────────────────────────────────
@@ -139,17 +139,17 @@ class TestModelProvenanceMatchesRoute:
         profile = _mock_profile()
         with (
             patch(
-                "src.agent.nodes.complex.get_cloud_llm",
+                "src.agent.core.complex.get_cloud_llm",
                 new_callable=AsyncMock,
                 return_value=mock_llm,
             ),
-            patch("src.agent.nodes.complex.get_profile", return_value=profile),
+            patch("src.agent.core.complex.get_profile", return_value=profile),
             patch(
-                "src.agent.nodes.complex._invoke_cloud_path",
+                "src.agent.core.complex._invoke_cloud_path",
                 side_effect=_passthrough_cloud_path,
             ),
         ):
-            from src.agent.nodes.complex import complex_llm_node
+            from src.agent.core.complex import complex_llm_node
 
             result = await complex_llm_node(state)
 
@@ -167,17 +167,17 @@ class TestModelProvenanceMatchesRoute:
         profile = _mock_profile()
         with (
             patch(
-                "src.agent.nodes.complex.get_cloud_llm",
+                "src.agent.core.complex.get_cloud_llm",
                 new_callable=AsyncMock,
                 return_value=mock_llm,
             ),
-            patch("src.agent.nodes.complex.get_profile", return_value=profile),
+            patch("src.agent.core.complex.get_profile", return_value=profile),
             patch(
-                "src.agent.nodes.complex._invoke_cloud_path",
+                "src.agent.core.complex._invoke_cloud_path",
                 side_effect=_passthrough_cloud_path,
             ),
         ):
-            from src.agent.nodes.complex import complex_llm_node
+            from src.agent.core.complex import complex_llm_node
 
             result = await complex_llm_node(state)
 

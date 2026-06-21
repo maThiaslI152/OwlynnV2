@@ -24,7 +24,7 @@ def mock_profile():
 class TestCloudBriefGate:
     @pytest.mark.asyncio
     async def test_tool_loop_skips_brief(self, mock_profile):
-        from src.agent.nodes.complex_utils.cloud_payload import prepare_cloud_payload
+        from src.agent.cloud.cloud_payload import prepare_cloud_payload
 
         async def noop_vision(messages):
             return messages, True
@@ -38,7 +38,7 @@ class TestCloudBriefGate:
             ToolMessage(content="file contents", tool_call_id="1"),
         ]
         with patch(
-            "src.agent.nodes.complex_utils.cloud_payload.get_profile",
+            "src.agent.cloud.cloud_payload.get_profile",
             return_value=mock_profile,
         ):
             payload = await prepare_cloud_payload(
@@ -53,7 +53,7 @@ class TestCloudBriefGate:
 
     @pytest.mark.asyncio
     async def test_first_turn_uses_brief(self, mock_profile):
-        from src.agent.nodes.complex_utils.cloud_payload import prepare_cloud_payload
+        from src.agent.cloud.cloud_payload import prepare_cloud_payload
 
         async def noop_vision(messages):
             return messages, True
@@ -61,11 +61,11 @@ class TestCloudBriefGate:
         messages = [HumanMessage(content="Summarize project")]
         with (
             patch(
-                "src.agent.nodes.complex_utils.cloud_payload.get_profile",
+                "src.agent.cloud.cloud_payload.get_profile",
                 return_value=mock_profile,
             ),
             patch(
-                "src.agent.nodes.complex_utils.cloud_payload.build_cloud_brief",
+                "src.agent.cloud.cloud_payload.build_cloud_brief",
                 return_value="--- brief ---",
             ),
         ):
@@ -82,7 +82,7 @@ class TestCloudBriefGate:
 
 class TestCompactToolCallArgs:
     def test_completed_write_compacts_content(self):
-        from src.agent.nodes.complex_utils.cloud_payload import (
+        from src.agent.cloud.cloud_payload import (
             compact_tool_call_args_for_api,
             message_to_deepseek_dict,
             messages_to_deepseek_api,
@@ -117,7 +117,7 @@ class TestCompactToolCallArgs:
         assert "dashboard.css" in tc_args["content"]
 
     def test_pending_write_keeps_content(self):
-        from src.agent.nodes.complex_utils.cloud_payload import (
+        from src.agent.cloud.cloud_payload import (
             message_to_deepseek_dict,
         )
 
@@ -139,7 +139,7 @@ class TestCompactToolCallArgs:
 
 class TestReasoningContentReplay:
     def test_message_converter_preserves_reasoning(self):
-        from src.agent.nodes.complex_utils.cloud_payload import message_to_deepseek_dict
+        from src.agent.cloud.cloud_payload import message_to_deepseek_dict
 
         msg = AIMessage(
             content="answer",
@@ -153,7 +153,7 @@ class TestReasoningContentReplay:
 
 class TestStablePrefix:
     def test_stable_prompt_excludes_date(self):
-        from src.agent.nodes.complex_utils.cloud_payload import COMPLEX_PROMPT_STABLE
+        from src.agent.cloud.cloud_payload import COMPLEX_PROMPT_STABLE
 
         assert "{current_date}" not in COMPLEX_PROMPT_STABLE
         assert "{memory_context}" not in COMPLEX_PROMPT_STABLE
@@ -164,7 +164,7 @@ class TestLegacyRoutesAbsent:
         import inspect
         import importlib.util
 
-        spec = importlib.util.find_spec("src.agent.graph")
+        spec = importlib.util.find_spec("src.agent.core.graph")
         assert spec is not None
         path = spec.origin
         assert path
@@ -187,7 +187,7 @@ class TestCloudBriefMemoryFilter:
 class TestVisionTranscriptionCache:
     @pytest.mark.asyncio
     async def test_cache_hit_avoids_second_vlm_call(self):
-        from src.agent.nodes.complex_utils import vision_proxy as vp
+        from src.agent.core.complex_utils import vision_proxy as vp
 
         vp._TRANSCRIPTION_CACHE.clear()
         image_block = {
@@ -202,7 +202,7 @@ class TestVisionTranscriptionCache:
         )
 
         with patch(
-            "src.agent.nodes.complex_utils.vision_proxy.get_vision_llm",
+            "src.agent.core.complex_utils.vision_proxy.get_vision_llm",
             AsyncMock(return_value=mock_llm),
         ):
             out1, ok1 = await vp.process_vision_messages(messages)
@@ -215,7 +215,7 @@ class TestVisionTranscriptionCache:
 
 class TestAnonymizeToolCalls:
     def test_notebook_run_code_with_backslashes_does_not_crash(self):
-        from src.agent.nodes.complex_utils.cloud_payload import _anonymize_tool_calls
+        from src.agent.cloud.cloud_payload import _anonymize_tool_calls
 
         code = (
             "import matplotlib.pyplot as plt\n"
@@ -237,7 +237,7 @@ class TestAnonymizeToolCalls:
         assert isinstance(out[0]["args"]["code"], str)
 
     def test_anonymizes_email_in_tool_args_without_json_roundtrip(self):
-        from src.agent.nodes.complex_utils.cloud_payload import _anonymize_tool_calls
+        from src.agent.cloud.cloud_payload import _anonymize_tool_calls
 
         tool_calls = [
             {
@@ -254,7 +254,7 @@ class TestAnonymizeToolCalls:
 
 class TestFallbackAnonymization:
     def test_deanonymize_restores_placeholders(self):
-        from src.agent.nodes.complex import _deanonymize_ai_message
+        from src.agent.core.complex import _deanonymize_ai_message
 
         mapping = {"[EMAIL_a4f2b9c1]": "real@example.com"}
         msg = AIMessage(content="Write to [EMAIL_a4f2b9c1]")
@@ -264,7 +264,7 @@ class TestFallbackAnonymization:
 
 class TestFinalizeCloudVisibleContent:
     def test_uses_content_when_present(self):
-        from src.agent.nodes.complex_utils.cloud_payload import (
+        from src.agent.cloud.cloud_payload import (
             finalize_cloud_visible_content,
         )
 
@@ -272,7 +272,7 @@ class TestFinalizeCloudVisibleContent:
         assert out == "Hello REST"
 
     def test_falls_back_to_reasoning_when_content_empty(self):
-        from src.agent.nodes.complex_utils.cloud_payload import (
+        from src.agent.cloud.cloud_payload import (
             finalize_cloud_visible_content,
         )
 

@@ -48,7 +48,7 @@ async def test_deepseek_v4_chat_matrix(tier, thinking_enabled):
 
     from openai import AsyncOpenAI
 
-    from src.agent.nodes.complex_utils.cloud_payload import (
+    from src.agent.cloud.cloud_payload import (
         COMPLEX_PROMPT_STABLE,
         finalize_cloud_visible_content,
     )
@@ -98,7 +98,7 @@ async def test_cloud_brief_multiturn_produces_substantive_reply():
     from openai import AsyncOpenAI
 
     from src.agent.hitl.cloud_brief import build_cloud_brief
-    from src.agent.nodes.complex_utils.cloud_payload import (
+    from src.agent.cloud.cloud_payload import (
         COMPLEX_PROMPT_STABLE,
         finalize_cloud_visible_content,
     )

@@ -21,7 +21,7 @@ async def test_complex_cloud_e2e_with_valid_key():
     if not _api_key():
         pytest.skip("DEEPSEEK_API_KEY not set")
 
-    from src.agent.nodes.complex import complex_llm_node
+    from src.agent.core.complex import complex_llm_node
     from src.memory.user_profile import get_profile
 
     profile = get_profile()
@@ -41,7 +41,7 @@ async def test_complex_cloud_e2e_with_valid_key():
         "token_budget": 256,
     }
 
-    with patch("src.agent.nodes.complex.get_profile", return_value=profile):
+    with patch("src.agent.core.complex.get_profile", return_value=profile):
         result = await complex_llm_node(state)
 
     assert "large-cloud" in (result.get("model_used") or "")

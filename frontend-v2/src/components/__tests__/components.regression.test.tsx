@@ -10,7 +10,12 @@ import { ScreenAssistPanel } from '../ScreenAssistPanel'
 // significant polyfilling beyond the scope of this regression slice.
 
 beforeEach(() => {
+  vi.clearAllMocks()
   useAppStore.setState(useAppStore.getInitialState(), true)
+  ;(window as any).electronAPI = {
+    invoke: vi.fn(),
+    on: vi.fn(),
+  }
 })
 
 afterEach(() => {

@@ -7,7 +7,7 @@ from src.agent.nodes.coherence import (
     _parse_coherence_json,
     coherence_check_node,
 )
-from src.agent.state import AgentState
+from src.agent.core.state import AgentState
 
 
 def test_parse_coherence_json():

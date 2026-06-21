@@ -65,7 +65,7 @@ class TestInitAgentRedisCheckpointer:
     async def test_init_agent_uses_redis_checkpointer(self):
         """With no args and Redis+RediSearch running, init_agent returns a
         graph whose checkpointer is NOT MemorySaver (i.e. it is Redis-backed)."""
-        from src.agent.graph import init_agent
+        from src.agent.core.graph import init_agent
 
         graph = await init_agent()
         assert graph is not None
@@ -88,12 +88,12 @@ class TestInitAgentExplicitCheckpointer:
     async def test_explicit_checkpointer_passthrough(self):
         """init_agent(checkpointer=mock_saver) should use the provided
         checkpointer without attempting Redis initialization."""
-        from src.agent.graph import init_agent
+        from src.agent.core.graph import init_agent
 
         mock_saver = MagicMock(spec=MemorySaver)
 
         with patch(
-            "src.agent.graph.mcp_manager.initialize",
+            "src.agent.core.graph.mcp_manager.initialize",
             new_callable=AsyncMock,
         ):
             graph = await init_agent(checkpointer=mock_saver)
@@ -117,7 +117,7 @@ class TestInitAgentMemorySaverFallback:
     )
     async def test_fallback_to_memory_saver_on_redis_failure(self):
         """Both Redis import paths fail → MemorySaver is used."""
-        from src.agent.graph import init_agent
+        from src.agent.core.graph import init_agent
 
         # Make both import paths raise so the fallback triggers
         original_import = (
@@ -137,7 +137,7 @@ class TestInitAgentMemorySaverFallback:
         with (
             patch("builtins.__import__", side_effect=_failing_import),
             patch(
-                "src.agent.graph.mcp_manager.initialize",
+                "src.agent.core.graph.mcp_manager.initialize",
                 new_callable=AsyncMock,
             ),
         ):
@@ -154,7 +154,7 @@ class TestInitAgentMemorySaverFallback:
     async def test_error_logged_on_redis_failure(self, caplog):
         """An ERROR-level log must be emitted when Redis init fails,
         containing both exception messages."""
-        from src.agent.graph import init_agent
+        from src.agent.core.graph import init_agent
 
         original_import = (
             __builtins__.__import__
@@ -173,10 +173,10 @@ class TestInitAgentMemorySaverFallback:
         with (
             patch("builtins.__import__", side_effect=_failing_import),
             patch(
-                "src.agent.graph.mcp_manager.initialize",
+                "src.agent.core.graph.mcp_manager.initialize",
                 new_callable=AsyncMock,
             ),
-            caplog.at_level(logging.ERROR, logger="src.agent.graph"),
+            caplog.at_level(logging.ERROR, logger="src.agent.core.graph"),
         ):
             await init_agent()
 
@@ -184,10 +184,10 @@ class TestInitAgentMemorySaverFallback:
         error_records = [
             r
             for r in caplog.records
-            if r.levelno >= logging.ERROR and "src.agent.graph" in r.name
+            if r.levelno >= logging.ERROR and "src.agent.core.graph" in r.name
         ]
         assert len(error_records) >= 1, (
-            "Expected at least one ERROR log from src.agent.graph"
+            "Expected at least one ERROR log from src.agent.core.graph"
         )
 
         error_msg = error_records[0].getMessage()

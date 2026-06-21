@@ -13,7 +13,7 @@ from typing import Any
 from langchain_core.messages import AIMessage
 from langgraph.types import interrupt
 
-from src.agent.state import AgentState
+from src.agent.core.state import AgentState
 from src.memory.user_profile import get_profile
 
 logger = logging.getLogger(__name__)

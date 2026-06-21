@@ -13,6 +13,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+from src.memory.file_lock import get_file_lock
 from src.config.audit_log import audit_info, audit_debug
 from src.config.config_loader import config
 
@@ -50,7 +51,8 @@ def _write_file(memories: list[dict]) -> None:
 
 def load_memories() -> list[dict]:
     """Load all memories from disk."""
-    return _read_file()
+    with get_file_lock(_MEMORIES_PATH):
+        return _read_file()
 
 
 def save_memory(fact: str) -> str:
@@ -59,23 +61,27 @@ def save_memory(fact: str) -> str:
     if not fact:
         return "Empty fact — nothing saved."
 
-    memories = _read_file()
-    before_count = len(memories)
+    with get_file_lock(_MEMORIES_PATH):
+        memories = _read_file()
+        before_count = len(memories)
 
-    # Avoid exact duplicates (case-insensitive)
-    if any(m.get("fact", "").lower().strip() == fact.lower() for m in memories):
-        audit_debug("memory.stm", "save_skipped_duplicate", total_count=before_count)
-        return f"Memory already exists: '{fact}'"
+        # Avoid exact duplicates (case-insensitive)
+        if any(m.get("fact", "").lower().strip() == fact.lower() for m in memories):
+            audit_debug(
+                "memory.stm", "save_skipped_duplicate", total_count=before_count
+            )
+            return f"Memory already exists: '{fact}'"
 
-    memories.append({"fact": fact, "timestamp": datetime.now().isoformat()})
+        memories.append({"fact": fact, "timestamp": datetime.now().isoformat()})
 
-    # Cap at max
-    capped = False
-    if len(memories) > _MAX_MEMORIES:
-        capped = True
-        memories = memories[-_MAX_MEMORIES:]
+        # Cap at max
+        capped = False
+        if len(memories) > _MAX_MEMORIES:
+            capped = True
+            memories = memories[-_MAX_MEMORIES:]
 
-    _write_file(memories)
+        _write_file(memories)
+
     after_count = len(memories)
     audit_info(
         "memory.stm",
@@ -94,7 +100,8 @@ def search_memories(query: str, top_k: int = 8) -> list[dict]:
     Returns up to top_k matches sorted by relevance, falling back to
     the most recent memories when no keyword match is found.
     """
-    memories = _read_file()
+    with get_file_lock(_MEMORIES_PATH):
+        memories = _read_file()
     if not memories:
         return []
 
@@ -134,30 +141,34 @@ def search_memories(query: str, top_k: int = 8) -> list[dict]:
 
 def delete_memory(fact: str) -> bool:
     """Remove a specific fact from memories. Returns True if removed."""
-    memories = _read_file()
-    before = len(memories)
-    filtered = [m for m in memories if m.get("fact") != fact]
-    if len(filtered) < before:
-        _write_file(filtered)
-        audit_info(
-            "memory.stm", "deleted", total_before=before, total_after=len(filtered)
-        )
-        return True
+    with get_file_lock(_MEMORIES_PATH):
+        memories = _read_file()
+        before = len(memories)
+        filtered = [m for m in memories if m.get("fact") != fact]
+        if len(filtered) < before:
+            _write_file(filtered)
+            audit_info(
+                "memory.stm", "deleted", total_before=before, total_after=len(filtered)
+            )
+            return True
+
     audit_debug("memory.stm", "delete_not_found", total_count=before)
     return False
 
 
 def clear_all_memories() -> int:
     """Delete every memory. Returns count removed."""
-    count = len(_read_file())
-    _write_file([])
+    with get_file_lock(_MEMORIES_PATH):
+        count = len(_read_file())
+        _write_file([])
     audit_info("memory.stm", "cleared", removed_count=count)
     return count
 
 
 def memories_to_context(query: str = "") -> str:
     """Format top memories as a system prompt context block."""
-    memories = search_memories(query, top_k=8) if query else _read_file()[-8:]
+    with get_file_lock(_MEMORIES_PATH):
+        memories = search_memories(query, top_k=8) if query else _read_file()[-8:]
     if not memories:
         return ""
     lines = ["LONG-TERM MEMORY (facts remembered from previous sessions):"]

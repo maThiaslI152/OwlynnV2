@@ -62,7 +62,7 @@ class TestChatTitleLogLevel:
     def test_log_level_is_warning_not_debug(self):
         """The generate_chat_title_router_llm function must use logger.warning."""
         import inspect
-        from src.agent.nodes.router import generate_chat_title_router_llm
+        from src.agent.routing.router import generate_chat_title_router_llm
 
         source = inspect.getsource(generate_chat_title_router_llm)
         assert "logger.warning" in source, (

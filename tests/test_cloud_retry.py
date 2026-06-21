@@ -11,11 +11,13 @@ import pytest
 @pytest.mark.anyio
 class TestCloudInvokeRetry:
     async def test_circuit_breaker_open_raises(self):
-        from src.agent.nodes.complex_utils.cloud_invoke import invoke_cloud_chat
-        from src.agent.nodes.complex_utils.cloud_payload import CloudThinkingConfig
+        from src.agent.cloud.cloud_invoke import invoke_cloud_chat
+        from src.agent.cloud.cloud_payload import CloudThinkingConfig
 
         mock_client = MagicMock()
-        with patch("src.agent.cloud_circuit_breaker.get_circuit_breaker") as mock_cb:
+        with patch(
+            "src.agent.cloud.cloud_circuit_breaker.get_circuit_breaker"
+        ) as mock_cb:
             mock_cb.return_value.is_open.return_value = True
             with pytest.raises(RuntimeError, match="Circuit breaker open"):
                 await invoke_cloud_chat(
@@ -31,8 +33,8 @@ class TestCloudInvokeRetry:
             mock_client.chat.completions.create.assert_not_called()
 
     async def test_retry_on_429_then_success(self):
-        from src.agent.nodes.complex_utils.cloud_invoke import invoke_cloud_chat
-        from src.agent.nodes.complex_utils.cloud_payload import CloudThinkingConfig
+        from src.agent.cloud.cloud_invoke import invoke_cloud_chat
+        from src.agent.cloud.cloud_payload import CloudThinkingConfig
 
         mock_response = MagicMock()
         mock_response.usage = MagicMock(
@@ -53,7 +55,9 @@ class TestCloudInvokeRetry:
             ]
         )
 
-        with patch("src.agent.cloud_circuit_breaker.get_circuit_breaker") as mock_cb:
+        with patch(
+            "src.agent.cloud.cloud_circuit_breaker.get_circuit_breaker"
+        ) as mock_cb:
             mock_cb.return_value.is_open.return_value = False
             with patch("asyncio.sleep", AsyncMock()):
                 raw, usage = await invoke_cloud_chat(
@@ -72,8 +76,8 @@ class TestCloudInvokeRetry:
         mock_cb.return_value.record_success.assert_called()
 
     async def test_user_id_passed_to_api(self):
-        from src.agent.nodes.complex_utils.cloud_invoke import invoke_cloud_chat
-        from src.agent.nodes.complex_utils.cloud_payload import CloudThinkingConfig
+        from src.agent.cloud.cloud_invoke import invoke_cloud_chat
+        from src.agent.cloud.cloud_payload import CloudThinkingConfig
 
         mock_response = MagicMock()
         mock_response.usage = MagicMock(
@@ -89,7 +93,9 @@ class TestCloudInvokeRetry:
         mock_client = MagicMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
-        with patch("src.agent.cloud_circuit_breaker.get_circuit_breaker") as mock_cb:
+        with patch(
+            "src.agent.cloud.cloud_circuit_breaker.get_circuit_breaker"
+        ) as mock_cb:
             mock_cb.return_value.is_open.return_value = False
             await invoke_cloud_chat(
                 llm_client=mock_client,

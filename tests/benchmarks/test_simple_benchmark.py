@@ -62,7 +62,7 @@ class TestSimpleLatency:
     )
     async def test_simple_latency_by_input_size(self, input_text: str, label: str):
         """p50/p95/p99 latency for simple_node at different input lengths."""
-        from src.agent.nodes.simple import simple_node
+        from src.agent.core.simple import simple_node
         from src.agent.llm import LLMPool
 
         mock_small = make_mock_llm(delay_ms=15, content="Mock simple response")
@@ -97,7 +97,7 @@ class TestSimpleLatency:
     @pytest.mark.asyncio
     async def test_simple_batch_throughput(self):
         """Throughput: invoke simple_node 50x."""
-        from src.agent.nodes.simple import simple_node
+        from src.agent.core.simple import simple_node
 
         mock_small = make_mock_llm(delay_ms=15, content="Hi there!")
         setup_benchmark_llms(small=mock_small)
@@ -138,7 +138,7 @@ class TestSimpleFallback:
     @pytest.mark.asyncio
     async def test_simple_fallback_latency(self):
         """Latency when small LLM raises and medium is used as fallback."""
-        from src.agent.nodes.simple import simple_node
+        from src.agent.core.simple import simple_node
 
         # Small LLM fails, medium succeeds
         mock_small = MockDelayLLM(
@@ -181,7 +181,7 @@ class TestSimpleConcurrency:
     @pytest.mark.parametrize("concurrency", [1, 2, 4, 8])
     async def test_simple_concurrent_throughput(self, concurrency: int):
         """Throughput at different concurrency levels."""
-        from src.agent.nodes.simple import simple_node
+        from src.agent.core.simple import simple_node
 
         mock_small = make_mock_llm(delay_ms=10, content="Quick answer")
         setup_benchmark_llms(small=mock_small)

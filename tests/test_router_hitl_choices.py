@@ -3,11 +3,11 @@
 import pytest
 from langchain_core.messages import HumanMessage
 
-from src.agent.nodes.router import (
+from src.agent.routing.router import (
     _build_low_confidence_router_choices,
     _is_simple_informational_query,
 )
-from src.agent.state import AgentState
+from src.agent.core.state import AgentState
 
 
 @pytest.mark.parametrize(
@@ -53,7 +53,7 @@ def test_is_simple_informational_query():
 @pytest.mark.anyio
 async def test_simple_factual_query_skips_router_hitl(monkeypatch):
     """Norway-style factual follow-ups should not show toolbox picker."""
-    from src.agent.nodes import router as router_mod
+    import src.agent.routing.router as router_mod
 
     async def fake_small_llm():
         class LLM:

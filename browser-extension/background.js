@@ -1,4 +1,5 @@
 let socket = null;
+let keepAliveInterval = null;
 const activeSearches = new Map();
 const RESTRICTED_PREFIXES = ["chrome://", "chrome-extension://", "brave://", "edge://", "about:"];
 
@@ -33,6 +34,14 @@ function connect() {
   socket.onopen = () => {
     console.log("[Owlynn Bridge] WebSocket connected.");
     chrome.runtime.sendMessage({ type: "CONNECTION_STATUS", connected: true }).catch(() => {});
+    
+    // Send a ping every 20 seconds to keep the Service Worker and WebSocket alive
+    if (keepAliveInterval) clearInterval(keepAliveInterval);
+    keepAliveInterval = setInterval(() => {
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: "ping" }));
+      }
+    }, 20000);
   };
 
   socket.onmessage = async (event) => {
@@ -51,6 +60,25 @@ function connect() {
         await handleFetchUrlsRequest(message.id, message.urls);
       } else if (message.action === "get_cookies") {
         await handleGetCookiesRequest(message.id, message.url);
+      } else if (message.action === "ui_status") {
+        const tab = await getActiveTab();
+        if (tab && message.payload) {
+          chrome.tabs.sendMessage(tab.id, {
+            type: 'OWLYNN_STATUS_UPDATE',
+            data: { action: message.payload.action, value: message.payload.value, duration: 15000 }
+          }).catch(() => {});
+        }
+      } else if (message.type === "page_context_response") {
+        const tab = await getActiveTab();
+        if (tab && message.thread_id) {
+          chrome.tabs.sendMessage(tab.id, {
+            type: 'OWLYNN_OPEN_SIDEBAR',
+            thread_id: message.thread_id
+          }).catch(() => {});
+        }
+      } else if (message.type === "RELOAD") {
+        console.log("[Owlynn Bridge] Received RELOAD command. Reloading extension...");
+        chrome.runtime.reload();
       }
     } catch (err) {
       console.error("[Owlynn Bridge] Error handling WebSocket message:", err);
@@ -59,6 +87,7 @@ function connect() {
 
   socket.onclose = (e) => {
     console.log("[Owlynn Bridge] WebSocket disconnected. Retrying in 3s...", e.reason);
+    if (keepAliveInterval) clearInterval(keepAliveInterval);
     socket = null;
     chrome.runtime.sendMessage({ type: "CONNECTION_STATUS", connected: false }).catch(() => {});
     setTimeout(connect, 3000);
@@ -109,16 +138,32 @@ async function extractTabContext(tab) {
       };
     }
 
-    const [{ result }] = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
+    const executionResults = await chrome.scripting.executeScript({
+      target: { tabId: tab.id, allFrames: true },
       files: ["content_extract.js"],
     });
-    if (result && typeof result === "object") {
+    
+    if (executionResults && executionResults.length > 0) {
+      let fullText = "";
+      let fullSelection = "";
+      executionResults.forEach((frame) => {
+        if (frame.result && typeof frame.result === "object") {
+          if (frame.result.text) {
+             if (fullText) fullText += "\n\n--- iframe ---\n\n";
+             fullText += frame.result.text;
+          }
+          if (frame.result.selection) {
+             fullSelection += frame.result.selection + "\n";
+          }
+        }
+      });
+      
+      const mainFrame = executionResults[0].result || {};
       return {
-        url: result.url || base.url,
-        title: result.title || base.title,
-        text: result.text || "",
-        selection: result.selection || "",
+        url: mainFrame.url || base.url,
+        title: mainFrame.title || base.title,
+        text: fullText.trim(),
+        selection: fullSelection.trim(),
       };
     }
   } catch (err) {
@@ -158,7 +203,32 @@ async function handleCaptureScreenshotRequest(requestId) {
   try {
     const tab = await getActiveTab();
     if (!tab) throw new Error("No active tab.");
+    
+    // Inject visual hints based on the DOM map
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => { window.__owlynn_interact_args = { action: 'inject_hints' }; }
+    });
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ["content_interact.js"]
+    }).catch(err => console.warn("Failed to inject hints:", err));
+    
+    // Wait for DOM to render the hints
+    await new Promise(resolve => setTimeout(resolve, 150));
+
     const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "jpeg", quality: 50 });
+    
+    // Remove hints
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => { window.__owlynn_interact_args = { action: 'remove_hints' }; }
+    });
+    await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ["content_interact.js"]
+    }).catch(err => console.warn("Failed to remove hints:", err));
+
     if (socket && socket.readyState === WebSocket.OPEN) {
       socket.send(JSON.stringify({ id: requestId, image_data: dataUrl }));
       console.log(`[Owlynn Bridge] Sent screenshot for ID ${requestId}`);
@@ -176,7 +246,24 @@ async function handleBrowserActionRequest(requestId, payload) {
     const tab = await getActiveTab();
     if (!tab) throw new Error("No active tab.");
     
-    if (payload.action === "read_dom_tree") {
+    // Broadcast status to UI
+    chrome.tabs.sendMessage(tab.id, {
+      type: 'OWLYNN_STATUS_UPDATE',
+      data: {
+        action: payload.action,
+        target: payload.selector || (payload.element_ids ? `Elements: ${payload.element_ids.join(',')}` : payload.element_id),
+        value: payload.text
+      }
+    }).catch(() => {});
+
+    if (payload.action === "read_dom_tree" || payload.action === "read_full_dom_tree") {
+      const includeText = payload.action === "read_full_dom_tree";
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: (includeText) => { window.__owlynn_include_text = includeText; },
+        args: [includeText]
+      });
+
       const [{ result }] = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
         files: ["buildDomTree.js"]
@@ -231,6 +318,20 @@ async function handleBrowserActionRequest(requestId, payload) {
       files: ["content_interact.js"]
     });
     
+    // Auto-return the updated DOM tree for mutating actions to save the agent a round-trip
+    if (result && result.success && ["click", "type", "scroll", "hover"].includes(payload.action)) {
+      try {
+        await new Promise(r => setTimeout(r, 600)); // allow SPA to render
+        const [{ result: domResult }] = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ["buildDomTree.js"]
+        });
+        result.dom_tree = domResult;
+      } catch (err) {
+        // Ignored: Action likely caused a hard page navigation
+      }
+    }
+    
     if (socket && socket.readyState === WebSocket.OPEN) {
       socket.send(JSON.stringify({ id: requestId, result: result || { success: false, error: "No result" } }));
     }
@@ -238,6 +339,11 @@ async function handleBrowserActionRequest(requestId, payload) {
     console.error("[Owlynn Bridge] browser_action failed:", err);
     if (socket && socket.readyState === WebSocket.OPEN) {
       socket.send(JSON.stringify({ id: requestId, error: String(err) }));
+    }
+  } finally {
+    const tab = await getActiveTab();
+    if (tab) {
+      chrome.tabs.sendMessage(tab.id, { type: 'OWLYNN_STATUS_UPDATE', data: { action: 'Thinking...', duration: 15000 } }).catch(() => {});
     }
   }
 }
@@ -398,6 +504,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponseCallback) => 
     sendResponseCallback({
       connected: !!(socket && socket.readyState === WebSocket.OPEN),
     });
+    return false;
+  }
+
+  if (message.type === "OWLYNN_ABORT_AUTOMATION") {
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      console.log("[Owlynn Bridge] User aborted automation. Closing WebSocket to interrupt backend.");
+      socket.close();
+    }
     return false;
   }
 

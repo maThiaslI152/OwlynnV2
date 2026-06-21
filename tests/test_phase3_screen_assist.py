@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.agent.nodes.router import (
+from src.agent.routing.router import (
     _augment_toolbox_for_scenario,
     _user_wants_screen_assist,
 )

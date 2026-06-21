@@ -1,6 +1,6 @@
 """Vision proxy JSON schema parse + cloud formatting."""
 
-from src.agent.nodes.complex_utils.vision_schema import (
+from src.agent.core.complex_utils.vision_schema import (
     format_vision_for_cloud,
     normalize_vision_payload,
     parse_vision_payload,

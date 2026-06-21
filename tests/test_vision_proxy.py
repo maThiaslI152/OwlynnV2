@@ -5,7 +5,7 @@ import json
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
-from src.agent.nodes.complex_utils import vision_proxy
+from src.agent.core.complex_utils import vision_proxy
 
 
 def _fake_ocr_json(text: str) -> str:
@@ -65,7 +65,7 @@ async def test_process_vision_messages_transcribes_image(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _clear_vision_cache():
-    from src.agent.nodes.complex_utils import vision_proxy as vp
+    from src.agent.core.complex_utils import vision_proxy as vp
 
     vp._TRANSCRIPTION_CACHE.clear()
     yield

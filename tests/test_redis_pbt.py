@@ -155,15 +155,15 @@ class TestFixRedisCheckpointer:
 
         **Validates: Requirements 2.1, 2.2**
         """
-        from src.agent.graph import init_agent
+        from src.agent.core.graph import init_agent
 
         mock_asetup = AsyncMock()
 
         with (
             patch("src.config.settings.REDIS_URL", redis_url),
-            patch("src.agent.graph.REDIS_URL", redis_url),
+            patch("src.agent.core.graph.REDIS_URL", redis_url),
             patch(
-                "src.agent.graph.mcp_manager.initialize",
+                "src.agent.core.graph.mcp_manager.initialize",
                 new_callable=AsyncMock,
             ),
             patch(
@@ -205,13 +205,13 @@ class TestPreservationCheckpointerPassthrough:
 
         **Validates: Requirements 3.1, 3.2**
         """
-        from src.agent.graph import init_agent
+        from src.agent.core.graph import init_agent
 
         uid = data.draw(st.integers(min_value=0, max_value=10000))
         mock_checkpointer = _make_mock_checkpointer(uid)
 
         with patch(
-            "src.agent.graph.mcp_manager.initialize",
+            "src.agent.core.graph.mcp_manager.initialize",
             new_callable=AsyncMock,
         ):
             graph = await init_agent(checkpointer=mock_checkpointer)

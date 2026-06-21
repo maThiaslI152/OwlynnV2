@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 from src.config.audit_log import audit_info, audit_debug
 from src.config.config_loader import config
+from src.memory.file_lock import get_file_lock
 
 _DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 MEMORIES_PATH = _DATA_DIR / "memories.json"
@@ -222,118 +223,127 @@ class MemoryEnricher:
 
 
 def load_topics() -> Dict[str, List[Dict]]:
-    return _read_json(TOPICS_PATH, {})
+    with get_file_lock(TOPICS_PATH):
+        return _read_json(TOPICS_PATH, {})
 
 
 def save_topics(topics: Dict) -> None:
-    _write_json(TOPICS_PATH, topics)
+    with get_file_lock(TOPICS_PATH):
+        _write_json(TOPICS_PATH, topics)
 
 
 def track_topic(category: str, topic: str, strength: float = 1.0) -> None:
-    topics = load_topics()
-    if category not in topics:
-        topics[category] = []
+    with get_file_lock(TOPICS_PATH):
+        topics = load_topics()
+        if category not in topics:
+            topics[category] = []
 
-    existing = next((t for t in topics[category] if t["name"] == topic), None)
-    now = datetime.now().isoformat()
+        existing = next((t for t in topics[category] if t["name"] == topic), None)
+        now = datetime.now().isoformat()
 
-    if existing:
-        existing["occurrences"] += 1
-        existing["last_mentioned"] = now
-        existing["strength"] = min(existing["strength"] + 0.1, 5.0)
-        audit_debug(
-            "memory.topics",
-            "topic_updated",
-            topic=topic,
-            category=category,
-            occurrence=existing["occurrences"],
-            strength=round(existing["strength"], 2),
-        )
-    else:
-        topics[category].append(
-            {
-                "name": topic,
-                "occurrences": 1,
-                "first_mentioned": now,
-                "last_mentioned": now,
-                "strength": strength,
-            }
-        )
-        audit_info(
-            "memory.topics",
-            "topic_extracted",
-            topic=topic,
-            category=category,
-            occurrence=1,
-            decay_score=1.0,
-        )
-    save_topics(topics)
+        if existing:
+            existing["occurrences"] += 1
+            existing["last_mentioned"] = now
+            existing["strength"] = min(existing["strength"] + 0.1, 5.0)
+            audit_debug(
+                "memory.topics",
+                "topic_updated",
+                topic=topic,
+                category=category,
+                occurrence=existing["occurrences"],
+                strength=round(existing["strength"], 2),
+            )
+        else:
+            topics[category].append(
+                {
+                    "name": topic,
+                    "occurrences": 1,
+                    "first_mentioned": now,
+                    "last_mentioned": now,
+                    "strength": strength,
+                }
+            )
+            audit_info(
+                "memory.topics",
+                "topic_extracted",
+                topic=topic,
+                category=category,
+                occurrence=1,
+                decay_score=1.0,
+            )
+        save_topics(topics)
 
 
 def load_interests() -> Dict[str, Dict]:
-    return _read_json(INTERESTS_PATH, {})
+    with get_file_lock(INTERESTS_PATH):
+        return _read_json(INTERESTS_PATH, {})
 
 
 def save_interests(interests: Dict) -> None:
-    _write_json(INTERESTS_PATH, interests)
+    with get_file_lock(INTERESTS_PATH):
+        _write_json(INTERESTS_PATH, interests)
 
 
 def update_interests(extracted_interests: Dict[str, bool]) -> None:
-    interests = load_interests()
-    now = datetime.now().isoformat()
-    for interest, present in extracted_interests.items():
-        if not present:
-            continue
-        if interest not in interests:
-            interests[interest] = {
-                "count": 1,
-                "first_observed": now,
-                "last_observed": now,
-                "strength": 1.0,
-            }
-            audit_debug(
-                "memory.topics", "interest_extracted", interest=interest, count=1
-            )
-        else:
-            interests[interest]["count"] += 1
-            interests[interest]["last_observed"] = now
-            interests[interest]["strength"] = min(
-                interests[interest]["strength"] + 0.2, 5.0
-            )
-            audit_debug(
-                "memory.topics",
-                "interest_updated",
-                interest=interest,
-                count=interests[interest]["count"],
-                decay_score=round(interests[interest]["strength"], 2),
-            )
-    save_interests(interests)
+    with get_file_lock(INTERESTS_PATH):
+        interests = load_interests()
+        now = datetime.now().isoformat()
+        for interest, present in extracted_interests.items():
+            if not present:
+                continue
+            if interest not in interests:
+                interests[interest] = {
+                    "count": 1,
+                    "first_observed": now,
+                    "last_observed": now,
+                    "strength": 1.0,
+                }
+                audit_debug(
+                    "memory.topics", "interest_extracted", interest=interest, count=1
+                )
+            else:
+                interests[interest]["count"] += 1
+                interests[interest]["last_observed"] = now
+                interests[interest]["strength"] = min(
+                    interests[interest]["strength"] + 0.2, 5.0
+                )
+                audit_debug(
+                    "memory.topics",
+                    "interest_updated",
+                    interest=interest,
+                    count=interests[interest]["count"],
+                    decay_score=round(interests[interest]["strength"], 2),
+                )
+        save_interests(interests)
 
 
 # ── Conversation Tracking ────────────────────────────────────────────────────
 
 
 def load_conversations_history(limit: Optional[int] = None) -> List[Dict]:
-    data = _read_json(CONVERSATIONS_PATH, [])
-    if not isinstance(data, list):
-        return []
-    if limit and limit > 0:
-        return data[-limit:]
-    return data
+    with get_file_lock(CONVERSATIONS_PATH):
+        data = _read_json(CONVERSATIONS_PATH, [])
+        if not isinstance(data, list):
+            return []
+        if limit and limit > 0:
+            return data[-limit:]
+        return data
 
 
 def save_conversations_history(history: List[Dict]) -> None:
-    _write_json(CONVERSATIONS_PATH, history)
+    with get_file_lock(CONVERSATIONS_PATH):
+        _write_json(CONVERSATIONS_PATH, history)
 
 
 def record_conversation(messages: List[Dict], session_id: str = None) -> Dict:
     summary = ConversationSummary.create_summary(messages)
     summary["session_id"] = session_id or f"session_{datetime.now().timestamp()}"
 
-    history = load_conversations_history()
-    history.append(summary)
-    history = history[-100:]  # keep last 100
-    save_conversations_history(history)
+    with get_file_lock(CONVERSATIONS_PATH):
+        history = load_conversations_history()
+        history.append(summary)
+        history = history[-100:]  # keep last 100
+        save_conversations_history(history)
 
     for category, items in summary.get("topics", {}).items():
         for item in items:

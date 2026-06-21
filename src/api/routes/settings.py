@@ -193,7 +193,7 @@ async def api_update_unified_settings(body: dict):
             )
         ):
             from src.agent.llm import LLMPool
-            from src.agent.cloud_circuit_breaker import reset_circuit_breaker
+            from src.agent.cloud.cloud_circuit_breaker import reset_circuit_breaker
 
             LLMPool.clear()
             reset_circuit_breaker()

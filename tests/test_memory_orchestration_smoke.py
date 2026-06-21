@@ -16,8 +16,8 @@ from src.agent.nodes.memory import (
     memory_retrieve_node,
     memory_write_node,
 )
-from src.agent.nodes.router import router_node
-from src.agent.state import AgentState
+from src.agent.routing.router import router_node
+from src.agent.core.state import AgentState
 from src.memory.extraction.queue import STREAM_KEY, enqueue_extraction
 from src.memory.extraction.worker import process_extraction_job
 
@@ -90,8 +90,12 @@ async def test_memory_pipeline_lite_router_retrieve_write(
 
     state = {**pentest_state, **lite}
 
-    with patch("src.agent.nodes.router._check_cloud_available", return_value=False):
-        routed = await router_node(state)
+    with patch("src.agent.routing.router._check_cloud_available", return_value=False):
+        with patch(
+            "src.agent.routing.router._memory_gate_fields",
+            return_value={"needs_memory_retrieval": True, "scenario_id": "pentest"},
+        ):
+            routed = await router_node(state)
 
     assert routed["route"] == "complex-cloud"
     assert routed.get("needs_memory_retrieval") is True

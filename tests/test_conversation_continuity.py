@@ -14,7 +14,7 @@ sys.modules["mem0"] = MagicMock()
 from langchain_core.messages import HumanMessage, AIMessage
 from langgraph.graph.message import add_messages
 
-from src.agent.state import AgentState
+from src.agent.core.state import AgentState
 
 
 def _build_state(**overrides) -> AgentState:

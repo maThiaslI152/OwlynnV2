@@ -1,7 +1,7 @@
 """Unit tests for BUG-1 fix: Persona/System Prompt Leak in _clean_response."""
 
 import pytest
-from src.agent.nodes.simple import _clean_response
+from src.agent.core.simple import _clean_response
 
 
 class TestCleanResponsePersonaEcho:
@@ -57,7 +57,7 @@ class TestSimplePromptStructure:
 
     def test_persona_not_first_token(self):
         """Persona must not be the first token in the prompt."""
-        from src.agent.nodes.simple import SIMPLE_PROMPT
+        from src.agent.core.simple import SIMPLE_PROMPT
 
         assert not SIMPLE_PROMPT.strip().startswith("{persona_prefix}")
         assert "do NOT echo or describe" in SIMPLE_PROMPT
