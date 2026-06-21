@@ -386,7 +386,6 @@ _REQUIRED_PATHS: list[str] = [
     "models.embedding.base_url",
     "models.embedding.model_name",
     "models.embedding.timeout",
-
     # Startup
     "startup.preload",
     "startup.warmup",

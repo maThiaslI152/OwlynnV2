@@ -63,7 +63,9 @@ class LLMPool:
                             "max_output_tokens", 512
                         )
                         cls._small_llm = ChatOpenAI(
-                            model=model_cfg.get("model_name", "gemma-4-e2b-heretic-uncensored-mlx"),
+                            model=model_cfg.get(
+                                "model_name", "gemma-4-e2b-heretic-uncensored-mlx"
+                            ),
                             api_key="sk-local-no-key-needed",
                             base_url=model_cfg.get(
                                 "base_url", "http://127.0.0.1:1234/v1"
@@ -96,7 +98,9 @@ class LLMPool:
                     source="fallback",
                 )
                 return ChatOpenAI(
-                    model=model_cfg.get("model_name", "gemma-4-e2b-heretic-uncensored-mlx"),
+                    model=model_cfg.get(
+                        "model_name", "gemma-4-e2b-heretic-uncensored-mlx"
+                    ),
                     api_key="sk-local-no-key-needed",
                     base_url=model_cfg.get("base_url", "http://127.0.0.1:1234/v1"),
                     temperature=model_cfg.get("temperature", 0.2),

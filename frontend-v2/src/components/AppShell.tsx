@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback, type ReactNode } from 'react'
+// @ts-ignore - vitest requires the default import to resolve named exports correctly
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
 import type { Options } from 'rehype-sanitize'
 import { Composer } from './Composer'
