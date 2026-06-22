@@ -174,15 +174,12 @@ The launcher will pause and prompt you if LM Studio isn't reachable — you can 
 ## Step 4: Python Backend
 
 ```bash
-# Create venv (first time only)
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
+# Create venv and sync dependencies (first time only)
+uv venv
+uv sync
 
 # Verify imports work
-python3 -c "import src.api.server; print('OK')"
+uv run python -c "import src.api.server; print('OK')"
 ```
 
 Key packages installed: `langgraph`, `fastapi`, `uvicorn`, `mem0ai`, `playwright`, `watchdog`, `langchain-openai`.
@@ -223,15 +220,14 @@ If you prefer to start components separately:
 
 ```bash
 # Backend only
-source .venv/bin/activate
-uvicorn src.api.server:app --host 127.0.0.1 --port 8000 --reload
+uv run uvicorn src.api.server:app --host 127.0.0.1 --port 8000 --reload
 
 # Frontend only
 cd frontend-v2 && npx vite --host 127.0.0.1 --port 5173
 
 # CLI query (requires backend running)
-python3 src/cli.py status
-python3 src/cli.py stream "Hello, what can you do?"
+uv run python src/cli.py status
+uv run python src/cli.py stream "Hello, what can you do?"
 ```
 
 ## Troubleshooting
@@ -244,7 +240,7 @@ python3 src/cli.py stream "Hello, what can you do?"
 
 | Symptom | Most Likely Cause | Fix |
 |---------|------------------|-----|
-| `start.sh`: "ERROR: .venv not found" | Python venv not created | Run `python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt` |
+| `start.sh`: "ERROR: .venv not found" | Python venv not created | Run `uv venv && uv sync` |
 | `start.sh`: "ERROR: Could not start containers" | No Podman/Docker installed | Install Podman (`brew install podman`) or Docker Desktop |
 | LM Studio "Not responding on port 1234" | LM Studio server not started | Open LM Studio, click "Start Server" in the top bar, then press Enter in terminal |
 | Backend crashes with "No module named 'src'" | PYTHONPATH not set | `start.sh` sets it automatically. If running manually: `export PYTHONPATH="$(pwd):$PYTHONPATH"` |
