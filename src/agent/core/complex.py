@@ -1091,7 +1091,8 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             }
         )
         log_model_attempt("large-cloud", "failed", reason=err_reason)
-        logger.warning("[complex] Cloud unavailable: %s", e)
+        error_text = e.response.text if hasattr(e, 'response') and hasattr(e.response, 'text') else str(e)
+        logger.warning("[complex] Cloud unavailable: %s - Body: %s", e, error_text)
         return {
             "messages": [
                 AIMessage(

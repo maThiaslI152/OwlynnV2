@@ -158,7 +158,7 @@ def estimate_token_budget(user_text: str, route: str) -> int:
 # ── Router prompt with toolbox classification ────────────────────────────
 ROUTER_PROMPT = """Classify in one shot. No reasoning, no preamble, no markdown.
 
-simple = greetings/thanks/small talk ONLY. If the user asks ANY factual question, trivia, or asks about a topic/event that might require research or internet access, MUST classify as complex.
+simple = casual chatter, acknowledgements (ok, got it, cool), short conversational praises, greetings/thanks ONLY. If the user asks ANY factual question, trivia, or asks about a topic/event that might require research or internet access, MUST classify as complex.
 complex = code/math/writing, multi-step work, OR needs live web/news/weather/prices. ANY mention of code, python, bugs, review, OR factual questions MUST be classified as complex.
 browser_local = user explicitly asks to interact with the browser extension (clicking, typing, reading DOM). The local model will drive the extension natively.
 
@@ -580,7 +580,7 @@ def _preferred_complex_route(cloud_available: bool | None = None) -> str:
     """Default complex route: cloud when escalation is available, else local."""
     if cloud_available is None:
         cloud_available = _check_cloud_available()
-    return "complex-cloud" if cloud_available else "complex-cloud"
+    return "complex-cloud" if cloud_available else "complex-default"
 
 
 def _build_low_confidence_router_choices(
@@ -797,7 +797,7 @@ async def router_node(state: AgentState) -> AgentState:
     # Quick keyword check to bypass LLM for obvious simple cases (greetings, time, etc.)
     # Strip punctuation and normalize text to lowercase
     cleaned_user = re.sub(r"[^\w\s]", "", user_text).lower().strip()
-    _greeting_phrases = {
+    _casual_chatter_phrases = {
         "hi",
         "hello",
         "hey",
@@ -815,9 +815,28 @@ async def router_node(state: AgentState) -> AgentState:
         "thank you very much",
         "bye",
         "goodbye",
+        "ok",
+        "okay",
+        "cool",
+        "awesome",
+        "got it",
+        "makes sense",
+        "haha",
+        "lol",
+        "nice",
+        "good job",
+        "yep",
+        "yeah",
+        "yup",
+        "alright",
+        "sure",
+        "understood",
+        "perfect",
+        "great",
+        "amazing",
     }
-    _greeting_pattern = re.compile(
-        r"\b(hello|hi|hey|howdy|good\s+morning|good\s+afternoon|good\s+evening|thanks|thank\s+you|bye|goodbye|whats\s+up|what's\s+up)\b",
+    _casual_chatter_pattern = re.compile(
+        r"\b(hello|hi|hey|howdy|good\s+morning|good\s+afternoon|good\s+evening|thanks|thank\s+you|bye|goodbye|whats\s+up|what's\s+up|ok|okay|cool|awesome|got\s+it|makes\s+sense|haha|lol|nice|good\s+job|yep|yeah|yup|alright|sure|understood|perfect|great|amazing|you'?re\s+awesome|that\s+is\s+cool|thank\s+you\s+so\s+much)\b",
         re.IGNORECASE,
     )
     _time_date_pattern = re.compile(r"\b(what\s+time|what\s+date)\b", re.IGNORECASE)
@@ -833,8 +852,8 @@ async def router_node(state: AgentState) -> AgentState:
     has_screen_intent = any(h in user_lower for h in _SCREEN_ASSIST_HINTS)
 
     if (
-        cleaned_user in _greeting_phrases
-        or _greeting_pattern.search(user_text)
+        cleaned_user in _casual_chatter_phrases
+        or _casual_chatter_pattern.search(user_text)
         or _time_date_pattern.search(user_text)
     ) and not (has_web_intent or has_file_intent or has_screen_intent):
         logger.info("[router] Simple path - keyword match (greeting/bypass)")
@@ -1338,9 +1357,9 @@ async def router_node(state: AgentState) -> AgentState:
                 re.IGNORECASE,
             )
             if "?" in user_text or _question_words.search(user_text):
-                # Exempt casual small talk
+                # Exempt casual small talk / conversational inquiries
                 if not re.search(
-                    r"\b(how are you|how do you do|what's up|whats up)\b",
+                    r"\b(how are you|how do you do|what's up|whats up|what do you think|how are you doing|are you sure|make sense\?|makes sense\?|got it\?)\b",
                     user_text,
                     re.IGNORECASE,
                 ):
@@ -1649,9 +1668,9 @@ async def router_node(state: AgentState) -> AgentState:
                     )
                     budget = estimate_token_budget(user_text, route_override)
                 if route_override == "complex-cloud" and not cloud_available:
-                    route_override = "complex-cloud"
-                    logger.warning(
-                        "[router] Cloud unavailable, falling back to complex-cloud"
+                    route_override = "complex-default"
+                    logger.debug(
+                        "[router] Cloud unavailable, falling back to complex-default"
                     )
                     audit_warn(
                         "agent.hitl",
@@ -1760,9 +1779,9 @@ async def router_node(state: AgentState) -> AgentState:
     # If cloud route but cloud unavailable, downgrade
     swap_from_route = route
     if route == "complex-cloud" and not cloud_available:
-        route = "complex-cloud"
-        logger.warning(
-            "[router] Cloud unavailable, downgraded from complex-cloud to complex-cloud"
+        route = "complex-default"
+        logger.info(
+            "[router] Cloud unavailable, downgraded from complex-cloud to complex-default"
         )
         audit_warn(
             "agent.model",

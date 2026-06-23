@@ -97,7 +97,7 @@ async def test_memory_pipeline_lite_router_retrieve_write(
         ):
             routed = await router_node(state)
 
-    assert routed["route"] == "complex-cloud"
+    assert routed["route"] in ("complex-cloud", "complex-default")
     assert routed.get("needs_memory_retrieval") is True
     assert routed.get("scenario_id") == "pentest"
 

@@ -288,23 +288,24 @@ async def _web_search_curl_cffi(
         r.raise_for_status()
         return r.text
 
-    blocked_details: list[str] = []
-    for source, url in targets:
+    async def _fetch(source: str, url: str):
         try:
             html = await asyncio.to_thread(_get, url)
+            if detect_bot_block(html):
+                return source, False, f"{source}: {_bot_block_detail(html)}"
+            hits = _parse_bing_html_results(html, max_hits=max_h) if source == "bing" else _parse_ddg_html_results(html, max_hits=max_h)
+            return source, True, hits
         except Exception as e:
             logger.warning("Error suppressed: %s", e)
-            blocked_details.append(f"{source}: {str(e)[:80]}")
-            continue
-        if detect_bot_block(html):
-            blocked_details.append(f"{source}: {_bot_block_detail(html)}")
-            continue
-        if source == "bing":
-            hits = _parse_bing_html_results(html, max_hits=max_h)
-        else:
-            hits = _parse_ddg_html_results(html, max_hits=max_h)
-        if hits:
-            hits = await _maybe_rerank_search_hits(focus_query, hits)
+            return source, False, f"{source}: {str(e)[:80]}"
+
+    blocked_details: list[str] = []
+    results = await asyncio.gather(*[_fetch(source, url) for source, url in targets])
+    
+    for res in results:
+        source, success, data = res
+        if success and data:
+            hits = await _maybe_rerank_search_hits(focus_query, data)
             return (
                 _format_search_hits_markdown(
                     query, backend, news, hits, f"via curl_cffi/{source}"
@@ -1003,6 +1004,8 @@ async def fetch_webpage(url: str, focus_query: str = "") -> str:
         focus_query: What to extract (e.g. the user's question). When non-empty and the page
             is long enough, returns numbered excerpts optimized for that query. When empty,
             returns a single truncated plain-text body (legacy behavior).
+            
+    DO NOT use this tool if the user explicitly asks to fetch 'via browser' or if they want to fetch multiple URLs simultaneously. Use `browser_background_fetch` instead.
     """
     import httpx
 
@@ -1092,6 +1095,8 @@ async def fetch_webpage_dynamic(url: str, focus_query: str = "") -> str:
 
     WARNING: This opens a headless (incognito-style) browser in the background. It does NOT have the user's cookies or login sessions.
     Do NOT use this tool for authenticated sites (like Moodle, LMS, Banking, or internal dashboards). For authenticated sites, ALWAYS rely on the browser extension tools and `download_to_workspace`.
+    
+    DO NOT use this tool if the user explicitly asks to fetch 'via browser' or if they want to fetch multiple URLs simultaneously. Use `browser_background_fetch` instead.
     """
     from src.tools.url_policy import url_fetch_blocked_reason
     from src.tools.web_retrieval import rank_chunks_to_source_pack
@@ -1169,7 +1174,7 @@ async def _crawl_urls(urls: list[str]) -> str:
 async def browser_background_fetch(urls: list[str]) -> str:
     """
     Fetch the text content of multiple URLs concurrently in the background using the browser extension.
-    Use this when you need to read multiple pages quickly, such as opening several search results at once.
+    MUST use this instead of `fetch_webpage` when the user explicitly asks to fetch "via browser", asks to bypass bot protections, or needs to read multiple pages concurrently.
     Requires the Owlynn Browser Bridge extension to be connected.
     """
     try:

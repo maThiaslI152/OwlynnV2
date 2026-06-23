@@ -14,6 +14,15 @@ audience: agent
 
 Project status tracker. Last updated: 2026-06-20 — Eval harness race conditions fixed; short file context injection threshold lowered; context truncation fixed; file formatting perfectly scoring.
 
+## Recent Changes (2026-06-23)
+
+| Change | Impact | Doc |
+|--------|--------|-----|
+| **Web Search Concurrent Fetch** | Refactored `curl_cffi` to use `asyncio.gather` for DuckDuckGo and Bing searches, eliminating sequential 60s aggregate timeouts. | [`docs/changes/web-search-and-routing-fixes.md`](changes/web-search-and-routing-fixes.md) |
+| **Router Fallback Fix** | Fixed hardcoded `complex-cloud` fallback loop in `router.py` that prevented local model downgrades when cloud is disabled. | [`docs/changes/web-search-and-routing-fixes.md`](changes/web-search-and-routing-fixes.md) |
+| **Document Writer Skill** | Added `document_writer.md` skill to enforce HITL outlines and section-by-section generation for long documents, bypassing output token limits. | [`docs/changes/web-search-and-routing-fixes.md`](changes/web-search-and-routing-fixes.md) |
+| **Local Cloud Automation Test Fix** | Fixed model precedence logic in `src/agent/llm.py` so automated tests can use local LM Studio instances (e.g. `gemma-4-e2b...`) as the cloud target without silently failing with "Cloud unavailable". Fixed frontend UI waiter timeout. | [`docs/changes/local-cloud-model-resolution-fix.md`](changes/local-cloud-model-resolution-fix.md) |
+
 ## Recent Changes (2026-06-21)
 
 | Change | Impact | Doc |
@@ -38,7 +47,7 @@ Project status tracker. Last updated: 2026-06-20 — Eval harness race condition
 |--------|--------|-----|
 | **Browser Extension Enhancements** | P0-P3 implemented: Visual Context (screenshots), Interactive DOM execution (click/type/scroll), Deep Background Scraping (`fetch_urls`), and Specialized Moodle Extractor. Extension automatically connects to backend on startup. | [`docs/BROWSER_EXTENSION.md`](BROWSER_EXTENSION.md) |
 | **Qwen3-VL-4B vision proxy** | Replaces Florence-2 (unloadable via LM Studio API). Full multimodal VLM; F9.1 100/100; 11 source files + 16 docs updated. LM Studio: 4 models, 7.5 GB. | [`changes/qwen3vl-vision-proxy/CHANGELOG.md`](changes/qwen3vl-vision-proxy/CHANGELOG.md) |
-| **Cloud-only pivot** | 3-tier → 2-tier cloud-only; `complex-default` removed; all complex reasoning → `complex-cloud`; local Qwen eliminated; medium slot removed from LLM pool; memory extraction → gemma-4-e2b; simple retry-once MiniCPM5; strict-cloud concept removed (`cloud_strict.py` deleted); 26 test files + 8 docs rewired | [`changes/cloud-only-pivot/CHANGELOG.md`](changes/cloud-only-pivot/CHANGELOG.md) |
+| **Cloud-only pivot** | 3-tier → 2-tier cloud-only; `complex-default` removed; all complex reasoning → `complex-cloud`; local Qwen eliminated; medium slot removed from LLM pool; memory extraction → gemma-4-e2b; simple retry-once gemma-4-e2b; strict-cloud concept removed (`cloud_strict.py` deleted); 26 test files + 8 docs rewired | [`changes/cloud-only-pivot/CHANGELOG.md`](changes/cloud-only-pivot/CHANGELOG.md) |
 | **R5 coherence self-correction** | `coherence_retry.py` node + `coherence_retry_gate`; bounded by `coherence.max_retries: 1`; threshold 0.4; cloud-only (no local fallback) | [`changes/coherence-self-correction/CHANGELOG.md`](changes/coherence-self-correction/CHANGELOG.md) |
 | **Playwright MCP** | `@playwright/mcp` host-native (npx + cached Chromium); no podman container overhead | — |
 
@@ -169,7 +178,7 @@ frontend-v2/src/App.tsx        # Frontend runtime
 
 | Key | Value |
 |-----|-------|
-| `small_llm_model_name` | `minicpm5-1b` |
+| `small_llm_model_name` | `gemma-4-e2b-heretic-uncensored-mlx` |
 
 ### Core Capabilities Status
 

@@ -134,8 +134,9 @@ class LLMPool:
         if tier == "pro":
             return tiers.get("pro") or "deepseek-v4-pro"
         return (
-            tiers.get("flash")
+            config.get("models.cloud.model_name")
             or profile.get("cloud_llm_model_name")
+            or tiers.get("flash")
             or "deepseek-v4-flash"
         )
 

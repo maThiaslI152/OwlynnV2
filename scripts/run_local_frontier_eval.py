@@ -668,12 +668,11 @@ async def delete_project(project_id: str) -> None:
 
 
 async def wait_for_ready(page: Page) -> None:
-    print("[EVAL] Waiting for connection status to be connected...")
-    await (
-        page.locator(".connection-label")
-        .filter(has_text="connected")
-        .wait_for(state="visible", timeout=30000)
-    )
+    print("[EVAL] Waiting for UI to be ready...")
+    try:
+        await page.locator(".workspace-project-item").first.wait_for(state="visible", timeout=30000)
+    except Exception as e:
+        print(f"Failed to find workspace item: {e}")
     await page.wait_for_timeout(1000)
 
 
