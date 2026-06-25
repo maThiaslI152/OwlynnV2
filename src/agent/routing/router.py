@@ -1539,6 +1539,10 @@ async def router_node(state: AgentState) -> AgentState:
         if state.get("mode") in ("api", "noninteractive"):
             _can_interrupt = False
 
+        # execution_policy=auto_approve: skip router HITL (evals, automated runs)
+        if get_profile().get("execution_policy") == "auto_approve":
+            _can_interrupt = False
+
         if hitl_needed and _can_interrupt:
             # ── Build interrupt payload and PAUSE the graph ──────
             # Only catch context/checkpointer errors (RuntimeError, ValueError).

@@ -461,17 +461,45 @@ def _resolve_complex_tools(
             for tc in msg.tool_calls:
                 prev_tool_names.add(tc.get("name", ""))
 
-    if prev_tool_names:
+    # Skip tool-history re-addition when router explicitly suppresses tools
+    # (e.g., conversation recall bypass sets selected_toolboxes=["none"])
+    if prev_tool_names and "none" not in (selected_toolboxes or []):
         for t in all_complex_tools(web_on):
             if getattr(t, "name", "") in prev_tool_names and t not in tools:
                 tools.append(t)
     return tools
 
 
-def build_web_search_answer_nudge_messages(tool_messages: list) -> list[HumanMessage]:
-    """After a successful web_search, remind the model it must write the final answer (non-empty)."""
+def build_web_search_answer_nudge_messages(
+    tool_messages: list, user_text: str = ""
+) -> list[HumanMessage]:
+    """After a successful web_search, remind the model it must write the final answer (non-empty).
+
+    Skips the nudge when the user's prompt has multi-step intent (e.g., "search the web
+    then create a file") to avoid steering the LLM away from subsequent tool calls.
+    """
     if not tool_messages:
         return []
+    # If user message has multi-step indicators, skip the synthesis nudge
+    if user_text:
+        lower = user_text.lower()
+        if any(
+            hint in lower
+            for hint in (
+                "then ",
+                "after that",
+                "afterwards",
+                "next,",
+                "create a file",
+                "write to",
+                "save to",
+                "save it",
+                "write the",
+                "also ",
+                "and then",
+            )
+        ):
+            return []
     for m in tool_messages:
         if not isinstance(m, ToolMessage):
             continue
@@ -1543,7 +1571,13 @@ async def complex_tool_action_node(state: AgentState) -> AgentState:
     ws_nudge = (
         []
         if skip_pre_synthesis_nudges
-        else (build_web_search_answer_nudge_messages(delta) if web_on else [])
+        else (
+            build_web_search_answer_nudge_messages(
+                delta, user_text=_latest_user_text(current_messages)
+            )
+            if web_on
+            else []
+        )
     )
 
     # Nudge the model to retry if a tool call failed with an error

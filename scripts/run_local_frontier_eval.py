@@ -870,6 +870,16 @@ async def wait_for_turn_complete(
                 continue
         if ws_log and since_ts:
             busy = not ws_idle
+            # Fallback: if WS idle hasn't arrived but DOM shows no busy
+            # indicators for >30s, treat as idle (WS event may have been lost)
+            if busy and elapsed > 30:
+                dom_busy = await is_graph_busy(page)
+                if not dom_busy:
+                    print(
+                        "\n[EVAL] WS idle not received but DOM shows idle — "
+                        "treating as complete"
+                    )
+                    busy = False
         else:
             busy = await is_graph_busy(page)
         if not busy:

@@ -100,7 +100,18 @@ def _risk_meta_for_call(tool_name: str, args: Any) -> dict[str, Any]:
     args_text = (
         json.dumps(args, ensure_ascii=True) if not isinstance(args, str) else str(args)
     )
-    hay = f"{tool_name} {args_text}"
+    # For write/edit tools, exclude file content from risk scanning to avoid
+    # false positives from URLs inside file content (e.g. font imports, CDNs).
+    _CONTENT_KEYS = {"content", "replacement_text"}
+    if isinstance(args, dict) and tool_name in {
+        "write_workspace_file",
+        "edit_workspace_file",
+    }:
+        scan_args = {k: v for k, v in args.items() if k not in _CONTENT_KEYS}
+        scan_text = json.dumps(scan_args, ensure_ascii=True)
+    else:
+        scan_text = args_text
+    hay = f"{tool_name} {scan_text}"
 
     if _DESTRUCTIVE_RE.search(hay) or tool_name == "delete_workspace_file":
         category = "destructive_action"
