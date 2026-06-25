@@ -293,7 +293,11 @@ async def _web_search_curl_cffi(
             html = await asyncio.to_thread(_get, url)
             if detect_bot_block(html):
                 return source, False, f"{source}: {_bot_block_detail(html)}"
-            hits = _parse_bing_html_results(html, max_hits=max_h) if source == "bing" else _parse_ddg_html_results(html, max_hits=max_h)
+            hits = (
+                _parse_bing_html_results(html, max_hits=max_h)
+                if source == "bing"
+                else _parse_ddg_html_results(html, max_hits=max_h)
+            )
             return source, True, hits
         except Exception as e:
             logger.warning("Error suppressed: %s", e)
@@ -301,7 +305,7 @@ async def _web_search_curl_cffi(
 
     blocked_details: list[str] = []
     results = await asyncio.gather(*[_fetch(source, url) for source, url in targets])
-    
+
     for res in results:
         source, success, data = res
         if success and data:
@@ -1004,7 +1008,7 @@ async def fetch_webpage(url: str, focus_query: str = "") -> str:
         focus_query: What to extract (e.g. the user's question). When non-empty and the page
             is long enough, returns numbered excerpts optimized for that query. When empty,
             returns a single truncated plain-text body (legacy behavior).
-            
+
     DO NOT use this tool if the user explicitly asks to fetch 'via browser' or if they want to fetch multiple URLs simultaneously. Use `browser_background_fetch` instead.
     """
     import httpx
@@ -1095,7 +1099,7 @@ async def fetch_webpage_dynamic(url: str, focus_query: str = "") -> str:
 
     WARNING: This opens a headless (incognito-style) browser in the background. It does NOT have the user's cookies or login sessions.
     Do NOT use this tool for authenticated sites (like Moodle, LMS, Banking, or internal dashboards). For authenticated sites, ALWAYS rely on the browser extension tools and `download_to_workspace`.
-    
+
     DO NOT use this tool if the user explicitly asks to fetch 'via browser' or if they want to fetch multiple URLs simultaneously. Use `browser_background_fetch` instead.
     """
     from src.tools.url_policy import url_fetch_blocked_reason

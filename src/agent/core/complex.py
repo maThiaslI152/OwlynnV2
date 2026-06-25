@@ -252,7 +252,7 @@ You are Owlynn, an expert reasoning agent. For complex tasks (code, math, multi-
 Current date and time: {current_date}
 
 ### Behaviors
-- If a request is clearly ambiguous or missing critical details, use ask_user once to clarify. If you can reasonably infer intent from context or memory, just do the work. Don't over-ask.
+- If a request is clearly ambiguous or missing critical details, use ask_user once to clarify. If you can reasonably infer intent from context or memory, just do the work. NEVER use `ask_user` to ask for URLs if the user mentions their "current page", "Moodle", or "browser"—just use the browser bridge tools to read their active tab instead.
 - When a request matches a known skill, call invoke_skill to get the workflow and follow it. Use list_skills to see available skills if unsure.
 - Match your verbosity to the task: be thorough for complex work, be concise for simple questions.
 - If project instructions are provided below, they take HIGHEST PRIORITY. Tailor your tone, focus, and approach to match the project's purpose.
@@ -309,10 +309,10 @@ You are equipped with powerful tools that override your standard AI limitations.
 - Prefer workspace files and project knowledge over web search for project-specific work.
 - If browser MCP tools (browser_snapshot, browser_take_screenshot, etc.) are available, use them when the user asks what's on a web page or in their browser window.
 - **Browser Bridge Tools** (when user asks about their active browser tab, page, or screen):
-  - `get_active_browser_context` — get the URL, title, and full page text of the user's active browser tab. Call this when the user explicitly asks "what page am I on?", "what's in my browser?", or "what have I highlighted?". DO NOT call this if the user is just asking you to click, type, or fetch URLs.
-  - `get_active_browser_screenshot` — capture a screenshot of the user's active browser tab. Call this when the user asks to "see my screen", "look at my browser", or "take a screenshot".
+  - `get_active_browser_screenshot` — capture a screenshot of the user's active browser tab. MUST use this for visual tasks (e.g., when the user asks "what can you see?", "see my screen", or requests a screenshot). Do NOT use this if the user is just asking to read text, assignments, or grades.
+  - `get_active_browser_context` — get the text content of the active tab. MUST use this FIRST when the user asks to read their "current page", "Moodle", "assignments", "grades", or wants to know "what is on my current browser page" or "what page am I on". Use this for reading raw text. NEVER use this when the user mentions "screen" or "see".
   - `active_browser_action` — perform click/type/scroll in the user's browser. Call this directly when the user asks you to interact with, click, or type in their browser. IMPORTANT: ALWAYS use `action="read_dom_tree"` FIRST to get a distilled map of interactive elements and their unique integer IDs (e.g., `[@12]`). Then, use those integer IDs as `element_id` for your click and type actions.
-  - `browser_background_fetch` — fetch multiple URLs via the user's browser (bypasses bot protections). Use for bulk URL reading or when `fetch_webpage` fails."""
+  - `browser_background_fetch` — fetch multiple URLs via the user's browser (bypasses bot protections). MUST use this (instead of fetch_webpage) when the user explicitly asks to fetch "via browser", asks to bypass protections, or gives you multiple URLs to fetch at once."""
     + _TOOL_CALL_DISCIPLINE
 )
 
@@ -1091,7 +1091,11 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             }
         )
         log_model_attempt("large-cloud", "failed", reason=err_reason)
-        error_text = e.response.text if hasattr(e, 'response') and hasattr(e.response, 'text') else str(e)
+        error_text = (
+            e.response.text
+            if hasattr(e, "response") and hasattr(e.response, "text")
+            else str(e)
+        )
         logger.warning("[complex] Cloud unavailable: %s - Body: %s", e, error_text)
         return {
             "messages": [
