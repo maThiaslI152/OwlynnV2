@@ -71,6 +71,18 @@ python scripts/run_extension_eval.py --track EX5
 python scripts/run_extension_eval.py --no-mock
 ```
 
+### Automated Evaluation Runner
+
+To automatically handle backend/frontend lifecycle and avoid cloud API costs by using the local mock model, use the automated wrapper script:
+
+```bash
+# Run the complete test suite locally (uses local LM Studio to avoid API costs)
+python scripts/run_extension_eval_automated.py --local-cloud
+
+# Run a single track locally
+python scripts/run_extension_eval_automated.py --local-cloud --track EX1
+```
+
 **Pass threshold: ≥ 75% overall.**
 
 Reports are written to `docs/evaluations/extension-eval-<date>.md`.
