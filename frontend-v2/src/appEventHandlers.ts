@@ -19,11 +19,11 @@ export function toToolExecutionSnapshot(
     input: event.input ?? null,
     toolCallId: event.tool_call_id ?? null,
     status: event.status,
-    duration: event.duration,
-    riskLabel: event.risk_label,
-    riskConfidence: event.risk_confidence,
-    riskRationale: event.risk_rationale,
-    remediationHint: event.remediation_hint,
+    duration: event.duration ?? null,
+    riskLabel: event.risk_label ?? null,
+    riskConfidence: event.risk_confidence ?? null,
+    riskRationale: event.risk_rationale ?? null,
+    remediationHint: event.remediation_hint ?? null,
   }
 }
 
@@ -43,15 +43,21 @@ export interface ConversationToolActivity {
   kind: 'tool_activity'
   id: string
   toolName: string
-  toolCallId?: string | null
+  toolCallId: string | null
+  input: string | null
   status: 'running' | 'success' | 'error'
-  input?: string | null
-  riskLabel?: string
-  riskConfidence?: number
-  riskRationale?: string
-  remediationHint?: string
+  duration?: number | null
+  riskLabel?: string | null
+  riskConfidence?: number | null
+  riskRationale?: string | null
+  remediationHint?: string | null
+  chartArtifact?: {
+    filename: string
+    url: string
+    kind: 'interactive' | 'static'
+    mimeType: string
+  }
   ts: number
-  duration?: number
 }
 
 export type HitlPromptStatus = 'pending' | 'approved' | 'rejected' | 'dismissed'

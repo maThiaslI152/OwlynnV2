@@ -93,9 +93,19 @@ function App() {
   const apiBase = isTauriRuntime ? 'http://127.0.0.1:8000' : ''
   const apiUrl = (path: string) => apiBase + path
 
+  const loadProjectsAbortRef = useRef<AbortController | null>(null)
+
   const loadProjects = useCallback(async () => {
+    if (loadProjectsAbortRef.current) {
+      loadProjectsAbortRef.current.abort()
+    }
+    const controller = new AbortController()
+    loadProjectsAbortRef.current = controller
+
     try {
-      const response = await fetch('/api/projects' + '?_t=' + Date.now())
+      const response = await fetch('/api/projects' + '?_t=' + Date.now(), {
+        signal: controller.signal
+      })
       if (!response.ok) return
       const payload = (await response.json()) as ProjectSummary[]
       const mapped = payload.map((project) => ({
@@ -135,7 +145,8 @@ function App() {
           setActiveChatId(tid)
         }
       }
-    } catch (e) {
+    } catch (e: any) {
+      if (e.name === 'AbortError') return
       console.warn('[loadProjects]', e)
       toast.error('Failed to load workspaces')
       setProjects([{ id: 'default', name: 'General Workspace', chats: [] }])
@@ -230,6 +241,7 @@ function App() {
         }
       } catch (e) {
         console.warn('[execPolicy]', e)
+        toast.error('Failed to load execution policy')
         // Keep local default if settings are unavailable.
       }
     }
@@ -244,6 +256,7 @@ function App() {
   }, [loadProjects])
 
   useEffect(() => {
+    let disposed = false
     const controller = new AbortController()
     const loadHistory = async () => {
       try {
@@ -252,6 +265,7 @@ function App() {
         })
         if (!response.ok) return
         const history = (await response.json()) as Array<{ type: string; content: string; tool_calls?: unknown[] }>
+        if (disposed) return
         if (!Array.isArray(history)) return
         for (const msg of history) {
           if (msg.type === 'ai' || msg.type === 'AIMessage') {
@@ -273,6 +287,7 @@ function App() {
       } catch (e: any) {
         if (e.name === 'AbortError') return
         console.warn('[loadHistory]', e)
+        toast.error('Failed to load chat history')
         // History unavailable — non-critical
       }
     }
@@ -282,6 +297,7 @@ function App() {
     wsClientRef.current = wsClient
     const disconnect = wsClient.connect({
       onOpen: () => {
+        if (disposed) return
         setConnection('connected')
         void loadHistory()
         void fetchCloudUsage().then((usage) => {
@@ -295,6 +311,7 @@ function App() {
       },
       onError: () => setConnection('error'),
       onEvent: (event: ServerEvent) => {
+        if (disposed) return
         const storeState = useAppStore.getState()
         const pendingId = storeState.pendingCorrelationId
         const eventId = (event as any).correlation_id
@@ -395,9 +412,9 @@ function App() {
               kind: 'tool_activity',
               id: snapshot.toolCallId || `tool-${Date.now()}`,
               toolName: snapshot.toolName,
-              toolCallId: snapshot.toolCallId,
+              toolCallId: snapshot.toolCallId ?? null,
               status: snapshot.status,
-              input: snapshot.input,
+              input: snapshot.input ?? null,
               riskLabel: snapshot.riskLabel,
               riskConfidence: snapshot.riskConfidence,
               riskRationale: snapshot.riskRationale,
@@ -470,6 +487,7 @@ function App() {
 
     setConnection('connecting')
     return () => {
+      disposed = true
       controller.abort()
       disconnect()
       wsClientRef.current = null
@@ -518,9 +536,9 @@ function App() {
             kind: 'tool_activity',
             id: snapshot.toolCallId || `tool-${Date.now()}`,
             toolName: snapshot.toolName,
-            toolCallId: snapshot.toolCallId,
+            toolCallId: snapshot.toolCallId ?? null,
             status: snapshot.status,
-            input: snapshot.input,
+            input: snapshot.input ?? null,
             riskLabel: snapshot.riskLabel,
             riskConfidence: snapshot.riskConfidence,
             riskRationale: snapshot.riskRationale,

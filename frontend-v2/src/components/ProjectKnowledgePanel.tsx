@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import toast from 'react-hot-toast'
 import { WORKSPACE_REF_DRAG_TYPE, workspaceRefAttachment, type AttachedFile } from '../lib/attachments'
 import { collapseKnowledgeFiles, type KnowledgeFileRow } from '../lib/knowledgeFiles'
 
@@ -35,6 +36,7 @@ export function ProjectKnowledgePanel({
       setFiles(knowledgeFiles)
     } catch {
       setError('Failed to load knowledge files')
+      toast.error('Failed to load knowledge files')
       setFiles([])
     } finally {
       setLoading(false)

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useAppStore } from '../state/useAppStore'
 import toast from 'react-hot-toast'
 
@@ -72,6 +72,7 @@ export function MemoryPanel() {
         if (!disposed) {
           console.warn('[MemoryPanel] fetch error:', err)
           setFetchError('Failed to load memory data. Is the backend running?')
+          toast.error('Failed to load memory data')
         }
       } finally {
         if (!disposed) setLoading(false)
@@ -84,15 +85,21 @@ export function MemoryPanel() {
     }
   }, [memoryUpdatedAt])
 
+  const mem0AbortRef = useRef<AbortController | null>(null)
+
   // Fetch Mem0 memories
   const loadMem0Memories = useCallback(async (query = '') => {
+    if (mem0AbortRef.current) mem0AbortRef.current.abort()
+    const controller = new AbortController()
+    mem0AbortRef.current = controller
+
     setMem0Loading(true)
     setMem0Error('')
     try {
       const params = new URLSearchParams()
       if (query) params.set('query', query)
       params.set('limit', '50')
-      const res = await fetch(`/api/mem0/search?${params.toString()}`)
+      const res = await fetch(`/api/mem0/search?${params.toString()}`, { signal: controller.signal })
       if (res.ok) {
         const data = await res.json()
         if (data.status === 'ok') {
@@ -103,7 +110,8 @@ export function MemoryPanel() {
       } else {
         setMem0Error('Failed to fetch memories')
       }
-    } catch (e) {
+    } catch (e: any) {
+      if (e.name === 'AbortError') return
       console.warn('[loadMem0Memories]', e)
       toast.error('Network error loading memories')
       setMem0Error('Network error')
@@ -208,6 +216,7 @@ export function MemoryPanel() {
                   }
                 } catch {
                   setFetchError('Retry failed. Is the backend running?')
+                  toast.error('Failed to refresh memory data')
                 } finally {
                   setLoading(false)
                 }

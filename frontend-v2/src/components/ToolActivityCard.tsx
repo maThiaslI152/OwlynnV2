@@ -15,11 +15,11 @@ export interface ToolActivitySnapshot {
   toolCallId?: string | null
   status: 'running' | 'success' | 'error'
   input?: string | null
-  duration?: number
-  riskLabel?: string
-  riskConfidence?: number
-  riskRationale?: string
-  remediationHint?: string
+  duration?: number | null
+  riskLabel?: string | null
+  riskConfidence?: number | null
+  riskRationale?: string | null
+  remediationHint?: string | null
 }
 
 interface ToolActivityCardProps {

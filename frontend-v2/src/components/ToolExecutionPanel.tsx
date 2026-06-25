@@ -200,7 +200,7 @@ console.log('Verification OK')`
             <span className={`badge badge-${tool.status}`}>{tool.status}</span>
           </div>
           <div className="tool-exec-detail">
-            {formatTs(tool.ts)} · {formatDuration(tool.duration)}
+            {formatTs(tool.ts)} · {formatDuration(tool.duration ?? undefined)}
             {tool.riskLabel ? ` · Risk: ${tool.riskLabel}` : ''}
           </div>
         </div>
@@ -214,7 +214,7 @@ console.log('Verification OK')`
                 <span className={`badge badge-${entry.status}`}>{entry.status}</span>
               </div>
               <div className="tool-exec-detail">
-                {formatTs(entry.ts)} · {formatDuration(entry.duration)}
+                {formatTs(entry.ts)} · {formatDuration(entry.duration ?? undefined)}
                 {entry.riskLabel ? ` · ${entry.riskLabel}` : ''}
               </div>
             </div>
