@@ -349,7 +349,7 @@ describe('AppShell', () => {
   it('renders all panel sections', () => {
     render(<AppShell {...defaultProps} />)
     // Section headers now include icon prefixes
-    expect(screen.getByText((content) => content.includes('Orchestration'))).toBeTruthy()
+    expect(screen.getAllByText((content) => content.includes('Knowledge')).length).toBeGreaterThan(0)
   })
 
   it('renders composer', () => {

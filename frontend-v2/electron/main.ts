@@ -42,7 +42,11 @@ function createWindow() {
     icon: path.join(process.env.VITE_PUBLIC, 'electron-vite.svg'),
     width: 1200,
     height: 800,
-    backgroundColor: '#0E1C31',
+    backgroundColor: '#00000000', // fully transparent
+    transparent: true,
+    vibrancy: 'under-window',
+    visualEffectState: 'active',
+    titleBarStyle: 'hiddenInset',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

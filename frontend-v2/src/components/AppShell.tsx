@@ -1,18 +1,12 @@
 import { useEffect, useRef, useState, useCallback, type ReactNode } from 'react'
+import toast from 'react-hot-toast'
 // @ts-expect-error - vitest requires the default import to resolve named exports correctly
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
 import type { Options } from 'rehype-sanitize'
 import { Composer } from './Composer'
-import { SafeModePanel } from './SafeModePanel'
-import { CloudSettingsPanel } from './CloudSettingsPanel'
-import { CloudUsagePanel } from './CloudUsagePanel'
-import { CloudUsageChip } from './CloudUsageChip'
-import { ScreenAssistPanel } from './ScreenAssistPanel'
 import { ProjectKnowledgePanel } from './ProjectKnowledgePanel'
-import { OrchestrationPanel } from './OrchestrationPanel'
-import { MemoryPanel } from './MemoryPanel'
-import { StudyPanel } from './StudyPanel'
+import { MacMenuBar } from './MacMenuBar'
 import { HitlPromptCard, type HitlPromptViewModel } from './HitlPromptCard'
 import { ToolActivityCard } from './ToolActivityCard'
 import type { InterruptChoice } from '../state/useAppStore'
@@ -304,40 +298,6 @@ function MessageBubble({
   )
 }
 
-function CollapsibleSection({
-  title,
-  icon,
-  defaultOpen = false,
-  children,
-  rightAction,
-  testId,
-}: {
-  title: string
-  icon?: string
-  defaultOpen?: boolean
-  children: ReactNode
-  rightAction?: ReactNode
-  testId?: string
-}) {
-  const [open, setOpen] = useState(defaultOpen)
-  return (
-    <div className="inspector-section" data-testid={testId}>
-      <div className="inspector-section-header" onClick={() => setOpen(!open)}>
-        <h3>{icon ? `${icon} ${title}` : title}</h3>
-        <div className="inspector-section-header-actions">
-          {rightAction}
-          <span className={`inspector-toggle ${open ? 'inspector-toggle-open' : ''}`}>▶</span>
-        </div>
-      </div>
-      <div
-        className={`inspector-section-body ${open ? 'inspector-section-body-open' : ''}`}
-        data-testid={testId ? `${testId}-body` : undefined}
-      >
-        {children}
-      </div>
-    </div>
-  )
-}
 
 const SUGGESTIONS = [
   'What can you help me with?',
@@ -414,7 +374,6 @@ export function AppShell({
   const messages = useAppStore((s) => s.messages)
   const conversationItems = useAppStore((s) => s.conversationItems)
   const operatorNote = useAppStore((s) => s.operatorNote)
-  const cloudStatus = useAppStore((s) => s.cloudStatus)
   const setCloudStatus = useAppStore((s) => s.setCloudStatus)
   const windowMode = useAppStore((s) => s.windowMode)
   const setWindowMode = useAppStore((s) => s.setWindowMode)
@@ -431,9 +390,9 @@ export function AppShell({
 
   const handleToggleMode = useCallback(async (targetMode: 'compact' | 'full') => {
     if (targetMode === 'compact') {
-      void tauriBridge.setWindowSize(680, 620)
+      void tauriBridge.setWindowSize(400, 600)
     } else {
-      void tauriBridge.setWindowSize(2400, 1600)
+      void tauriBridge.setWindowSize(1200, 800)
     }
     setWindowMode(targetMode)
     if (targetMode === 'compact') {
@@ -477,6 +436,7 @@ export function AppShell({
         if (!disposed) setCloudStatus(status)
       } catch {
         if (!disposed) setCloudStatus(null)
+        toast.error('Failed to fetch cloud status')
       }
     }
     if (connectionState === 'connected') {
@@ -517,20 +477,25 @@ export function AppShell({
   const searchParams = new URLSearchParams(window.location.search)
   const isSidebarMode = searchParams.get('mode') === 'sidebar'
   const isCompact = windowMode === 'compact' || isSidebarMode
-  const showInspector = (!isCompact || inspectorOpen) && !isSidebarMode
   const projectChats = activeProject?.chats ?? []
   const showDragStrip = isTauriRuntime()
 
   return (
-    <div className={`app-shell${isCompact ? ' app-shell-compact' : ''}`}>
-      {/* ── Left Panel (full mode only) ── */}
+    <div className="app-shell-wrapper">
+      <MacMenuBar 
+        isCompact={isCompact} 
+        onToggleMode={() => handleToggleMode(isCompact ? 'full' : 'compact')} 
+      />
+      <div className={`app-shell ${isCompact ? 'app-shell-compact' : ''}`}>
+        {/* ── Left Panel (hidden in compact) ── */}
       {!isCompact && (
         <aside className="panel left-panel">
           {showDragStrip && <div className="window-drag-strip" data-tauri-drag-region />}
-          <div className="workspace-section">
-            <div className="workspace-header">
-              <h2>Workspace</h2>
-              <div className="workspace-header-actions">
+          
+          <details className="sidebar-accordion" open>
+            <summary>
+              Workspace
+              <div className="workspace-header-actions" onClick={e => e.stopPropagation()}>
                 <button
                   type="button"
                   className="workspace-refresh"
@@ -543,134 +508,64 @@ export function AppShell({
                   Refresh
                 </button>
               </div>
-            </div>
-            <p className="workspace-meta">
-              Active: <strong>{activeProject?.name || activeProjectId}</strong>
-            </p>
-            <p className="workspace-meta">
-              Thread: <code>{currentThreadId.length > 16 ? currentThreadId.slice(0, 16) + '…' : currentThreadId}</code>
-            </p>
-            <div className="workspace-project-list">
-              {creatingProject && (
-                <div className="workspace-project-item workspace-project-item-active">
-                  <span className="project-icon">+</span>
-                  <RenameInput
-                    initialName="New Workspace"
-                    onSave={(newName) => {
-                      onCreateProject(newName)
-                      setCreatingProject(false)
-                    }}
-                    onCancel={() => setCreatingProject(false)}
-                  />
-                </div>
-              )}
-              {projects.map((project) => (
-                <div
-                  key={project.id}
-                  className={`workspace-project-item${
-                    project.id === activeProjectId ? ' workspace-project-item-active' : ''
-                  }`}
-                  onClick={() => {
-                    if (renamingProjectId !== project.id) {
-                      onSwitchProject(project.id)
-                    }
-                  }}
-                >
-                  <span className="project-icon">{project.name?.charAt(0)?.toUpperCase() || '?'}</span>
-                  {renamingProjectId === project.id ? (
+            </summary>
+            <div className="sidebar-accordion-content">
+              <p className="workspace-meta">
+                Active: <strong>{activeProject?.name || activeProjectId}</strong>
+              </p>
+              <p className="workspace-meta">
+                Thread: <code>{currentThreadId.length > 16 ? currentThreadId.slice(0, 16) + '…' : currentThreadId}</code>
+              </p>
+              <div className="workspace-project-list">
+                {creatingProject && (
+                  <div className="workspace-project-item workspace-project-item-active">
+                    <span className="project-icon">+</span>
                     <RenameInput
-                      initialName={project.name}
+                      initialName="New Workspace"
                       onSave={(newName) => {
-                        onEditProject(project.id, newName)
-                        setRenamingProjectId(null)
+                        onCreateProject(newName)
+                        setCreatingProject(false)
                       }}
-                      onCancel={() => setRenamingProjectId(null)}
+                      onCancel={() => setCreatingProject(false)}
                     />
-                  ) : (
-                    <>
-                      <span className="project-name" title={project.name}>
-                        {project.name}
-                      </span>
-                      {project.id !== 'default' && (
-                        <span className="chat-list-item-actions">
-                          <button
-                            type="button"
-                            className="chat-list-action"
-                            title="Rename workspace"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setRenamingProjectId(project.id)
-                            }}
-                          >
-                            ✎
-                          </button>
-                          <button
-                            type="button"
-                            className="chat-list-action chat-list-action-delete"
-                            title="Delete workspace"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              if (confirm('Delete this workspace? This cannot be undone.')) {
-                                onDeleteProject(project.id)
-                              }
-                            }}
-                          >
-                            ✕
-                          </button>
+                  </div>
+                )}
+                {projects.map((project) => (
+                  <div
+                    key={project.id}
+                    className={`workspace-project-item${
+                      project.id === activeProjectId ? ' workspace-project-item-active' : ''
+                    }`}
+                    onClick={() => {
+                      if (renamingProjectId !== project.id) {
+                        onSwitchProject(project.id)
+                      }
+                    }}
+                  >
+                    <span className="project-icon">{project.name?.charAt(0)?.toUpperCase() || '?'}</span>
+                    {renamingProjectId === project.id ? (
+                      <RenameInput
+                        initialName={project.name}
+                        onSave={(newName) => {
+                          onEditProject(project.id, newName)
+                          setRenamingProjectId(null)
+                        }}
+                        onCancel={() => setRenamingProjectId(null)}
+                      />
+                    ) : (
+                      <>
+                        <span className="project-name" title={project.name}>
+                          {project.name}
                         </span>
-                      )}
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-          {/* ── Chat List ── */}
-          <div className="workspace-section">
-            <div className="workspace-header">
-              <h2>Chats</h2>
-              <button type="button" className="workspace-refresh" onClick={onNewChat} title="New chat">
-                + New
-              </button>
-            </div>
-            <div className="chat-list">
-              {projectChats.length === 0 ? (
-                <p className="chat-list-empty">No chats yet. Start a new conversation.</p>
-              ) : (
-                [...projectChats]
-                  .sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))
-                  .map((chat) => (
-                    <div
-                      key={chat.id}
-                      className={`chat-list-item${chat.id === activeChatId ? ' chat-list-item-active' : ''}`}
-                      onClick={() => {
-                        if (renamingChatId !== chat.id) {
-                          onSelectChat(chat.id)
-                        }
-                      }}
-                    >
-                      {renamingChatId === chat.id ? (
-                        <RenameInput
-                          initialName={chat.name}
-                          onSave={(newName) => {
-                            onRenameChat(chat.id, newName)
-                            setRenamingChatId(null)
-                          }}
-                          onCancel={() => setRenamingChatId(null)}
-                        />
-                      ) : (
-                        <>
-                          <span className="chat-list-item-name" title={chat.name}>
-                            {chat.name}
-                          </span>
+                        {project.id !== 'default' && (
                           <span className="chat-list-item-actions">
                             <button
                               type="button"
                               className="chat-list-action"
-                              title="Rename"
+                              title="Rename workspace"
                               onClick={(e) => {
                                 e.stopPropagation()
-                                setRenamingChatId(chat.id)
+                                setRenamingProjectId(project.id)
                               }}
                             >
                               ✎
@@ -678,95 +573,119 @@ export function AppShell({
                             <button
                               type="button"
                               className="chat-list-action chat-list-action-delete"
-                              title="Delete"
+                              title="Delete workspace"
                               onClick={(e) => {
                                 e.stopPropagation()
-                                if (confirm('Delete this chat? This cannot be undone.')) {
-                                  onDeleteChat(chat.id)
+                                if (confirm('Delete this workspace? This cannot be undone.')) {
+                                  onDeleteProject(project.id)
                                 }
                               }}
                             >
                               ✕
                             </button>
                           </span>
-                        </>
-                      )}
-                    </div>
-                  ))
-              )}
+                        )}
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-          <ProjectKnowledgePanel
-            activeProjectId={activeProjectId}
-            onAttachToComposer={(file) => attachWorkspaceFileRef.current(file)}
-          />
+          </details>
+
+          {/* ── Chat List ── */}
+          <details className="sidebar-accordion" open>
+            <summary>
+              Chats
+              <div className="workspace-header-actions" onClick={e => e.stopPropagation()}>
+                <button type="button" className="workspace-refresh" onClick={onNewChat} title="New chat">
+                  + New
+                </button>
+              </div>
+            </summary>
+            <div className="sidebar-accordion-content">
+              <div className="chat-list">
+                {projectChats.length === 0 ? (
+                  <p className="chat-list-empty">No chats yet. Start a new conversation.</p>
+                ) : (
+                  [...projectChats]
+                    .sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))
+                    .map((chat) => (
+                      <div
+                        key={chat.id}
+                        className={`chat-list-item${chat.id === activeChatId ? ' chat-list-item-active' : ''}`}
+                        onClick={() => {
+                          if (renamingChatId !== chat.id) {
+                            onSelectChat(chat.id)
+                          }
+                        }}
+                      >
+                        {renamingChatId === chat.id ? (
+                          <RenameInput
+                            initialName={chat.name}
+                            onSave={(newName) => {
+                              onRenameChat(chat.id, newName)
+                              setRenamingChatId(null)
+                            }}
+                            onCancel={() => setRenamingChatId(null)}
+                          />
+                        ) : (
+                          <>
+                            <span className="chat-list-item-name" title={chat.name}>
+                              {chat.name}
+                            </span>
+                            <span className="chat-list-item-actions">
+                              <button
+                                type="button"
+                                className="chat-list-action"
+                                title="Rename"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setRenamingChatId(chat.id)
+                                }}
+                              >
+                                ✎
+                              </button>
+                              <button
+                                type="button"
+                                className="chat-list-action chat-list-action-delete"
+                                title="Delete"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  if (confirm('Delete this chat? This cannot be undone.')) {
+                                    onDeleteChat(chat.id)
+                                  }
+                                }}
+                              >
+                                ✕
+                              </button>
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    ))
+                )}
+              </div>
+            </div>
+          </details>
+
+          {/* ── Knowledge ── */}
+          <details className="sidebar-accordion" open>
+            <summary>Knowledge</summary>
+            <div className="sidebar-accordion-content">
+              <ProjectKnowledgePanel
+                activeProjectId={activeProjectId}
+                onAttachToComposer={(file) => attachWorkspaceFileRef.current(file)}
+              />
+            </div>
+          </details>
         </aside>
       )}
 
       {/* ── Center Panel ── */}
       <main className={`panel center-panel${isCompact ? ' center-panel-compact' : ''}`}>
         {showDragStrip && <div className="window-drag-strip" data-tauri-drag-region />}
-        {!isSidebarMode && (
-          <header className="topbar" data-tauri-drag-region>
-            <h1>
-              <span className="logo-dot" />
-              Owlynn
-            </h1>
-            {isCompact && (
-              <div className="topbar-actions">
-                <div className="safe-mode-popover-container" style={{ position: 'relative' }}>
-                  <button
-                    type="button"
-                    className="topbar-btn"
-                    onClick={() => setSafeModePopoverOpen(!safeModePopoverOpen)}
-                    title="Security & Safe Mode"
-                  >
-                    🛡
-                  </button>
-                  {safeModePopoverOpen && (
-                    <div className="topbar-popover">
-                      <SafeModePanel />
-                      <CloudSettingsPanel />
-                    </div>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  className="topbar-btn"
-                  onClick={() => setInspectorOpen(!inspectorOpen)}
-                  title="Toggle inspector"
-                >
-                  {inspectorOpen ? '✕' : '☰'}
-                </button>
-                <button
-                  type="button"
-                  className="topbar-btn"
-                  onClick={() => handleToggleMode('full')}
-                  title="Full workspace"
-                >
-                  ⛶
-                </button>
-                <span className={`connection-status`}>
-                  <span className={`connection-dot connection-dot-${connectionState}`} />
-                  <span className="connection-label">{connectionState}</span>
-                </span>
-                <CloudUsageChip />
-                {cloudStatus && (
-                  <span className="connection-status" title={
-                    cloudStatus.available && cloudStatus.key_valid
-                      ? `Cloud: ${cloudStatus.model} (connected)` 
-                      : cloudStatus.error || 'Cloud unavailable'
-                  }>
-                    <span className={`connection-dot ${
-                      cloudStatus.available && cloudStatus.key_valid ? 'connection-dot-connected' : 'connection-dot-error'
-                    }`} />
-                    <span className="connection-label">cloud</span>
-                  </span>
-                )}
-              </div>
-            )}
-          </header>
-        )}
+
         {operatorNote ? <p className="operator-note">ⓘ {operatorNote}</p> : null}
         <div className="messages-container" ref={messagesContainerRef}>
           <div className="messages">
@@ -824,7 +743,31 @@ export function AppShell({
                 )
               }
 
-              return entries.map((entry) => {
+              // First, group sequential tool_activity items
+              const groupedEntries = []
+              let currentToolGroup = null
+              
+              for (const entry of entries) {
+                if (entry.kind === 'conversation_item' && entry.item.kind === 'tool_activity') {
+                  if (!currentToolGroup) {
+                    currentToolGroup = { kind: 'tool_group', items: [entry.item], ts: entry.ts }
+                  } else {
+                    currentToolGroup.items.push(entry.item)
+                  }
+                } else {
+                  if (currentToolGroup) {
+                    groupedEntries.push(currentToolGroup)
+                    currentToolGroup = null
+                  }
+                  groupedEntries.push(entry)
+                }
+              }
+              if (currentToolGroup) {
+                groupedEntries.push(currentToolGroup)
+              }
+
+              return groupedEntries.map((entryRaw, groupIdx) => {
+                const entry = entryRaw as any
                 if (entry.kind === 'message') {
                   const { message, idx } = entry
                   const isStreaming =
@@ -842,28 +785,41 @@ export function AppShell({
                   )
                 }
 
-                // conversation_item
-                const item = entry.item
-                if (item.kind === 'tool_activity') {
-                  const ta = item as ConversationToolActivity
+                if (entry.kind === 'tool_group') {
                   return (
-                    <ToolActivityCard
-                      key={`tool-${ta.id}`}
-                      activity={{
-                        id: ta.id,
-                        toolName: ta.toolName,
-                        toolCallId: ta.toolCallId,
-                        status: ta.status,
-                        input: ta.input,
-                        duration: ta.duration,
-                        riskLabel: ta.riskLabel,
-                        riskConfidence: ta.riskConfidence,
-                        riskRationale: ta.riskRationale,
-                        remediationHint: ta.remediationHint,
-                      }}
-                    />
+                    <details key={`tool-group-${groupIdx}`} className="tool-group-pill">
+                      <summary>
+                        <span className="tool-group-icon">⚙️</span>
+                        <span>Working... ({entry.items.length} tools used)</span>
+                      </summary>
+                      <div className="tool-group-content">
+                        {entry.items.map((item: any) => {
+                          const ta = item as ConversationToolActivity
+                          return (
+                            <ToolActivityCard
+                              key={`tool-${ta.id}`}
+                              activity={{
+                                id: ta.id,
+                                toolName: ta.toolName,
+                                toolCallId: ta.toolCallId,
+                                status: ta.status,
+                                input: ta.input,
+                                duration: ta.duration,
+                                riskLabel: ta.riskLabel,
+                                riskConfidence: ta.riskConfidence,
+                                riskRationale: ta.riskRationale,
+                                remediationHint: ta.remediationHint,
+                              }}
+                            />
+                          )
+                        })}
+                      </div>
+                    </details>
                   )
                 }
+
+                // conversation_item (hitl_prompt, etc)
+                const item = entry.item
 
                 if (item.kind === 'hitl_prompt') {
                   const hp = item as ConversationHitlPrompt
@@ -950,75 +906,7 @@ export function AppShell({
           }}
         />
       </main>
-
-      {/* ── Right Panel ── */}
-      {showInspector && (
-        <aside className={`panel right-panel${isCompact ? ' right-panel-overlay' : ''}`}>
-          {showDragStrip && <div className="window-drag-strip" data-tauri-drag-region />}
-          {isCompact ? (
-            <div className="inspector-header" data-tauri-drag-region>
-              <h2>Inspector</h2>
-              <button type="button" className="topbar-btn" onClick={() => setInspectorOpen(false)}>✕</button>
-            </div>
-          ) : (
-            <div className="inspector-header" data-tauri-drag-region>
-              <h2>Inspector</h2>
-              <div className="inspector-header-actions">
-                <button
-                  type="button"
-                  className="topbar-btn"
-                  onClick={() => handleToggleMode('compact')}
-                  title="Compact mode"
-                >
-                  ⊟
-                </button>
-                <span className={`connection-status`}>
-                  <span className={`connection-dot connection-dot-${connectionState}`} />
-                  <span className="connection-label">{connectionState}</span>
-                </span>
-                <CloudUsageChip />
-                <div className="safe-mode-popover-container" style={{ position: 'relative' }}>
-                  <button
-                    type="button"
-                    className="topbar-btn"
-                    onClick={() => setSafeModePopoverOpen(!safeModePopoverOpen)}
-                    title="Security & Safe Mode"
-                  >
-                    🛡
-                  </button>
-                  {safeModePopoverOpen && (
-                    <div className="topbar-popover">
-                      <SafeModePanel />
-                    <CloudSettingsPanel />
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-          <CollapsibleSection
-            title="Cloud & Usage"
-            icon="☁"
-            defaultOpen={false}
-            testId="inspector-cloud-usage-section"
-          >
-            <CloudSettingsPanel />
-            <CloudUsagePanel />
-          </CollapsibleSection>
-          <CollapsibleSection title="Orchestration" icon="⚙" defaultOpen>
-            <OrchestrationPanel />
-          </CollapsibleSection>
-          <CollapsibleSection title="Study" icon="📚" defaultOpen={false}>
-            <StudyPanel />
-          </CollapsibleSection>
-          <CollapsibleSection title="Memory & Context" icon="🧠" defaultOpen={false}>
-            <MemoryPanel />
-          </CollapsibleSection>
-          <CollapsibleSection title="Screen Assist" icon="🖥">
-            <ScreenAssistPanel />
-          </CollapsibleSection>
-        </aside>
-      )}
+      </div>
     </div>
   )
 }

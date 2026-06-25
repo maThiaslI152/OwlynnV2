@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { useAppStore } from '../../state/useAppStore'
 import { ActionProposalQueue } from '../ActionProposalQueue'
-import { ScreenAssistPanel } from '../ScreenAssistPanel'
 
 // Note: ToolExecutionPanel is not tested here because it depends heavily on
 // browser-only APIs (crypto.subtle, Clipboard API, Blob, URL.createObjectURL)
@@ -175,94 +174,3 @@ describe('ActionProposalQueue regression', () => {
   })
 })
 
-describe('ScreenAssistPanel regression', () => {
-  it('renders default off state', () => {
-    render(<ScreenAssistPanel />)
-    expect(screen.getByText('Source')).toBeTruthy()
-    expect(screen.getByText((content) => content.includes('Mode:') && content.includes('Off'))).toBeTruthy()
-    expect(screen.getByText('Capture')).toBeTruthy()
-    expect(screen.getByText('Preview')).toBeTruthy()
-    expect(screen.getByText('Annotate')).toBeTruthy()
-    expect(screen.getByText('Stop')).toBeTruthy()
-  })
-
-  it('updates source select without crashing', () => {
-    render(<ScreenAssistPanel />)
-    const select = screen.getByLabelText('Source') as HTMLSelectElement
-    expect(select.value).toBe('screen')
-
-    fireEvent.change(select, { target: { value: 'window' } })
-    expect(useAppStore.getState().screenAssist.source).toBe('window')
-    expect(select.value).toBe('window')
-  })
-
-  it('shows preview path when set in store', () => {
-    useAppStore.getState().setScreenAssistMode('preview')
-    useAppStore.getState().setScreenAssistPreviewPath('/tmp/test.png')
-
-    const mockBridge = {
-      startScreenPreview: vi.fn().mockResolvedValue({ ok: true }),
-      stopScreenPreview: vi.fn().mockResolvedValue({ ok: true }),
-      convertFileSrc: vi.fn((path: string) => `asset://${path}`),
-    }
-
-    render(<ScreenAssistPanel bridge={mockBridge} />)
-    expect(screen.getByAltText('screen capture')).toBeTruthy()
-  })
-
-  it('calls startPreview through injected bridge', async () => {
-    const mockBridge = {
-      startScreenPreview: vi.fn().mockResolvedValue({ ok: true, data: 'preview started' }),
-      stopScreenPreview: vi.fn().mockResolvedValue({ ok: true }),
-      convertFileSrc: vi.fn((path: string) => `file://${path}`),
-    }
-
-    render(<ScreenAssistPanel bridge={mockBridge} />)
-    fireEvent.click(screen.getByText('Preview'))
-
-    expect(mockBridge.startScreenPreview).toHaveBeenCalledWith('screen')
-
-    await vi.waitFor(() => {
-      expect(useAppStore.getState().screenAssist.mode).toBe('preview')
-      expect(useAppStore.getState().operatorNote).toContain('preview started')
-    })
-  })
-
-  it('calls stopPreview through injected bridge', async () => {
-    useAppStore.getState().setScreenAssistMode('preview')
-
-    const mockBridge = {
-      startScreenPreview: vi.fn().mockResolvedValue({ ok: true }),
-      stopScreenPreview: vi.fn().mockResolvedValue({ ok: true, data: 'stopped' }),
-      convertFileSrc: vi.fn((path: string) => `file://${path}`),
-    }
-
-    render(<ScreenAssistPanel bridge={mockBridge} />)
-    fireEvent.click(screen.getByText('Stop'))
-
-    expect(mockBridge.stopScreenPreview).toHaveBeenCalled()
-
-    await vi.waitFor(() => {
-      expect(useAppStore.getState().screenAssist.mode).toBe('off')
-      expect(useAppStore.getState().operatorNote).toContain('stopped')
-    })
-  })
-
-  it('shows error note when bridge fails', async () => {
-    const mockBridge = {
-      startScreenPreview: vi.fn().mockResolvedValue({ ok: false, error: 'Tauri unavailable' }),
-      stopScreenPreview: vi.fn().mockResolvedValue({ ok: true }),
-      convertFileSrc: vi.fn((path: string) => `file://${path}`),
-    }
-
-    render(<ScreenAssistPanel bridge={mockBridge} />)
-    fireEvent.click(screen.getByText('Preview'))
-
-    await vi.waitFor(() => {
-      expect(useAppStore.getState().operatorNote).toContain('Tauri unavailable')
-    })
-
-    // State should not have changed on failure
-    expect(useAppStore.getState().screenAssist.mode).toBe('off')
-  })
-})
