@@ -27,11 +27,11 @@ export interface ToolExecutionSnapshot {
   input?: string | null
   toolCallId?: string | null
   status: 'running' | 'success' | 'error'
-  duration?: number
-  riskLabel?: string
-  riskConfidence?: number
-  riskRationale?: string
-  remediationHint?: string
+  duration?: number | null
+  riskLabel?: string | null
+  riskConfidence?: number | null
+  riskRationale?: string | null
+  remediationHint?: string | null
 }
 
 export interface ActionProposal {
@@ -140,6 +140,7 @@ interface AppState {
   executionPolicy: ExecutionPolicy
   windowMode: WindowMode
   screenAssist: ScreenAssistState
+  screenAssistEnabled: boolean
   actionProposals: ActionProposal[]
   latestToolExecution: ToolExecutionSnapshot | null
   toolExecutionHistory: ToolExecutionSnapshot[]
@@ -173,6 +174,7 @@ interface AppState {
   setScreenAssistMode: (mode: ScreenAssistState['mode']) => void
   setScreenAssistSource: (source: ScreenAssistState['source']) => void
   setScreenAssistPreviewPath: (previewPath: string | null) => void
+  setScreenAssistEnabled: (enabled: boolean) => void
   upsertActionProposal: (proposal: ActionProposal) => void
   updateActionProposalStatus: (id: string, status: ActionProposal['status']) => void
   setLatestToolExecution: (tool: ToolExecutionSnapshot | null) => void
@@ -213,6 +215,7 @@ export const useAppStore = create<AppState>((set) => ({
     source: 'screen',
     previewPath: null,
   },
+  screenAssistEnabled: false,
   actionProposals: [],
   latestToolExecution: null,
   toolExecutionHistory: [],
@@ -228,7 +231,7 @@ export const useAppStore = create<AppState>((set) => ({
   interruptQuestion: null,
   interruptChoices: null,
   inlineSecurityPrompt: null,
-      pendingCorrelationId: null,
+  pendingCorrelationId: null,
   activePersonaId: 'default',
   evalResponseStyle: null,
   responseStyle: null,
@@ -282,6 +285,7 @@ export const useAppStore = create<AppState>((set) => ({
         previewPath,
       },
     })),
+  setScreenAssistEnabled: (enabled) => set({ screenAssistEnabled: enabled }),
   upsertActionProposal: (proposal) =>
     set((state) => {
       const existing = state.actionProposals.find((p) => p.id === proposal.id)

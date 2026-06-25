@@ -44,9 +44,12 @@ async def read_screen_element(x: int, y: int) -> str:
 async def get_active_browser_context() -> str:
     """
     Return the active browser tab URL, title, page text, and selection.
+    Use this FIRST whenever the user asks about their "current page" (e.g., Moodle, assignments, grades) or wants to know what text is on the page, or asks "what page am I on".
 
     Prefers the Owlynn Browser Bridge extension (Brave/Chrome) when connected;
     otherwise falls back to AppleScript (Chrome, Safari, Arc) and optional Playwright CDP.
+
+    This tool ONLY returns text context, not visual layout. DO NOT use this tool if the user asks "what you can see", mentions the "screen", or requests visual confirmation. Use `get_active_browser_screenshot` instead for visual requests.
     """
     if not _enabled():
         return "Error: screen assist is disabled in configuration."
@@ -60,7 +63,7 @@ async def get_active_browser_screenshot() -> str:
     Return a base64 encoded jpeg screenshot of the user's active browser tab.
 
     This command requires the Owlynn Browser Bridge extension. Use this when you
-    need visual context of the user's active page.
+    need visual context of the user's active page, or when the user explicitly asks "what can you see", mentions the "screen", or requests visual confirmation.
     """
     if not _enabled():
         return "Error: screen assist is disabled in configuration."

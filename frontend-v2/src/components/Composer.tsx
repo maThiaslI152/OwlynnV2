@@ -7,6 +7,7 @@ import {
   workspaceRefAttachment,
 } from '../lib/attachments'
 import { buildPageContextDraft } from '../lib/browserPageContext'
+import { electronBridge } from '../lib/electronBridge'
 import toast from 'react-hot-toast'
 
 interface Persona {
@@ -48,6 +49,7 @@ export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitl
   const [value, setValue] = useState('')
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([])
   const [isDragging, setIsDragging] = useState(false)
+  const [isCapturing, setIsCapturing] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   
   // Persona selection states
@@ -57,6 +59,8 @@ export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitl
   const setResponseStyle = useAppStore((s) => s.setResponseStyle)
   const browserPageContext = useAppStore((s) => s.browserPageContext)
   const browserPageContextNonce = useAppStore((s) => s.browserPageContextNonce)
+  const screenAssistEnabled = useAppStore((s) => s.screenAssistEnabled)
+  const setScreenAssistEnabled = useAppStore((s) => s.setScreenAssistEnabled)
   const [personas, setPersonas] = useState<Persona[]>([])
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -126,13 +130,55 @@ export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitl
     onSend(content)
   }, [browserPageContextNonce, browserPageContext, onSend])
 
-  const handleSubmit = (event?: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event?: React.FormEvent<HTMLFormElement>) => {
     if (event) event.preventDefault()
-    if (disabled) return
+    if (disabled || isCapturing) return
     const content = value.trim()
-    // Allow sending just files without text
-    if (!content && attachedFiles.length === 0) return
-    onSend(content, attachedFiles.length > 0 ? attachedFiles : undefined)
+    
+    // Allow sending just files without text, but if screenAssist is on, we'll have a file soon
+    if (!content && attachedFiles.length === 0 && !screenAssistEnabled) return
+
+    const finalFiles = [...attachedFiles]
+
+    if (screenAssistEnabled) {
+      setIsCapturing(true)
+      try {
+        const result = await electronBridge.startScreenPreview('screen')
+        if (result.ok && result.data) {
+          // Parse the path from the result string: "screen preview started: screen (/tmp/owlynn-preview-screen-xxxx.jpg)"
+          const match = result.data.match(/\((.*?)\)/)
+          if (match) {
+            const previewPath = match[1]
+            const response = await fetch(electronBridge.convertFileSrc(previewPath))
+            const blob = await response.blob()
+            const dataUrl = await new Promise<string>((res, rej) => {
+              const reader = new FileReader()
+              reader.onload = () => res(reader.result as string)
+              reader.onerror = rej
+              reader.readAsDataURL(blob)
+            })
+            
+            finalFiles.push({
+              name: `Screen Capture - ${new Date().toLocaleTimeString()}.jpg`,
+              type: 'image/jpeg',
+              data: dataUrl,
+            })
+          }
+        } else {
+          toast.error(`Screen capture failed: ${result.error}`)
+        }
+      } catch (err) {
+        toast.error(`Failed to capture screen: ${err}`)
+      } finally {
+        setIsCapturing(false)
+      }
+    }
+
+    if (!content && finalFiles.length === 0) {
+      return // If capture failed and no text, don't send
+    }
+
+    onSend(content, finalFiles.length > 0 ? finalFiles : undefined)
     setValue('')
     setAttachedFiles([])
     if (textareaRef.current) {
@@ -343,6 +389,18 @@ export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitl
           </div>
         )}
         <div className="composer-input-row">
+          <button
+            type="button"
+            className={`composer-screen-assist ${screenAssistEnabled ? 'active' : ''}`}
+            onClick={() => setScreenAssistEnabled(!screenAssistEnabled)}
+            title={screenAssistEnabled ? "Screen Assist: ON (Auto-capture on send)" : "Turn on Screen Assist"}
+            disabled={disabled || hitlBlocked}
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          </button>
           <div className="composer-input-wrap">
             <textarea
               ref={textareaRef}
@@ -354,12 +412,14 @@ export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitl
                   ? 'Approve or decline the action above to continue'
                   : isDragging
                     ? 'Drop files or workspace references here...'
-                    : compact
-                      ? 'Ask...'
-                      : `Ask ${activePersona.name}...`
+                    : isCapturing
+                      ? 'Capturing screen...'
+                      : compact
+                        ? 'Ask...'
+                        : `Ask ${activePersona.name}...`
               }
               rows={1}
-              disabled={disabled || hitlBlocked}
+              disabled={disabled || hitlBlocked || isCapturing}
             />
           </div>
           {isGenerating ? (
