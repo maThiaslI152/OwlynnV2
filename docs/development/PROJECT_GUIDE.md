@@ -52,7 +52,7 @@ Do **not** add new `.py` test or patch scripts at repo root.
 | `tests/test_router_web_intent.py` | Web-intent forcing tests |
 | `tests/test_llm_pool.py` | LLM pool tests |
 
-**Current models** (`defaults.yaml`): router `minicpm5-1b`, complex cloud `deepseek-v4-flash`, vision proxy `qwen3-vl-4b-instruct-c_abliterated-v2-mlx`, extraction `gemma-4-e2b-heretic-uncensored-mlx`. Startup preloads router + embedding only when cloud escalation is enabled.
+**Current models** (`defaults.yaml`): Unified local model `gemma-4-e2b-heretic-uncensored-mlx` (router, vision proxy, and memory extraction), complex cloud `deepseek-v4-flash`. Startup preloads local unified model + embedding.
 
 ## Complex / cloud path
 

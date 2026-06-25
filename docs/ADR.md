@@ -73,9 +73,8 @@ Two-tier model system:
 
 | Tier | Model | Context | Location |
 |------|-------|---------|----------|
-| Router | `minicpm5-1b` | 8K | Always local |
+| Local Unified | `gemma-4-e2b-heretic-uncensored-mlx` | 32K | Always local (routing, vision proxy, memory extraction) |
 | Cloud | `deepseek-v4-flash` | 1M | Primary complex |
-| Extraction | `gemma-4-e2b` | 8K | Local, background |
 
 **Consequences:**
 

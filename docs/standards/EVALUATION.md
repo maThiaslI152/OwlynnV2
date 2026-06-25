@@ -217,9 +217,9 @@ DOM scrape is kept only as a fallback. Both are stored (`executed_tools_ws`, `ex
 | File processed | +10 |
 | DSML leak | −15 |
 | Premature complete (DSML or missing tools at idle) | −10 |
-| Cloud Qwen fallback on cloud-intended turn | cap **49** (`cloud_scoring: qwen_fallback_fail`) |
+| Cloud fallback on cloud-intended turn | cap **49** (`cloud_scoring: cloud_fallback_fail`) |
 
-**Cloud scoring strictness:** When `runtime_profile` is `cloud`/`auto` and the turn expects `complex-cloud` or `vision_cloud`, finishing on `medium-default-fallback` or `medium-default-synthesis` caps the grade at 49. Runtime fallback is **not** blocked — this is eval-only. Exempt: `small-local`, vision profile, `simple` route, `--profile local`.
+**Cloud scoring strictness:** When `runtime_profile` is `cloud`/`auto` and the turn expects `complex-cloud` or `vision_cloud`, finishing on a local fallback route caps the grade at 49. Runtime fallback is **not** blocked — this is eval-only. Exempt: `small-local`, vision profile, `simple` route, `--profile local`.
 
 Skipped turns (Mem0 offline, vision unavailable) are excluded from `max_score`.
 
@@ -257,8 +257,8 @@ Set `PYTHONPATH=.` (repo root) when running eval scripts so `src` imports resolv
 
 When `cloud_no_local_fallback` is enabled (via `--strict-cloud` on cloud profile runs):
 
-- **Blocked:** `medium-default-fallback`, `medium-default-synthesis`, `vision_proxy_failed` → Qwen, `simple` → Qwen
-- **Allowed:** router MiniCPM, Qwen3-VL-4B vision proxy, background memory extraction Gemma
+- **Blocked:** local complex fallback routes (previously routing to medium Qwen)
+- **Allowed:** unified local model `gemma-4-e2b-heretic-uncensored-mlx` (routing, vision proxy, and memory extraction)
 - **Failure badge:** `large-cloud-failed` or `small-local-failed` with explicit error text
 - **Scoring:** cloud-intended turns ending on fallback badges cap at grade 49 (`cloud_fallback_fail`)
 - **Preflight:** `--profile cloud` exits if `/api/cloud-status` reports `key_valid: false`

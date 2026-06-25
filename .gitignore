@@ -46,6 +46,20 @@ secrets/
 # Test caches
 .pytest_cache/
 .hypothesis/
+.coverage
+
+# Built Electron artifacts
+frontend-v2/dist-electron/
+
+# Autonomous loop state
+BLOCKED.md
+
+# Scratch test scripts (root-level)
+/test_cloud_llm.py
+/test_gen.py
+/test_gen.ts
+/test_schema.json
+/test_schema.py
 
 # Model artifacts (Docling, etc.)
 .models/

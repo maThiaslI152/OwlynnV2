@@ -12,31 +12,21 @@ owner: human
 
 ## Models to Download
 
-Owlynn uses a **router** (always loaded) plus an **extraction** model for background memory. Complex reasoning is handled entirely by DeepSeek V4 cloud — no local complex model needed.
+Owlynn uses a single **local unified model** (`gemma-4-e2b-heretic-uncensored-mlx`) which acts as the router, simple path executor, vision proxy VLM, and background memory extraction tool. Complex reasoning is handled entirely by DeepSeek V4 cloud — no local complex model needed.
 
-### Router (Always Loaded)
+### Local Unified Model (Always Loaded)
 
-- `minicpm5-1b` (or `mlx-community/MiniCPM5-1B-8bit`) — routing, simple answers, chat titles
-
-### Extraction (Background memory, lazy-loaded)
-
-- `gemma-4-e2b-heretic-uncensored-mlx` — background memory extraction (STM → LTM writes, idle-deferred)
-- Config: `models.extraction` in [`defaults.yaml`](../../src/config/defaults.yaml)
-
-### Vision proxy (Cloud + image path — Qwen3-VL-4B)
-
-- **`qwen3-vl-4b-instruct-c_abliterated-v2-mlx`** — lazy-loaded on first image; **full multimodal VLM** (describes images, transcribes text, identifies UI)
-- On proxy failure: `complex-cloud` retries text-only (no local multimodal fallback)
-- Config: `models.vision_proxy` in [`defaults.yaml`](../../src/config/defaults.yaml)
+- `gemma-4-e2b-heretic-uncensored-mlx` — handles routing, simple answers, chat titles, vision proxy (image transcription), and background memory extraction.
+- Config: `models.small` in [`defaults.yaml`](../../src/config/defaults.yaml)
 
 ### Embeddings (RAG / Memory Only)
 
 - `text-embedding-nomic-embed-text-v1.5-embedding` — Qdrant vector search for **text documents only**
-- Chat images go through Qwen3-VL-4B vision proxy → DeepSeek text (not local multimodal)
+- Chat images go through the unified local model vision proxy → DeepSeek text (no cloud image upload).
 
 ### Legacy note
 
-Older docs referenced separate vision/longctx model slots, Qwen 9B medium models, and Gemma variants. Current architecture is cloud-primary: only `minicpm5-1b` (router) and `gemma-4-e2b` (extraction) run locally in LM Studio. All complex reasoning goes to DeepSeek V4 cloud.
+Older docs referenced separate vision/longctx model slots, Qwen 9B medium models, Florence-2/Qwen3-VL-4B vision proxies, and Gemma variants. Current architecture is cloud-primary with a single unified local model (`gemma-4-e2b-heretic-uncensored-mlx`) and nomic embedding. All complex reasoning goes to DeepSeek V4 cloud.
 
 ## Jinja Template Issues — `No user query found in messages`
 

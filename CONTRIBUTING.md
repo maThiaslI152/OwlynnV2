@@ -122,6 +122,6 @@ cd frontend-v2 && npx vitest run
 - **Agent nodes** are LangGraph callables over `AgentState` — side effects limited to LLM calls, tools, and memory I/O.
 - **Memory scoping**: Non-default projects isolate memories via `project:<id>` user IDs in Mem0.
 - **Security proxy**: Sensitive tool calls pass through `security_proxy_node` / `plan_review_node` with HITL interrupts.
-- **Models**: Router `minicpm5-1b`, complex `qwen3.5-9b-uncensored-hauhaucs-aggressive@q6_k` — see `src/config/defaults.yaml`.
+- **Models**: Unified local model `gemma-4-e2b-heretic-uncensored-mlx` (routing, vision proxy, and memory extraction), cloud complex `deepseek-v4-flash` — see `src/config/defaults.yaml`.
 
 See [`docs/architecture/overview.md`](docs/architecture/overview.md) and [`AGENTS.md`](AGENTS.md).

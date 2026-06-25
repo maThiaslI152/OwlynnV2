@@ -1,12 +1,12 @@
 # Owlynn — Local AI Cowork Agent
 
 [![Python](https://img.shields.io/badge/python-3.11+-blue)](https://python.org)
-[![Node](https://img.shields.io/badge/node-18+-green)](https://nodejs.org)
+[![Node](https://img.shields.io/badge/node-20+-green)](https://nodejs.org)
 [![CI](https://img.shields.io/badge/CI-local_scripts%2Fci.sh-059669)](scripts/ci.sh)
 [![Frontend](https://img.shields.io/badge/frontend-React_19_%2B_Vite_8-61DAFB)](frontend-v2/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-A private AI productivity agent with **cloud-primary DeepSeek V4** routing and local fallback. LangGraph orchestration, MiniCPM5 router + optional local Qwen9B fallback, Florence-2 vision proxy for images, semantic memory, and an Electron desktop UI. Optimized for Apple Silicon (M4 Air 24GB).
+A private AI productivity agent with **cloud-primary DeepSeek V4** routing and local fallback. LangGraph orchestration, Gemma-4-E2B unified local model (routing, vision proxy, and memory extraction), semantic memory, and an Electron desktop UI. Optimized for Apple Silicon (M4 Air 24GB).
 
 ## Goal
 
@@ -18,9 +18,9 @@ Owlynn is a **desktop AI coworker** that keeps your data local. It reasons throu
 
 | Capability | Summary |
 |------------|---------|
-| **Routing** | MiniCPM5 router → `simple` \| `complex-default` \| `complex-cloud` |
+| **Routing** | Gemma-4-E2B router → `simple` \| `complex-cloud` |
 | **Memory orchestration** | Split inject (`memory_inject_lite` → router → gated `memory_retrieve`), async 8B extraction, PII scrub, pentest/research scenarios |
-| **Vision proxy** | Local VLM → JSON OCR → text-only DeepSeek path; lazy load + idle unload |
+| **Vision proxy** | Local Gemma-4-E2B VLM → JSON OCR → text-only DeepSeek path; lazy load + idle unload |
 | **Screen assist** | macOS tmux capture, Accessibility API, browser tab, Kali SSH tmux (Python tools) |
 | **HITL** | Security proxy + plan review for sensitive tool calls |
 | **Search** | Browser extension (tier 0.2) → curl_cffi → DDGS → Playwright; SearXNG opt-in |
@@ -46,7 +46,7 @@ User Message
 memory_inject_lite ──► profile, persona, topics (no vector search)
     │
     ▼
-router ──► simple | complex-default | complex-cloud; memory gate + scenario
+router ──► simple | complex-cloud; memory gate + scenario
     │
     ▼
 memory_retrieve ──► gated Qdrant/Mem0 + scenario markdown (when needed)
@@ -68,7 +68,7 @@ auto_summarize? ──► if tokens > 85% context window
          memory_write ──► PII scrub → Redis extraction queue → END
 ```
 
-Routes: **`simple`**, **`complex-default`** (local Qwen), **`complex-cloud`** (DeepSeek V4). Legacy `complex-vision` / `complex-longctx` routes removed.
+Routes: **`simple`**, **`complex-cloud`** (DeepSeek V4). Legacy `complex-default`, `complex-vision`, and `complex-longctx` routes removed.
 
 ### Tech Stack
 
@@ -76,13 +76,14 @@ Routes: **`simple`**, **`complex-default`** (local Qwen), **`complex-cloud`** (D
 |-------|------------|
 | Backend | FastAPI + LangGraph + Python 3.11+ |
 | Frontend | React 19 + TypeScript (Vite 8) + Zustand 5, Electron desktop |
-| Router LLM | `minicpm5-1b` (classification) |
-| Medium LLM | `qwen3.5-9b-uncensored-hauhaucs-aggressive@q6_k` (local complex + vision proxy) |
-| Cloud LLM | `deepseek-v4-flash` / `deepseek-v4-pro` (optional `complex-cloud`) |
-| File processing | Docling v2 (PDF/DOCX → markdown) |
+| Local LLM | `gemma-4-e2b-heretic-uncensored-mlx` (routing, vision proxy, background memory extraction) |
+| Cloud LLM | `deepseek-v4-flash` / `deepseek-v4-pro` (primary complex reasoning) |
+| File processing | Docling v2 (PDF/DOCX → markdown), StirlingPDF (Docker, OCR), PyMuPDF |
 | Memory | Mem0 + Qdrant + JSON STM; Redis extraction worker |
 | Checkpointing | Redis (`AsyncRedisSaver`; falls back to in-memory) |
 | Search | Multi-tier: browser extension → curl_cffi / DDGS → Playwright; SearXNG opt-in |
+| Package manager | `uv` (Python), npm (Node) |
+| Build system | Hatchling (backend), Vite + electron-builder (frontend) |
 | Testing | pytest + hypothesis (backend), vitest (frontend) |
 | CI | Local [`scripts/ci.sh`](scripts/ci.sh) (pre-push hook) |
 
@@ -134,8 +135,7 @@ Settings live in `src/config/defaults.yaml` (override chain: YAML → env → `u
 
 | Slot | Default model | Role |
 |------|---------------|------|
-| Small | `minicpm5-1b` | Router |
-| Medium | `qwen3.5-9b-...@q6_k` | Local complex + vision proxy |
+| Small | `gemma-4-e2b-heretic-uncensored-mlx` | Local Unified Model (routing, vision proxy, memory extraction) |
 | Cloud | `deepseek-v4-flash` | DeepSeek V4 (`complex-cloud`) |
 
 Local models via LM Studio on port `1234`.
@@ -183,7 +183,7 @@ Set models in `.env` or the Settings UI (see [`docs/guides/dev-startup.md`](docs
 ./start.sh
 ```
 
-Starts Podman containers (Qdrant + Redis), prompts for LM Studio on `:1234`, then backend (`:8000`) + Vite (`:5173`).
+Starts Podman containers (Qdrant + Redis + StirlingPDF), prompts for LM Studio on `:1234`, then backend (`:8000`) + Vite (`:5173`).
 
 ### Browser-only dev
 

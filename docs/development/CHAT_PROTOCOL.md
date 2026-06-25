@@ -500,7 +500,7 @@ Returns all user-facing settings merged from `GET /api/profile` and `GET /api/ad
   "preferred_language": "en",
   "response_style": "concise",
   "small_llm_base_url": "http://127.0.0.1:1234/v1",
-  "small_llm_model_name": "minicpm5-1b",
+  "small_llm_model_name": "gemma-4-e2b-heretic-uncensored-mlx",
   "llm_base_url": "http://127.0.0.1:1234/v1",
   "llm_model_name": "gemma-4-e2b-heretic-uncensored-mlx",
   "cloud_llm_base_url": "https://api.deepseek.com/v1",

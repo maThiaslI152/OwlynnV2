@@ -26,27 +26,24 @@ Related Owlynn docs: [`CLOUD-LLM-ARCHITECTURE.md`](../CLOUD-LLM-ARCHITECTURE.md)
 
 ### 1. Role split: cloud-primary planner/workhorse
 
-- **Local MiniCPM5** (`models.small`): router + simple path; always preloaded at startup.
+- **Local Unified Model** (`models.small`): router + simple path + vision proxy + background memory extraction (`gemma-4-e2b-heretic-uncensored-mlx`); preloaded at startup.
 - **Local nomic embedding** (`models.embedding`): memory/RAG/web-rank; preloaded at startup.
-- **Local Qwen9B** (`models.medium`): **fallback only** when cloud unavailable or invoke fails; lazy-loaded (not preloaded when DeepSeek key + escalation enabled).
-- **Qwen3-VL-4B** (`models.vision_proxy`): dedicated vision proxy for cloud+image; lazy on first attachment.
 - **DeepSeek V4** (`models.cloud`): primary complex workhorse on route `complex-cloud` (default when cloud available).
 - The router can emit an `execution_plan` JSON block injected into the cloud system prompt.
 
 Entry points: [`src/agent/llm.py`](../../src/agent/llm.py) (`get_cloud_llm`), [`src/agent/nodes/complex.py`](../../src/agent/nodes/complex.py) (`complex_llm_node`), [`src/agent/nodes/router.py`](../../src/agent/nodes/router.py).
 
-### 2. Vision-to-text proxy (Qwen3-VL-4B)
+### 2. Vision-to-text proxy (Gemma-4-E2B)
 
 DeepSeek V4 is **text-only**. Images never go to the API as multimodal input.
 
 When `route == complex-cloud` and the user attached images:
 
-1. [`vision_proxy.py`](../../src/agent/nodes/complex_utils/vision_proxy.py) runs Qwen3-VL-4B (`models.vision_proxy`, lazy via `vision_model_manager.py`).
+1. [`vision_proxy.py`](../../src/agent/nodes/complex_utils/vision_proxy.py) runs the unified local model Gemma-4-E2B (`models.small`, lazy via `vision_model_manager.py`).
 2. Default mode: natural-language prompts → [`vision_qwen3vl.py`](../../src/agent/nodes/complex_utils/vision_qwen3vl.py) parses text/UI into structured blocks; [`vision_schema.py`](../../src/agent/nodes/complex_utils/vision_schema.py) formats `[Image content transcribed by vision sensor]` text.
-3. Fallback mode (`cloud.vision_prompt_mode: json_chat`): Qwen9B+mmproj JSON OCR prompt (legacy path).
-4. DeepSeek receives a normal text conversation (no `image_url`).
+3. DeepSeek receives a normal text conversation (no `image_url`).
 
-On proxy failure, the code falls back to local `complex-default` (Qwen9B multimodal).
+On proxy failure, the code retries with a text-only prompt (no local multimodal fallback).
 
 ### 3. Cloud path security
 
@@ -54,7 +51,7 @@ Before any DeepSeek call on `complex-cloud`, [`prepare_cloud_payload()`](../../s
 
 1. **Anonymization** — deterministic SHA-256 placeholders for PII/paths/emails.
 2. **Cloud brief** (first turn only) — compact HITL summary when no tool history; full anonymized history on tool-loop turns.
-3. **Vision proxy** — local Qwen3-VL-4B transcription with hash cache; post-vision re-anonymization.
+3. **Vision proxy** — local Gemma-4-E2B transcription with hash cache; post-vision re-anonymization.
 4. **Deanonymization** on response content, `reasoning_content`, and tool-call args.
 
 Routes are **`simple | complex-cloud`** (cloud-primary; legacy `complex-default` / `complex-vision` / `complex-longctx` removed).

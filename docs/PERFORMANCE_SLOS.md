@@ -53,15 +53,14 @@ Measured from: user sends message → assistant first token received (streaming)
 | Component | Budget | Notes |
 |-----------|--------|-------|
 | Python agent (langgraph + LLM pool) | 2 GB | Peak during complex reasoning + tool execution |
-| Small LLM (`minicpm5-1b`, Q8_0, LM Studio) | 1.5 GB | Router + simple fallback |
-| Extraction LLM (`gemma-4-e2b-heretic-uncensored-mlx`, LM Studio) | 3.5 GB | Background memory extraction |
-| Vision LLM (`qwen3-vl-4b-instruct-c_abliterated-v2-mlx`, LM Studio) | 3.0 GB | Vision proxy (lazy, on first image) |
+| Local Unified LLM (`gemma-4-e2b-heretic-uncensored-mlx`, LM Studio) | 3.5 GB | Router, vision proxy, memory extraction |
+| nomic embedding (LM Studio) | 140 MB | Memory/RAG/web-rank embeddings |
 | Qdrant (Docker) | 512 MB | Vector store for memory |
 | Redis (Docker) | 128 MB | Session state + LangGraph checkpoints |
 | SearxNG (Docker) | 256 MB | Local web search |
 | Frontend (Tauri + React) | 256 MB | Desktop shell + rendered UI |
-| **Total sustained** | **~9.1 GB** | All models loaded, all services running |
-| **Total peak** | **~10.5 GB** | During complex reasoning + web search + memory save |
+| **Total sustained** | **~6.8 GB** | All models loaded, all services running |
+| **Total peak** | **~7.8 GB** | During complex reasoning + web search + memory save |
 
 ### Storage
 
