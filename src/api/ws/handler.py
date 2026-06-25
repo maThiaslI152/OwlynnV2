@@ -863,6 +863,15 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                     logger.info("Saved file to %s", filepath)
                 except Exception as e:
                     logger.error("Failed to save file %s: %s", name, e)
+                    try:
+                        await websocket.send_json(
+                            {
+                                "type": "error",
+                                "content": f"Failed to save attachment '{name}': {e}",
+                            }
+                        )
+                    except Exception:
+                        pass  # WS already closed
 
             # On first user message in a thread, register the chat in the project
             if thread_id not in sessions or not sessions[thread_id].event_buffer:

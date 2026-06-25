@@ -177,7 +177,9 @@ def _anonymize_message_for_cloud(
                     if stripped:
                         content = json.dumps(data)
             except Exception:
-                pass
+                logger.warning(
+                    "Failed to strip DOM data from cloud payload", exc_info=True
+                )
         content, msg_mapping = anonymize(content, anon_ctx)
         if msg_mapping:
             anon_mapping = msg_mapping

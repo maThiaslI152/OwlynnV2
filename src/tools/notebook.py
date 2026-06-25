@@ -37,8 +37,8 @@ def _cleanup_worker(proc):
     except Exception:
         try:
             proc.kill()
-        except:
-            pass
+        except Exception:
+            pass  # kill failed; process may be zombie
 
 
 @atexit.register

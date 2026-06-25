@@ -81,8 +81,8 @@ def main():
                     json.dumps({"error": f"Worker internal error: {str(e)}"}) + "\n"
                 )
                 sys.stdout.flush()
-            except:
-                pass
+            except Exception:
+                pass  # stdout write failed; parent will see worker timeout
 
 
 if __name__ == "__main__":

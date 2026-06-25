@@ -75,6 +75,7 @@ TEST_PROMPTS: list[dict[str, Any]] = [
         "topic": "Router Precision (Simple)",
         "prompt": "Hello there! Hope you are doing well today.",
         "expected_route": "simple",
+        "expected_tools": [],
         "timeout_s": SIMPLE_TIMEOUT_S,
         "min_response_chars": 8,
         "pipeline_notes": "keyword_bypass → simple → memory_write",

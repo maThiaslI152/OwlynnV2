@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from jsonschema import Draft7Validator
 from langchain_core.tools import tool
@@ -98,7 +101,7 @@ def render_interactive_block(block_type: str, payload: dict) -> str:
         project_id = get_active_project_id() or "default"
         _persist_artifact(project_id, block_type.strip().lower(), payload)
     except Exception:
-        pass
+        logger.warning("Failed to persist interactive artifact", exc_info=True)
 
     return (
         "Interactive block ready — include this fence verbatim in your reply:\n\n"

@@ -89,7 +89,9 @@ def serialize_message(msg):
 
             content_ui = _strip_dsml_blocks(_strip_thinking_tags(content_ui or ""))
         except Exception:
-            pass
+            logger.warning(
+                "Failed to strip DSML/thinking tags from message content", exc_info=True
+            )
     else:
         content_ui = msg.content
 
