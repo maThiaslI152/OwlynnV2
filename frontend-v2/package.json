@@ -9,7 +9,8 @@
     "build": "tsc -b && vite build && electron-builder",
     "test": "vitest run",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "generate:types": "cd .. && python scripts/generate_ws_types.py"
   },
   "dependencies": {
     "mermaid": "^11.15.0",
@@ -38,6 +39,7 @@
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.5.0",
     "jsdom": "^29.0.2",
+    "json-schema-to-typescript": "^15.0.4",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.58.2",
     "vite": "^8.0.10",

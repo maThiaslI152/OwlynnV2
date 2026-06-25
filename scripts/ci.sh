@@ -147,6 +147,14 @@ if ! $PYTHON_ONLY; then
     (cd frontend-v2 && npm ci)
   fi
 
+  info "Checking WS payload generation drift…"
+  if (cd frontend-v2 && npm run generate:types >/dev/null) && git diff --exit-code frontend-v2/src/types/protocol.generated.ts > /dev/null; then
+    pass "WS Payload types are up to date"
+  else
+    fail "WS Payload types drifted! Run 'npm run generate:types' in frontend-v2 and commit the changes."
+    EXIT_CODE=1
+  fi
+
   info "Running frontend linting…"
   if (cd frontend-v2 && npm run lint); then
     pass "Frontend linting passed"
