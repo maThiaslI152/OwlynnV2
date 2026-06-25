@@ -250,6 +250,7 @@ async def websocket_endpoint(websocket: WebSocket):
                                     content,
                                     user_id="owner",
                                     metadata={"url": url, "source": "live_tracking"},
+                                    infer=False,
                                 )
                                 logger.info(f"Saved live tracking context for {url}")
                             except Exception as e:

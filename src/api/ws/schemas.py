@@ -67,7 +67,7 @@ class AssistantMessagePayload(BaseModel):
     tool_name: Optional[str] = None
     tool_call_id: Optional[str] = None
     model_used: Optional[str] = None
-    token_usage: Optional[Dict[str, int]] = None
+    token_usage: Optional[Dict[str, Any]] = None
 
 
 class AssistantMessageEvent(BaseModel):
@@ -276,6 +276,15 @@ class CoherenceRetryCompletedEvent(BaseModel):
     type: Literal["coherence_retry_completed"] = "coherence_retry_completed"
 
 
+class ResponseCoherenceEvent(BaseModel):
+    type: Literal["response_coherence"] = "response_coherence"
+    coherent: bool
+    confidence: float
+    duration_ms: int
+    reason: Optional[str] = None
+    correlation_id: Optional[str] = None
+
+
 ServerEvent = Annotated[
     Union[
         AssistantMessageEvent,
@@ -303,6 +312,7 @@ ServerEvent = Annotated[
         BrowserPageContextEvent,
         CoherenceRetryStartedEvent,
         CoherenceRetryCompletedEvent,
+        ResponseCoherenceEvent,
     ],
     Field(discriminator="type"),
 ]

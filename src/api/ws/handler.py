@@ -923,4 +923,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
         # But we should stop the forwarder.
         forwarder_task.cancel()
         # The forwarder cleanup will check if it should delete the session.
-        await websocket.close(code=1000)
+        try:
+            await websocket.close(code=1000)
+        except RuntimeError:
+            pass
