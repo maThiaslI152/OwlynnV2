@@ -670,7 +670,9 @@ async def delete_project(project_id: str) -> None:
 async def wait_for_ready(page: Page) -> None:
     print("[EVAL] Waiting for UI to be ready...")
     try:
-        await page.locator(".workspace-project-item").first.wait_for(state="visible", timeout=30000)
+        await page.locator(".workspace-project-item").first.wait_for(
+            state="visible", timeout=30000
+        )
     except Exception as e:
         print(f"Failed to find workspace item: {e}")
     await page.wait_for_timeout(1000)

@@ -114,27 +114,16 @@ for i in $(seq 1 180); do
     sleep 1
 done
 
-# Start frontend (Vite dev server)
+# Start frontend (Electron App)
 if [ -d "frontend-v2" ]; then
-    (cd frontend-v2 && npx vite --host 127.0.0.1 --port 5173 >/dev/null 2>&1) &
+    (cd frontend-v2 && npm run dev >/dev/null 2>&1) &
     _PIDS+=("$!")
-    for _ in $(seq 1 30); do
-        curl -sf -o /dev/null http://127.0.0.1:5173 && break
-        sleep 1
-    done
-    echo "      Frontend ready (PID $!)."
+    echo "      Electron app launching (PID $!)."
     echo ""
     echo "── Owlynn running ──"
-    echo "   Browser: http://127.0.0.1:5173"
     echo "   API:     http://127.0.0.1:8000"
     echo "   Press Ctrl+C to stop."
     echo ""
-    if [ -d "/Applications/Brave Browser.app" ]; then
-        echo "      Opening Brave Browser with search extension loaded..."
-        open -a "Brave Browser" "http://127.0.0.1:5173" --args --load-extension="$(pwd)/browser-extension" 2>/dev/null || open http://127.0.0.1:5173 2>/dev/null || true
-    else
-        open http://127.0.0.1:5173 2>/dev/null || true
-    fi
 else
     echo "      Frontend not found. API at http://127.0.0.1:8000"
     echo "      Press Ctrl+C to stop."
