@@ -313,6 +313,24 @@ function App() {
           clearTimeout(pendingTimeoutRef.current)
           pendingTimeoutRef.current = null
         }
+        // Clear streaming state when connection drops
+        // This handles cases where the agent finishes but WS events are lost
+        const msgs = useAppStore.getState().messages
+        const last = msgs[msgs.length - 1]
+        if (last && last.role === 'assistant' && last.id?.startsWith('stream-')) {
+          useAppStore.setState({
+            messages: msgs.map((m, idx) =>
+              idx === msgs.length - 1
+                ? {
+                    id: crypto.randomUUID(),
+                    role: 'assistant',
+                    content: m.content || '',
+                    ts: Date.now(),
+                  }
+                : m
+            ),
+          })
+        }
       },
       onError: () => setConnection('error'),
       onEvent: (event: ServerEvent) => {

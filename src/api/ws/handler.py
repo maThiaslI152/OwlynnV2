@@ -636,8 +636,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                                     "type": "ai",
                                                     "content": "",
                                                     "id": str(
-                                                        getattr(msg, "id", "")
-                                                        or ""
+                                                        getattr(msg, "id", "") or ""
                                                     ),
                                                 },
                                             }

@@ -880,25 +880,41 @@ async def wait_for_turn_complete(
             # or response is ready, treat as complete. Handles lost WS events.
             if busy and elapsed > 30:
                 try:
-                    dom_busy = await asyncio.wait_for(is_graph_busy(page), timeout=5.0)
-                    if not dom_busy:
-                        print(
-                            "\n[EVAL] WS idle not received but DOM shows "
-                            "not busy — treating as complete"
-                        )
+                    # Check if frontend is disconnected — if so, not busy
+                    conn_state = await asyncio.wait_for(
+                        page.evaluate(
+                            "() => {"
+                            "  const el = document.querySelector('[data-connection-state]');"
+                            "  return el ? el.dataset.connectionState : 'unknown';"
+                            "}"
+                        ),
+                        timeout=3.0,
+                    )
+                    if conn_state == "disconnected":
+                        print("\n[EVAL] Frontend disconnected — treating as complete")
                         busy = False
                     else:
-                        dom_response = await asyncio.wait_for(
-                            scrape_final_response(page), timeout=5.0
+                        dom_busy = await asyncio.wait_for(
+                            is_graph_busy(page), timeout=5.0
                         )
-                        dom_normalized = _normalize_response(dom_response)
-                        if len(dom_normalized) >= min_chars:
+                        if not dom_busy:
                             print(
-                                f"\n[EVAL] WS idle not received but response "
-                                f"ready ({len(dom_normalized)} chars) — "
-                                f"treating as complete"
+                                "\n[EVAL] WS idle not received but DOM shows "
+                                "not busy — treating as complete"
                             )
                             busy = False
+                        else:
+                            dom_response = await asyncio.wait_for(
+                                scrape_final_response(page), timeout=5.0
+                            )
+                            dom_normalized = _normalize_response(dom_response)
+                            if len(dom_normalized) >= min_chars:
+                                print(
+                                    f"\n[EVAL] WS idle not received but response "
+                                    f"ready ({len(dom_normalized)} chars) — "
+                                    f"treating as complete"
+                                )
+                                busy = False
                 except Exception:
                     pass
         else:

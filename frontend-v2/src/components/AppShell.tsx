@@ -481,7 +481,7 @@ export function AppShell({
   const showDragStrip = isTauriRuntime()
 
   return (
-    <div className="app-shell-wrapper">
+    <div className="app-shell-wrapper" data-connection-state={connectionState}>
       <MacMenuBar 
         isCompact={isCompact} 
         onToggleMode={() => handleToggleMode(isCompact ? 'full' : 'compact')} 
