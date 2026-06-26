@@ -535,11 +535,16 @@ function App() {
         } else if (event.type === 'coherence_retry_completed') {
           setCoherenceRetryActive(false)
         } else if (event.type === 'cloud_fallback') {
-          setCloudFallback({
-            reason: (event as any).reason || 'cloud_unavailable',
-            fallback_model: (event as any).fallback_model || 'local-fallback',
-            can_retry: (event as any).can_retry !== false,
-          })
+          // In auto_approve mode, auto-accept the fallback without blocking
+          if (executionPolicy === 'auto_approve') {
+            setCloudFallback(null)
+          } else {
+            setCloudFallback({
+              reason: (event as any).reason || 'cloud_unavailable',
+              fallback_model: (event as any).fallback_model || 'local-fallback',
+              can_retry: (event as any).can_retry !== false,
+            })
+          }
         }
       },
     })
