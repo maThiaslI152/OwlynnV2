@@ -89,6 +89,7 @@ function App() {
   const activeProjectIdRef = useRef(activeProjectId)
   const currentThreadIdRef = useRef(currentThreadId)
   const wsClientRef = useRef<WsClient | null>(null)
+  const pendingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isTauriRuntime = typeof window !== 'undefined' && Boolean((window as any).__TAURI_INTERNALS__)
   const apiBase = isTauriRuntime ? 'http://127.0.0.1:8000' : ''
   const apiUrl = (path: string) => apiBase + path
@@ -308,6 +309,10 @@ function App() {
         setConnection('disconnected')
         setLatestToolExecution(null)
         setPendingCorrelationId(null)
+        if (pendingTimeoutRef.current) {
+          clearTimeout(pendingTimeoutRef.current)
+          pendingTimeoutRef.current = null
+        }
       },
       onError: () => setConnection('error'),
       onEvent: (event: ServerEvent) => {
@@ -323,10 +328,26 @@ function App() {
             return
         }
 
+        // Clear any existing timeout when we get a new event
+        if (pendingTimeoutRef.current) {
+            clearTimeout(pendingTimeoutRef.current)
+            pendingTimeoutRef.current = null
+        }
+
         if (isIdleStatus && pendingId) {
             useAppStore.setState({ pendingCorrelationId: null })
         } else if (!isIdleStatus && eventId && !pendingId) {
             useAppStore.setState({ pendingCorrelationId: eventId })
+            // Fallback: clear pendingCorrelationId after 120s of no WS activity
+            // This handles cases where status:idle or assistant.message is lost
+            pendingTimeoutRef.current = setTimeout(() => {
+                const currentPending = useAppStore.getState().pendingCorrelationId
+                if (currentPending) {
+                    console.warn('[WS] Pending correlation timeout — clearing stale generating state')
+                    useAppStore.setState({ pendingCorrelationId: null })
+                }
+                pendingTimeoutRef.current = null
+            }, 120_000)
         }
 
         if (event.type === 'assistant.message') {
@@ -365,6 +386,10 @@ function App() {
           }
           if (pendingId) {
             useAppStore.setState({ pendingCorrelationId: null })
+            if (pendingTimeoutRef.current) {
+              clearTimeout(pendingTimeoutRef.current)
+              pendingTimeoutRef.current = null
+            }
           }
         } else if (event.type === 'safe_mode.changed') {
           setSafeMode(event.mode)
@@ -491,6 +516,10 @@ function App() {
       controller.abort()
       disconnect()
       wsClientRef.current = null
+      if (pendingTimeoutRef.current) {
+        clearTimeout(pendingTimeoutRef.current)
+        pendingTimeoutRef.current = null
+      }
     }
   }, [activeProjectId, addMessage, appendStreamChunk, applyBrowserPageContext, currentThreadId, executionPolicy, pushToolExecution, setConnection, setLatestToolExecution, setPendingCorrelationId, setMemoryUpdatedAt, setModelInfo, setContextCompression, setContextBreakdown, setCloudUsage, setCoherenceRetryActive, setOperatorNote, setRouterMetadata, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setTtsSpeaking, upsertActionProposal, updateActionProposalStatus, isTauriRuntime, wsBaseUrl])
 
