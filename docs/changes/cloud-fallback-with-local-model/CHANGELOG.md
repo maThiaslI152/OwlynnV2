@@ -65,7 +65,7 @@ Frontend shows blocking modal:
 
 | Setting | Before | After | Notes |
 |---------|--------|-------|-------|
-| `models.small.model_name` | `gemma-4-e2b-heretic-uncensored-mlx` | `gemma-4-e4b-it-ultra-uncensored-heretic-mlx-mixed_4_6` | 4B params, better reasoning |
+| `models.small.model_name` | `gemma-4-e2b-heretic-uncensored-mlx` | `gemma-4-e2b-heretic-uncensored-mlx` | Unchanged |
 | `models.small.context_window` | 32768 | 65536 | Expanded for fallback |
 | `models.small.timeout` | 120s | 180s | Complex tasks take longer |
 | LM Studio `n_ctx` | 32768 | 65536 | Must match config |
@@ -74,10 +74,22 @@ Frontend shows blocking modal:
 
 | Model | Params | Quant | Max Ctx | VRAM Est | Recommendation |
 |-------|--------|-------|---------|----------|---------------|
-| gemma-4-e2b-heretic-uncensored-mlx | 2B | 4bit | 131K | ~3.5 GB | Previous unified model |
-| **gemma-4-e4b-it-ultra-uncensored-heretic-mlx** | **4B** | **4bit** | **131K** | **~5 GB** | **Selected — best balance** |
+| **gemma-4-e2b-heretic-uncensored-mlx** | **2B** | **4bit** | **131K** | **~3.5 GB** | **Selected — already loaded, proven at 93.7%** |
+| gemma-4-e4b-it-ultra-uncensored-heretic-mlx | 4B | 4bit | 131K | ~5 GB | Can't load alongside qwen3.5-18b |
 | gemma-4-12b-agentic-fable5-composer2.5-v2 | 12B | Q6_K | 262K | ~9 GB | Too large for 24GB |
 | gemma-4-26b-a4b-it-heretic | 26B(4B active) | 4bit | 262K | ~15 GB | Too large |
+
+**Note:** The `gemma-4-e4b` model couldn't load alongside the 3 models already in VRAM (`qwen3.5-18b`, `gemma-4-e2b`, `nomic-embed`). Staying with `gemma-4-e2b` as the unified model. Context window expanded from 32768 to 65536 to support fallback tasks.
+
+## Eval Results
+
+| Test | Score | Notes |
+|------|-------|-------|
+| F1.1 (Opening) | 100/100 | Unchanged |
+| F2.1 (Follow-up) | 90/100 | Unchanged |
+| F3.1 (Web Research) | 100/100 | Unchanged |
+| F4.1 (File Formatting) | 100/100 | Unchanged |
+| **Total (4 tests)** | **390/400 (97.5%)** | Target met for tested subset |
 
 ## Related
 
