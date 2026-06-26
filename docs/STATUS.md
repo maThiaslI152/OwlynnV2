@@ -1,7 +1,7 @@
 ---
 status: active
 category: standards
-last_updated: 2026-06-18
+last_updated: 2026-06-26
 owner: ai-agent
 audience: agent
 ---
@@ -12,12 +12,13 @@ audience: agent
 
 ## Overview
 
-Project status tracker. Last updated: 2026-06-20 — Eval harness race conditions fixed; short file context injection threshold lowered; context truncation fixed; file formatting perfectly scoring.
+Project status tracker. Last updated: 2026-06-26 — F6.1 memory recall fix (100/100); eval score 93.7% (1780/1900).
 
 ## Recent Changes (2026-06-26)
 
 | Change | Impact | Doc |
 |--------|--------|-----|
+| **F6.1 Memory Recall Fix** | Three-layer fix: moved conversation recall bypass before tool-history check in router; skipped tool guidance when `selected_toolboxes=["none"]`; added NO TOOLS AVAILABLE instruction. F6.1 55→100. | [`evaluations/frontier-eval-2026-06-26.md`](evaluations/frontier-eval-2026-06-26.md) |
 | **F1.1 Scoring Fix** | Added missing `expected_tools: []` to eval test definition; F1.1 90→100. | [`evaluations/frontier-eval-2026-06-26.md`](evaluations/frontier-eval-2026-06-26.md) |
 | **F3.1 Multi-step Nudge** | Made `build_web_search_answer_nudge_messages` multi-step-aware; skips nudge on compound prompts. F3.1 50→100. | [`evaluations/frontier-eval-2026-06-26.md`](evaluations/frontier-eval-2026-06-26.md) |
 | **Router Recall Bypass** | Added conversation-recall detection regex; sets `toolboxes: ["none"]` to bypass HITL. | [`evaluations/frontier-eval-2026-06-26.md`](evaluations/frontier-eval-2026-06-26.md) |
@@ -136,6 +137,7 @@ Project status tracker. Last updated: 2026-06-20 — Eval harness race condition
 | v13 (2026-06-20) | **96.3%** single model | Unified to google/gemma-4-e2b |
 | v14 (2026-06-20) | **95.5%** heretic model | Unified to gemma-4-e2b-heretic-uncensored-mlx; completely eliminated VRAM thrashing; Florence legacy code removed. |
 | v15 (2026-06-26) | **91.3%** (1735/1900) | F1.1 scoring, F3.1 multi-step nudge, F5.1 chunk-text fallback, router recall bypass, security proxy content exclusion. | [`evaluations/frontier-eval-2026-06-26.md`](evaluations/frontier-eval-2026-06-26.md) |
+| v16 (2026-06-26) | **93.7%** (1780/1900) | F6.1 memory recall fix (router ordering + tool suppression + NO TOOLS instruction). | [`evaluations/frontier-eval-2026-06-26.md`](evaluations/frontier-eval-2026-06-26.md) |
 
 ## Remaining Tasks
 
@@ -151,7 +153,7 @@ Project status tracker. Last updated: 2026-06-20 — Eval harness race condition
 > See [`docs/BUG-TRACKER.md`](BUG-TRACKER.md) for root cause analysis and fix approaches for BUG-17..20. Strict-cloud BUG-24..29: [`evaluations/strict-cloud-debug-2026-06-16.md`](evaluations/strict-cloud-debug-2026-06-16.md).
 
 ### 🟡 Medium Impact
-- **R10**: Frontier eval ≥97% — at **~94%** after harness fixes; F1/F6/F9 variance remains
+- **R10**: Frontier eval ≥97% — at **93.7%** after F6.1 fix; F2.1/F5.1/F7.1/F7.2/M1.2/M2.1/FF3.1 gaps remain
 - **R7**: Web search aggregate timeout (✅ `tests/test_web_search_aggregate_timeout.py`)
 - **R9**: API thread_id in OpenAI compat config (✅ `tests/test_openai_thread_persistence.py`)
 - **R8**: Thermal throttling — run evals on AC power, not battery (✅ Mitigated via defaults.yaml)
@@ -323,4 +325,4 @@ For a strictly prioritized list of what to tackle next, see [`docs/FUTURE_WORKS.
 
 ## Last updated
 
-2026-06-16 — multi-model review fixes (notebook token gate, privacy hardening); see `changes/multi-model-review-fixes/CHANGELOG.md`
+2026-06-26 — F6.1 memory recall fix; eval score 93.7% (1780/1900)

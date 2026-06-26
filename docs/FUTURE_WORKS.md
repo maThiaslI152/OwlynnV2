@@ -14,15 +14,16 @@ While the major known bugs are squashed, the project's `STATUS.md` outlines seve
 
 ## 🔴 P0: Critical Verification & Reliability
 
-1. **Fix F5.1 WS Event Loss (Frontend Idle State Bug)**
-   - **Why:** The frontend's `pendingCorrelationId` is never cleared when `status: idle` WS event is lost. This causes `.composer-stop` to stay visible, making `is_graph_busy` return True forever. The agent completes F5.1 successfully (both files written, coherence_check passes) but the eval harness can't detect completion.
-   - **Root Cause Chain:** Security proxy false positive (fixed) → Router HITL interrupt (fixed) → Frontend WS event loss (unfixed) → Playwright page context breaks (unfixable without frontend fix).
-   - **Action:** Add a fallback timer in `App.tsx` that clears `pendingCorrelationId` after N seconds of no WS activity. Or: always send `assistant.message` in `handler.py`'s `on_chain_end`, even when `text_for_ui` is empty.
-   - **Files:** `frontend-v2/src/App.tsx:313`, `src/api/ws/handler.py:546`
+1. **Fix F5.1 WS Event Loss (Frontend Idle State Bug)** — ✅ Mostly Fixed
+   - **Why:** The frontend's `pendingCorrelationId` is never cleared when `status: idle` WS event is lost. This causes `.composer-stop` to stay visible, making `is_graph_busy` return True forever.
+   - **Status:** Fixed via chunk-text fallback (eval script reconstructs response from streaming chunks), frontend 120s timeout, `clearStreamingState()` on `window.__owlynnEval`, and `assistant.message` always-sent fallback in handler.py. F5.1 scores 90/100.
+   - **Remaining:** Playwright browser WS connection still drops during long responses (~40s). Full fix requires frontend WS reconnection or backend polling.
+   - **Files:** `frontend-v2/src/App.tsx:313`, `src/api/ws/handler.py:546`, `scripts/run_local_frontier_eval.py`
 
 2. **Verify Frontier Eval Suite (Task `R10`)** 
    - **Why:** We need empirical proof that the system hits ≥97% (ideally 100%) after our recent patches.
-   - **Action:** Run `./scripts/ci.sh` and the full `run_local_frontier_eval.py` suite once off battery power.
+   - **Current:** 93.7% (1780/1900) after F6.1 fix. Gap: +63 points needed.
+   - **Action:** Fix remaining test gaps: F2.1 (90), F5.1 (90), F7.1/F7.2 (85), M1.2 (75), M2.1 (85), FF3.1 (85).
 
 3. **Fix Silent Error Handling** 
    - **Why:** `try/catch` blocks in the frontend and API routes currently swallow errors (e.g., during profile updates). This makes regressions nearly impossible to diagnose.

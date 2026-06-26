@@ -1,5 +1,5 @@
 ---
-title: "Frontier Eval — 2026-06-26 — Bug Fixes & F5.1 Fix"
+title: "Frontier Eval — 2026-06-26 — Bug Fixes & F5.1/F6.1 Fix"
 category: evaluations
 date: 2026-06-26
 eval_type: local-frontier
@@ -7,13 +7,13 @@ profile: local
 model: gemma-4-e2b-heretic-uncensored-mlx (router), deepseek-v4-flash (cloud)
 ---
 
-# Frontier Eval — 2026-06-26 — Bug Fixes & F5.1 Fix
+# Frontier Eval — 2026-06-26 — Bug Fixes & F5.1/F6.1 Fix
 
 ## Summary
 
-Fixed 4 eval test failures (F1.1, F3.1, F5.1, F6.1) with 20 commits. Overall score improved from ~82% to **91.3%** (1735/1900). F5.1 now passes via chunk-text fallback when WS events are lost.
+Fixed 5 eval test failures (F1.1, F3.1, F5.1, F6.1) with 27 commits. Overall score improved from ~82% to **93.7%** (1780/1900). F5.1 now passes via chunk-text fallback when WS events are lost. F6.1 now passes via three-layer tool suppression fix.
 
-## Final Scores (v15 — 2026-06-26)
+## Final Scores (v16 — 2026-06-26)
 
 | Test | Before | After | Notes |
 |------|--------|-------|-------|
@@ -22,7 +22,7 @@ Fixed 4 eval test failures (F1.1, F3.1, F5.1, F6.1) with 20 commits. Overall sco
 | F3.1 (Web Research) | 50/100 | **100/100** | Multi-step nudge firing on compound prompts |
 | F4.1 (File Formatting) | 100/100 | 100/100 | Unchanged |
 | F5.1 (Sustained Reasoning) | 0/100 (stuck) | **90/100** | Chunk-text fallback + force-clear timeout |
-| F6.1 (Memory) | 75/100 | 55/100 | Regression — router now uses `invoke_skill` tool |
+| F6.1 (Memory) | 75/100 | **100/100** | Three-layer fix: router ordering + tool suppression + NO TOOLS instruction |
 | F7.1 (Frontier Quality) | — | 85/100 | New test |
 | F7.2 (Frontier Pro) | — | 85/100 | New test |
 | F8.1 (Router LLM) | — | 100/100 | New test |
@@ -36,7 +36,7 @@ Fixed 4 eval test failures (F1.1, F3.1, F5.1, F6.1) with 20 commits. Overall sco
 | FF2.1 (Format DOCX) | — | 100/100 | New test |
 | FF3.1 (Format XLSX) | — | 85/100 | New test |
 | FF4.1 (Format CSV) | — | 100/100 | New test |
-| **Total** | **~305/500** | **1735/1900** | **91.3%** |
+| **Total** | **~305/500** | **1780/1900** | **93.7%** |
 
 ## Fixes Applied
 
@@ -52,11 +52,25 @@ Fixed 4 eval test failures (F1.1, F3.1, F5.1, F6.1) with 20 commits. Overall sco
 
 **Fix:** Made the nudge multi-step-aware. Skips the nudge when the user's text contains compound-step markers (`then`, `also`, `after that`, `create a file`, `save to`, `write`, `update`, `append`).
 
-### F6.1 — Router recall bypass (75→hardened)
+### F6.1 — Memory Recall Fix (55→100)
 
-**Root cause:** "Recall what we discussed earlier" hit the `conversation_memory` toolbox, which triggered HITL (interrupt for security_proxy approval). The security_proxy saw the recall request as a tool call needing approval.
+**Root cause (3 layers):**
 
-**Fix:** Added conversation-recall detection in `router.py` (`_CONVERSATION_RECALL_PATTERN` regex). When matched, sets `selected_toolboxes: ["none"]` and `complex_hint: "conversation-only"`, bypassing HITL.
+1. **Router ordering** — The tool-history bypass at line 956 returned early with `selected_toolboxes=["all"]` before the conversation recall bypass at line 1191 could fire. When F6.1 runs after F3.1, the LangGraph state still contained messages with tool calls from F3.1.
+
+2. **System prompt** — The tool guidance section (`COMPLEX_TOOL_GUIDANCE_WEB`) always listed `recall_memories` as available, even when `selected_toolboxes=["none"]`. DeepSeek saw this and generated a tool call.
+
+3. **LLM hallucination** — Without explicit instruction about tool absence, DeepSeek generated pseudo-tool-call syntax (`invoke_skill\nlist_skills.get_history()`).
+
+**Fix (3 layers):**
+
+1. **Router ordering** — Moved conversation recall bypass (lines 1191-1233) to before the tool-history check (line 956) in `router.py`.
+
+2. **Tool guidance suppression** — Added `_suppress_tools` check in `complex.py` to skip `COMPLEX_TOOL_GUIDANCE_*` when `selected_toolboxes=["none"]`.
+
+3. **NO TOOLS instruction** — Added `volatile_extra` block telling the LLM: "You have no tools for this turn. Answer directly from conversation history and memory context. Do NOT attempt to call any tools."
+
+**Result:** F6.1: 55/100 → 100/100. Tools=[], response contains "tokyo".
 
 ### Router HITL — auto_approve for evals
 

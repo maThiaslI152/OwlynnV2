@@ -12,8 +12,8 @@ audience: agent
 
 ```yaml
 manifest:
-  version: 8
-  generated: "2026-06-18T04:00:00Z"
+  version: 9
+  generated: "2026-06-26T20:00:00Z"
   files:
     - path: AGENTS.md
       status: active
@@ -605,6 +605,11 @@ manifest:
       category: evaluation
       audience: agent
       last_updated: 2026-06-18
+    - path: docs/evaluations/frontier-eval-2026-06-26.md
+      status: active
+      category: evaluation
+      audience: agent
+      last_updated: 2026-06-26
     - path: docs/evaluations/long-conversation-2026-06-04.md
       status: active
       category: reference
@@ -760,4 +765,4 @@ manifest:
 
 ## Last updated
 
-2026-06-11 — manifest v7; updated WEB_SEARCH.md for Chrome Search Bridge
+2026-06-26 — manifest v9; added frontier-eval-2026-06-26.md
