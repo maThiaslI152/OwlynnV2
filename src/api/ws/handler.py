@@ -234,8 +234,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                             ):
                                 await _send_ws(
                                     {
-                                        "type": "memory_updated",
-                                        "thread_id": thread_id,
+                                        "type": "memory.updated",
                                     }
                                 )
 
@@ -628,6 +627,21 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                                     "message": fallback_msg,
                                                 }
                                             )
+                                    else:
+                                        # All fallbacks exhausted — send empty message to clear streaming state
+                                        await _send_ws(
+                                            {
+                                                "type": "assistant.message",
+                                                "message": {
+                                                    "type": "ai",
+                                                    "content": "",
+                                                    "id": str(
+                                                        getattr(msg, "id", "")
+                                                        or ""
+                                                    ),
+                                                },
+                                            }
+                                        )
                         elif node is None or node not in {
                             "simple",
                             "complex_llm",

@@ -328,8 +328,16 @@ function App() {
             return
         }
 
-        // Clear any existing timeout when we get a new event
-        if (pendingTimeoutRef.current) {
+        // Only reset timeout on meaningful events, not streaming chunks
+        const isMeaningfulEvent = isIdleStatus ||
+            event.type === 'assistant.message' ||
+            event.type === 'tool_execution' ||
+            event.type === 'hitl_prompt' ||
+            event.type === 'router_decision' ||
+            event.type === 'coherence_retry_started' ||
+            event.type === 'coherence_retry_completed'
+
+        if (isMeaningfulEvent && pendingTimeoutRef.current) {
             clearTimeout(pendingTimeoutRef.current)
             pendingTimeoutRef.current = null
         }
@@ -338,8 +346,9 @@ function App() {
             useAppStore.setState({ pendingCorrelationId: null })
         } else if (!isIdleStatus && eventId && !pendingId) {
             useAppStore.setState({ pendingCorrelationId: eventId })
-            // Fallback: clear pendingCorrelationId after 120s of no WS activity
+            // Fallback: clear pendingCorrelationId after 120s of no meaningful WS activity
             // This handles cases where status:idle or assistant.message is lost
+            // Don't reset on chunk events — only meaningful events reset the timer
             pendingTimeoutRef.current = setTimeout(() => {
                 const currentPending = useAppStore.getState().pendingCorrelationId
                 if (currentPending) {
