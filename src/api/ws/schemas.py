@@ -285,6 +285,14 @@ class ResponseCoherenceEvent(BaseModel):
     correlation_id: Optional[str] = None
 
 
+class CloudFallbackEvent(BaseModel):
+    type: Literal["cloud_fallback"] = "cloud_fallback"
+    reason: str
+    fallback_model: str
+    can_retry: bool = True
+    correlation_id: Optional[str] = None
+
+
 ServerEvent = Annotated[
     Union[
         AssistantMessageEvent,
@@ -313,6 +321,7 @@ ServerEvent = Annotated[
         CoherenceRetryStartedEvent,
         CoherenceRetryCompletedEvent,
         ResponseCoherenceEvent,
+        CloudFallbackEvent,
     ],
     Field(discriminator="type"),
 ]

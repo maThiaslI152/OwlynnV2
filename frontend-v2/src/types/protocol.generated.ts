@@ -157,14 +157,19 @@ export type Confidence2 = number;
 export type DurationMs1 = number;
 export type Reason1 = string | null;
 export type CorrelationId = string | null;
+export type Type28 = "cloud_fallback";
+export type Reason2 = string;
+export type FallbackModel = string;
+export type CanRetry = boolean;
+export type CorrelationId1 = string | null;
 export type Client =
   | UserMessageEvent
   | StopClientEvent
   | SecurityApprovalClientEvent
   | AskUserResponseClientEvent
   | PlanReviewResponseClientEvent;
-export type Type28 = "user.message";
-export type CorrelationId1 = string | null;
+export type Type29 = "user.message";
+export type CorrelationId2 = string | null;
 export type Id4 = string;
 export type Content4 = string;
 export type Message1 = string | null;
@@ -176,16 +181,16 @@ export type Files =
 export type ProjectId = string | null;
 export type PersonaId = string | null;
 export type Source2 = ("text" | "voice") | null;
-export type Type29 = "stop";
-export type Type30 = "security_approval";
+export type Type30 = "stop";
+export type Type31 = "security_approval";
 export type Approved = boolean;
-export type CorrelationId2 = string | null;
-export type Type31 = "ask_user_response";
 export type CorrelationId3 = string | null;
-export type Type32 = "plan_review_response";
+export type Type32 = "ask_user_response";
+export type CorrelationId4 = string | null;
+export type Type33 = "plan_review_response";
 export type Approved1 = boolean;
 export type Feedback = string | null;
-export type CorrelationId4 = string | null;
+export type CorrelationId5 = string | null;
 
 export interface ProtocolEvents {
   server: Server;
@@ -405,16 +410,16 @@ export interface ResponseCoherenceEvent {
   [k: string]: unknown;
 }
 export interface CloudFallbackEvent {
-  type: "cloud_fallback";
-  reason: string;
-  fallback_model: string;
-  can_retry: boolean;
-  correlation_id?: string;
+  type?: Type28;
+  reason: Reason2;
+  fallback_model: FallbackModel;
+  can_retry?: CanRetry;
+  correlation_id?: CorrelationId1;
   [k: string]: unknown;
 }
 export interface UserMessageEvent {
-  type?: Type28;
-  correlation_id?: CorrelationId1;
+  type?: Type29;
+  correlation_id?: CorrelationId2;
   id: Id4;
   content: Content4;
   message?: Message1;
@@ -425,29 +430,29 @@ export interface UserMessageEvent {
   [k: string]: unknown;
 }
 export interface StopClientEvent {
-  type?: Type29;
+  type?: Type30;
   [k: string]: unknown;
 }
 export interface SecurityApprovalClientEvent {
-  type?: Type30;
+  type?: Type31;
   approved: Approved;
-  correlation_id?: CorrelationId2;
+  correlation_id?: CorrelationId3;
   [k: string]: unknown;
 }
 export interface AskUserResponseClientEvent {
-  type?: Type31;
+  type?: Type32;
   answer: Answer;
-  correlation_id?: CorrelationId3;
+  correlation_id?: CorrelationId4;
   [k: string]: unknown;
 }
 export interface Answer {
   [k: string]: unknown;
 }
 export interface PlanReviewResponseClientEvent {
-  type?: Type32;
+  type?: Type33;
   approved: Approved1;
   feedback?: Feedback;
-  correlation_id?: CorrelationId4;
+  correlation_id?: CorrelationId5;
   [k: string]: unknown;
 }
 
