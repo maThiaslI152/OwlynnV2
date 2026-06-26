@@ -135,7 +135,7 @@ Project status tracker. Last updated: 2026-06-20 — Eval harness race condition
 | v12 (2026-06-19) | **85.0%** strict cloud | Pushed router strictly to cloud; 1615/1900 |
 | v13 (2026-06-20) | **96.3%** single model | Unified to google/gemma-4-e2b |
 | v14 (2026-06-20) | **95.5%** heretic model | Unified to gemma-4-e2b-heretic-uncensored-mlx; completely eliminated VRAM thrashing; Florence legacy code removed. |
-| v15 (2026-06-26) | **~95%** (F1/F3/F6 fixed) | F1.1 scoring, F3.1 multi-step nudge, router recall bypass, security proxy content exclusion. F5.1 still blocked by WS event loss. | [`evaluations/frontier-eval-2026-06-26.md`](evaluations/frontier-eval-2026-06-26.md) |
+| v15 (2026-06-26) | **91.3%** (1735/1900) | F1.1 scoring, F3.1 multi-step nudge, F5.1 chunk-text fallback, router recall bypass, security proxy content exclusion. | [`evaluations/frontier-eval-2026-06-26.md`](evaluations/frontier-eval-2026-06-26.md) |
 
 ## Remaining Tasks
 
