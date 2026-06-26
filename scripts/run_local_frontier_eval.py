@@ -45,7 +45,7 @@ SCREENSHOT_DIR = REPO_ROOT / "assets" / "frontier_eval_screenshots"
 OUTPUT_DATA_FILE = REPO_ROOT / "data" / "frontier_eval_run_data.json"
 WORKSPACE_DIR = REPO_ROOT / "workspace"
 
-COMPLEX_ROUTES = frozenset({"complex-cloud"})
+COMPLEX_ROUTES = frozenset({"complex-cloud", "complex-default"})
 VISION_ROUTES = frozenset({"vision", "vision_cloud"})
 # Cloud-intended complex turns that fail are scored as failed.
 CLOUD_FAILURE_BADGES = frozenset(
