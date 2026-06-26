@@ -930,6 +930,8 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         style_hint=style_hint,
     )
     _suppress_tools = (state.get("selected_toolboxes") or []) == ["none"]
+    if _suppress_tools:
+        logger.info("[complex] selected_toolboxes=['none'] — suppressing tool guidance")
     if mode != "tools_off" and not _suppress_tools:
         if vision_task:
             system_text += COMPLEX_TOOL_GUIDANCE_VISION
