@@ -1,5 +1,58 @@
 {
-  "generated_at": "2026-06-22T03:08:06",
-  "total_entries": 0,
-  "entries": []
+  "generated_at": "2026-06-26T18:39:50",
+  "total_entries": 4,
+  "entries": [
+    {
+      "name": "postproc_anonymize",
+      "category": "complex",
+      "warmup_iters": 0,
+      "measured_iters": 100,
+      "concurrency": 1,
+      "p50_ms": 0.01,
+      "p95_ms": 0.01,
+      "p99_ms": 0.06,
+      "mean_ms": 0.01,
+      "throughput_ops_per_sec": 85693.55,
+      "metadata": {}
+    },
+    {
+      "name": "postproc_deanonymize",
+      "category": "complex",
+      "warmup_iters": 0,
+      "measured_iters": 100,
+      "concurrency": 1,
+      "p50_ms": 0.0,
+      "p95_ms": 0.0,
+      "p99_ms": 0.0,
+      "mean_ms": 0.0,
+      "throughput_ops_per_sec": 4004003.84,
+      "metadata": {}
+    },
+    {
+      "name": "postproc_think_tag_strip",
+      "category": "complex",
+      "warmup_iters": 0,
+      "measured_iters": 100,
+      "concurrency": 1,
+      "p50_ms": 0.0,
+      "p95_ms": 0.0,
+      "p99_ms": 0.03,
+      "mean_ms": 0.0,
+      "throughput_ops_per_sec": 1061086.79,
+      "metadata": {}
+    },
+    {
+      "name": "tool_action_noop",
+      "category": "complex",
+      "warmup_iters": 2,
+      "measured_iters": 50,
+      "concurrency": 1,
+      "p50_ms": 0.01,
+      "p95_ms": 0.01,
+      "p99_ms": 0.37,
+      "mean_ms": 0.01,
+      "throughput_ops_per_sec": 73678.72,
+      "metadata": {}
+    }
+  ]
 }
