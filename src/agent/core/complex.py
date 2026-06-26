@@ -738,6 +738,10 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     memory_context = state.get("memory_context", "None")
     persona = state.get("persona", "No persona available")
     mode = state.get("mode") or "tools_on"
+    # Conversation recall bypass sets selected_toolboxes=["none"] — force tools_off
+    # so the system prompt omits tool guidance and no tools are bound to the LLM.
+    if (state.get("selected_toolboxes") or []) == ["none"]:
+        mode = "tools_off"
     thread_messages = list(state.get("messages") or [])
     turn_messages = _messages_for_current_user_turn(thread_messages)
     project_id = state.get("project_id") or "default"
