@@ -234,7 +234,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                             ):
                                 await _send_ws(
                                     {
-                                        "type": "memory.updated",
+                                        "type": "memory_updated",
                                     }
                                 )
 
