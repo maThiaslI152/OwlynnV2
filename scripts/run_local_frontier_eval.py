@@ -530,6 +530,18 @@ class WsEventLog:
                 latest = content
         return latest
 
+    def chunk_text_since(self, since_ts: float) -> str:
+        """Accumulated text from chunk events after ``since_ts``."""
+        parts: list[str] = []
+        for ev in self.events:
+            if ev["ts"] < since_ts or ev["type"] != "chunk":
+                continue
+            payload = ev.get("payload", {})
+            content = payload.get("content") or ""
+            if isinstance(content, str) and content:
+                parts.append(content)
+        return "".join(parts)
+
 
 async def poll_api(
     path: str, *, timeout_s: float = 30.0, interval_s: float = 1.0
@@ -944,12 +956,33 @@ async def wait_for_turn_complete(
                         busy = False
                 except Exception as e:
                     print(f"\n[EVAL-DEBUG] Force-clear error: {e}")
+                    # If page context is broken, check backend directly
+                    if elapsed > 180:
+                        try:
+                            async with httpx.AsyncClient(timeout=5.0) as check_client:
+                                resp = await check_client.get(
+                                    f"{API_URL}/api/history/{thread_id}"
+                                )
+                                if resp.status_code == 200:
+                                    history = resp.json()
+                                    # If backend has history, the agent completed
+                                    if isinstance(history, list) and len(history) > 0:
+                                        print(
+                                            "\n[EVAL] Backend has history — "
+                                            "agent completed, frontend stuck"
+                                        )
+                                        busy = False
+                        except Exception:
+                            pass
         else:
             busy = await is_graph_busy(page)
         if not busy:
             ws_text = (
                 ws_log.assistant_text_since(since_ts) if ws_log and since_ts else ""
             )
+            # Fallback: use chunk text if assistant.message not received
+            if not ws_text and ws_log and since_ts:
+                ws_text = ws_log.chunk_text_since(since_ts)
             response_text = ws_text or await scrape_final_response(page)
             normalized = _normalize_response(response_text)
             tools, ws_tools = await _executed_tools()
@@ -1026,6 +1059,9 @@ async def wait_for_turn_complete(
 
     print("\n[EVAL] Timeout waiting for turn complete!")
     ws_text = ws_log.assistant_text_since(since_ts) if ws_log and since_ts else ""
+    # Fallback: use chunk text if assistant.message not received
+    if not ws_text and ws_log and since_ts:
+        ws_text = ws_log.chunk_text_since(since_ts)
     response_text = ws_text or await scrape_final_response(page)
     tools, ws_tools = await _executed_tools()
     return {
