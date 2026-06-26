@@ -41,7 +41,7 @@ FRONTEND_URL = "http://127.0.0.1:5173"
 PYTHON_BIN = sys.executable  # current Python interpreter
 
 EVAL_IDS = "F1.1,F8.1,F3.1,F4.1,F6.1,F7.1"
-EVAL_TIMEOUT_S = 900  # 15 min per model max
+EVAL_TIMEOUT_S = 1800  # 30 min per model max
 HEALTH_TIMEOUT_S = 120  # 2 min for backend to become ready
 MODEL_LOAD_TIMEOUT_S = 120  # 2 min for LM Studio to load model
 
@@ -415,13 +415,18 @@ async def run_eval_for_model(model: ModelConfig, run_index: int) -> dict[str, An
     print(f"  Model ID: {model.id}")
     print(f"{'='*80}")
 
-    # 1. Unload all non-embedding models
-    print("\n  [STEP 1] Unloading all non-embedding models...")
+    # 1. Kill backend FIRST — prevents old backend from re-loading models
+    print("\n  [STEP 1] Killing backend...")
+    kill_backend()
+    await asyncio.sleep(2.0)
+
+    # 2. Unload all non-embedding models
+    print("\n  [STEP 2] Unloading all non-embedding models...")
     await lm_studio_unload_all_except_embedding()
     await asyncio.sleep(2.0)
 
-    # 2. Load target model
-    print("\n  [STEP 2] Loading target model...")
+    # 3. Load target model
+    print("\n  [STEP 3] Loading target model...")
     loaded = await lm_studio_load(model)
     if not loaded:
         print(f"  [FAIL] Could not load {model.id} — skipping")
@@ -429,11 +434,6 @@ async def run_eval_for_model(model: ModelConfig, run_index: int) -> dict[str, An
 
     # Wait for model to stabilize
     await asyncio.sleep(3.0)
-
-    # 3. Kill backend
-    print("\n  [STEP 3] Killing backend...")
-    kill_backend()
-    await asyncio.sleep(2.0)
 
     # 4. Start backend with model override
     print("\n  [STEP 4] Starting backend...")
@@ -765,14 +765,34 @@ async def main() -> None:
     # Ensure output dir exists
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
+    # Load existing results to avoid overwriting
+    results_file = RESULTS_DIR / "sweep_results.json"
+    existing_ids: set[str] = set()
+    if results_file.exists():
+        try:
+            with open(results_file) as f:
+                existing_results = json.load(f)
+            results = list(existing_results)
+            existing_ids = {r["model"] for r in results if r.get("model")}
+            print(f"  [RESUME] Loaded {len(existing_results)} existing results")
+        except Exception:
+            results = []
+    else:
+        results = []
+
     # Run sweep
     date_str = time.strftime("%Y-%m-%d")
-    results: list[dict] = []
 
     for i, model in enumerate(selected):
         print(f"\n{'#'*80}")
         print(f"  MODEL {i+1}/{len(selected)}")
         print(f"{'#'*80}")
+
+        # Skip if already completed
+        if model.id in existing_ids:
+            existing = next(r for r in results if r.get("model") == model.id)
+            print(f"  [SKIP] Already completed: {existing.get('status')} ({existing.get('percentage', 0)}%)")
+            continue
 
         try:
             result = await run_eval_for_model(model, run_index=i + 1)
