@@ -1,7 +1,7 @@
 ---
 status: active
 category: planning
-last_updated: 2026-06-19
+last_updated: 2026-06-26
 owner: ai-agent
 audience: human
 ---
@@ -14,11 +14,17 @@ While the major known bugs are squashed, the project's `STATUS.md` outlines seve
 
 ## 🔴 P0: Critical Verification & Reliability
 
-1. **Verify Frontier Eval Suite (Task `R10`)** 
+1. **Fix F5.1 WS Event Loss (Frontend Idle State Bug)**
+   - **Why:** The frontend's `pendingCorrelationId` is never cleared when `status: idle` WS event is lost. This causes `.composer-stop` to stay visible, making `is_graph_busy` return True forever. The agent completes F5.1 successfully (both files written, coherence_check passes) but the eval harness can't detect completion.
+   - **Root Cause Chain:** Security proxy false positive (fixed) → Router HITL interrupt (fixed) → Frontend WS event loss (unfixed) → Playwright page context breaks (unfixable without frontend fix).
+   - **Action:** Add a fallback timer in `App.tsx` that clears `pendingCorrelationId` after N seconds of no WS activity. Or: always send `assistant.message` in `handler.py`'s `on_chain_end`, even when `text_for_ui` is empty.
+   - **Files:** `frontend-v2/src/App.tsx:313`, `src/api/ws/handler.py:546`
+
+2. **Verify Frontier Eval Suite (Task `R10`)** 
    - **Why:** We need empirical proof that the system hits ≥97% (ideally 100%) after our recent patches.
    - **Action:** Run `./scripts/ci.sh` and the full `run_local_frontier_eval.py` suite once off battery power.
 
-2. **Fix Silent Error Handling** 
+3. **Fix Silent Error Handling** 
    - **Why:** `try/catch` blocks in the frontend and API routes currently swallow errors (e.g., during profile updates). This makes regressions nearly impossible to diagnose.
    - **Action:** Audit empty catch blocks and surface errors to the user via visible toast notifications.
 
