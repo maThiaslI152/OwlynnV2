@@ -651,34 +651,34 @@ def _resolve_complex_route(
     if _has_image_content(state):
         if cloud_available:
             return "complex-cloud", toolbox
-        return "complex-cloud", toolbox
+        return "complex-default", toolbox
 
     # 2. Web-search toolbox — cloud orchestration (DeepSeek) when escalation is on
     if cloud_available and "web_search" in toolbox:
         return "complex-cloud", toolbox
 
-    # 3. Exceeds Medium_LongCtx → cloud when available
+    # 3. Exceeds Medium_LongCtx → cloud when available, else local default
     if estimated_input > _MEDIUM_LONGCTX_CONTEXT * 0.80:
         if cloud_available:
             return "complex-cloud", toolbox
-        return "complex-cloud", toolbox
+        return "complex-default", toolbox
 
     # 4. Exceeds 80% of Medium_Default → cloud when available, else local default
     if estimated_input > _MEDIUM_DEFAULT_CONTEXT * 0.80:
         if cloud_available:
             return "complex-cloud", toolbox
-        return "complex-cloud", toolbox
+        return "complex-default", toolbox
 
-    # 5. Frontier-quality indicators → cloud when available
+    # 5. Frontier-quality indicators → cloud when available, else local default
     if _needs_frontier_quality(user_text):
         if cloud_available:
             return "complex-cloud", toolbox
-        return "complex-cloud", toolbox
+        return "complex-default", toolbox
 
-    # 6. Default — cloud-first when escalation is available
+    # 6. Default — cloud-first when escalation is available, else local default
     if cloud_available:
         return "complex-cloud", toolbox
-    return "complex-cloud", toolbox
+    return "complex-default", toolbox
 
 
 def _check_cloud_available() -> bool:

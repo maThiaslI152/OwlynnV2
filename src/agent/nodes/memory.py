@@ -837,7 +837,14 @@ async def memory_write_node(state: AgentState) -> AgentState:
             topics = TopicExtractor.extract_topics(conversation_text)
             interests = TopicExtractor.extract_interests(conversation_text)
 
-            fact_text = f"User asked: {last_human}. AI answered: {last_ai}"
+            # Tag with model that generated the response
+            model_generated_by = (
+                state.get("model_generated_by") or state.get("model_used") or "unknown"
+            )
+            if state.get("cloud_fallback_used"):
+                fact_text = f"User asked: {last_human}. AI answered: {last_ai} [generated_by:{model_generated_by}]"
+            else:
+                fact_text = f"User asked: {last_human}. AI answered: {last_ai}"
             from src.agent.pii_scrubber import scrub_for_storage
             from src.memory.extraction import queue as extraction_queue
 

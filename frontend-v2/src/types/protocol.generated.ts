@@ -30,7 +30,8 @@ export type Server =
   | BrowserPageContextEvent
   | CoherenceRetryStartedEvent
   | CoherenceRetryCompletedEvent
-  | ResponseCoherenceEvent;
+  | ResponseCoherenceEvent
+  | CloudFallbackEvent;
 export type Type = "assistant.message";
 export type Id = string | null;
 export type Content = string | null;
@@ -401,6 +402,14 @@ export interface ResponseCoherenceEvent {
   duration_ms: DurationMs1;
   reason?: Reason1;
   correlation_id?: CorrelationId;
+  [k: string]: unknown;
+}
+export interface CloudFallbackEvent {
+  type: "cloud_fallback";
+  reason: string;
+  fallback_model: string;
+  can_retry: boolean;
+  correlation_id?: string;
   [k: string]: unknown;
 }
 export interface UserMessageEvent {

@@ -12,12 +12,13 @@ owner: human
 
 ## Models to Download
 
-Owlynn uses a single **local unified model** (`gemma-4-e2b-heretic-uncensored-mlx`) which acts as the router, simple path executor, vision proxy VLM, and background memory extraction tool. Complex reasoning is handled entirely by DeepSeek V4 cloud — no local complex model needed.
+Owlynn uses a single **local unified model** (`gemma-4-e2b-heretic-uncensored-mlx`) which acts as the router, simple path executor, vision proxy VLM, background memory extraction tool, and cloud fallback for complex reasoning when DeepSeek V4 is unavailable.
 
 ### Local Unified Model (Always Loaded)
 
-- `gemma-4-e2b-heretic-uncensored-mlx` — handles routing, simple answers, chat titles, vision proxy (image transcription), and background memory extraction.
+- `gemma-4-e2b-heretic-uncensored-mlx` — handles routing, simple answers, chat titles, vision proxy (image transcription), background memory extraction, and cloud fallback. 2B params, 4-bit quantization, ~3.5 GB VRAM.
 - Config: `models.small` in [`defaults.yaml`](../../src/config/defaults.yaml)
+- **Important:** Set LM Studio `n_ctx` to 65536 or higher for this model.
 
 ### Embeddings (RAG / Memory Only)
 
@@ -26,7 +27,7 @@ Owlynn uses a single **local unified model** (`gemma-4-e2b-heretic-uncensored-ml
 
 ### Legacy note
 
-Older docs referenced separate vision/longctx model slots, Qwen 9B medium models, Florence-2/Qwen3-VL-4B vision proxies, and Gemma variants. Current architecture is cloud-primary with a single unified local model (`gemma-4-e2b-heretic-uncensored-mlx`) and nomic embedding. All complex reasoning goes to DeepSeek V4 cloud.
+Older docs referenced separate vision/longctx model slots, Qwen 9B medium models, Florence-2/Qwen3-VL-4B vision proxies, and Gemma variants. Current architecture is cloud-primary with a single unified local model (`gemma-4-e2b-heretic-uncensored-mlx`) and nomic embedding. Complex reasoning goes to DeepSeek V4 cloud, with local fallback when cloud is unavailable.
 
 ## Jinja Template Issues — `No user query found in messages`
 

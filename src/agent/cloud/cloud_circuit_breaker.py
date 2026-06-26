@@ -154,6 +154,19 @@ class CloudCircuitBreaker:
         self._circuit_open = False
         logger.info("[circuit-breaker] Forced reset to closed")
 
+    def allow_single_retry(self) -> None:
+        """Allow a single retry even when circuit is open.
+
+        Used when user explicitly requests a cloud retry from the fallback HITL modal.
+        Transitions to half-open state so the next call goes through.
+        """
+        if self._circuit_open:
+            self._circuit_open = False
+            logger.info(
+                "[circuit-breaker] Single retry allowed by user request (was open, %d failures)",
+                self._consecutive_failures,
+            )
+
 
 # ── module-level singleton ────────────────────────────────────────
 

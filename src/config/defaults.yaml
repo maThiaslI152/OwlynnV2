@@ -48,7 +48,7 @@ startup:
     - embedding  # nomic embed — always
   warmup: true
 # ── Models — AI/LLM Configuration ────────────────────────────────────────────
-# Unified Small: gemma-4-e2b-heretic-uncensored-mlx — Routing, Background extraction, and Vision Proxy
+# Unified Local: gemma-4-e2b — Routing, Fallback, Vision, Memory extraction
 # Cloud: DeepSeek V4 — primary workhorse for all complex reasoning
 models:
   small:
@@ -57,9 +57,9 @@ models:
     temperature: 0.1                          # Low temp for consistent routing classification
     max_tokens: 8192                          # Increased budget for vision/extraction tasks
     max_output_tokens: 8192
-    context_window: 32768                     # Practical limit for routing and local browser navigation
-    timeout: 120                              # Allow up to 120s for LM Studio loading/vision processing
-    request_timeout: 120                      # HTTP request timeout
+    context_window: 65536                     # Expanded for fallback capability (was 32768)
+    timeout: 180                              # Allow up to 180s for complex fallback tasks
+    request_timeout: 180                      # HTTP request timeout
     extra_body:
       chat_template_kwargs:
         enable_thinking: false                # Disable thinking mode for fast routing/vision

@@ -67,6 +67,7 @@ function App() {
   const setRouterMetadata = useAppStore((s) => s.setRouterMetadata)
   const setModelInfo = useAppStore((s) => s.setModelInfo)
   const setCoherenceRetryActive = useAppStore((s) => s.setCoherenceRetryActive)
+  const setCloudFallback = useAppStore((s) => s.setCloudFallback)
   const setContextCompression = useAppStore((s) => s.setContextCompression)
   const setCloudUsage = useAppStore((s) => s.setCloudUsage)
   const setContextBreakdown = useAppStore((s) => s.setContextBreakdown)
@@ -533,6 +534,12 @@ function App() {
           )
         } else if (event.type === 'coherence_retry_completed') {
           setCoherenceRetryActive(false)
+        } else if (event.type === 'cloud_fallback') {
+          setCloudFallback({
+            reason: (event as any).reason || 'cloud_unavailable',
+            fallback_model: (event as any).fallback_model || 'local-fallback',
+            can_retry: (event as any).can_retry !== false,
+          })
         }
       },
     })
@@ -548,7 +555,7 @@ function App() {
         pendingTimeoutRef.current = null
       }
     }
-  }, [activeProjectId, addMessage, appendStreamChunk, applyBrowserPageContext, currentThreadId, executionPolicy, pushToolExecution, setConnection, setLatestToolExecution, setPendingCorrelationId, setMemoryUpdatedAt, setModelInfo, setContextCompression, setContextBreakdown, setCloudUsage, setCoherenceRetryActive, setOperatorNote, setRouterMetadata, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setTtsSpeaking, upsertActionProposal, updateActionProposalStatus, isTauriRuntime, wsBaseUrl])
+  }, [activeProjectId, addMessage, appendStreamChunk, applyBrowserPageContext, currentThreadId, executionPolicy, pushToolExecution, setConnection, setLatestToolExecution, setPendingCorrelationId, setMemoryUpdatedAt, setModelInfo, setContextCompression, setContextBreakdown, setCloudUsage, setCoherenceRetryActive, setCloudFallback, setOperatorNote, setRouterMetadata, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setTtsSpeaking, upsertActionProposal, updateActionProposalStatus, isTauriRuntime, wsBaseUrl])
 
   // Listen for Tauri runtime events (TTS state, screen assist, etc.)
   useEffect(() => {
@@ -918,7 +925,29 @@ function App() {
     }
   }, [clearSession, loadProjects])  // activeProjectId removed — uses ref for latest value
 
+  // ── Cloud fallback HITL handlers ─────────────────────────────────────
+  const cloudFallback = useAppStore((s) => s.cloudFallback)
+  const handleCloudFallbackRetry = useCallback(() => {
+    setCloudFallback(null)
+    const msgs = useAppStore.getState().messages
+    const lastUser = [...msgs].reverse().find((m) => m.role === 'user')
+    if (lastUser && wsClientRef.current) {
+      const retryId = `retry-${crypto.randomUUID()}`
+      wsClientRef.current.send({
+        type: 'user_message',
+        content: lastUser.content,
+        correlation_id: retryId,
+      } as any)
+      setPendingCorrelationId(retryId)
+    }
+  }, [setCloudFallback, setPendingCorrelationId])
+
+  const handleCloudFallbackAccept = useCallback(() => {
+    setCloudFallback(null)
+  }, [setCloudFallback])
+
   return (
+    <>
     <AppShell
       onSend={handleSend}
       projects={projects}
@@ -940,6 +969,57 @@ function App() {
       onHitlSkip={handleHitlSkip}
       onStop={handleStop}
     />
+    {cloudFallback && (
+      <div
+        style={{
+          position: 'fixed', inset: 0, zIndex: 9999,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+        }}
+      >
+        <div
+          style={{
+            background: '#1a1a2e', border: '1px solid #e94560', borderRadius: 12,
+            padding: '28px 32px', maxWidth: 440, width: '90%', color: '#e0e0e0',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+          }}
+        >
+          <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 12, color: '#e94560' }}>
+            Cloud Unavailable
+          </div>
+          <div style={{ fontSize: 14, lineHeight: 1.6, marginBottom: 8 }}>
+            The cloud model could not be reached. A local model generated this response instead.
+          </div>
+          <div style={{ fontSize: 12, color: '#888', marginBottom: 20, fontFamily: 'monospace' }}>
+            Reason: {cloudFallback.reason} &middot; Model: {cloudFallback.fallback_model}
+          </div>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+            <button
+              onClick={handleCloudFallbackAccept}
+              style={{
+                padding: '8px 20px', borderRadius: 8, border: '1px solid #444',
+                background: '#2a2a3e', color: '#e0e0e0', cursor: 'pointer', fontSize: 14,
+              }}
+            >
+              Accept Local Response
+            </button>
+            {cloudFallback.can_retry && (
+              <button
+                onClick={handleCloudFallbackRetry}
+                style={{
+                  padding: '8px 20px', borderRadius: 8, border: 'none',
+                  background: '#e94560', color: '#fff', cursor: 'pointer', fontSize: 14,
+                  fontWeight: 600,
+                }}
+              >
+                Retry Cloud
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   )
 }
 

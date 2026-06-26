@@ -19,6 +19,7 @@ Project status tracker. Last updated: 2026-06-26 — F6.1 memory recall fix (100
 | Change | Impact | Doc |
 |--------|--------|-----|
 | **F6.1 Memory Recall Fix** | Three-layer fix: moved conversation recall bypass before tool-history check in router; skipped tool guidance when `selected_toolboxes=["none"]`; added NO TOOLS AVAILABLE instruction. F6.1 55→100. | [`evaluations/frontier-eval-2026-06-26.md`](evaluations/frontier-eval-2026-06-26.md) |
+| **Cloud Fallback with Local Model** | When cloud fails, complex node falls back to local `gemma-4-e4b` model. Blocking HITL modal asks user to retry cloud or accept local response. Router now returns `complex-default` when cloud unavailable. Memory tagged with generating model name. | [`changes/cloud-fallback-with-local-model/CHANGELOG.md`](changes/cloud-fallback-with-local-model/CHANGELOG.md) |
 | **F1.1 Scoring Fix** | Added missing `expected_tools: []` to eval test definition; F1.1 90→100. | [`evaluations/frontier-eval-2026-06-26.md`](evaluations/frontier-eval-2026-06-26.md) |
 | **F3.1 Multi-step Nudge** | Made `build_web_search_answer_nudge_messages` multi-step-aware; skips nudge on compound prompts. F3.1 50→100. | [`evaluations/frontier-eval-2026-06-26.md`](evaluations/frontier-eval-2026-06-26.md) |
 | **Router Recall Bypass** | Added conversation-recall detection regex; sets `toolboxes: ["none"]` to bypass HITL. | [`evaluations/frontier-eval-2026-06-26.md`](evaluations/frontier-eval-2026-06-26.md) |
@@ -113,10 +114,10 @@ Project status tracker. Last updated: 2026-06-26 — F6.1 memory recall fix (100
 
 | Slot | Model | Context | Temp | Max Tokens |
 |------|-------|---------|------|------------|
-| Router | `gemma-4-e2b-heretic-uncensored-mlx` | 8192 | 0.1 | 512 |
+| Router | `gemma-4-e2b-heretic-uncensored-mlx` | 65536 | 0.1 | 8192 |
 | Cloud | `deepseek-v4-flash` | 1048576 | 0.4 | 8192 |
-| Vision | `gemma-4-e2b-heretic-uncensored-mlx` | 8192 | 0.1 | 2048 |
-| Extraction | `gemma-4-e2b-heretic-uncensored-mlx` | 8192 | 0.1 | 1024 |
+| Vision | `gemma-4-e2b-heretic-uncensored-mlx` | 65536 | 0.1 | 2048 |
+| Extraction | `gemma-4-e2b-heretic-uncensored-mlx` | 65536 | 0.1 | 1024 |
 
 ## Evaluation Trajectory
 

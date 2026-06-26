@@ -27,6 +27,7 @@ class LLMPool:
     """Singleton pool for LLM instances to avoid re-initialization overhead."""
 
     _small_llm: Optional[ChatOpenAI] = None
+    _fallback_llm: Optional[ChatOpenAI] = None
 
     _cloud_llm_flash: Optional[ChatOpenAI] = None
     _cloud_llm_pro: Optional[ChatOpenAI] = None
@@ -114,7 +115,7 @@ class LLMPool:
             audit_debug("agent.model", "pool_cache_hit", slot="small")
         return cls._small_llm
 
-    # ── extraction (gemma-4-e2b background) ──────────────────────────
+    # ── extraction (unified local model) ──────────────────────────
 
     @classmethod
     async def get_extraction_llm(cls, *, foreground: bool = True) -> ChatOpenAI:
@@ -122,6 +123,74 @@ class LLMPool:
         if "extraction" in cls._test_overrides:
             return cls._test_overrides["extraction"]
         return await cls.get_small_llm()
+
+    # ── fallback (same model as small, used when cloud fails) ─────
+
+    @classmethod
+    async def get_fallback_llm(cls) -> ChatOpenAI:
+        """Get or create cached fallback LLM instance.
+
+        Uses the same local model as small but with expanded context and timeout
+        suitable for complex task fallback when cloud is unavailable.
+        """
+        if "fallback" in cls._test_overrides:
+            audit_debug("agent.model", "pool_test_override", slot="fallback")
+            return cls._test_overrides["fallback"]
+        if cls._fallback_llm is None:
+            try:
+                async with cls._lock:
+                    if cls._fallback_llm is None:
+                        model_cfg = get_model_config("small")
+                        extra_body = dict(model_cfg.get("extra_body") or {})
+                        extra_body["max_output_tokens"] = model_cfg.get(
+                            "max_output_tokens", 8192
+                        )
+                        cls._fallback_llm = ChatOpenAI(
+                            model=model_cfg.get(
+                                "model_name",
+                                "gemma-4-e2b-heretic-uncensored-mlx",
+                            ),
+                            api_key="sk-local-no-key-needed",
+                            base_url=model_cfg.get(
+                                "base_url", "http://127.0.0.1:1234/v1"
+                            ),
+                            temperature=model_cfg.get("temperature", 0.1),
+                            max_tokens=model_cfg.get("max_tokens", 8192),
+                            extra_body=extra_body,
+                            request_timeout=model_cfg.get("request_timeout")
+                            or model_cfg.get("timeout", 180),
+                            stream_chunk_timeout=None,
+                        )
+                        audit_info(
+                            "agent.model",
+                            "pool_instance_created",
+                            slot="fallback",
+                            model=model_cfg.get("model_name"),
+                        )
+            except Exception as e:
+                logger.warning("Fallback LLM creation error: %s", e)
+                model_cfg = get_model_config("small")
+                extra_body = dict(model_cfg.get("extra_body") or {})
+                extra_body["max_output_tokens"] = model_cfg.get(
+                    "max_output_tokens", 8192
+                )
+                return ChatOpenAI(
+                    model=model_cfg.get(
+                        "model_name",
+                        "gemma-4-e2b-heretic-uncensored-mlx",
+                    ),
+                    api_key="sk-local-no-key-needed",
+                    base_url=model_cfg.get("base_url", "http://127.0.0.1:1234/v1"),
+                    temperature=model_cfg.get("temperature", 0.1),
+                    max_tokens=model_cfg.get("max_tokens", 8192),
+                    extra_body=extra_body,
+                    request_timeout=model_cfg.get("request_timeout")
+                    or model_cfg.get("timeout", 180),
+                    stream_chunk_timeout=None,
+                )
+        else:
+            audit_debug("agent.model", "pool_cache_hit", slot="fallback")
+        return cls._fallback_llm
 
     # ── cloud (DeepSeek API) ──────────────────────────────────────────
 
@@ -204,6 +273,7 @@ class LLMPool:
     def clear(cls):
         """Clear cached instances (call when profile or config updates)."""
         cls._small_llm = None
+        cls._fallback_llm = None
         cls._extraction_llm = None
         cls._cloud_llm_flash = None
         cls._cloud_llm_pro = None
@@ -251,3 +321,8 @@ async def get_extraction_llm(*, foreground: bool = True) -> ChatOpenAI:
 async def get_cloud_llm(tier: Optional[str] = None) -> ChatOpenAI:
     """Get cloud LLM instance (DeepSeek API) for optional tier flash|pro."""
     return await LLMPool.get_cloud_llm(tier)
+
+
+async def get_fallback_llm() -> ChatOpenAI:
+    """Get fallback LLM instance (local model, expanded context for complex tasks)."""
+    return await LLMPool.get_fallback_llm()

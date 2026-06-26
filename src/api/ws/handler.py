@@ -489,6 +489,22 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                         }
                                     )
 
+                                # Emit cloud_fallback event when local fallback was used
+                                if output.get("cloud_fallback_used"):
+                                    await _send_ws(
+                                        {
+                                            "type": "cloud_fallback",
+                                            "reason": output.get(
+                                                "cloud_fallback_reason",
+                                                "cloud_unavailable",
+                                            ),
+                                            "fallback_model": _node_model_used
+                                            or "local-fallback",
+                                            "can_retry": True,
+                                            "correlation_id": correlation_id,
+                                        }
+                                    )
+
                                 # Accumulate cloud token usage into session totals
                                 if _node_token_usage and isinstance(
                                     _node_token_usage, dict

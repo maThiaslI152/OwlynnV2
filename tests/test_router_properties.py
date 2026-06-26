@@ -116,10 +116,10 @@ class TestRouteDecisionDomain:
     @given(text=user_text_st)
     @settings(max_examples=100, deadline=None)
     def test_image_always_cloud_when_cloud_unavailable(self, text: str):
-        """Image + any text routes to complex-cloud even when cloud is unavailable."""
+        """Image + any text routes to complex-default when cloud is unavailable (local fallback)."""
         state = _make_image_state(text)
         route, _ = _resolve_complex_route(text, state, ["all"], cloud_available=False)
-        assert route == "complex-cloud"
+        assert route == "complex-default"
 
     def test_image_with_frontier_routes_cloud_for_vision_proxy(self):
         """Image + frontier task routes to cloud so Qwen transcribes before DeepSeek."""
@@ -166,11 +166,11 @@ class TestRouteDecisionDomain:
     )
     @settings(max_examples=100, deadline=None)
     def test_short_text_routes_cloud_when_cloud_unavailable(self, text: str):
-        """Short text without frontier hints routes to complex-cloud even when cloud is off."""
+        """Short text without frontier hints routes to complex-default when cloud is off (local fallback)."""
         assume(not _needs_frontier_quality(text))
         state = _make_text_state(text)
         route, _ = _resolve_complex_route(text, state, ["all"], cloud_available=False)
-        assert route == "complex-cloud"
+        assert route == "complex-default"
 
     @given(
         text=st.text(
