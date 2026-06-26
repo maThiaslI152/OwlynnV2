@@ -738,10 +738,6 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     memory_context = state.get("memory_context", "None")
     persona = state.get("persona", "No persona available")
     mode = state.get("mode") or "tools_on"
-    # Conversation recall bypass sets selected_toolboxes=["none"] — force tools_off
-    # so the system prompt omits tool guidance and no tools are bound to the LLM.
-    if (state.get("selected_toolboxes") or []) == ["none"]:
-        mode = "tools_off"
     thread_messages = list(state.get("messages") or [])
     turn_messages = _messages_for_current_user_turn(thread_messages)
     project_id = state.get("project_id") or "default"
@@ -856,6 +852,16 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             f"The routing logic has generated the following step-by-step plan for you to follow:\n"
             f"{execution_plan}\n"
             f"You should execute these steps using your tools."
+        )
+
+    # Conversation recall bypass: selected_toolboxes=["none"] — suppress tool calls.
+    if (state.get("selected_toolboxes") or []) == ["none"]:
+        volatile_extra += (
+            "\n\n[NO TOOLS AVAILABLE] You have no tools for this turn. "
+            "Answer the user's question directly from the conversation history "
+            "and memory context provided above. Do NOT attempt to call any tools "
+            "(like invoke_skill, recall_memories, list_skills, etc.) — they are "
+            "not available. Just write a plain-text answer."
         )
 
     router_meta = state.get("router_metadata") or {}
