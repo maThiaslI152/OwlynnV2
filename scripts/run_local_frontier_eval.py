@@ -917,6 +917,33 @@ async def wait_for_turn_complete(
                                 busy = False
                 except Exception:
                     pass
+            # Force-complete: if still busy after 120s, inject JS to clear state
+            if busy and elapsed > 120:
+                try:
+                    print(
+                        "\n[EVAL] Force-clearing frontend state after 120s timeout..."
+                    )
+                    await asyncio.wait_for(
+                        page.evaluate(
+                            "() => {"
+                            "  if (window.__owlynnEval && "
+                            "      window.__owlynnEval.clearStreamingState) {"
+                            "    window.__owlynnEval.clearStreamingState();"
+                            "    return true;"
+                            "  }"
+                            "  return false;"
+                            "}"
+                        ),
+                        timeout=5.0,
+                    )
+                    # Wait for React to re-render
+                    await asyncio.sleep(2)
+                    dom_busy = await asyncio.wait_for(is_graph_busy(page), timeout=5.0)
+                    if not dom_busy:
+                        print("[EVAL] Force-clear succeeded — DOM not busy")
+                        busy = False
+                except Exception as e:
+                    print(f"\n[EVAL-DEBUG] Force-clear error: {e}")
         else:
             busy = await is_graph_busy(page)
         if not busy:

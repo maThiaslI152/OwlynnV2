@@ -676,10 +676,25 @@ function App() {
       __owlynnEval?: {
         setResponseStyle: (s: string) => void
         clearPendingCorrelation: () => void
+        clearStreamingState: () => void
       }
     }).__owlynnEval = {
       setResponseStyle: (style: string) => setEvalResponseStyle(style || null),
       clearPendingCorrelation: () => setPendingCorrelationId(null),
+      clearStreamingState: () => {
+        setPendingCorrelationId(null)
+        const msgs = useAppStore.getState().messages
+        const last = msgs[msgs.length - 1]
+        if (last && last.role === 'assistant' && last.id?.startsWith('stream-')) {
+          useAppStore.setState({
+            messages: msgs.map((m, idx) =>
+              idx === msgs.length - 1
+                ? { ...m, id: crypto.randomUUID() }
+                : m
+            ),
+          })
+        }
+      },
     }
     return () => {
       delete (window as Window & { __owlynnEval?: unknown }).__owlynnEval
