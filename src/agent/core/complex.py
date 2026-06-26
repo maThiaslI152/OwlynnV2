@@ -929,7 +929,8 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         persona=persona,
         style_hint=style_hint,
     )
-    if mode != "tools_off":
+    _suppress_tools = (state.get("selected_toolboxes") or []) == ["none"]
+    if mode != "tools_off" and not _suppress_tools:
         if vision_task:
             system_text += COMPLEX_TOOL_GUIDANCE_VISION
         else:
