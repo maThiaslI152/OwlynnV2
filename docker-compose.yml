@@ -46,8 +46,9 @@ services:
       - SECURITY_ENABLELOGIN=false
       - SECURITY_CUSTOMGLOBALAPIKEY=${STIRLING_PDF_API_KEY:-owlynn-local-dev}
       - LANGS=en_GB
+      - JAVA_TOOL_OPTIONS=-Xms128m -Xmx512m
     restart: unless-stopped
-    mem_limit: 2g
+    mem_limit: 1g
 
 volumes:
   qdrant_data:

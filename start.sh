@@ -32,21 +32,16 @@ echo "════════════════════════�
 echo ""
 
 # ═══════════════════════════════════════════════════════════════════
-# [1/3] Podman containers — Qdrant, Redis, StirlingPDF (SearXNG opt-in)
+# [1/3] Podman containers — Qdrant, Redis (StirlingPDF: on-demand)
 # ═══════════════════════════════════════════════════════════════════
-_CORE_SERVICES="qdrant redis stirling-pdf"
-echo "[1/3] Containers (Qdrant, Redis, StirlingPDF)..."
+_CORE_SERVICES="qdrant redis"
+echo "[1/3] Containers (Qdrant, Redis)..."
 podman machine start 2>/dev/null || true
 podman compose up -d $_CORE_SERVICES 2>/dev/null || podman-compose up -d $_CORE_SERVICES 2>/dev/null || docker compose up -d $_CORE_SERVICES 2>/dev/null || {
     echo "      ERROR: Could not start containers. Is Podman/Docker installed?"
     exit 1
 }
 sleep 3
-if curl -sf http://127.0.0.1:8090/swagger-ui/index.html >/dev/null 2>&1; then
-    echo "      StirlingPDF ready on :8090."
-else
-    echo "      StirlingPDF not yet ready (PDF intake falls back to PyMuPDF)."
-fi
 echo "      Ready."
 
 # ═══════════════════════════════════════════════════════════════════

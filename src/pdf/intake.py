@@ -59,7 +59,7 @@ def _stirling_extract(
 
 def extract_pdf_text_from_path(path: str, *, page_markers: bool = False) -> str:
     """Extract text from a PDF file on disk."""
-    if stirling_pdf.is_configured() and stirling_pdf.is_available():
+    if stirling_pdf.is_configured() and stirling_pdf.ensure_available():
         try:
             text = _stirling_extract(file_path=path)
             if text.strip():
@@ -82,7 +82,7 @@ def extract_pdf_text_from_path(path: str, *, page_markers: bool = False) -> str:
 
 def extract_pdf_text_from_bytes(data: bytes, *, filename: str = "upload.pdf") -> str:
     """Extract text from PDF bytes (chat attachments)."""
-    if stirling_pdf.is_configured() and stirling_pdf.is_available():
+    if stirling_pdf.is_configured() and stirling_pdf.ensure_available():
         try:
             text = _stirling_extract(file_bytes=data, filename=filename)
             if text.strip():

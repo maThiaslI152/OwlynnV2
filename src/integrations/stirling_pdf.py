@@ -7,6 +7,9 @@ See: https://docs.stirlingpdf.com/API/
 from __future__ import annotations
 
 import logging
+import os
+import subprocess
+import time
 from pathlib import Path
 
 import httpx
@@ -61,6 +64,55 @@ def is_available() -> bool:
             return resp.status_code == 200
     except Exception as e:
         logger.debug("StirlingPDF swagger probe failed: %s", e)
+    return False
+
+
+_COMPOSE_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+def ensure_available(timeout: float = 30.0) -> bool:
+    """Start StirlingPDF container on demand if not running, wait until ready.
+
+    Returns True if StirlingPDF is available (already running or just started).
+    Returns False if it couldn't be started within timeout.
+    """
+    if is_available():
+        return True
+
+    logger.info("StirlingPDF not running — starting on demand...")
+    compose_cmd: list[str] | None = None
+    for cmd in (
+        ["podman", "compose", "up", "-d", "stirling-pdf"],
+        ["podman-compose", "up", "-d", "stirling-pdf"],
+        ["docker", "compose", "up", "-d", "stirling-pdf"],
+    ):
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=60,
+                cwd=str(_COMPOSE_PROJECT_ROOT),
+            )
+            if result.returncode == 0:
+                compose_cmd = cmd
+                break
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            continue
+
+    if compose_cmd is None:
+        logger.warning("StirlingPDF start failed — no compose backend available")
+        return False
+
+    logger.info("StirlingPDF container starting via %s...", compose_cmd[0])
+    start = time.monotonic()
+    while time.monotonic() - start < timeout:
+        if is_available():
+            logger.info("StirlingPDF ready after %.1fs", time.monotonic() - start)
+            return True
+        time.sleep(1.0)
+
+    logger.warning("StirlingPDF didn't become ready within %ds", int(timeout))
     return False
 
 
