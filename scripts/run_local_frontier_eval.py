@@ -956,24 +956,6 @@ async def wait_for_turn_complete(
                         busy = False
                 except Exception as e:
                     print(f"\n[EVAL-DEBUG] Force-clear error: {e}")
-                    # If page context is broken, check backend directly
-                    if elapsed > 180:
-                        try:
-                            async with httpx.AsyncClient(timeout=5.0) as check_client:
-                                resp = await check_client.get(
-                                    f"{API_URL}/api/history/{thread_id}"
-                                )
-                                if resp.status_code == 200:
-                                    history = resp.json()
-                                    # If backend has history, the agent completed
-                                    if isinstance(history, list) and len(history) > 0:
-                                        print(
-                                            "\n[EVAL] Backend has history — "
-                                            "agent completed, frontend stuck"
-                                        )
-                                        busy = False
-                        except Exception:
-                            pass
         else:
             busy = await is_graph_busy(page)
         if not busy:
