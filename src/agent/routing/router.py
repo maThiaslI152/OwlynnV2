@@ -887,6 +887,50 @@ async def router_node(state: AgentState) -> AgentState:
             **_memory_gate_fields(state, user_text, "simple", force_needs=False),
         }
 
+    # ── Conversation recall bypass (suppress tools for pure recall) ────
+    _recall_pattern = re.compile(
+        r"(earlier|previous|before|last)\s+(in\s+)?(this\s+)?(conversation|chat|session|message)",
+        re.IGNORECASE,
+    )
+    _recall_what_pattern = re.compile(
+        r"what\s+(did|was|were|have)\s+(we|you|i)\s+(discuss|talk|say|look|search|save|write|mention|cover)",
+        re.IGNORECASE,
+    )
+    if _recall_pattern.search(user_lower) or _recall_what_pattern.search(user_lower):
+        logger.info(
+            "[router] Complex path — conversation recall detected, suppressing tools"
+        )
+        route = "complex-cloud" if cloud_available else "simple"
+        budget = estimate_token_budget(user_text, route)
+        metadata = _build_router_metadata(
+            route,
+            confidence=0.95,
+            reasoning="conversation_recall_bypass",
+            classification_source="deterministic",
+            cloud_available=cloud_available,
+            has_images=has_images,
+            task_category="conversation_recall",
+            estimated_tokens=budget,
+            web_on=web_on,
+        )
+        audit_info(
+            "agent.lifecycle",
+            "router_decision",
+            route=route,
+            confidence=0.95,
+            source="conversation_recall_bypass",
+            task_category="conversation_recall",
+        )
+        return {
+            "route": route,
+            "token_budget": budget,
+            "selected_toolboxes": ["none"],
+            "router_clarification_used": False,
+            "skill_matched": None,
+            "router_metadata": metadata,
+            **_memory_gate_fields(state, user_text, route, force_needs=False),
+        }
+
     # Fast-path for browser extension contexts: force local model
     if (
         "[SYSTEM NOTE: This context was sent directly from the active browser tab via the Owlynn Browser Extension"
@@ -1186,50 +1230,6 @@ async def router_node(state: AgentState) -> AgentState:
             "router_clarification_used": False,
             "skill_matched": None,
             "router_metadata": metadata,
-        }
-
-    # ── Conversation recall bypass (suppress tools for pure recall) ────
-    _recall_pattern = re.compile(
-        r"(earlier|previous|before|last)\s+(in\s+)?(this\s+)?(conversation|chat|session|message)",
-        re.IGNORECASE,
-    )
-    _recall_what_pattern = re.compile(
-        r"what\s+(did|was|were|have)\s+(we|you|i)\s+(discuss|talk|say|look|search|save|write|mention|cover)",
-        re.IGNORECASE,
-    )
-    if _recall_pattern.search(user_lower) or _recall_what_pattern.search(user_lower):
-        logger.info(
-            "[router] Complex path — conversation recall detected, suppressing tools"
-        )
-        route = "complex-cloud" if cloud_available else "simple"
-        budget = estimate_token_budget(user_text, route)
-        metadata = _build_router_metadata(
-            route,
-            confidence=0.95,
-            reasoning="conversation_recall_bypass",
-            classification_source="deterministic",
-            cloud_available=cloud_available,
-            has_images=has_images,
-            task_category="conversation_recall",
-            estimated_tokens=budget,
-            web_on=web_on,
-        )
-        audit_info(
-            "agent.lifecycle",
-            "router_decision",
-            route=route,
-            confidence=0.95,
-            source="conversation_recall_bypass",
-            task_category="conversation_recall",
-        )
-        return {
-            "route": route,
-            "token_budget": budget,
-            "selected_toolboxes": ["none"],
-            "router_clarification_used": False,
-            "skill_matched": None,
-            "router_metadata": metadata,
-            **_memory_gate_fields(state, user_text, route, force_needs=False),
         }
 
     # ── Deterministic complex-route bypasses ──────────────────────────
