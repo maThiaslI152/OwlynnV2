@@ -119,12 +119,13 @@ MODELS: list[ModelConfig] = [
         model_type="vlm",
         arch="qwen35moe",
         quantization="unknown",
-        estimated_vram_gb=4.0,
+        estimated_vram_gb=20.0,  # 35B params full weight, even with MoE
         max_context_length=262144,
         load_context_length=16384,
         flash_attention=True,
         num_experts=3,
-        notes="GGUF. 35B total, 3B active. VLM type. Huge capacity for its VRAM. Set num_experts=3.",
+        skip=True,  # 35B params ≈ 20 GB VRAM — too large for 24 GB M4 Air
+        notes="SKIP: 35B total ≈ 20 GB VRAM even at Q4. Won't fit alongside agent/embedding.",
     ),
     ModelConfig(
         id="qwen3.5-18b-a3b-reap-coding-heretic-v0-i1",
@@ -244,7 +245,7 @@ async def lm_studio_list_models() -> list[dict]:
 
 async def lm_studio_unload(instance_id: str) -> bool:
     """Unload a model by instance_id. Returns True on success."""
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with httpx.AsyncClient(timeout=60.0) as client:
         try:
             resp = await client.post(
                 f"{LM_STUDIO_API}/api/v1/models/unload",
@@ -296,15 +297,26 @@ async def lm_studio_load(model: ModelConfig) -> bool:
             return False
 
 
-async def lm_studio_unload_all_except_embedding() -> None:
-    """Unload all non-embedding models."""
+async def lm_studio_unload_all_except_embedding() -> bool:
+    """Unload all non-embedding models. Returns True if all unloaded successfully."""
     models = await lm_studio_list_models()
+    all_ok = True
     for m in models:
         if m.get("state") != "loaded":
             continue
         if m.get("type") == "embeddings":
             continue
-        await lm_studio_unload(m["id"])
+        ok = await lm_studio_unload(m["id"])
+        if not ok:
+            all_ok = False
+    # Verify no non-embedding models remain loaded
+    await asyncio.sleep(2.0)
+    remaining = await lm_studio_list_models()
+    still_loaded = [m for m in remaining if m.get("state") == "loaded" and m.get("type") != "embeddings"]
+    if still_loaded:
+        print(f"  [LM] WARNING: {len(still_loaded)} models still loaded after unload: {[m['id'] for m in still_loaded]}")
+        all_ok = False
+    return all_ok
 
 
 async def lm_studio_get_model_info(model_id: str) -> dict | None:
@@ -650,6 +662,23 @@ def generate_report(results: list[dict], date_str: str) -> str:
 
 # ── Main ───────────────────────────────────────────────────────────────────
 
+async def cleanup_stuck_models() -> None:
+    """Unload all non-embedding models and restart backend with default model."""
+    print("[CLEANUP] Unloading all non-embedding models...")
+    await lm_studio_unload_all_except_embedding()
+    print("[CLEANUP] Killing backend...")
+    kill_backend()
+    await asyncio.sleep(2.0)
+    print("[CLEANUP] Starting backend with default model...")
+    default_model = "gemma-4-e2b-heretic-uncensored-mlx"
+    proc = start_backend(default_model)
+    ready = await wait_for_backend_ready()
+    if ready:
+        print(f"[CLEANUP] Backend ready with {default_model}")
+    else:
+        print("[CLEANUP] Backend health check timed out — may need manual restart")
+
+
 async def main() -> None:
     parser = argparse.ArgumentParser(description="Local model evaluation sweep")
     parser.add_argument(
@@ -668,11 +697,15 @@ async def main() -> None:
         help="Print what would happen without running.",
     )
     parser.add_argument(
-        "--skip-backend-restart",
+        "--cleanup",
         action="store_true",
-        help="Skip backend restart (assume already running with correct model).",
+        help="Unload all non-embedding models and restart backend with default model.",
     )
     args = parser.parse_args()
+
+    if args.cleanup:
+        await cleanup_stuck_models()
+        return
 
     # Filter models
     tier_filter = {t.strip().upper() for t in args.tier.split(",") if t.strip()} if args.tier else None
@@ -741,7 +774,11 @@ async def main() -> None:
         print(f"  MODEL {i+1}/{len(selected)}")
         print(f"{'#'*80}")
 
-        result = await run_eval_for_model(model, run_index=i + 1)
+        try:
+            result = await run_eval_for_model(model, run_index=i + 1)
+        except Exception as e:
+            print(f"  [CRASH] Unexpected error for {model.id}: {e}")
+            result = {"model": model.id, "display_name": model.display_name, "status": f"crash: {e}", "exchanges": []}
         results.append(result)
 
         # Save intermediate results
