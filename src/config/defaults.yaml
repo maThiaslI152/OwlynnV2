@@ -204,12 +204,12 @@ screen_assist:
   ax_blindspot_crop_size: 512              # Vision fallback when AX empty
   browser_cdp_url: ""                      # Optional Playwright CDP (e.g. :9222)
   kali:
-    host: ""                               # KALI_SSH_HOST env
-    user: "kali"
-    port: 22
+    host: "127.0.0.1"                      # Lima VM (auto-started on Pentest mode)
+    user: "tim"                            # Lima SSH user (host user)
+    port: 60022                            # Lima SSH port
     tmux_session: "main"
     history_lines: 200
-    identity_file: ""                      # Optional SSH key path
+    identity_file: "~/.lima/_config/user"  # Lima SSH key
 
 # ── Browser extension (Owlynn Browser Bridge) ────────────────────────────────
 browser_extension:
