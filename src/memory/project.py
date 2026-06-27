@@ -36,10 +36,11 @@ _DEFAULT_PROJECT: dict = {
     "files": [],
     "chats": [],
     "category": "general",
+    "mode": "normal",
 }
 
 _IMMUTABLE_FIELDS = frozenset({"id"})
-_PROJECT_WRITABLE_FIELDS = frozenset({"name", "instructions", "category"})
+_PROJECT_WRITABLE_FIELDS = frozenset({"name", "instructions", "category", "mode"})
 _CHAT_WRITABLE_FIELDS = frozenset({"name", "pinned"})
 
 
@@ -113,7 +114,12 @@ class ProjectManager:
         """Ensure every project has the keys introduced after v1."""
         changed = False
         for proj in self.projects.values():
-            for key, default in (("chats", []), ("files", []), ("category", "general")):
+            for key, default in (
+                ("chats", []),
+                ("files", []),
+                ("category", "general"),
+                ("mode", "normal"),
+            ):
                 if key not in proj:
                     proj[key] = default
                     changed = True

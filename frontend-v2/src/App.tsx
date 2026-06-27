@@ -37,6 +37,7 @@ interface ProjectSummary {
   id: string
   name: string
   chats?: ProjectChat[]
+  mode?: 'normal' | 'study' | 'pentest'
 }
 
 interface ProjectCreateResponse {
@@ -120,6 +121,7 @@ function App() {
       const mapped = payload.map((project) => ({
         id: project.id,
         name: project.name ?? project.id,
+        mode: (project.mode as 'normal' | 'study' | 'pentest') || 'normal',
         chats: (project.chats ?? []).map((c: any) => ({
           id: c.id,
           name: c.name ?? 'New Chat',
@@ -829,7 +831,22 @@ function App() {
     setActiveChatId(next.nextCurrentThreadId)
     setOperatorNote(next.operatorNote)
     refreshCloudUsage()
-  }, [activeProjectId, currentThreadId, clearSession, refreshCloudUsage])
+    // Load project's persisted mode
+    const targetProject = projects.find((p) => p.id === projectId)
+    if (targetProject?.mode) {
+      setActiveMode(targetProject.mode)
+    }
+  }, [activeProjectId, currentThreadId, clearSession, refreshCloudUsage, projects, setActiveMode])
+
+  const handleModeChange = useCallback((mode: 'normal' | 'study' | 'pentest') => {
+    setActiveMode(mode)
+    // Persist mode to project metadata
+    fetch(`/api/projects/${encodeURIComponent(activeProjectId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode }),
+    }).catch(() => { /* non-critical */ })
+  }, [activeProjectId, setActiveMode])
 
   const handleNewChat = useCallback(() => {
     const newThreadId = makeThreadId()
@@ -994,7 +1011,7 @@ function App() {
       onRenameChat={handleRenameChat}
       examCountdown={examCountdown}
       activeMode={activeMode}
-      onModeChange={setActiveMode}
+      onModeChange={handleModeChange}
       onHitlApprove={handleHitlApprove}
       onHitlDecline={handleHitlDecline}
       onHitlSelectChoice={handleHitlSelectChoice}

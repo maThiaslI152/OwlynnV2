@@ -44,6 +44,7 @@ interface WorkspaceProject {
   id: string
   name: string
   chats?: ProjectChat[]
+  mode?: 'normal' | 'study' | 'pentest'
 }
 
 interface ExamCountdownItem {
