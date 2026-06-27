@@ -1,7 +1,7 @@
 ---
 status: active
 category: reference
-last_updated: 2026-06-10
+last_updated: 2026-06-28
 owner: ai-agent
 audience: agent
 ---
@@ -93,17 +93,24 @@ src/api/routes/files.py            # Tool discovery (GET /api/tools)
 
 | Tool | Description |
 |------|-------------|
-| `course_register` | Register course code, name, exam date, linked PDFs |
+| `course_register` | Register course code, name, exam date, linked PDFs. Auto-creates workspace project when files provided. |
+| `course_workspace_create` | On-demand workspace creation for existing course |
+| `course_chat_create` | Create named chat in course project (e.g., "Chapter 1") |
 | `course_list` / `course_get` | List or fetch course metadata |
 | `study_note_save` / `study_note_search` | Structured study notes CRUD/search |
 | `flashcard_deck_create` / `flashcard_review` | Flashcard decks with SM-2 lite scheduling |
+| `flashcard_suggest` | Generate flashcard content from course files |
 | `quiz_session_start` / `quiz_session_answer` | Thread-scoped multi-question quizzes |
+| `study_session_log` | Log study sessions for streak tracking |
+| `study_weak_areas` | Detect weak topics from misconception history |
 | `mastery_record` | Explicit study misconception/mastery LTM atoms |
 | `export_study_sheet` | Export study guide to PDF or DOCX |
 
 Study skills (`study_tutor`, `exam_prep`, `flashcard_builder`, `interactive_teaching`, etc.) bind `file_ops` + `memory` + `study` toolboxes. Learning mode (`response_style: learning`) activates study scenario automatically.
 
 **Inline widgets:** `interactive_teaching` skill + `render_interactive_block` produce `owlynn-*` fences rendered inline in chat (see `docs/CHAT_PROTOCOL.md`).
+
+**Study mode:** See [MODES.md](MODES.md) for mode system. See [STUDY.md](STUDY.md) for full study system documentation.
 
 ### Toolbox: `memory`
 
@@ -128,6 +135,8 @@ External MCP servers (stdio) are declared in [`mcp_config.json`](../../mcp_confi
 | `mcp_config.json` | Server command + env (e.g. Kali SSH for pentest-mcp-server) |
 
 Pentest MCP tools (`pentest_*`) require HITL approval. Guide: [mcp-pentest-kali.md](../guides/mcp-pentest-kali.md).
+
+**Pentest mode:** See [MODES.md](MODES.md) for mode system. See [PENTEST.md](PENTEST.md) for pentest infrastructure documentation.
 
 ## Key Decisions
 
