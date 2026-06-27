@@ -47,6 +47,46 @@
 | Change cloud / anonymization | [`docs/architecture/CLOUD-LLM-ARCHITECTURE.md`](docs/architecture/CLOUD-LLM-ARCHITECTURE.md) | `src/agent/nodes/complex.py`, `src/agent/nodes/complex_utils/` |
 | Run or configure the app | [`docs/guides/dev-startup.md`](docs/guides/dev-startup.md) | `start.sh`, `setup.sh`, `.env` |
 | Run CI / tests / evaluation | [`docs/standards/EVALUATION.md`](docs/standards/EVALUATION.md) | `scripts/ci.sh`, `scripts/run_*_eval.py` |
+| Change mode system (Normal/Study/Pentest) | — | `frontend-v2/src/components/ModeSwitcher.tsx`, `frontend-v2/src/state/useAppStore.ts`, `src/api/ws/handler.py` |
+| Change study tools / courses | — | `src/tools/study_tools.py`, `src/api/routes/study.py`, `skills/` |
+| Change pentest scenario | — | `scenarios/pentest/`, `src/memory/scenarios.py`, `frontend-v2/src/components/PentestScopePanel.tsx` |
+
+## Mode System
+
+Owlynn has three modes that change the UI, tools, and system prompt:
+
+| Mode | Response Style | Scenario | Sidebar | Right Panel |
+|------|---------------|----------|---------|-------------|
+| **Normal** | User choice | Auto-detected | Standard projects/chats | Orchestration, cloud usage |
+| **Study** | `learning` (forced) | `study` (forced) | Courses, exam countdown, study progress | Study progress, weak areas |
+| **Pentest** | `concise` (forced) | `pentest` (forced) | Scope & constraints panel | (MVP: sidebar only) |
+
+- Mode is persisted per-project in `projects.json` (`mode` field)
+- Mode switcher is in the left sidebar top
+- Mode → WS payload: frontend sends `scenario_id` to backend
+- Backend maps `scenario_id` to forced response_style and scenario injection
+- `src/memory/project.py`: `_PROJECT_WRITABLE_FIELDS` includes `mode`
+
+## Study System
+
+16 study tools in `src/tools/study_tools.py`:
+
+| Tool | Purpose |
+|------|---------|
+| `course_register` | Register course, auto-creates workspace project when linked_files provided |
+| `course_workspace_create` | On-demand workspace creation for existing course |
+| `course_chat_create` | Create named chat in course project |
+| `course_list` / `course_get` | List/get course metadata |
+| `study_note_save` / `study_note_search` | Save/search study notes |
+| `flashcard_deck_create` / `flashcard_review` | Create decks, SM-2 spaced repetition review |
+| `flashcard_suggest` | Generate flashcard content from course files |
+| `quiz_session_start` / `quiz_session_answer` | Multi-question quiz sessions |
+| `study_session_log` | Log sessions for streak tracking |
+| `study_weak_areas` | Detect weak topics from misconception history |
+| `mastery_record` | Save mastery/misconception atoms to Mem0 |
+| `export_study_sheet` | Export study guide as PDF/DOCX |
+
+API endpoints: `GET /api/study/dashboard`, `GET /api/study/exam-countdown`
 
 ## Skip unless asked
 
@@ -80,4 +120,4 @@ When generating cache keys for chat histories or context gatekeepers (e.g., in `
 
 ## Last updated
 
-2026-06-20 — Added learned rules for eval synchronization, frontend error handling, and cache key invalidation.
+2026-06-28 — Added mode system (Normal/Study/Pentest), study suite (16 tools, 6 skills), file viewer, mode persistence per-project.
