@@ -25,10 +25,14 @@ async def capture_remote_tmux_pane(
     remote = f"tmux capture-pane -p -t {shlex.quote(session)} -S -{max(1, lines)}"
     ssh_cmd = [
         "ssh",
-        "-o", "BatchMode=yes",
-        "-o", "ConnectTimeout=15",
-        "-o", "StrictHostKeyChecking=no",
-        "-o", "UserKnownHostsFile=/dev/null",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "ConnectTimeout=15",
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-o",
+        "UserKnownHostsFile=/dev/null",
     ]
     if port != 22:
         ssh_cmd.extend(["-p", str(port)])
