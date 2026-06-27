@@ -17,6 +17,7 @@ owner: ai-agent
 - [`AGENT_FLOW.md`](../AGENT_FLOW.md) — LangGraph node flow
 - [`CHAT_PROTOCOL.md`](../CHAT_PROTOCOL.md) — WebSocket contract
 - [`STATUS.md`](../STATUS.md) — Current risks and model config
+- [`logging.md`](logging.md) — Full logging & trace system reference
 
 ## Symptom → File Mapping
 
@@ -87,12 +88,13 @@ cd frontend-v2 && npx vitest run 2>&1 | tail -3
 ```
 Symptom?
 ├─ Backend/API error → backend-api.md
-├─ Wrong model/route → router.py + agent-graph.md
+├─ Wrong model/route → router.py + agent-graph.md + logcat.py --channel agent.model
+├─ "What happened in conversation X?" → trace_view.py <thread_id>
 ├─ LLM timeout/OOM → llm-pool.md + defaults.yaml
 ├─ Memory/Qdrant → memory.md
-├─ Tool/HITL → tools.md + HITL.md
+├─ Tool/HITL → tools.md + HITL.md + trace_view.py <thread_id> --type tool_call
 ├─ Frontend/WS → frontend.md + CHAT_PROTOCOL.md
-└─ Performance → profiling.md
+└─ Performance → profiling.md + trace_view.py <thread_id> --type tool_call
 ```
 
 ## Related

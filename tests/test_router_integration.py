@@ -67,6 +67,7 @@ def _make_mock_llm(content: str) -> MagicMock:
 
 
 @pytest.mark.anyio
+@patch("src.agent.routing.router.get_profile")
 @patch("src.agent.routing.router.interrupt")
 @patch("src.agent.routing.router.SkillMatcher")
 @patch("src.agent.routing.router.get_small_llm", new_callable=AsyncMock)
@@ -76,6 +77,7 @@ async def test_router_skill_hitl_round_trip(
     mock_get_llm,
     MockSkillMatcher,
     mock_interrupt,
+    mock_get_profile,
 ):
     """
     When LLM confidence is below routing_confidence_threshold (0.6) AND
@@ -84,6 +86,10 @@ async def test_router_skill_hitl_round_trip(
     """
     # ── Arrange ──────────────────────────────────────────────────────
     mock_get_config.return_value = {"configurable": {"__pregel_checkpointer": object()}}
+    mock_get_profile.return_value = {
+        "execution_policy": "interactive",
+        "cloud_escalation_enabled": False,
+    }
     mock_get_llm.return_value = _make_mock_llm(
         '{"routing":"complex","confidence":0.45,"toolbox":"all"}'
     )
@@ -140,6 +146,7 @@ async def test_router_skill_hitl_round_trip(
 
 
 @pytest.mark.anyio
+@patch("src.agent.routing.router.get_profile")
 @patch("src.agent.routing.router.interrupt")
 @patch("src.agent.routing.router.SkillMatcher")
 @patch("src.agent.routing.router.get_small_llm", new_callable=AsyncMock)
@@ -149,6 +156,7 @@ async def test_router_skill_hitl_resume(
     mock_get_llm,
     MockSkillMatcher,
     mock_interrupt,
+    mock_get_profile,
 ):
     """
     When HITL fires and the user picks a skill choice, the router must set
@@ -156,6 +164,10 @@ async def test_router_skill_hitl_resume(
     """
     # ── Arrange ──────────────────────────────────────────────────────
     mock_get_config.return_value = {"configurable": {"__pregel_checkpointer": object()}}
+    mock_get_profile.return_value = {
+        "execution_policy": "interactive",
+        "cloud_escalation_enabled": False,
+    }
     mock_get_llm.return_value = _make_mock_llm(
         '{"routing":"complex","confidence":0.40,"toolbox":"all"}'
     )
@@ -184,7 +196,8 @@ async def test_router_skill_hitl_resume(
     state = _make_text_state("find the latest AI papers")
 
     # ── Act ──────────────────────────────────────────────────────────
-    result = await router_node(state)
+    with patch("src.agent.routing.router._check_cloud_available", return_value=True):
+        result = await router_node(state)
 
     # ── Assert ───────────────────────────────────────────────────────
     assert result["router_clarification_used"] is True
@@ -199,6 +212,7 @@ async def test_router_skill_hitl_resume(
 
 
 @pytest.mark.anyio
+@patch("src.agent.routing.router.get_profile")
 @patch("src.agent.routing.router.interrupt")
 @patch("src.agent.routing.router.SkillMatcher")
 @patch("src.agent.routing.router.get_small_llm", new_callable=AsyncMock)
@@ -208,6 +222,7 @@ async def test_router_confident_ambiguous_skill_hitl(
     mock_get_llm,
     MockSkillMatcher,
     mock_interrupt,
+    mock_get_profile,
 ):
     """
     Even when the LLM is confident (above routing_confidence_threshold),
@@ -216,6 +231,10 @@ async def test_router_confident_ambiguous_skill_hitl(
     """
     # ── Arrange ──────────────────────────────────────────────────────
     mock_get_config.return_value = {"configurable": {"__pregel_checkpointer": object()}}
+    mock_get_profile.return_value = {
+        "execution_policy": "interactive",
+        "cloud_escalation_enabled": False,
+    }
     mock_get_llm.return_value = _make_mock_llm(
         '{"routing":"complex","confidence":0.85,"toolbox":"data_viz"}'  # HIGH confidence
     )

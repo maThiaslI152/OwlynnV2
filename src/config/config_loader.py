@@ -484,6 +484,7 @@ def validate_config() -> dict[str, list[str]]:
         "file_indexing",
         "pdf_rendering",
         "audit",
+        "trace",
         "threading",
         "secret_store",
         "file_decode",

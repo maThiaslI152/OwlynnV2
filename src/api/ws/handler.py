@@ -765,6 +765,25 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
     # Start the event forwarder task
     forwarder_task = asyncio.create_task(forward_events())
 
+    # Start conversation trace writer (persists per-thread JSONL)
+    trace_task = None
+    _trace_queue = None
+    try:
+        from src.config.trace_writer import get_trace_writer, trace_listener
+
+        cfg_trace_enabled = get_trace_writer() is not None
+    except Exception:
+        cfg_trace_enabled = False
+
+    if cfg_trace_enabled:
+        try:
+            _trace_queue = await session.add_listener()
+            trace_task = asyncio.create_task(
+                trace_listener(thread_id, _trace_queue, get_trace_writer())
+            )
+        except Exception:
+            logger.debug("Trace writer init failed", exc_info=True)
+
     try:
         while True:
             data = await websocket.receive_text()
@@ -856,6 +875,17 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
             persona_id = payload.get("persona_id", "default")
             base_dir = get_project_workspace(project_id)
 
+            # Mode → scenario mapping: frontend sends scenario_id for explicit modes
+            client_scenario_id = payload.get("scenario_id")
+            if client_scenario_id in ("study", "pentest"):
+                scenario_id = client_scenario_id
+                if client_scenario_id == "study" and response_style == "normal":
+                    response_style = "learning"
+                elif client_scenario_id == "pentest" and response_style == "normal":
+                    response_style = "concise"
+            else:
+                scenario_id = None  # Let the router detect it
+
             # Handle Workspace References
             for f in files:
                 if f.get("type") == "workspace_ref":
@@ -937,6 +967,21 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
             if not message_content:
                 continue
 
+            # Write user message to trace (before graph run starts)
+            if cfg_trace_enabled:
+                try:
+                    tw = get_trace_writer()
+                    tw.write(thread_id, {"type": "turn_start"})
+                    tw.write(
+                        thread_id,
+                        {
+                            "type": "user_message",
+                            "content": message_content[:2000],
+                        },
+                    )
+                except Exception:
+                    pass
+
             # Start the graph run in the session (background)
             await session.start_run(
                 {
@@ -947,6 +992,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                     "project_id": project_id,
                     "persona_id": persona_id,
                     "thread_id": thread_id,
+                    **({"scenario_id": scenario_id} if scenario_id else {}),
                 },
                 config=config,
                 correlation_id=payload.get("correlation_id"),
@@ -958,10 +1004,14 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
     finally:
         # We don't cancel the session task here! It continues in background.
         connected_websockets.discard(websocket)  # Remove from active list
-        # But we should stop the forwarder.
+        # Stop the forwarder and trace listener.
         forwarder_task.cancel()
+        if trace_task is not None:
+            trace_task.cancel()
+        if _trace_queue is not None:
+            session.remove_listener(_trace_queue)
         # The forwarder cleanup will check if it should delete the session.
         try:
             await websocket.close(code=1000)
-        except RuntimeError:
+        except (RuntimeError, AttributeError):
             pass

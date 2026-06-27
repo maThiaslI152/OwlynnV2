@@ -9,6 +9,10 @@ import { ProjectKnowledgePanel } from './ProjectKnowledgePanel'
 import { MacMenuBar } from './MacMenuBar'
 import { HitlPromptCard, type HitlPromptViewModel } from './HitlPromptCard'
 import { ToolActivityCard } from './ToolActivityCard'
+import { ModeSwitcher } from './ModeSwitcher'
+import { FileViewerModal } from './FileViewerModal'
+import { PentestScopePanel } from './PentestScopePanel'
+import { StudyProgressPanel } from './StudyProgressPanel'
 import type { InterruptChoice } from '../state/useAppStore'
 import type { ConversationItem, ConversationToolActivity, ConversationHitlPrompt, ConversationChartEmbed } from '../appEventHandlers'
 import { useAppStore } from '../state/useAppStore'
@@ -42,6 +46,19 @@ interface WorkspaceProject {
   chats?: ProjectChat[]
 }
 
+interface ExamCountdownItem {
+  course_id: string
+  name: string
+  exam_date: string
+  days_until: number
+  pending_todos: number
+  current_streak: number
+  flashcard_decks: number
+  total_cards: number
+  due_cards: number
+  project_id?: string
+}
+
 interface AppShellProps {
   onSend: (content: string, files?: AttachedFile[]) => void
   projects: WorkspaceProject[]
@@ -57,6 +74,9 @@ interface AppShellProps {
   onSelectChat: (chatId: string) => void
   onDeleteChat: (chatId: string) => void
   onRenameChat: (chatId: string, newName: string) => void
+  examCountdown?: ExamCountdownItem[]
+  activeMode?: 'normal' | 'study' | 'pentest'
+  onModeChange?: (mode: 'normal' | 'study' | 'pentest') => void
   /** Inline HITL card callbacks */
   onHitlApprove?: (hitlId: string, variant: string, answers?: Record<string, unknown>) => void
   onHitlDecline?: (hitlId: string) => void
@@ -368,6 +388,9 @@ export function AppShell({
   onDeleteChat,
   onRenameChat,
   onStop,
+  examCountdown,
+  activeMode = 'normal',
+  onModeChange,
 }: AppShellProps) {
   const connectionState = useAppStore((s) => s.connectionState)
   const pendingCorrelationId = useAppStore((s) => s.pendingCorrelationId)
@@ -491,7 +514,14 @@ export function AppShell({
       {!isCompact && (
         <aside className="panel left-panel">
           {showDragStrip && <div className="window-drag-strip" data-tauri-drag-region />}
-          
+
+          {/* ── Mode Switcher ── */}
+          {onModeChange && (
+            <div style={{ padding: '8px 10px 4px' }}>
+              <ModeSwitcher activeMode={activeMode} onModeChange={onModeChange} />
+            </div>
+          )}
+
           <details className="sidebar-accordion" open>
             <summary>
               Workspace
@@ -679,6 +709,57 @@ export function AppShell({
               />
             </div>
           </details>
+
+          {/* ── Exam Countdown ── */}
+          {activeMode !== 'pentest' && examCountdown && examCountdown.length > 0 && (
+            <details className="sidebar-accordion" open>
+              <summary>Upcoming Exams</summary>
+              <div className="sidebar-accordion-content">
+                {examCountdown.map((exam) => (
+                  <div key={exam.course_id} style={{
+                    padding: '8px 10px',
+                    marginBottom: 6,
+                    borderRadius: 8,
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                  }}>
+                    <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>
+                      {exam.name}
+                    </div>
+                    <div style={{ fontSize: 12, opacity: 0.7, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <span>{exam.days_until <= 0 ? '🔴 Today!' : `📅 ${exam.days_until} day${exam.days_until !== 1 ? 's' : ''}`}</span>
+                      {exam.pending_todos > 0 && <span>📝 {exam.pending_todos} todo{exam.pending_todos !== 1 ? 's' : ''}</span>}
+                      {exam.current_streak > 0 && <span>🔥 {exam.current_streak}d streak</span>}
+                    </div>
+                    {exam.total_cards > 0 && (
+                      <div style={{ fontSize: 11, opacity: 0.5, marginTop: 3 }}>
+                        📇 {exam.due_cards}/{exam.total_cards} cards due
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+
+          {/* ── Mode-Specific Sidebar Sections ── */}
+          {activeMode === 'study' && (
+            <details className="sidebar-accordion" open>
+              <summary>Study Progress</summary>
+              <div className="sidebar-accordion-content">
+                <StudyProgressPanel />
+              </div>
+            </details>
+          )}
+
+          {activeMode === 'pentest' && (
+            <details className="sidebar-accordion" open>
+              <summary>Scope & Constraints</summary>
+              <div className="sidebar-accordion-content">
+                <PentestScopePanel activeProjectId={activeProjectId} />
+              </div>
+            </details>
+          )}
         </aside>
       )}
 

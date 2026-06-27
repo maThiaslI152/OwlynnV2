@@ -309,10 +309,13 @@ async def test_long_context_boundary_routes_cloud_not_default():
             content='{"routing":"complex","confidence":0.95,"toolbox":"all"}'
         )
     )
-    with patch(
-        "src.agent.routing.router.get_small_llm",
-        new_callable=AsyncMock,
-        return_value=mock_llm,
+    with (
+        patch(
+            "src.agent.routing.router.get_small_llm",
+            new_callable=AsyncMock,
+            return_value=mock_llm,
+        ),
+        patch("src.agent.routing.router._check_cloud_available", return_value=True),
     ):
         out = await router_node(state)
     assert out["route"] == "complex-cloud"

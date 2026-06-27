@@ -86,6 +86,13 @@ function App() {
   const [activeProjectId, setActiveProjectId] = useState('default')
   const [activeChatId, setActiveChatId] = useState(initialThreadId)
   const [currentThreadId, setCurrentThreadId] = useState(initialThreadId)
+  const [examCountdown, setExamCountdown] = useState<Array<{
+    course_id: string; name: string; exam_date: string; days_until: number;
+    pending_todos: number; current_streak: number; flashcard_decks: number;
+    total_cards: number; due_cards: number; project_id?: string
+  }>>([])
+  const activeMode = useAppStore((s) => s.activeMode)
+  const setActiveMode = useAppStore((s) => s.setActiveMode)
   const projectThreadsRef = useRef<Record<string, string>>({ default: initialThreadId })
   const activeProjectIdRef = useRef(activeProjectId)
   const currentThreadIdRef = useRef(currentThreadId)
@@ -256,6 +263,21 @@ function App() {
   useEffect(() => {
     void loadProjects()
   }, [loadProjects])
+
+  // Fetch exam countdown data
+  useEffect(() => {
+    const fetchExamCountdown = async () => {
+      try {
+        const resp = await fetch('/api/study/exam-countdown')
+        if (!resp.ok) return
+        const data = await resp.json()
+        if (data?.status === 'ok' && Array.isArray(data.exams)) {
+          setExamCountdown(data.exams)
+        }
+      } catch { /* non-critical */ }
+    }
+    void fetchExamCountdown()
+  }, [])
 
   useEffect(() => {
     let disposed = false
@@ -667,6 +689,7 @@ function App() {
 
     addMessage(message)
     setPendingCorrelationId(message.id)
+    const modeScenarioId = activeMode === 'study' ? 'study' : activeMode === 'pentest' ? 'pentest' : undefined
     wsClientRef.current?.send({
       correlation_id: message.id,
       type: 'user.message',
@@ -677,8 +700,9 @@ function App() {
       project_id: activeProjectId,
       persona_id: activePersonaId,
       ...(responseStyle ? { response_style: responseStyle } : {}),
+      ...(modeScenarioId ? { scenario_id: modeScenarioId } : {}),
     })
-  }, [addMessage, activeProjectId])
+  }, [addMessage, activeProjectId, activeMode])
 
   useEffect(() => {
     const store = useAppStore.getState()
@@ -968,6 +992,9 @@ function App() {
       onSelectChat={handleSelectChat}
       onDeleteChat={handleDeleteChat}
       onRenameChat={handleRenameChat}
+      examCountdown={examCountdown}
+      activeMode={activeMode}
+      onModeChange={setActiveMode}
       onHitlApprove={handleHitlApprove}
       onHitlDecline={handleHitlDecline}
       onHitlSelectChoice={handleHitlSelectChoice}

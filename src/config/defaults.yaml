@@ -341,6 +341,10 @@ audit:
   error_backup_count: 3
   sanitize_max_len: 500
 
+# ── Conversation Trace ───────────────────────────────────────────────────────
+trace:
+  output_dir: "~/.owlynn/traces"
+
 # ── Threading ────────────────────────────────────────────────────────────────
 threading:
   max_workers: 2

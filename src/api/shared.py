@@ -73,6 +73,21 @@ def _stringify_lc_message_content(content) -> str:
     return str(content)
 
 
+_INJECTED_FILE_RE = re.compile(
+    r"\[(?:Workspace file `[^\n]+|Attached File: `[^\n]+).*?\n---\n.*?\n---\s*"
+    r"|\[Attached File: `[^\n]+`\]\n```\n.*?\n```\s*",
+    re.DOTALL,
+)
+
+
+def _strip_injected_file_content(content: str) -> str:
+    """Remove injected file/attachment content from HumanMessage for UI display."""
+    if not isinstance(content, str) or not content:
+        return content
+    stripped = _INJECTED_FILE_RE.sub("", content)
+    return stripped.strip()
+
+
 def serialize_message(msg):
     """
     Converts Langchain BaseMessage objects into raw UI-friendly dictionaries
@@ -94,6 +109,10 @@ def serialize_message(msg):
             )
     else:
         content_ui = msg.content
+        if getattr(msg, "type", None) == "human":
+            content_ui = _strip_injected_file_content(
+                content_ui if isinstance(content_ui, str) else str(content_ui or "")
+            )
 
     serialized = {"type": getattr(msg, "type", "unknown"), "content": content_ui}
 

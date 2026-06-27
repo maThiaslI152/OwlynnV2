@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import toast from 'react-hot-toast'
 import { WORKSPACE_REF_DRAG_TYPE, workspaceRefAttachment, type AttachedFile } from '../lib/attachments'
 import { collapseKnowledgeFiles, type KnowledgeFileRow } from '../lib/knowledgeFiles'
+import { FileViewerModal } from './FileViewerModal'
 
 type KnowledgeFile = KnowledgeFileRow
 
@@ -18,6 +19,7 @@ export function ProjectKnowledgePanel({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [indexingStates, setIndexingStates] = useState<Record<string, { status: string; chunks?: number; error?: string; timestamp?: number }>>({})
+  const [viewingFile, setViewingFile] = useState<string | null>(null)
 
   const loadKnowledgeFiles = useCallback(async () => {
     setLoading(true)
@@ -112,7 +114,7 @@ export function ProjectKnowledgePanel({
       )}
       {renderedFiles.length > 0 && (
         <>
-          <p className="knowledge-hint">Drag a file to the prompt to reference it.</p>
+          <p className="knowledge-hint">Click to preview, drag to prompt.</p>
           <ul className="knowledge-list">
             {renderedFiles.map((file) => {
               const indexing = indexingStates[file.name]
@@ -121,7 +123,8 @@ export function ProjectKnowledgePanel({
                   key={file.name}
                   className="knowledge-item knowledge-item-draggable"
                   draggable
-                  title={`Drag to prompt: ${file.name}`}
+                  title={`Click to preview, drag to prompt: ${file.name}`}
+                  onClick={() => setViewingFile(file.name)}
                   onDragStart={(e) => {
                     e.dataTransfer.setData(
                       WORKSPACE_REF_DRAG_TYPE,
@@ -153,6 +156,14 @@ export function ProjectKnowledgePanel({
             })}
           </ul>
         </>
+      )}
+
+      {viewingFile && (
+        <FileViewerModal
+          filename={viewingFile}
+          projectId={activeProjectId}
+          onClose={() => setViewingFile(null)}
+        />
       )}
     </section>
   )

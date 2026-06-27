@@ -230,3 +230,57 @@ def resolve_study_scenario(response_style: str | None, user_text: str) -> str | 
     if any(kw in lower for kw in _STUDY_KEYWORDS):
         return "study"
     return None
+
+
+def detect_weak_topics(memory: object, mem0_uid: str) -> list[dict]:
+    """Analyze study atoms to find topics with high misconception density.
+
+    Returns list of {"topic": str, "struggles": int, "masteries": int, "weakness": float}.
+    """
+    try:
+        results_dict = memory.search(
+            f"{STUDY_STRUGGLE_PREFIX} misconception struggle mastery",
+            filters={"user_id": mem0_uid},
+            limit=30,
+        )
+        items = (
+            results_dict.get("results", [])
+            if isinstance(results_dict, dict)
+            else results_dict
+        )
+    except Exception:
+        return []
+
+    topic_data: dict[str, dict] = {}
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        text = str(item.get("memory") or item.get("text") or "")
+        if not is_study_memory_item(item):
+            continue
+
+        # Extract topic
+        topic_match = re.search(
+            r"\[STUDY_(?:STRUGGLE|MASTERY)\]\s*([^:]+):", text, re.I
+        )
+        topic = topic_match.group(1).strip() if topic_match else "Unknown"
+
+        if topic not in topic_data:
+            topic_data[topic] = {"topic": topic, "struggles": 0, "masteries": 0}
+
+        if STUDY_STRUGGLE_PREFIX.lower() in text.lower():
+            topic_data[topic]["struggles"] += 1
+        elif "[study_mastery]" in text.lower():
+            topic_data[topic]["masteries"] += 1
+
+    # Calculate weakness score (higher = weaker)
+    result = []
+    for td in topic_data.values():
+        total = td["struggles"] + td["masteries"]
+        if total > 0:
+            td["weakness"] = td["struggles"] / total
+        else:
+            td["weakness"] = 0.0
+        result.append(td)
+
+    return sorted(result, key=lambda x: (-x["weakness"], -x["struggles"]))

@@ -166,6 +166,7 @@ interface AppState {
   coherenceRetryAttempt: number
   coherenceRetryOriginalConfidence: number | null
   cloudFallback: { reason: string; fallback_model: string; can_retry: boolean } | null
+  activeMode: 'normal' | 'study' | 'pentest'
   setConnectionState: (state: ConnectionState) => void
   addMessage: (message: ChatMessage) => void
   appendStreamChunk: (chunk: string) => void
@@ -202,6 +203,7 @@ interface AppState {
   setCloudFallback: (fallback: { reason: string; fallback_model: string; can_retry: boolean } | null) => void
   setEvalResponseStyle: (style: string | null) => void
   setResponseStyle: (style: string | null) => void
+  setActiveMode: (mode: 'normal' | 'study' | 'pentest') => void
   applyBrowserPageContext: (ctx: import('../lib/browserPageContext').BrowserPageContext) => void
 }
 
@@ -243,6 +245,7 @@ export const useAppStore = create<AppState>((set) => ({
   coherenceRetryAttempt: 0,
   coherenceRetryOriginalConfidence: null,
   cloudFallback: null,
+  activeMode: 'normal',
   setConnectionState: (connectionState) => set({ connectionState }),
   addMessage: (message) =>
     set((state) => ({
@@ -383,6 +386,7 @@ export const useAppStore = create<AppState>((set) => ({
       coherenceRetryOriginalConfidence: active ? confidence : null,
     }),
   setCloudFallback: (cloudFallback) => set({ cloudFallback }),
+  setActiveMode: (activeMode) => set({ activeMode }),
   setEvalResponseStyle: (evalResponseStyle) => set({ evalResponseStyle }),
   setResponseStyle: (responseStyle) => set({ responseStyle }),
   applyBrowserPageContext: (ctx) =>

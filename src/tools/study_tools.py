@@ -19,6 +19,7 @@ _COURSES_PATH = DATA_DIR / "courses.json"
 _NOTES_DIR = DATA_DIR / "study_notes"
 _FLASHCARDS_DIR = DATA_DIR / "flashcards"
 _QUIZ_DIR = DATA_DIR / "quiz_sessions"
+_PROGRESS_PATH = DATA_DIR / "study_progress.json"
 
 
 def _read_json(path: Path, default: Any) -> Any:
@@ -78,6 +79,52 @@ def _filter_memories_by_tags(results: list, tags: list[str]) -> list:
     return filtered or results
 
 
+def _auto_create_study_project(
+    course_id: str, name: str, files: list[str]
+) -> str | None:
+    """Create a study workspace project for a course and index linked files."""
+    try:
+        import asyncio
+        import shutil
+
+        from src.memory.project import project_manager
+        from src.config.settings import get_project_workspace
+
+        project_name = f"{course_id} — {name}"
+        instructions = (
+            f"You are a study tutor for {name} ({course_id}). "
+            f"Use the knowledge files as source material. "
+            f"When the user asks about this course, reference the indexed documents."
+        )
+        project = project_manager.create_project(project_name, instructions)
+        project_id = project["id"]
+
+        workspace = get_project_workspace(project_id)
+        for fname in files:
+            src = Path(get_project_workspace("default")) / fname
+            if src.is_file():
+                dst = Path(workspace) / fname
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, dst)
+                # Index as knowledge in Qdrant (non-blocking best-effort)
+                try:
+                    content = dst.read_text(encoding="utf-8", errors="replace")[:32000]
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        asyncio.ensure_future(
+                            project_manager.add_knowledge(project_id, fname, content)
+                        )
+                    else:
+                        loop.run_until_complete(
+                            project_manager.add_knowledge(project_id, fname, content)
+                        )
+                except Exception:
+                    pass  # Non-critical — files are still in workspace
+        return project_id
+    except Exception:
+        return None
+
+
 @tool
 def course_register(
     course_id: str,
@@ -88,6 +135,9 @@ def course_register(
     """
     Register or update a course for study tracking.
 
+    When linked_files are provided, automatically creates a dedicated study
+    workspace project and indexes the files as knowledge.
+
     Args:
         course_id: Short code (e.g. UID10667).
         name: Full course name.
@@ -96,28 +146,48 @@ def course_register(
     """
     courses = _read_json(_COURSES_PATH, [])
     files = [f.strip() for f in linked_files.split(",") if f.strip()]
+    cid = course_id.strip()
+
+    # Preserve existing project_id if course already exists
+    existing_project_id = None
+    for c in courses:
+        if c.get("course_id") == cid:
+            existing_project_id = c.get("project_id")
+            break
+
+    project_id = existing_project_id
+
+    # Auto-create study workspace when linked files are provided and no project exists
+    if files and not project_id:
+        project_id = _auto_create_study_project(cid, name.strip(), files)
+
     entry = {
-        "course_id": course_id.strip(),
+        "course_id": cid,
         "name": name.strip(),
         "exam_date": exam_date.strip() or None,
         "linked_files": files,
+        "project_id": project_id,
         "updated_at": datetime.now().isoformat(timespec="seconds"),
     }
     replaced = False
     for i, c in enumerate(courses):
-        if c.get("course_id") == entry["course_id"]:
+        if c.get("course_id") == cid:
             courses[i] = {**c, **entry}
             replaced = True
             break
     if not replaced:
         courses.append(entry)
     _write_json(_COURSES_PATH, courses)
-    return f"✅ Course registered: {entry['course_id']} — {entry['name']}"
+
+    msg = f"✅ Course registered: {cid} — {name}"
+    if project_id:
+        msg += f"\n📁 Study workspace created (project: {project_id})"
+    return msg
 
 
 @tool
 def course_list() -> str:
-    """List all registered courses with exam dates."""
+    """List all registered courses with exam dates and workspace status."""
     courses = _read_json(_COURSES_PATH, [])
     if not courses:
         return "No courses registered. Use course_register to add one."
@@ -125,8 +195,9 @@ def course_list() -> str:
     for c in courses:
         exam = c.get("exam_date") or "no exam date"
         files = len(c.get("linked_files") or [])
+        ws = "📁" if c.get("project_id") else "—"
         lines.append(
-            f"  • {c.get('course_id')}: {c.get('name')} (exam: {exam}, {files} files)"
+            f"  {ws} {c.get('course_id')}: {c.get('name')} (exam: {exam}, {files} files)"
         )
     return "\n".join(lines)
 
@@ -139,6 +210,85 @@ def course_get(course_id: str) -> str:
         if c.get("course_id") == course_id.strip():
             return json.dumps(c, ensure_ascii=False, indent=2)
     return f"Course '{course_id}' not found."
+
+
+@tool
+def course_workspace_create(course_id: str, linked_files: str = "") -> str:
+    """
+    Create a study workspace project for an existing course.
+
+    Args:
+        course_id: Course code to create workspace for.
+        linked_files: Comma-separated workspace PDF paths to index.
+    """
+    courses = _read_json(_COURSES_PATH, [])
+    target = None
+    for c in courses:
+        if c.get("course_id") == course_id.strip():
+            target = c
+            break
+    if not target:
+        return (
+            f"Course '{course_id}' not found. Register it first with course_register."
+        )
+
+    if target.get("project_id"):
+        return f"Course '{course_id}' already has a workspace (project: {target['project_id']})."
+
+    files = [f.strip() for f in linked_files.split(",") if f.strip()] or target.get(
+        "linked_files", []
+    )
+    if not files:
+        return "No files to index. Provide linked_files or register the course with files first."
+
+    project_id = _auto_create_study_project(target["course_id"], target["name"], files)
+    if not project_id:
+        return "Failed to create study workspace."
+
+    # Update course entry with project_id and files
+    for i, c in enumerate(courses):
+        if c.get("course_id") == course_id.strip():
+            courses[i]["project_id"] = project_id
+            courses[i]["linked_files"] = files
+            courses[i]["updated_at"] = datetime.now().isoformat(timespec="seconds")
+            break
+    _write_json(_COURSES_PATH, courses)
+    return f"✅ Study workspace created for {course_id} (project: {project_id}, {len(files)} files indexed)"
+
+
+@tool
+def course_chat_create(course_id: str, chat_name: str) -> str:
+    """
+    Create a named chat in a course's study workspace project.
+
+    Args:
+        course_id: Course code.
+        chat_name: Name for the new chat (e.g. "Chapter 1 — Intro").
+    """
+    courses = _read_json(_COURSES_PATH, [])
+    target = None
+    for c in courses:
+        if c.get("course_id") == course_id.strip():
+            target = c
+            break
+    if not target:
+        return f"Course '{course_id}' not found."
+    if not target.get("project_id"):
+        return f"Course '{course_id}' has no study workspace. Use course_workspace_create first."
+
+    try:
+        import uuid
+
+        from src.memory.project import project_manager
+
+        chat_id = f"thread-{uuid.uuid4()}"
+        project_manager.add_chat_to_project(
+            target["project_id"],
+            {"id": chat_id, "name": chat_name.strip(), "created_at": time.time()},
+        )
+        return f"✅ Chat '{chat_name}' created in {course_id} workspace (id: {chat_id})"
+    except Exception as e:
+        return f"Failed to create chat: {e}"
 
 
 @tool
@@ -448,4 +598,192 @@ def export_study_sheet(title: str, content: str, format: str = "pdf") -> str:
 
     return create_pdf.invoke(
         {"filename": f"{safe}.pdf", "content": content, "title": title}
+    )
+
+
+# ── Study Progress & Streak Tracking ─────────────────────────────────
+
+
+def _load_progress() -> dict:
+    return _read_json(_PROGRESS_PATH, {"sessions": [], "streaks": {}})
+
+
+def _save_progress(data: dict) -> None:
+    _write_json(_PROGRESS_PATH, data)
+
+
+@tool
+def study_session_log(
+    course_id: str,
+    session_type: str,
+    topic: str = "",
+    duration_minutes: int = 0,
+    cards_reviewed: int = 0,
+    score: float = 0.0,
+) -> str:
+    """
+    Log a study session for streak tracking and progress analytics.
+
+    Args:
+        course_id: Course code.
+        session_type: flashcard_review, quiz, study, or exam_prep.
+        topic: Topic or chapter studied.
+        duration_minutes: How long the session lasted.
+        cards_reviewed: Number of flashcards reviewed (if applicable).
+        score: Score as decimal 0.0-1.0 (if applicable).
+    """
+    progress = _load_progress()
+    now = datetime.now()
+    today = now.date().isoformat()
+
+    session_entry = {
+        "course_id": course_id.strip(),
+        "type": session_type.strip(),
+        "topic": topic.strip(),
+        "started_at": now.isoformat(timespec="seconds"),
+        "duration_minutes": duration_minutes,
+        "cards_reviewed": cards_reviewed,
+        "score": score,
+    }
+    progress.setdefault("sessions", []).append(session_entry)
+
+    # Update streak
+    streaks = progress.setdefault("streaks", {})
+    streak = streaks.get(course_id.strip(), {})
+    last_active = streak.get("last_active_date", "")
+    current = streak.get("current", 0)
+    longest = streak.get("longest", 0)
+
+    if last_active == today:
+        pass  # Same day, no change
+    elif last_active == (now.date() - timedelta(days=1)).isoformat():
+        current += 1
+    else:
+        current = 1
+
+    longest = max(longest, current)
+    streaks[course_id.strip()] = {
+        "current": current,
+        "longest": longest,
+        "last_active_date": today,
+    }
+    _save_progress(progress)
+    return (
+        f"✅ Study session logged for {course_id} ({session_type}). "
+        f"🔥 Streak: {current} day(s)."
+    )
+
+
+@tool
+def study_weak_areas(course_id: str = "") -> str:
+    """
+    Identify weak topics based on misconception history from long-term memory.
+
+    Args:
+        course_id: Optional course filter.
+    """
+    try:
+        from src.memory.long_term import memory as mem0_memory
+    except Exception:
+        return "Error: Mem0 not available."
+    if mem0_memory is None:
+        return "Mem0 memory not initialized."
+
+    from src.memory.educator import STUDY_STRUGGLE_PREFIX, is_study_memory_item
+    from src.tools.workspace_context import _active_project_id
+
+    active_pid = _active_project_id.get()
+    user_id = (
+        f"project:{active_pid}" if active_pid and active_pid != "default" else "owner"
+    )
+
+    try:
+        results_dict = mem0_memory.search(
+            f"{STUDY_STRUGGLE_PREFIX} misconception struggle",
+            filters={"user_id": user_id},
+            limit=20,
+        )
+        items = (
+            results_dict.get("results", [])
+            if isinstance(results_dict, dict)
+            else results_dict
+        )
+    except Exception:
+        return "Could not search study memories."
+
+    struggles = [i for i in (items or []) if is_study_memory_item(i)]
+    if not struggles:
+        return "No weak areas detected yet. Keep studying!"
+
+    # Count by topic
+    topic_counts: dict[str, int] = {}
+    for item in struggles:
+        text = str(item.get("memory") or item.get("text") or "")
+        # Extract topic from [STUDY_STRUGGLE] prefix
+        match = __import__("re").search(
+            r"\[STUDY_STRUGGLE\]\s*([^:]+):", text, __import__("re").I
+        )
+        topic = match.group(1).strip() if match else "Unknown"
+        topic_counts[topic] = topic_counts.get(topic, 0) + 1
+
+    lines = ["📊 Weak Areas (by misconception count):"]
+    for topic, count in sorted(topic_counts.items(), key=lambda x: -x[1]):
+        lines.append(f"  ⚠️ {topic}: {count} misconception(s)")
+    return "\n".join(lines)
+
+
+@tool
+def flashcard_suggest(course_id: str, chapter: str, count: int = 10) -> str:
+    """
+    Suggest flashcard content from a course chapter.
+    Returns JSON front/back pairs ready for flashcard_deck_create.
+
+    Args:
+        course_id: Course code to find linked files.
+        chapter: Chapter or topic name to extract cards from.
+        count: Number of flashcards to suggest (default 10).
+    """
+    courses = _read_json(_COURSES_PATH, [])
+    target = None
+    for c in courses:
+        if c.get("course_id") == course_id.strip():
+            target = c
+            break
+    if not target:
+        return f"Course '{course_id}' not found."
+
+    files = target.get("linked_files", [])
+    if not files:
+        return f"No linked files for {course_id}. Register the course with files first."
+
+    # Try to find a matching file for the chapter
+    chapter_lower = chapter.strip().lower()
+    matched_file = None
+    for f in files:
+        if chapter_lower in f.lower():
+            matched_file = f
+            break
+    if not matched_file:
+        matched_file = files[0]  # Default to first file
+
+    # Read file content from the course's project workspace
+    try:
+        from src.config.settings import get_project_workspace
+
+        course_pid = target.get("project_id") or "default"
+        workspace = get_project_workspace(course_pid)
+        filepath = Path(workspace) / matched_file
+        if not filepath.is_file():
+            return f"File not found: {matched_file} in workspace {workspace}"
+        content = filepath.read_text(encoding="utf-8", errors="replace")[:16000]
+    except Exception as e:
+        return f"Failed to read {matched_file}: {e}"
+
+    # Return the content and instructions for the agent to generate flashcards
+    return (
+        f"Source: {matched_file} (chapter: {chapter})\n"
+        f"Content preview:\n{content[:8000]}\n\n"
+        f"Generate {count} flashcards from this content as a JSON array of "
+        f'{{"front": "...", "back": "..."}} objects, then call flashcard_deck_create '
+        f'with deck_name="{chapter}" and course_id="{course_id}".'
     )
