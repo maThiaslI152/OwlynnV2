@@ -44,9 +44,9 @@ After the agent responds, `memory_write_node`:
 4. Records the conversation in `conversations.json`
 5. Invalidates the memory cache for the next turn
 
-### Background extraction (Gemma) — resource deferral
+### Background extraction (Qwen3-VL-4B) — resource deferral
 
-LTM atom extraction uses the **extraction** slot (Gemma-4-E2B-heretic-uncensored-mlx) in a background worker. To avoid GPU/CPU contention with active chat or local fallback:
+LTM atom extraction uses the unified local model (`models.small`, `qwen3-vl-4b-instruct-c_abliterated-v2-mlx`) in a background worker. To avoid GPU/CPU contention with active chat or local fallback:
 
 ```text
 memory_write → Redis queue → worker waits for idle window → invoke_medium_background() → Mem0
@@ -55,7 +55,7 @@ memory_write → Redis queue → worker waits for idle window → invoke_medium_
 **Defer conditions** (configurable in `defaults.yaml`):
 
 - No active graph run (`GraphSession` registers start/end)
-- No foreground medium-LLM call (agent complex/simple local path)
+- No foreground local-LLM call (agent complex/simple local path)
 - Post-turn cooldown (`idle_cooldown_seconds`, default 8s)
 - Lower CPU priority during invoke (`process_nice`, default 10)
 
@@ -112,7 +112,7 @@ The `VectorLifecycleManager` orchestrates the insertion and deletion of vector d
 
 - `src/agent/nodes/memory.py` — `memory_inject_lite`, `memory_retrieve`, `memory_write`
 - `src/memory/extraction/` — Custom extractor worker + schema
-- `src/agent/local_llm_scheduler.py` — Foreground/background medium LLM deferral
+- `src/agent/local_llm_scheduler.py` — Foreground/background unified local model deferral
 - `src/memory/scenarios.py` — L2/L3 scenario markdown
 - `src/memory/compression.py` — Cloud brief memory block
 - `src/agent/pii_scrubber.py` — PII scrub before LTM writes

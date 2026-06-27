@@ -1,6 +1,6 @@
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from .formatter import _synthetic_answer_from_web_search_tool
+from .formatter import _synthetic_answer_from_web_search_tool, latest_user_text
 from .helpers import _web_search_tool_output_has_results
 
 _FETCH_TOOLS = frozenset({"fetch_webpage", "fetch_webpage_dynamic", "deep_research"})
@@ -26,15 +26,6 @@ _MEDICAL_ZONA_MARKERS = (
     "varicella",
     "giời leo",
 )
-
-
-def _latest_user_text(messages: list) -> str:
-    for m in reversed(messages):
-        if isinstance(m, HumanMessage):
-            c = m.content
-            if isinstance(c, str) and not c.strip().startswith("[Internal reminder"):
-                return c
-    return ""
 
 
 def _user_expects_gaming_context(user_text: str) -> bool:
@@ -107,7 +98,7 @@ def _fallback_for_blank_response(
 
     Prefers fetch/deep_research excerpts, then filtered web_search listings.
     """
-    user_text = _latest_user_text(messages)
+    user_text = latest_user_text(messages)
 
     chart_answer = _answer_from_notebook_chart(messages)
     if chart_answer is not None:

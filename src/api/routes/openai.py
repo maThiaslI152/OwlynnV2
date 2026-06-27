@@ -18,7 +18,9 @@ async def api_openai_chat_completions(body: dict):
 
     # Extract request params
     messages = body.get("messages", [])
-    model = body.get("model", "gemma-4-e2b")
+    from src.config.config_loader import config
+
+    model = body.get("model") or config.get_small_model_name()
     stream = bool(body.get("stream", False))
     project_id = body.get("project_id", "default")
     persona_id = body.get("persona_id", "default")

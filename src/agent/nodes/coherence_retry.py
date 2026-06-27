@@ -25,7 +25,7 @@ from src.agent.core.complex_utils.formatter import (
     _strip_dsml_blocks,
     _strip_thinking_tags,
 )
-from src.agent.core.complex_utils.fallback import _latest_user_text
+from src.agent.core.complex_utils.formatter import latest_user_text
 from src.memory.user_profile import get_profile
 
 from src.config.audit_log import audit_info, audit_warn
@@ -86,7 +86,7 @@ async def coherence_retry_node(state: AgentState) -> dict[str, Any]:
     coherence = state.get("response_coherence") or {}
     reason = str(coherence.get("reason") or "low_coherence")
 
-    query = _latest_user_text(messages)
+    query = latest_user_text(messages)
 
     retry_nudge = _retry_nudge(query, confidence, reason)
 

@@ -39,7 +39,7 @@ Before comparing, here is what Owlynn already has (see [`architecture/overview.m
 |---|---|
 | Desktop shell | **Electron** (macOS `.app` / `.dmg` via `frontend-v2`); legacy Tauri CSS classes remain in stylesheet only |
 | Agent orchestration | LangGraph graph: `memory_inject → router → complex_llm ↔ security_proxy ↔ tool_action → memory_write` |
-| Model routing | **Cloud-primary:** `simple` (MiniCPM5-1B) or `complex-cloud` (DeepSeek V4). Extraction: Gemma-4-E2B (local, background). Legacy `complex-default`/`complex-vision`/`complex-longctx` and **SwapManager** removed (2026-06) |
+| Model routing | **Cloud-primary:** `simple` (MiniCPM5-1B) or `complex-cloud` (DeepSeek V4). Extraction: Qwen3-VL-4B (local, background, shares models.small). Legacy `complex-default`/`complex-vision`/`complex-longctx` and **SwapManager** removed (2026-06) |
 | Cloud path | `prepare_cloud_payload()` — PII anonymization, brief gate, stable/volatile prompt layers, vision proxy, prefix cache metrics. Phase 5 **output** cache deferred |
 | Tools | 20+ built-in tools + skill chains (`.md` in `skills/`) + MCP STDIO |
 | Security | `security_proxy` HITL on sensitive tools, HMAC audit trail, cloud anonymization |
@@ -122,7 +122,7 @@ Before comparing, here is what Owlynn already has (see [`architecture/overview.m
 |  | 1. **List loaded models** — `GET /v1/models` from LM Studio |
 |  | 2. **List available/downloaded models** — LM Studio local model directory |
 |  | 3. **HuggingFace search** — HF API for MLX-compatible models with VRAM estimates |
-|  | 4. **One-click configure** — Map models to `models.small` / `models.medium` in Settings, persist to profile overrides |
+|  | 4. **One-click configure** — Map models to `models.small` / `models.cloud` in Settings, persist to profile overrides |
 |  | 5. **Model card view** — Size, context window, quantization, HF link |
 |  | **Caveat:** Actual download still happens via LM Studio or `huggingface-cli`. Owlynn's role is discovery + configuration. Full one-click download requires LM Studio to support it via API (currently it doesn't). |
 

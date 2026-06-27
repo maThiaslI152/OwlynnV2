@@ -44,16 +44,16 @@ external_services:
 # ── Startup preload ──────────────────────────────────────────────────────────
 startup:
   preload:
-    - small      # Gemma-4-E2B unified local model (routing, vision, extraction)
+    - small      # Qwen3-VL-4B unified local model (routing, vision, extraction)
     - embedding  # nomic embed — always
   warmup: true
 # ── Models — AI/LLM Configuration ────────────────────────────────────────────
-# Unified Local: gemma-4-e2b — Routing, Fallback, Vision, Memory extraction
+# Unified Local: qwen3-vl-4b — Routing, Fallback, Vision, Memory extraction
 # Cloud: DeepSeek V4 — primary workhorse for all complex reasoning
 models:
   small:
     base_url: "http://127.0.0.1:1234/v1"      # SMALL_LLM_BASE_URL env
-    model_name: "gemma-4-e2b-heretic-uncensored-mlx"
+    model_name: "qwen3-vl-4b-instruct-c_abliterated-v2-mlx"
     temperature: 0.1                          # Low temp for consistent routing classification
     max_tokens: 8192                          # Increased budget for vision/extraction tasks
     max_output_tokens: 8192
@@ -61,8 +61,6 @@ models:
     timeout: 180                              # Allow up to 180s for complex fallback tasks
     request_timeout: 180                      # HTTP request timeout
     extra_body:
-      chat_template_kwargs:
-        enable_thinking: false                # Disable thinking mode for fast routing/vision
       top_p: 0.95
       keep_alive: -1                          # Ask LM Studio to keep model loaded
       # LM Studio handles concurrency internally (e.g. 2 parallel slots).
@@ -141,6 +139,11 @@ routing:
     tie_margin: 0.15
     tie_min_top_score: 0.3
     vague_word_count: 3
+
+# ── Router LLM (classifier) ──────────────────────────────────────────────────
+router_llm:
+  temperature: 0.05
+  max_tokens: 500
 
 # ── Memory ───────────────────────────────────────────────────────────────────
 memory:

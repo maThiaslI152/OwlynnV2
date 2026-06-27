@@ -1,7 +1,7 @@
 ---
 status: active
 category: architecture
-last_updated: 2026-06-10
+last_updated: 2026-06-27
 owner: ai-agent
 audience: agent
 ---
@@ -102,7 +102,7 @@ HITL interrupt nodes (highlighted):
 
 | Concern | Detail |
 |---------|--------|
-| Model | Router LLM (Gemma-4-E2B) |
+| Model | Router LLM (Qwen3-VL-4B) |
 | Tools | None bound |
 | Memory context | Not injected into prompt |
 | Artifact cleaning | Strips `<think>` tags and reasoning artifacts |

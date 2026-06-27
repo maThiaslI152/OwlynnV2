@@ -84,10 +84,14 @@ def needs_web_synthesis_retry(
 
 
 def _strip_thinking_tags(text: str) -> str:
-    """Remove <think>...</think> blocks from reasoning output."""
+    """Remove thinking blocks — handles Gemma (<think>), Qwen (<thinking>), and plaintext formats."""
     if not text:
         return text
     cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+    cleaned = re.sub(r"<thinking>.*?</thinking>", "", cleaned, flags=re.DOTALL).strip()
+    cleaned = re.sub(
+        r"Thinking Process:.*?(?=\n\n[^\d]|\Z)", "", cleaned, flags=re.DOTALL
+    ).strip()
     return cleaned if cleaned else text
 
 
@@ -124,6 +128,21 @@ def _flatten_human_content(content) -> str:
                 parts.append(str(block.get("text", "")))
         return "\n".join(parts)
     return str(content or "")
+
+
+def latest_user_text(messages: list) -> str:
+    """Return the last real user message text, skipping internal reminders.
+
+    Handles both str and list content types (multimodal messages).
+    """
+    from langchain_core.messages import HumanMessage
+
+    for m in reversed(messages):
+        if isinstance(m, HumanMessage):
+            text = _flatten_human_content(m.content)
+            if text.strip() and not text.strip().startswith("[Internal reminder"):
+                return text
+    return ""
 
 
 _TOOL_ONLY_PLACEHOLDERS: dict[str, str] = {

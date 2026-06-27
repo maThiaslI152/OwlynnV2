@@ -1,7 +1,7 @@
 ---
 status: active
 category: guide
-last_updated: 2026-06-10
+last_updated: 2026-06-27
 audience: agent
 owner: ai-agent
 ---
@@ -72,7 +72,7 @@ To swap a model, change 1-2 lines in `defaults.yaml`. No code changes needed.
 | Section | What it controls |
 |---------|-----------------|
 | `models.small` | Router/model for simple tasks (name, base_url, temp, max_tokens, context_window) |
-| `models.extraction` | Background memory extraction model (Gemma-4-E2B) |
+| `models.extraction` | _(deprecated)_ — extraction now uses `models.small` |
 | `models.cloud` | DeepSeek V4 API (`deepseek-v4-flash` / `deepseek-v4-pro`) |
 | `cloud` | Thinking mode, reasoning effort, vision cache TTL |
 | `routing` | Confidence thresholds, budget tiers, keyword bypasses |
@@ -93,7 +93,7 @@ python3 -c "from src.config.config_loader import validate_config; print(validate
 | `PORT` | `server.port` | `8000` |
 | `SMALL_LLM_BASE_URL` | `models.small.base_url` | `http://127.0.0.1:1234/v1` |
 | `CLOUD_LLM_BASE_URL` | `models.cloud.base_url` | `https://api.deepseek.com/v1` |
-| `SMALL_LLM_MODEL_NAME` | `models.small.model_name` | `gemma-4-e2b-heretic-uncensored-mlx` |
+| `SMALL_LLM_MODEL_NAME` | `models.small.model_name` | `qwen3-vl-4b-instruct-c_abliterated-v2-mlx` |
 | `CLOUD_LLM_MODEL_NAME` | `models.cloud.model_name` | `deepseek-v4-flash` |
 | `DEEPSEEK_API_KEY` | env (or `.env.local`) | — |
 | `QDRANT_HOST` / `QDRANT_PORT` | `external_services.qdrant.*` | `localhost:6333` |
@@ -160,7 +160,7 @@ See [`docs/guides/lm_studio.md`](lm_studio.md) for full model setup instructions
 
 1. Open LM Studio
 2. Download and load models:
-   - Local Unified Model: `gemma-4-e2b-heretic-uncensored-mlx` (small slot, used for routing, vision proxy, and memory extraction)
+   - Local Unified Model: `qwen3-vl-4b-instruct-c_abliterated-v2-mlx` (small slot, used for routing, vision proxy, and memory extraction)
    - **Complex reasoning**: no local model needed — DeepSeek V4 cloud handles all complex tasks
    - **RAG only:** `text-embedding-nomic-embed-text-v1.5-embedding` (for long-term memory)
 3. Start the local server (button in the top bar) — listens on port `1234`

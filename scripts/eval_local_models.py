@@ -52,22 +52,23 @@ SCREENSHOT_BASE = REPO_ROOT / "assets"
 
 # ── Model definitions ──────────────────────────────────────────────────────
 
+
 @dataclass
 class ModelConfig:
-    id: str                          # LM Studio model identifier
-    display_name: str                # Human-readable name
-    tier: str                        # S/A/B/C/D/E
-    model_type: str = "llm"          # llm, vlm
-    arch: str = ""                   # gemma4, qwen35, qwen35moe, llama
-    quantization: str = ""           # 4bit, Q4_K_M, Q6_K, Q8_0, etc.
-    estimated_vram_gb: float = 0.0   # Estimated VRAM when loaded
-    max_context_length: int = 131072 # Model's max context from LM Studio
-    load_context_length: int = 16384 # Context to request at load time
-    flash_attention: bool = True     # GGUF only
-    num_experts: int | None = None   # MoE only — active experts at inference
+    id: str  # LM Studio model identifier
+    display_name: str  # Human-readable name
+    tier: str  # S/A/B/C/D/E
+    model_type: str = "llm"  # llm, vlm
+    arch: str = ""  # gemma4, qwen35, qwen35moe, llama
+    quantization: str = ""  # 4bit, Q4_K_M, Q6_K, Q8_0, etc.
+    estimated_vram_gb: float = 0.0  # Estimated VRAM when loaded
+    max_context_length: int = 131072  # Model's max context from LM Studio
+    load_context_length: int = 16384  # Context to request at load time
+    flash_attention: bool = True  # GGUF only
+    num_experts: int | None = None  # MoE only — active experts at inference
     capabilities: list[str] = field(default_factory=lambda: ["tool_use"])
-    notes: str = ""                  # Quirks, known issues
-    skip: bool = False               # Skip this model in the sweep
+    notes: str = ""  # Quirks, known issues
+    skip: bool = False  # Skip this model in the sweep
 
 
 MODELS: list[ModelConfig] = [
@@ -235,6 +236,7 @@ MODELS: list[ModelConfig] = [
 
 # ── LM Studio API helpers ─────────────────────────────────────────────────
 
+
 async def lm_studio_list_models() -> list[dict]:
     """List all models with state info."""
     async with httpx.AsyncClient(timeout=10.0) as client:
@@ -312,9 +314,15 @@ async def lm_studio_unload_all_except_embedding() -> bool:
     # Verify no non-embedding models remain loaded
     await asyncio.sleep(2.0)
     remaining = await lm_studio_list_models()
-    still_loaded = [m for m in remaining if m.get("state") == "loaded" and m.get("type") != "embeddings"]
+    still_loaded = [
+        m
+        for m in remaining
+        if m.get("state") == "loaded" and m.get("type") != "embeddings"
+    ]
     if still_loaded:
-        print(f"  [LM] WARNING: {len(still_loaded)} models still loaded after unload: {[m['id'] for m in still_loaded]}")
+        print(
+            f"  [LM] WARNING: {len(still_loaded)} models still loaded after unload: {[m['id'] for m in still_loaded]}"
+        )
         all_ok = False
     return all_ok
 
@@ -336,12 +344,15 @@ async def lm_studio_is_loaded(model_id: str) -> bool:
 
 # ── Backend management ────────────────────────────────────────────────────
 
+
 def kill_backend() -> None:
     """Kill the backend process on port 8000."""
     try:
         result = subprocess.run(
             ["lsof", "-ti", ":8000"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         pids = result.stdout.strip().split("\n")
         pids = [p for p in pids if p.strip()]
@@ -358,8 +369,16 @@ def kill_backend() -> None:
 def start_backend(model_name: str) -> subprocess.Popen:
     """Start the backend with SMALL_LLM_MODEL_NAME override."""
     env = {**os.environ, "SMALL_LLM_MODEL_NAME": model_name}
-    cmd = [PYTHON_BIN, "-m", "uvicorn", "src.api.server:app",
-           "--host", "127.0.0.1", "--port", "8000"]
+    cmd = [
+        PYTHON_BIN,
+        "-m",
+        "uvicorn",
+        "src.api.server:app",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8000",
+    ]
     proc = subprocess.Popen(
         cmd,
         cwd=str(REPO_ROOT),
@@ -408,12 +427,13 @@ async def apply_eval_settings() -> None:
 
 # ── Eval runner ────────────────────────────────────────────────────────────
 
+
 async def run_eval_for_model(model: ModelConfig, run_index: int) -> dict[str, Any]:
     """Run the eval subset for a single model. Returns parsed results."""
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print(f"  RUNNING EVAL: [{model.tier}] {model.display_name}")
     print(f"  Model ID: {model.id}")
-    print(f"{'='*80}")
+    print(f"{'=' * 80}")
 
     # 1. Kill backend FIRST — prevents old backend from re-loading models
     print("\n  [STEP 1] Killing backend...")
@@ -430,7 +450,12 @@ async def run_eval_for_model(model: ModelConfig, run_index: int) -> dict[str, An
     loaded = await lm_studio_load(model)
     if not loaded:
         print(f"  [FAIL] Could not load {model.id} — skipping")
-        return {"model": model.id, "display_name": model.display_name, "status": "load_failed", "exchanges": []}
+        return {
+            "model": model.id,
+            "display_name": model.display_name,
+            "status": "load_failed",
+            "exchanges": [],
+        }
 
     # Wait for model to stabilize
     await asyncio.sleep(3.0)
@@ -448,7 +473,12 @@ async def run_eval_for_model(model: ModelConfig, run_index: int) -> dict[str, An
             os.kill(proc.pid, signal.SIGKILL)
         except ProcessLookupError:
             pass
-        return {"model": model.id, "display_name": model.display_name, "status": "backend_timeout", "exchanges": []}
+        return {
+            "model": model.id,
+            "display_name": model.display_name,
+            "status": "backend_timeout",
+            "exchanges": [],
+        }
 
     # 6. Apply eval settings
     print("\n  [STEP 6] Applying eval settings...")
@@ -475,10 +505,13 @@ def run_eval_subprocess(model: ModelConfig, run_index: int) -> dict[str, Any]:
     """Run the eval script as a subprocess. Returns parsed results."""
     eval_script = REPO_ROOT / "scripts" / "run_local_frontier_eval.py"
     cmd = [
-        PYTHON_BIN, str(eval_script),
-        "--profile", "local",
+        PYTHON_BIN,
+        str(eval_script),
+        "--profile",
+        "local",
         "--cloud-off",
-        "--ids", EVAL_IDS,
+        "--ids",
+        EVAL_IDS,
     ]
 
     env = {**os.environ, "PYTHONPATH": str(REPO_ROOT)}
@@ -503,7 +536,10 @@ def run_eval_subprocess(model: ModelConfig, run_index: int) -> dict[str, Any]:
                 eval_data = json.load(f)
 
         # Move per-model results
-        model_dir = RESULTS_DIR / f"{run_index:02d}_{model.id.replace('/', '_').replace('@', '_')}"
+        model_dir = (
+            RESULTS_DIR
+            / f"{run_index:02d}_{model.id.replace('/', '_').replace('@', '_')}"
+        )
         model_dir.mkdir(parents=True, exist_ok=True)
 
         # Save eval data
@@ -522,8 +558,10 @@ def run_eval_subprocess(model: ModelConfig, run_index: int) -> dict[str, Any]:
             ss_dst = model_dir / "screenshots"
             if ss_dst.exists():
                 import shutil
+
                 shutil.rmtree(ss_dst)
             import shutil
+
             shutil.copytree(ss_src, ss_dst)
 
         # Extract summary
@@ -537,21 +575,23 @@ def run_eval_subprocess(model: ModelConfig, run_index: int) -> dict[str, Any]:
         per_turn = []
         for e in scored:
             s = e.get("scores", {})
-            per_turn.append({
-                "id": e.get("prompt_id", ""),
-                "topic": e.get("topic", ""),
-                "grade": s.get("grade", 0),
-                "route_match": s.get("route_match", False),
-                "tools_match": s.get("tools_match", False),
-                "response_ok": s.get("response_ok", False),
-                "dsml_leak": s.get("dsml_leak", False),
-                "recall_ok": s.get("recall_ok"),
-                "duration_s": e.get("duration_seconds", 0),
-                "approx_tps": e.get("approx_tps", 0),
-                "route": e.get("route", ""),
-                "classification_source": e.get("classification_source", ""),
-                "model_badge": e.get("model_badge", ""),
-            })
+            per_turn.append(
+                {
+                    "id": e.get("prompt_id", ""),
+                    "topic": e.get("topic", ""),
+                    "grade": s.get("grade", 0),
+                    "route_match": s.get("route_match", False),
+                    "tools_match": s.get("tools_match", False),
+                    "response_ok": s.get("response_ok", False),
+                    "dsml_leak": s.get("dsml_leak", False),
+                    "recall_ok": s.get("recall_ok"),
+                    "duration_s": e.get("duration_seconds", 0),
+                    "approx_tps": e.get("approx_tps", 0),
+                    "route": e.get("route", ""),
+                    "classification_source": e.get("classification_source", ""),
+                    "model_badge": e.get("model_badge", ""),
+                }
+            )
 
         return {
             "model": model.id,
@@ -569,13 +609,24 @@ def run_eval_subprocess(model: ModelConfig, run_index: int) -> dict[str, Any]:
 
     except subprocess.TimeoutExpired:
         print(f"  [FAIL] Eval timed out for {model.id}")
-        return {"model": model.id, "display_name": model.display_name, "status": "eval_timeout", "exchanges": []}
+        return {
+            "model": model.id,
+            "display_name": model.display_name,
+            "status": "eval_timeout",
+            "exchanges": [],
+        }
     except Exception as e:
         print(f"  [FAIL] Eval error for {model.id}: {e}")
-        return {"model": model.id, "display_name": model.display_name, "status": f"error: {e}", "exchanges": []}
+        return {
+            "model": model.id,
+            "display_name": model.display_name,
+            "status": f"error: {e}",
+            "exchanges": [],
+        }
 
 
 # ── Report generator ───────────────────────────────────────────────────────
+
 
 def generate_report(results: list[dict], date_str: str) -> str:
     """Generate a markdown comparison report."""
@@ -610,7 +661,9 @@ def generate_report(results: list[dict], date_str: str) -> str:
             per_turn = r.get("per_turn", [])
             route_ok = sum(1 for t in per_turn if t.get("route_match"))
             tools_ok = sum(1 for t in per_turn if t.get("tools_match"))
-            tps_vals = [t.get("approx_tps", 0) for t in per_turn if t.get("approx_tps", 0) > 0]
+            tps_vals = [
+                t.get("approx_tps", 0) for t in per_turn if t.get("approx_tps", 0) > 0
+            ]
             avg_tps = round(sum(tps_vals) / len(tps_vals), 1) if tps_vals else 0
 
             lines.append(
@@ -630,7 +683,9 @@ def generate_report(results: list[dict], date_str: str) -> str:
     for r in sorted_results:
         if r.get("status") != "completed":
             continue
-        lines.append(f"### {r.get('display_name', r['model'])} (Tier {r.get('tier', '?')})")
+        lines.append(
+            f"### {r.get('display_name', r['model'])} (Tier {r.get('tier', '?')})"
+        )
         lines.append("")
         lines.append("| ID | Topic | Grade | Route | Tools | TPS | Duration |")
         lines.append("|----|-------|-------|-------|-------|-----|----------|")
@@ -662,6 +717,7 @@ def generate_report(results: list[dict], date_str: str) -> str:
 
 # ── Main ───────────────────────────────────────────────────────────────────
 
+
 async def cleanup_stuck_models() -> None:
     """Unload all non-embedding models and restart backend with default model."""
     print("[CLEANUP] Unloading all non-embedding models...")
@@ -670,7 +726,7 @@ async def cleanup_stuck_models() -> None:
     kill_backend()
     await asyncio.sleep(2.0)
     print("[CLEANUP] Starting backend with default model...")
-    default_model = "gemma-4-e2b-heretic-uncensored-mlx"
+    default_model = "qwen3-vl-4b-instruct-c_abliterated-v2-mlx"
     proc = start_backend(default_model)
     ready = await wait_for_backend_ready()
     if ready:
@@ -708,7 +764,11 @@ async def main() -> None:
         return
 
     # Filter models
-    tier_filter = {t.strip().upper() for t in args.tier.split(",") if t.strip()} if args.tier else None
+    tier_filter = (
+        {t.strip().upper() for t in args.tier.split(",") if t.strip()}
+        if args.tier
+        else None
+    )
     model_filter = args.model.strip() if args.model else None
 
     selected = []
@@ -725,15 +785,17 @@ async def main() -> None:
         print("[ERROR] No models matched the filter.")
         sys.exit(1)
 
-    print(f"\n{'='*80}")
-    print(f"  LOCAL MODEL EVALUATION SWEEP")
+    print(f"\n{'=' * 80}")
+    print("  LOCAL MODEL EVALUATION SWEEP")
     print(f"  {len(selected)} models selected | Eval IDs: {EVAL_IDS}")
-    print(f"{'='*80}")
+    print(f"{'=' * 80}")
     print()
 
     for i, m in enumerate(selected):
-        print(f"  {i+1:2d}. [{m.tier}] {m.display_name}")
-        print(f"      ID: {m.id} | VRAM: ~{m.estimated_vram_gb} GB | ctx: {m.load_context_length}")
+        print(f"  {i + 1:2d}. [{m.tier}] {m.display_name}")
+        print(
+            f"      ID: {m.id} | VRAM: ~{m.estimated_vram_gb} GB | ctx: {m.load_context_length}"
+        )
         if m.notes:
             print(f"      Notes: {m.notes[:100]}")
         print()
@@ -784,45 +846,56 @@ async def main() -> None:
     date_str = time.strftime("%Y-%m-%d")
 
     for i, model in enumerate(selected):
-        print(f"\n{'#'*80}")
-        print(f"  MODEL {i+1}/{len(selected)}")
-        print(f"{'#'*80}")
+        print(f"\n{'#' * 80}")
+        print(f"  MODEL {i + 1}/{len(selected)}")
+        print(f"{'#' * 80}")
 
         # Skip if already completed
         if model.id in existing_ids:
             existing = next(r for r in results if r.get("model") == model.id)
-            print(f"  [SKIP] Already completed: {existing.get('status')} ({existing.get('percentage', 0)}%)")
+            print(
+                f"  [SKIP] Already completed: {existing.get('status')} ({existing.get('percentage', 0)}%)"
+            )
             continue
 
         try:
             result = await run_eval_for_model(model, run_index=i + 1)
         except Exception as e:
             print(f"  [CRASH] Unexpected error for {model.id}: {e}")
-            result = {"model": model.id, "display_name": model.display_name, "status": f"crash: {e}", "exchanges": []}
+            result = {
+                "model": model.id,
+                "display_name": model.display_name,
+                "status": f"crash: {e}",
+                "exchanges": [],
+            }
         results.append(result)
 
         # Save intermediate results
         with open(RESULTS_DIR / "sweep_results.json", "w") as f:
             json.dump(results, f, indent=2)
 
-        print(f"\n  [RESULT] {result.get('display_name', '?')}: "
-              f"{result.get('status', '?')} "
-              f"({result.get('total_score', 0)}/{result.get('max_score', 0)} = "
-              f"{result.get('percentage', 0)}%)")
+        print(
+            f"\n  [RESULT] {result.get('display_name', '?')}: "
+            f"{result.get('status', '?')} "
+            f"({result.get('total_score', 0)}/{result.get('max_score', 0)} = "
+            f"{result.get('percentage', 0)}%)"
+        )
 
     # Generate report
     print("\n\n[REPORT] Generating comparison report...")
     report = generate_report(results, date_str)
-    report_path = REPO_ROOT / "docs" / "evaluations" / f"local-model-comparison-{date_str}.md"
+    report_path = (
+        REPO_ROOT / "docs" / "evaluations" / f"local-model-comparison-{date_str}.md"
+    )
     report_path.parent.mkdir(parents=True, exist_ok=True)
     with open(report_path, "w") as f:
         f.write(report)
     print(f"  [REPORT] Saved to {report_path}")
 
     # Final summary
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print(f"  SWEEP COMPLETE — {len(results)} models tested")
-    print(f"{'='*80}")
+    print(f"{'=' * 80}")
     completed = [r for r in results if r.get("status") == "completed"]
     if completed:
         best = max(completed, key=lambda r: r.get("percentage", 0))

@@ -38,8 +38,10 @@ def query(prompt: str, project: str, approve_sensitive: bool):
     """Send a single prompt to the agent and display the response."""
     url = f"{get_base_url()}/v1/chat/completions"
 
+    from src.config.config_loader import config
+
     payload = {
-        "model": "gemma-4-e2b",
+        "model": config.get_small_model_name(),
         "messages": [{"role": "user", "content": prompt}],
         "stream": False,
         "project_id": project,
@@ -88,8 +90,10 @@ def stream(prompt: str, project: str, approve_sensitive: bool):
     """Send a prompt and stream token chunks in real-time."""
     url = f"{get_base_url()}/v1/chat/completions"
 
+    from src.config.config_loader import config
+
     payload = {
-        "model": "gemma-4-e2b",
+        "model": config.get_small_model_name(),
         "messages": [{"role": "user", "content": prompt}],
         "stream": True,
         "project_id": project,

@@ -46,7 +46,7 @@ While the major known bugs are squashed, the project's `STATUS.md` outlines seve
 ## 🔵 P2: Model Routing & Feature Polish
 
 6. **Router Selection Drift**
-   - **Why:** The `gemma-4-e2b` router sometimes struggles with borderline prompts (e.g., confusing casual chatter with complex reasoning), resulting in wasted tokens or slow responses.
+   - **Why:** The Qwen3-VL-4B router sometimes struggles with borderline prompts (e.g., confusing casual chatter with complex reasoning), resulting in wasted tokens or slow responses.
    - **Action:** Refine the prompt logic and add pre-classification keyword gates to force obvious prompts down the correct path.
 
 7. **Graceful Browser Degradation (Electron IPC)**

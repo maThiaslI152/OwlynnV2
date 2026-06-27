@@ -2,7 +2,7 @@
 status: active
 category: reference
 audience: agent
-last_updated: 2026-06-11
+last_updated: 2026-06-27
 owner: ai-agent
 ---
 
@@ -52,7 +52,7 @@ Do **not** add new `.py` test or patch scripts at repo root.
 | `tests/test_router_web_intent.py` | Web-intent forcing tests |
 | `tests/test_llm_pool.py` | LLM pool tests |
 
-**Current models** (`defaults.yaml`): Unified local model `gemma-4-e2b-heretic-uncensored-mlx` (router, vision proxy, and memory extraction), complex cloud `deepseek-v4-flash`. Startup preloads local unified model + embedding.
+**Current models** (`defaults.yaml`): Unified local model `qwen3-vl-4b-instruct-c_abliterated-v2-mlx` (router, vision proxy, and memory extraction), complex cloud `deepseek-v4-flash`. Startup preloads local unified model + embedding.
 
 ## Complex / cloud path
 

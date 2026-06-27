@@ -1,7 +1,7 @@
 ---
 status: active
 category: guide
-last_updated: 2026-05-31
+last_updated: 2026-06-27
 owner: human
 ---
 
@@ -46,7 +46,7 @@ Expected output: `PONG`. Falls back to in-memory `MemorySaver` if Redis unavaila
 
 | Section | Fields |
 |---------|--------|
-| Profile | Name, language, response style, medium model variants, cloud (DeepSeek) configuration |
+| Profile | Name, language, response style, local model variants, cloud (DeepSeek) configuration |
 | Advanced | Cloud escalation toggle, anonymization toggle, Router HITL, clarification threshold, custom sensitive terms |
 | Memory | Short-term (Redis URL), long-term (Mem0/Qdrant) |
 | Persona | Agent name, tone of voice |
@@ -142,4 +142,4 @@ Expected output: `PONG`. Falls back to in-memory `MemorySaver` if Redis unavaila
 
 ## Last updated
 
-2026-05-31 — `docs-standards-timeline` added frontmatter
+2026-06-27 — Updated model references to Qwen3-VL-4B

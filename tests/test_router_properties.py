@@ -35,6 +35,7 @@ VALID_ROUTES = {
 }
 VALID_COMPLEX_ROUTES = {
     "complex-cloud",
+    "complex-default",
 }
 
 

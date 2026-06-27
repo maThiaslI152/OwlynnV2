@@ -2,7 +2,7 @@
 Auto-Summarize Node — Compresses older conversation history when context usage
 exceeds 85% of the active model's context window.
 
-Uses the always-loaded small model (Gemma-4-E2B) to produce a
+Uses the always-loaded small model (unified local model) to produce a
 bulleted summary of the reasoning history. This summary is injected at the start
 of the conversation. Preserves tool call results,
 

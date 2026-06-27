@@ -283,6 +283,28 @@ class ConfigLoader:
         cls._defaults = None
         cls._env_overrides_applied = False
 
+    # ── Model name accessors — single source of truth for model selection ──
+
+    @classmethod
+    def get_small_model_name(cls) -> str:
+        """Return the configured local model name (router, fallback, vision, extraction)."""
+        return cls.get(
+            "models.small.model_name", "qwen3-vl-4b-instruct-c_abliterated-v2-mlx"
+        )
+
+    @classmethod
+    def get_cloud_model_name(cls) -> str:
+        """Return the configured cloud model name (DeepSeek flash tier)."""
+        return cls.get("models.cloud.model_name", "deepseek-v4-flash")
+
+    @classmethod
+    def get_embedding_model_name(cls) -> str:
+        """Return the configured embedding model name."""
+        return cls.get(
+            "models.embedding.model_name",
+            "text-embedding-nomic-embed-text-v1.5-embedding",
+        )
+
 
 # ── Module-level singleton for convenience ───────────────────────────────────
 
@@ -322,15 +344,15 @@ def get_m4_optimization() -> dict[str, Any]:
         },
         "extraction_model": {
             "model_name": cfg.get("models", {})
-            .get("extraction", {})
-            .get("model_name", "gemma-4-e2b-heretic-uncensored-mlx"),
+            .get("small", {})
+            .get("model_name", "qwen3-vl-4b-instruct-c_abliterated-v2-mlx"),
             "max_tokens": cfg.get("models", {})
-            .get("extraction", {})
+            .get("small", {})
             .get("max_tokens", 1024),
             "temperature": cfg.get("models", {})
-            .get("extraction", {})
+            .get("small", {})
             .get("temperature", 0.1),
-            "timeout": cfg.get("models", {}).get("extraction", {}).get("timeout", 120),
+            "timeout": cfg.get("models", {}).get("small", {}).get("timeout", 120),
         },
         "memory": {
             "max_facts": cfg.get("memory", {}).get("max_facts", 200),

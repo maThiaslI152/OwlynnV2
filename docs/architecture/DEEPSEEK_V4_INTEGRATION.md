@@ -1,7 +1,7 @@
 ---
 status: active
 category: architecture
-last_updated: 2026-06-07
+last_updated: 2026-06-27
 owner: ai-agent
 purpose: "DeepSeek V4 integration in Owlynn: architecture, API behavior, implemented optimizations, and deferred Phase 5 response cache."
 ---
@@ -26,20 +26,20 @@ Related Owlynn docs: [`CLOUD-LLM-ARCHITECTURE.md`](../CLOUD-LLM-ARCHITECTURE.md)
 
 ### 1. Role split: cloud-primary planner/workhorse
 
-- **Local Unified Model** (`models.small`): router + simple path + vision proxy + background memory extraction (`gemma-4-e2b-heretic-uncensored-mlx`); preloaded at startup.
+- **Local Unified Model** (`models.small`): router + simple path + vision proxy + background memory extraction (`qwen3-vl-4b-instruct-c_abliterated-v2-mlx`); preloaded at startup.
 - **Local nomic embedding** (`models.embedding`): memory/RAG/web-rank; preloaded at startup.
 - **DeepSeek V4** (`models.cloud`): primary complex workhorse on route `complex-cloud` (default when cloud available).
 - The router can emit an `execution_plan` JSON block injected into the cloud system prompt.
 
 Entry points: [`src/agent/llm.py`](../../src/agent/llm.py) (`get_cloud_llm`), [`src/agent/nodes/complex.py`](../../src/agent/nodes/complex.py) (`complex_llm_node`), [`src/agent/nodes/router.py`](../../src/agent/nodes/router.py).
 
-### 2. Vision-to-text proxy (Gemma-4-E2B)
+### 2. Vision-to-text proxy (Qwen3-VL-4B)
 
 DeepSeek V4 is **text-only**. Images never go to the API as multimodal input.
 
 When `route == complex-cloud` and the user attached images:
 
-1. [`vision_proxy.py`](../../src/agent/nodes/complex_utils/vision_proxy.py) runs the unified local model Gemma-4-E2B (`models.small`, lazy via `vision_model_manager.py`).
+1. [`vision_proxy.py`](../../src/agent/nodes/complex_utils/vision_proxy.py) runs the unified local model Qwen3-VL-4B (`models.small`, lazy via `vision_model_manager.py`).
 2. Default mode: natural-language prompts → [`vision_qwen3vl.py`](../../src/agent/nodes/complex_utils/vision_qwen3vl.py) parses text/UI into structured blocks; [`vision_schema.py`](../../src/agent/nodes/complex_utils/vision_schema.py) formats `[Image content transcribed by vision sensor]` text.
 3. DeepSeek receives a normal text conversation (no `image_url`).
 
@@ -51,7 +51,7 @@ Before any DeepSeek call on `complex-cloud`, [`prepare_cloud_payload()`](../../s
 
 1. **Anonymization** — deterministic SHA-256 placeholders for PII/paths/emails.
 2. **Cloud brief** (first turn only) — compact HITL summary when no tool history; full anonymized history on tool-loop turns.
-3. **Vision proxy** — local Gemma-4-E2B transcription with hash cache; post-vision re-anonymization.
+3. **Vision proxy** — local Qwen3-VL-4B transcription with hash cache; post-vision re-anonymization.
 4. **Deanonymization** on response content, `reasoning_content`, and tool-call args.
 
 Routes are **`simple | complex-cloud`** (cloud-primary; legacy `complex-default` / `complex-vision` / `complex-longctx` removed).
@@ -310,7 +310,7 @@ Effort:       reasoning_effort = high|max  (only when thinking enabled)
 Tools:        bind_tools(strict=True); replay reasoning_content in loops
 Cache:        automatic prefix cache; put stable text first, volatile last
 Security:     anonymize → cloud → deanonymize
-Images:       vision_proxy (Gemma-4-e2b) → text block in prompt
+Images:       vision_proxy (Qwen3-VL-4B) → text block in prompt
 KV cache:     OpenAI `user` param = thread_id for per-conversation prefix isolation
 Legacy:       deepseek-chat / deepseek-reasoner → migrate before 2026-07-24
 ```

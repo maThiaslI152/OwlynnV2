@@ -137,7 +137,7 @@ INFO:src.agent.nodes.simple:Simple node responding with Small_LLM
 
 # Fallback on failure
 WARNING:src.agent.nodes.simple:Small_LLM failed, falling back to Medium_Default
-INFO:src.agent.nodes.simple:model_used=medium-default-fallback
+INFO:src.agent.nodes.simple:model_used=local-fallback
 ```
 
 ### Complex Node

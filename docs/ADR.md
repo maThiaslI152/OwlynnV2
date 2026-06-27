@@ -1,7 +1,7 @@
 ---
 status: active
 category: architecture
-last_updated: 2026-05-31
+last_updated: 2026-06-27
 owner: human
 ---
 
@@ -73,7 +73,7 @@ Two-tier model system:
 
 | Tier | Model | Context | Location |
 |------|-------|---------|----------|
-| Local Unified | `gemma-4-e2b-heretic-uncensored-mlx` | 32K | Always local (routing, vision proxy, memory extraction) |
+| Local Unified | `qwen3-vl-4b-instruct-c_abliterated-v2-mlx` | 65536 | Always local (routing, vision proxy, memory extraction) |
 | Cloud | `deepseek-v4-flash` | 1M | Primary complex |
 
 **Consequences:**

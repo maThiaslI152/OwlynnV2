@@ -74,7 +74,7 @@ To run the full multi-process application locally, follow these steps:
 1.  **LM Studio (Local LLM Server):**
     *   Open **LM Studio**.
     *   Start the Local Server on port **`1234`**.
-    *   Ensure your embedding model (`nomic-embed-text-v1.5` or equivalent) and reasoning LLM (`gemma-4` or equivalent) are loaded.
+    *   Ensure your embedding model (`nomic-embed-text-v1.5` or equivalent) and reasoning LLM (`qwen3-vl-4b` or equivalent) are loaded.
 2.  **Containers:**
     *   Verify that your Qdrant and Redis container engines are active.
 

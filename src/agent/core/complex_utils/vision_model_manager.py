@@ -49,7 +49,7 @@ class VisionModelManager:
         self._last_used = time.monotonic()
 
     async def acquire(self) -> ChatOpenAI:
-        from src.agent.llm import LLMPool
+        from src.agent.llm import LLMPool, _build_local_llm_client
 
         if "medium" in LLMPool._test_overrides:
             return LLMPool._test_overrides["medium"]
@@ -67,24 +67,15 @@ class VisionModelManager:
                         f"Vision VLM ({model_name}) is not loaded in LM Studio"
                     )
 
-                extra_body = dict(model_cfg.get("extra_body") or {})
-                extra_body["max_output_tokens"] = int(
-                    config.get("cloud.vision_max_tokens", 2048)
-                )
-                temp = float(
-                    model_cfg.get("temperature")
-                    if model_cfg.get("temperature") is not None
-                    else config.get("cloud.vision_temperature", 0.1)
-                )
-                self._client = ChatOpenAI(
-                    model=model_name,
-                    api_key="sk-local-no-key-needed",
-                    base_url=model_cfg.get("base_url", "http://127.0.0.1:1234/v1"),
-                    temperature=temp,
+                self._client = _build_local_llm_client(
+                    temperature=float(
+                        model_cfg.get("temperature")
+                        if model_cfg.get("temperature") is not None
+                        else config.get("cloud.vision_temperature", 0.1)
+                    ),
                     max_tokens=int(config.get("cloud.vision_max_tokens", 2048)),
-                    extra_body=extra_body,
-                    request_timeout=model_cfg.get("request_timeout")
-                    or model_cfg.get("timeout", 120),
+                    max_output_tokens=int(config.get("cloud.vision_max_tokens", 2048)),
+                    timeout=120,
                 )
                 self._model_name = model_name
                 audit_info(

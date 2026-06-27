@@ -49,7 +49,7 @@ audience: agent
 ### Memory System (Unique vs frontier chat)
 - Three-tier: JSON STM · Qdrant/Mem0 LTM · personal topics/interests/conversations
 - Split inject: `memory_inject_lite` (fast, no vector) → router gate → `memory_retrieve`
-- Background extraction (Gemma-4-E2B via Redis stream → idle-deferred LTM writes)
+- Background extraction (Qwen3-VL-4B via Redis stream → idle-deferred LTM writes)
 - Validated in eval: session recall M1.2=100, LTM cross-thread M2.1=100
 
 ### Tool Suite (20+ tools)

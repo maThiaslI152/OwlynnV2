@@ -101,7 +101,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
 from src.config.log_middleware import log_model_attempt
 
 log_model_attempt("large-cloud", "success", reason="initial_route")
-log_model_attempt("medium-vision", "failed", reason="auth_error_401_403")
+log_model_attempt("complex-cloud", "failed", reason="auth_error_401_403")
 ```
 
 ### Using HITL Logging

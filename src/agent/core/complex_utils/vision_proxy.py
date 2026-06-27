@@ -55,7 +55,7 @@ def _vision_prompt_mode() -> str:
 def _raw_to_cloud_text(raw: str) -> str:
     mode = _vision_prompt_mode()
     payload = None
-    if mode in ("qwen3vl", "standard", "gemma4"):
+    if mode in ("qwen3vl", "standard"):
         payload = parse_qwen3vl_response(raw)
     if payload is None:
         payload = parse_vision_payload(raw)

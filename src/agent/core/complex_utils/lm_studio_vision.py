@@ -18,12 +18,7 @@ _LOAD_POLL_INTERVAL_S = 2.0
 
 def configured_vision_model_name() -> str:
     """OpenAI-compatible model id used in /v1/chat/completions."""
-    return str(
-        config.get(
-            "models.small.model_name",
-            "gemma-4-e2b-heretic-uncensored-mlx",
-        )
-    )
+    return config.get_small_model_name()
 
 
 def configured_vision_lm_studio_key() -> str:

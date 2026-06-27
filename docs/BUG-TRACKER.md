@@ -47,7 +47,7 @@ audience: agent
 
 **Fix Applied:**
 1. `router.py` — Added `router_metadata: _build_router_metadata("complex-default", classification_source="empty_state_fallback")` to early return.
-2. `server.py` — `router_info` event now includes derived `model` name (e.g., "small-local" for simple, "medium-variant" for complex).
+2. `server.py` — `router_info` event now includes derived `model` name (e.g., "small-local" for simple, "unified local model" for complex).
 3. `App.tsx` — `router_info` handler forwards `event.model` to `setModelInfo()`.
 4. `OrchestrationPanel.tsx` — Split into `hasRoutingData` / `hasMemoryOnly`. Memory-only case shows "No routing data yet — send a message to populate."
 
@@ -273,7 +273,7 @@ audience: agent
 1. `_extract_tool_output_delta()` + `_count_ai_tool_rounds()` in `complex.py`.
 2. `complex.max_web_tool_rounds: 3`; on exhaustion `tools_for_invoke = None` (all tools dropped) + synthesis prompt.
 3. `_strip_dsml_blocks()` / `_content_has_dsml_tool_syntax()`; WebSocket `_sanitize_assistant_text()`; skip fetch nudges on last tool round.
-4. Cloud synthesis retry (`tools=None`); local medium LLM fallback; rewritten `fallback.py` with gaming relevance filter.
+4. Cloud synthesis retry (`tools=None`); unified local model fallback; rewritten `fallback.py` with gaming relevance filter.
 5. Config: `src/config/defaults.yaml` → `complex.max_web_tool_rounds`.
 
 **Verification:**

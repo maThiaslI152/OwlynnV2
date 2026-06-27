@@ -1,19 +1,19 @@
 ---
 status: active
 category: architecture
-last_updated: 2026-06-19
+last_updated: 2026-06-27
 owner: ai-agent
 ---
 
 # Vision Proxy (Phase 2)
 
-Gemma 4 (heretic-uncensored) acts as a **vision-language sensor** for the text-only DeepSeek cloud path. It transcribes visible text, detects UI elements, and describes visual structure — DeepSeek synthesizes the final answer from the transcription.
+Qwen3-VL-4B acts as a **vision-language sensor** for the text-only DeepSeek cloud path. It transcribes visible text, detects UI elements, and describes visual structure — DeepSeek synthesizes the final answer from the transcription.
 
 ## Flow
 
 ```text
 User image (chat upload or screen crop)
-  → vision_proxy (Gemma 4 local VLM, lazy-loaded)
+  → vision_proxy (Qwen3-VL-4B local VLM, lazy-loaded)
   → natural-language transcription of text + UI
   → formatted block in cloud prompt (image_url stripped)
   → DeepSeek V4
@@ -32,7 +32,7 @@ User image (chat upload or screen crop)
 
 ## Output contract
 
-Gemma is prompted to transcribe text verbatim and identify UI elements. The parser extracts:
+Qwen3-VL-4B is prompted to transcribe text verbatim and identify UI elements. The parser extracts:
 
 ```json
 {
@@ -55,13 +55,10 @@ confidence=0.75
 ```yaml
 models:
   vision_proxy:
-    model_name: "gemma-4-e2b-heretic-uncensored-mlx"
-    lm_studio_model_key: "gemma-4-e2b-heretic-uncensored-mlx"
+    model_name: "qwen3-vl-4b-instruct-c_abliterated-v2-mlx"
+    lm_studio_model_key: "qwen3-vl-4b-instruct-c_abliterated-v2-mlx"
     temperature: 0.1
     max_tokens: 2048
-    extra_body:
-      chat_template_kwargs:
-        enable_thinking: false
 
 cloud:
   vision_prompt_mode: qwen3vl
@@ -77,7 +74,7 @@ cloud:
 `VisionModelManager` holds a dedicated client. Unloads after `cloud.vision_idle_unload_seconds` (default 300s) with no active transcriptions. On proxy failure, `complex-cloud` retries text-only.
 
 Models loaded in LM Studio for production:
-- `gemma-4-e2b-heretic-uncensored-mlx` (Unified: router, extraction, vision)
+- `qwen3-vl-4b-instruct-c_abliterated-v2-mlx` (Unified: router, extraction, vision)
 - `text-embedding-nomic-embed-text-v1.5` (0.14 GB) — embeddings
 
 ## Screen assist hook (Phase 3)

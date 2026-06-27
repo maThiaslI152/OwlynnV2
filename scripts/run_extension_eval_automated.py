@@ -72,7 +72,7 @@ async def main():
     if args.local_cloud:
         print("Running in --local-cloud mode")
         env["CLOUD_LLM_BASE_URL"] = "http://127.0.0.1:1234/v1"
-        env["CLOUD_LLM_MODEL_NAME"] = "gemma-4-e2b-heretic-uncensored-mlx"
+        env["CLOUD_LLM_MODEL_NAME"] = "qwen3-vl-4b-instruct-c_abliterated-v2-mlx"
         env["DEEPSEEK_API_KEY"] = "sk-local-mock-key"
 
     backend_proc = None
@@ -120,7 +120,7 @@ async def main():
                     "http://127.0.0.1:8000/api/unified-settings",
                     json={
                         "cloud_llm_base_url": "http://127.0.0.1:1234/v1",
-                        "cloud_llm_model_name": "gemma-4-e2b-heretic-uncensored-mlx",
+                        "cloud_llm_model_name": "qwen3-vl-4b-instruct-c_abliterated-v2-mlx",
                     },
                 )
 

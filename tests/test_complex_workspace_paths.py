@@ -6,11 +6,11 @@ from unittest.mock import MagicMock
 sys.modules["mem0"] = MagicMock()
 
 from src.agent.core.complex import (  # noqa: E402
-    _latest_user_text,
     _looks_like_prose_tool_stall,
     _user_intent_needs_workspace_read,
     _workspace_paths_from_text,
 )
+from src.agent.core.complex_utils.formatter import latest_user_text  # noqa: E402
 from langchain_core.messages import AIMessage, HumanMessage  # noqa: E402
 
 
@@ -29,7 +29,7 @@ def test_latest_user_text_multimodal():
         HumanMessage(content="old"),
         HumanMessage(content=[{"type": "text", "text": "new with `f.pdf`"}]),
     ]
-    assert "new" in _latest_user_text(messages)
+    assert "new" in latest_user_text(messages)
 
 
 def test_user_intent_study():

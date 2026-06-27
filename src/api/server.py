@@ -113,7 +113,7 @@ async def lifespan(app: FastAPI):
             except Exception as e:
                 logger.warning("[startup] Embedding warmup skipped: %s", e)
 
-        # 3. Extraction (gemma-4-e2b) — always available for background work
+        # 3. Extraction (qwen3-vl-4b) — always available for background work
         if "extraction" in preload_slots:
             try:
                 await LLMPool.get_extraction_llm()

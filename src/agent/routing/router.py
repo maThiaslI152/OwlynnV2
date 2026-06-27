@@ -208,9 +208,12 @@ def parse_routing(
     content: str,
 ) -> tuple[str, float, list[str], str | None, bool | None, str | None]:
     """Extract routing decision, confidence, toolbox, plan, memory gate, and scenario."""
-    # Gemma safety: strip any <think>...</think> blocks that may
-    # leak through even when enable_thinking=false is set via chat_template_kwargs.
+    # Strip thinking blocks — handles both Gemma (<think>) and Qwen (<thinking>) formats.
     content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
+    content = re.sub(r"<thinking>.*?</thinking>", "", content, flags=re.DOTALL).strip()
+    content = re.sub(
+        r"Thinking Process:.*?(?=\n\n[^\d]|\Z)", "", content, flags=re.DOTALL
+    ).strip()
     try:
         match = re.search(r"\{.*\}", content, re.DOTALL)
         if match:

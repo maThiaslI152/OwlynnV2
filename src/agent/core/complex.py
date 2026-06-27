@@ -23,6 +23,7 @@ from src.agent.lm_studio_compat import (
 )
 from src.agent.cloud.anonymization import anonymize, deanonymize
 
+from .complex_utils.cloud_fallback import handle_cloud_fallback
 from .complex_utils.web_budget import (
     evaluate_web_budget,
     filter_tools_for_web_budget,
@@ -34,6 +35,7 @@ from .complex_utils.formatter import (
     _flatten_human_content,
     _strip_dsml_blocks,
     _strip_thinking_tags,
+    latest_user_text,
     needs_web_synthesis_retry,
     placeholder_for_tool_only_turn,
 )
@@ -80,6 +82,12 @@ MAX_CUTOFF_RETRIES = int(config.get("complex.max_cutoff_retries", 1))
 
 # Max retries for cloud LLM calls with exponential backoff
 _MAX_CLOUD_RETRIES = int(config.get("complex.max_cloud_retries", 3))
+
+# Default token budget for local fallback and tools_off mode
+_DEFAULT_TOKEN_BUDGET = int(config.get("complex.default_token_budget", 4096))
+
+# Context window for the local model (used in fallback budget capping)
+_SMALL_CONTEXT_WINDOW = int(config.get("models.small.context_window", 65536))
 
 
 async def _invoke_cloud_path(
@@ -183,7 +191,7 @@ async def _invoke_local_fallback(
     llm = await get_fallback_llm()
     fallback_budget = _cap_budget_to_context(
         prompt_messages,
-        min(budget, int(config.get("complex.default_token_budget", 4096))),
+        min(budget, _DEFAULT_TOKEN_BUDGET),
         max_context,
     )
     if tools:
@@ -597,13 +605,6 @@ def build_fetch_retry_nudge_messages(tool_messages: list) -> list[HumanMessage]:
     return out
 
 
-def _latest_user_text(messages: list) -> str:
-    for m in reversed(messages):
-        if isinstance(m, HumanMessage):
-            return _flatten_human_content(m.content)
-    return ""
-
-
 def _workspace_paths_from_text(text: str) -> list[str]:
     """Filenames from chat upload injections (server + legacy wording)."""
     paths: list[str] = []
@@ -1014,68 +1015,16 @@ async def complex_llm_node(state: AgentState) -> AgentState:
 
     if not payload.vision_proxy_ok and has_images:
         logger.warning("[complex] vision_proxy failed; attempting local fallback")
-        try:
-            fallback_response, fallback_label = await _invoke_local_fallback(
-                prompt_messages=prompt_messages,
-                tools=None,
-                budget=int(config.get("complex.default_token_budget", 4096)),
-                max_context=int(config.get("models.small.context_window", 65536)),
-            )
-            fallback_chain.append(
-                {
-                    "model": "local-fallback",
-                    "status": "success",
-                    "reason": "vision_proxy_failed",
-                }
-            )
-            return {
-                "messages": [
-                    fallback_response
-                    if isinstance(fallback_response, AIMessage)
-                    else AIMessage(content=fallback_response.content)
-                ],
-                "model_used": fallback_label,
-                "model_generated_by": fallback_label,
-                "pending_tool_calls": False,
-                "security_decision": None,
-                "security_reason": None,
-                "api_tokens_used": state.get("api_tokens_used"),
-                "fallback_chain": fallback_chain,
-                "cloud_brief_tokens_est": cloud_brief_tokens_est,
-                "anonymization_placeholders_count": anonymization_placeholders_count,
-                "cloud_fallback_used": True,
-                "cloud_fallback_reason": "vision_proxy_failed",
-                **_vision_telemetry("proxy"),
-            }
-        except Exception as fb_err:
-            logger.warning("[complex] Local fallback also failed: %s", fb_err)
-            return {
-                "messages": [
-                    AIMessage(
-                        content="Cloud unavailable — please try again or disable complex reasoning."
-                    )
-                ],
-                "model_used": "large-cloud-failed",
-                "pending_tool_calls": False,
-                "security_decision": None,
-                "security_reason": None,
-                "api_tokens_used": state.get("api_tokens_used"),
-                "fallback_chain": [
-                    {
-                        "model": "large-cloud",
-                        "status": "failed",
-                        "reason": "vision_proxy_failed",
-                    },
-                    {
-                        "model": "local-fallback",
-                        "status": "failed",
-                        "reason": str(fb_err)[:80],
-                    },
-                ],
-                "cloud_brief_tokens_est": cloud_brief_tokens_est,
-                "anonymization_placeholders_count": anonymization_placeholders_count,
-                **_vision_telemetry("proxy"),
-            }
+        return await handle_cloud_fallback(
+            invoke_local_fallback=_invoke_local_fallback,
+            fallback_chain=fallback_chain,
+            reason="vision_proxy_failed",
+            prompt_messages=prompt_messages,
+            tools=None,
+            vision_intake_mode="proxy",
+            cloud_brief_tokens_est=cloud_brief_tokens_est,
+            anonymization_placeholders_count=anonymization_placeholders_count,
+        )
 
     audit_debug(
         "agent.vision",
@@ -1095,76 +1044,23 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         except CloudUnavailableError as e:
             err_reason = (str(e) or type(e).__name__)[:120]
             log_model_attempt("large-cloud", "failed", reason=err_reason)
-            fallback_chain.append(
-                {"model": "large-cloud", "status": "failed", "reason": err_reason}
-            )
             logger.warning(
                 "[complex] Cloud unavailable in tools_off mode, trying local fallback: %s",
                 e,
             )
-            try:
-                fallback_response, fallback_label = await _invoke_local_fallback(
-                    prompt_messages=prompt_messages,
-                    tools=None,
-                    budget=int(config.get("complex.default_token_budget", 4096)),
-                    max_context=int(config.get("models.small.context_window", 65536)),
-                )
-                fallback_chain.append(
-                    {
-                        "model": "local-fallback",
-                        "status": "success",
-                        "reason": "cloud_unavailable_tools_off",
-                    }
-                )
-                return {
-                    "messages": [
-                        fallback_response
-                        if isinstance(fallback_response, AIMessage)
-                        else AIMessage(content=fallback_response.content)
-                    ],
-                    "model_used": fallback_label,
-                    "model_generated_by": fallback_label,
-                    "pending_tool_calls": False,
-                    "security_decision": None,
-                    "security_reason": None,
-                    "api_tokens_used": state.get("api_tokens_used"),
-                    "fallback_chain": fallback_chain,
-                    "cloud_brief_tokens_est": cloud_brief_tokens_est,
-                    "anonymization_placeholders_count": anonymization_placeholders_count,
-                    "cloud_fallback_used": True,
-                    "cloud_fallback_reason": "cloud_unavailable",
-                    **_vision_telemetry(vision_intake_mode),
-                }
-            except Exception as fb_err:
-                logger.warning("[complex] Local fallback also failed: %s", fb_err)
-                fallback_chain.append(
-                    {
-                        "model": "local-fallback",
-                        "status": "failed",
-                        "reason": str(fb_err)[:80],
-                    }
-                )
-                return {
-                    "messages": [
-                        AIMessage(
-                            content="Cloud unavailable — please try again or disable complex reasoning."
-                        )
-                    ],
-                    "model_used": "large-cloud-failed",
-                    "pending_tool_calls": False,
-                    "security_decision": None,
-                    "security_reason": None,
-                    "api_tokens_used": state.get("api_tokens_used"),
-                    "fallback_chain": fallback_chain,
-                    "cloud_brief_tokens_est": cloud_brief_tokens_est,
-                    "anonymization_placeholders_count": anonymization_placeholders_count,
-                    **_vision_telemetry(vision_intake_mode),
-                }
+            return await handle_cloud_fallback(
+                fallback_chain=fallback_chain,
+                reason="cloud_unavailable",
+                prompt_messages=prompt_messages,
+                tools=None,
+                vision_intake_mode=vision_intake_mode,
+                cloud_brief_tokens_est=cloud_brief_tokens_est,
+                anonymization_placeholders_count=anonymization_placeholders_count,
+            )
 
         budget = _cap_budget_to_context(
             prompt_messages,
-            state.get("token_budget")
-            or int(config.get("complex.default_token_budget", 4096)),
+            state.get("token_budget") or _DEFAULT_TOKEN_BUDGET,
             max_context,
         )
         api_tokens = None
@@ -1233,14 +1129,6 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         log_model_attempt("large-cloud", "success", reason="initial_route")
     except CloudUnavailableError as e:
         err_reason = (str(e) or type(e).__name__)[:120]
-        fallback_chain.append(
-            {
-                "model": "large-cloud",
-                "status": "failed",
-                "reason": err_reason,
-                "duration_ms": 0,
-            }
-        )
         log_model_attempt("large-cloud", "failed", reason=err_reason)
         error_text = (
             e.response.text
@@ -1252,63 +1140,20 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             e,
             error_text,
         )
-        try:
-            fallback_response, fallback_label = await _invoke_local_fallback(
-                prompt_messages=prompt_messages,
-                tools=tools_for_invoke,
-                budget=int(config.get("complex.default_token_budget", 4096)),
-                max_context=int(config.get("models.small.context_window", 65536)),
-            )
-            fallback_chain.append({"model": "local-fallback", "status": "success"})
-            return {
-                "messages": [
-                    fallback_response
-                    if isinstance(fallback_response, AIMessage)
-                    else AIMessage(content=fallback_response.content)
-                ],
-                "model_used": fallback_label,
-                "model_generated_by": fallback_label,
-                "pending_tool_calls": False,
-                "security_decision": None,
-                "security_reason": None,
-                "api_tokens_used": state.get("api_tokens_used"),
-                "fallback_chain": fallback_chain,
-                "cloud_brief_tokens_est": cloud_brief_tokens_est,
-                "anonymization_placeholders_count": anonymization_placeholders_count,
-                "cloud_fallback_used": True,
-                "cloud_fallback_reason": "cloud_unavailable",
-                **_vision_telemetry(vision_intake_mode),
-            }
-        except Exception as fb_err:
-            logger.warning("[complex] Local fallback also failed: %s", fb_err)
-            fallback_chain.append(
-                {
-                    "model": "local-fallback",
-                    "status": "failed",
-                    "reason": str(fb_err)[:80],
-                }
-            )
-            return {
-                "messages": [
-                    AIMessage(
-                        content="Cloud unavailable — please try again or disable complex reasoning."
-                    )
-                ],
-                "model_used": "large-cloud-failed",
-                "pending_tool_calls": False,
-                "security_decision": None,
-                "security_reason": None,
-                "api_tokens_used": state.get("api_tokens_used"),
-                "fallback_chain": fallback_chain,
-                "cloud_brief_tokens_est": cloud_brief_tokens_est,
-                "anonymization_placeholders_count": anonymization_placeholders_count,
-                **_vision_telemetry(vision_intake_mode),
-            }
+        return await handle_cloud_fallback(
+            invoke_local_fallback=_invoke_local_fallback,
+            fallback_chain=fallback_chain,
+            reason="cloud_unavailable",
+            prompt_messages=prompt_messages,
+            tools=tools_for_invoke,
+            vision_intake_mode=vision_intake_mode,
+            cloud_brief_tokens_est=cloud_brief_tokens_est,
+            anonymization_placeholders_count=anonymization_placeholders_count,
+        )
 
     budget = _cap_budget_to_context(
         prompt_messages,
-        state.get("token_budget")
-        or int(config.get("complex.default_token_budget", 4096)),
+        state.get("token_budget") or _DEFAULT_TOKEN_BUDGET,
         max_context,
     )
     if tools_for_invoke:
@@ -1351,189 +1196,39 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                 )
             except Exception:
                 logger.warning("[complex] Cloud retry failed, trying local fallback")
-                fallback_chain.append(
-                    {
-                        "model": "large-cloud",
-                        "status": "failed",
-                        "reason": "rate_limit_retry_failed",
-                    }
-                )
-                try:
-                    fallback_response, fallback_label = await _invoke_local_fallback(
-                        prompt_messages=prompt_messages,
-                        tools=tools_for_invoke,
-                        budget=int(config.get("complex.default_token_budget", 4096)),
-                        max_context=int(
-                            config.get("models.small.context_window", 65536)
-                        ),
-                    )
-                    fallback_chain.append(
-                        {"model": "local-fallback", "status": "success"}
-                    )
-                    return {
-                        "messages": [
-                            fallback_response
-                            if isinstance(fallback_response, AIMessage)
-                            else AIMessage(content=fallback_response.content)
-                        ],
-                        "model_used": fallback_label,
-                        "model_generated_by": fallback_label,
-                        "pending_tool_calls": False,
-                        "security_decision": None,
-                        "security_reason": None,
-                        "api_tokens_used": state.get("api_tokens_used"),
-                        "fallback_chain": fallback_chain,
-                        "cloud_brief_tokens_est": cloud_brief_tokens_est,
-                        "anonymization_placeholders_count": anonymization_placeholders_count,
-                        "cloud_fallback_used": True,
-                        "cloud_fallback_reason": "rate_limit",
-                        **_vision_telemetry(vision_intake_mode),
-                    }
-                except Exception as fb_err:
-                    logger.warning("[complex] Local fallback also failed: %s", fb_err)
-                    fallback_chain.append(
-                        {
-                            "model": "local-fallback",
-                            "status": "failed",
-                            "reason": str(fb_err)[:80],
-                        }
-                    )
-                    return {
-                        "messages": [
-                            AIMessage(
-                                content="Cloud unavailable — please try again or disable complex reasoning."
-                            )
-                        ],
-                        "model_used": "large-cloud-failed",
-                        "pending_tool_calls": False,
-                        "security_decision": None,
-                        "security_reason": None,
-                        "api_tokens_used": state.get("api_tokens_used"),
-                        "fallback_chain": fallback_chain,
-                        "cloud_brief_tokens_est": cloud_brief_tokens_est,
-                        "anonymization_placeholders_count": anonymization_placeholders_count,
-                        **_vision_telemetry(vision_intake_mode),
-                    }
-        elif "401" in str(e) or "403" in str(e):
-            fallback_chain.append(
-                {
-                    "model": "large-cloud",
-                    "status": "failed",
-                    "reason": "auth_error_401_403",
-                }
-            )
-            logger.warning("[complex] Cloud auth error, trying local fallback")
-            try:
-                fallback_response, fallback_label = await _invoke_local_fallback(
+                return await handle_cloud_fallback(
+                    fallback_chain=fallback_chain,
+                    reason="rate_limit",
                     prompt_messages=prompt_messages,
                     tools=tools_for_invoke,
-                    budget=int(config.get("complex.default_token_budget", 4096)),
-                    max_context=int(config.get("models.small.context_window", 65536)),
+                    vision_intake_mode=vision_intake_mode,
+                    cloud_brief_tokens_est=cloud_brief_tokens_est,
+                    anonymization_placeholders_count=anonymization_placeholders_count,
                 )
-                fallback_chain.append({"model": "local-fallback", "status": "success"})
-                return {
-                    "messages": [
-                        fallback_response
-                        if isinstance(fallback_response, AIMessage)
-                        else AIMessage(content=fallback_response.content)
-                    ],
-                    "model_used": fallback_label,
-                    "model_generated_by": fallback_label,
-                    "pending_tool_calls": False,
-                    "security_decision": None,
-                    "security_reason": None,
-                    "api_tokens_used": state.get("api_tokens_used"),
-                    "fallback_chain": fallback_chain,
-                    "cloud_brief_tokens_est": cloud_brief_tokens_est,
-                    "anonymization_placeholders_count": anonymization_placeholders_count,
-                    "cloud_fallback_used": True,
-                    "cloud_fallback_reason": "auth_error",
-                    **_vision_telemetry(vision_intake_mode),
-                }
-            except Exception as fb_err:
-                logger.warning("[complex] Local fallback also failed: %s", fb_err)
-                fallback_chain.append(
-                    {
-                        "model": "local-fallback",
-                        "status": "failed",
-                        "reason": str(fb_err)[:80],
-                    }
-                )
-                return {
-                    "messages": [
-                        AIMessage(
-                            content="Unable to connect to the cloud model — your API key may be invalid or expired. Please check Settings and try again."
-                        )
-                    ],
-                    "model_used": "large-cloud-failed",
-                    "pending_tool_calls": False,
-                    "security_decision": None,
-                    "security_reason": None,
-                    "api_tokens_used": state.get("api_tokens_used"),
-                    "fallback_chain": fallback_chain,
-                    "cloud_brief_tokens_est": cloud_brief_tokens_est,
-                    "anonymization_placeholders_count": anonymization_placeholders_count,
-                    **_vision_telemetry(vision_intake_mode),
-                }
+        elif "401" in str(e) or "403" in str(e):
+            logger.warning("[complex] Cloud auth error, trying local fallback")
+            return await handle_cloud_fallback(
+                fallback_chain=fallback_chain,
+                reason="auth_error",
+                prompt_messages=prompt_messages,
+                tools=tools_for_invoke,
+                vision_intake_mode=vision_intake_mode,
+                cloud_brief_tokens_est=cloud_brief_tokens_est,
+                anonymization_placeholders_count=anonymization_placeholders_count,
+            )
         else:
             logger.warning(
                 "[complex] Cloud error, trying local fallback: %s", err_reason
             )
-            fallback_chain.append(
-                {"model": "large-cloud", "status": "failed", "reason": err_reason}
+            return await handle_cloud_fallback(
+                fallback_chain=fallback_chain,
+                reason="cloud_error",
+                prompt_messages=prompt_messages,
+                tools=tools_for_invoke,
+                vision_intake_mode=vision_intake_mode,
+                cloud_brief_tokens_est=cloud_brief_tokens_est,
+                anonymization_placeholders_count=anonymization_placeholders_count,
             )
-            try:
-                fallback_response, fallback_label = await _invoke_local_fallback(
-                    prompt_messages=prompt_messages,
-                    tools=tools_for_invoke,
-                    budget=int(config.get("complex.default_token_budget", 4096)),
-                    max_context=int(config.get("models.small.context_window", 65536)),
-                )
-                fallback_chain.append({"model": "local-fallback", "status": "success"})
-                return {
-                    "messages": [
-                        fallback_response
-                        if isinstance(fallback_response, AIMessage)
-                        else AIMessage(content=fallback_response.content)
-                    ],
-                    "model_used": fallback_label,
-                    "model_generated_by": fallback_label,
-                    "pending_tool_calls": False,
-                    "security_decision": None,
-                    "security_reason": None,
-                    "api_tokens_used": state.get("api_tokens_used"),
-                    "fallback_chain": fallback_chain,
-                    "cloud_brief_tokens_est": cloud_brief_tokens_est,
-                    "anonymization_placeholders_count": anonymization_placeholders_count,
-                    "cloud_fallback_used": True,
-                    "cloud_fallback_reason": "cloud_error",
-                    **_vision_telemetry(vision_intake_mode),
-                }
-            except Exception as fb_err:
-                logger.warning("[complex] Local fallback also failed: %s", fb_err)
-                fallback_chain.append(
-                    {
-                        "model": "local-fallback",
-                        "status": "failed",
-                        "reason": str(fb_err)[:80],
-                    }
-                )
-            return {
-                "messages": [
-                    AIMessage(
-                        content="Cloud unavailable — please try again or disable complex reasoning."
-                    )
-                ],
-                "model_used": "large-cloud-failed",
-                "pending_tool_calls": False,
-                "security_decision": None,
-                "security_reason": None,
-                "api_tokens_used": state.get("api_tokens_used"),
-                "fallback_chain": fallback_chain,
-                "cloud_brief_tokens_est": cloud_brief_tokens_est,
-                "anonymization_placeholders_count": anonymization_placeholders_count,
-                **_vision_telemetry(vision_intake_mode),
-            }
 
     # If we fell back from cloud, skip deanonymization — fallback model got non-anonymized input
     if "fallback" in model_label and anon_mapping:
@@ -1588,7 +1283,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             cleaned_visible=cleaned_visible,
         )
     ):
-        user_query = _latest_user_text(thread_messages)
+        user_query = latest_user_text(thread_messages)
         query_hint = (
             f" Answer the user's question: {user_query[:300]}" if user_query else ""
         )
@@ -1645,7 +1340,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     # structured tool_calls. When uploads are clearly present, read the
     # files here and re-prompt once.
     if not has_tool_calls:
-        utext = _latest_user_text(thread_messages)
+        utext = latest_user_text(thread_messages)
         paths = _workspace_paths_from_text(utext)
         if (
             paths
@@ -1660,8 +1355,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                 )
                 recapped = _cap_budget_to_context(
                     second_prompt,
-                    state.get("token_budget")
-                    or int(config.get("complex.default_token_budget", 4096)),
+                    state.get("token_budget") or _DEFAULT_TOKEN_BUDGET,
                     max_context,
                 )
                 llm_recapped = llm.bind_tools(tools).bind(max_tokens=recapped)
@@ -1700,10 +1394,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     is_length_cutoff = finish_reason in ("length", "max_tokens") or (
         completion_tokens > 256
         and completion_tokens
-        >= (
-            state.get("token_budget") or int(config.get("complex.default_token_budget"))
-        )
-        - 15
+        >= (state.get("token_budget") or _DEFAULT_TOKEN_BUDGET) - 15
     )
 
     if (
@@ -1845,7 +1536,7 @@ async def complex_tool_action_node(state: AgentState) -> AgentState:
         if skip_pre_synthesis_nudges
         else (
             build_web_search_answer_nudge_messages(
-                delta, user_text=_latest_user_text(current_messages)
+                delta, user_text=latest_user_text(current_messages)
             )
             if web_on
             else []

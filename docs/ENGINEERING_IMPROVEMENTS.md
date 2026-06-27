@@ -216,7 +216,7 @@ This document captures prioritized improvement ideas for Owlynn. It is **advisor
 
 **Improvement:**
 1. `GET /api/models/loaded` — proxy `GET http://127.0.0.1:1234/v1/models` from LM Studio
-2. Settings panel section: shows currently loaded models, assigns to `small`/`medium` slots
+2. Settings panel section: shows currently loaded models, assigns to `small`/`cloud` slots
 3. (Stretch) HuggingFace model search via HF API filtered to MLX-compatible models
 4. Saves assignment to `user_profile.json` overrides (no `defaults.yaml` edits required)
 

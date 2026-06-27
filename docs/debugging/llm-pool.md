@@ -20,7 +20,7 @@ owner: human
 | `model_not_found` in response | Model not loaded in LM Studio | `curl http://127.0.0.1:1234/v1/models \| jq '.data[].id'` | Load model in LM Studio or update profile model keys |
 | Small LLM response is garbage | Wrong model loaded or token limit | Check response content, compare with expected model | Verify `small_llm_model_name` in profile matches loaded model |
 | Swap hangs (>120s) | LM Studio native API unresponsive | `curl http://127.0.0.1:1234/api/v1/models` (native API) | Restart LM Studio; check `docker stats` for memory pressure |
-| Model not found | Name mismatch vs LM Studio | Check `defaults.yaml` `models.small` name | Load `gemma-4-e2b-heretic-uncensored-mlx` in LM Studio |
+| Model not found | Name mismatch vs LM Studio | Check `defaults.yaml` `models.small` name | Load `qwen3-vl-4b-instruct-c_abliterated-v2-mlx` in LM Studio |
 | Request timeout | M4 slow inference | Check `models.*.timeout` in defaults.yaml | Reduce context window or use AC power |
 | DeepSeek API 401 | Invalid or missing API key | `echo $DEEPSEEK_API_KEY` | Set `DEEPSEEK_API_KEY` env var or in User_Profile |
 | DeepSeek API 403 | Account quota exceeded or disabled | Check DeepSeek dashboard | Top up quota or disable cloud escalation |
@@ -100,7 +100,7 @@ ps aux | grep python | grep -v grep | awk '{printf "PID: %s, RSS: %.1f GB, CMD: 
 
 ```
 # Small LLM initialization
-INFO:src.agent.llm:Initializing Small_LLM (gemma-4-e2b-heretic-uncensored-mlx)
+INFO:src.agent.llm:Initializing Small_LLM (qwen3-vl-4b-instruct-c_abliterated-v2-mlx)
 
 # Cloud LLM usage
 INFO:src.agent.llm:Escalating to Cloud_LLM (deepseek-v4-flash)
@@ -216,7 +216,7 @@ INFO:src.agent.llm:Cloud budget: 420000/500000 (84%) — WARNING
 
 4. Reduce context window if still OOM:
    - Set a lower `max_tokens` via profile or defer to small LLM for simple queries.
-   - The system has a degradation ladder: unload medium → reduce context → disable summarize. Optionally stop SearXNG manually (`podman stop owlynn_searxng`) — not automated in code.
+   - The system has a degradation ladder: unload unified local model → reduce context → disable summarize. Optionally stop SearXNG manually (`podman stop owlynn_searxng`) — not automated in code.
 
 ### Procedure 4: DeepSeek API Errors
 
@@ -253,7 +253,7 @@ INFO:src.agent.llm:Cloud budget: 420000/500000 (84%) — WARNING
 ## Known Fixes
 
 - **`model_not_found` errors for legacy model IDs**: Resolved — profile update semantic now persists active model keys. `LLMPool.clear()` triggered on profile changes.
-- **Cloud fallback chain**: Cloud failures may fall back to local medium. 401/403 — check API key. 429 retries after backoff. See [architecture/overview.md](../architecture/overview.md) and [CLOUD-LLM-ARCHITECTURE.md](../CLOUD-LLM-ARCHITECTURE.md).
+- **Cloud fallback chain**: Cloud failures may fall back to unified local model. 401/403 — check API key. 429 retries after backoff. See [architecture/overview.md](../architecture/overview.md) and [CLOUD-LLM-ARCHITECTURE.md](../CLOUD-LLM-ARCHITECTURE.md).
 - See also: [PERFORMANCE_SLOS.md](../PERFORMANCE_SLOS.md) for memory budget and degradation ladder.
 
 ## Related

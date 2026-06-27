@@ -1,7 +1,7 @@
 ---
 status: active
 category: standards
-last_updated: 2026-06-26
+last_updated: 2026-06-27
 owner: ai-agent
 audience: agent
 ---
@@ -115,10 +115,10 @@ Project status tracker. Last updated: 2026-06-26 — F6.1 memory recall fix (100
 
 | Slot | Model | Context | Temp | Max Tokens |
 |------|-------|---------|------|------------|
-| Router | `gemma-4-e2b-heretic-uncensored-mlx` | 65536 | 0.1 | 8192 |
+| Router | `qwen3-vl-4b-instruct-c_abliterated-v2-mlx` | 65536 | 0.1 | 8192 |
 | Cloud | `deepseek-v4-flash` | 1048576 | 0.4 | 8192 |
-| Vision | `gemma-4-e2b-heretic-uncensored-mlx` | 65536 | 0.1 | 2048 |
-| Extraction | `gemma-4-e2b-heretic-uncensored-mlx` | 65536 | 0.1 | 1024 |
+| Vision | `qwen3-vl-4b-instruct-c_abliterated-v2-mlx` | 65536 | 0.1 | 2048 |
+| Extraction | `qwen3-vl-4b-instruct-c_abliterated-v2-mlx` | 65536 | 0.1 | 1024 |
 
 ## Evaluation Trajectory
 
@@ -196,7 +196,7 @@ frontend-v2/src/App.tsx        # Frontend runtime
 
 | Key | Value |
 |-----|-------|
-| `small_llm_model_name` | `gemma-4-e2b-heretic-uncensored-mlx` |
+| `small_llm_model_name` | `qwen3-vl-4b-instruct-c_abliterated-v2-mlx` |
 
 ### Core Capabilities Status
 
