@@ -839,6 +839,7 @@ function App() {
   }, [activeProjectId, currentThreadId, clearSession, refreshCloudUsage, projects, setActiveMode])
 
   const handleModeChange = useCallback((mode: 'normal' | 'study' | 'pentest') => {
+    const prevMode = useAppStore.getState().activeMode
     setActiveMode(mode)
     // Persist mode to project metadata
     fetch(`/api/projects/${encodeURIComponent(activeProjectId)}`, {
@@ -846,7 +847,30 @@ function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mode }),
     }).catch(() => { /* non-critical */ })
-  }, [activeProjectId, setActiveMode])
+
+    // Auto-start Kali VM when switching to pentest mode
+    if (mode === 'pentest' && prevMode !== 'pentest') {
+      setOperatorNote('Starting Kali VM...')
+      fetch('/api/pentest/vm/start', { method: 'POST' })
+        .then((r) => r.json())
+        .then((d) => {
+          if (d.status === 'ok') {
+            setOperatorNote('Kali VM ready for pentest.')
+          } else {
+            setOperatorNote(`Kali VM: ${d.error || 'startup failed'}`)
+            toast.error(`Kali VM: ${d.error || 'startup failed'}`)
+          }
+        })
+        .catch(() => { /* non-critical */ })
+    }
+
+    // Auto-stop Kali VM when switching away from pentest mode
+    if (prevMode === 'pentest' && mode !== 'pentest') {
+      fetch('/api/pentest/vm/stop', { method: 'POST' })
+        .then(() => { setOperatorNote('Kali VM stopped.') })
+        .catch(() => { /* non-critical */ })
+    }
+  }, [activeProjectId, setActiveMode, setOperatorNote])
 
   const handleNewChat = useCallback(() => {
     const newThreadId = makeThreadId()
