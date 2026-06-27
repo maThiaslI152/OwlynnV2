@@ -77,6 +77,23 @@ Cloud APIs (DeepSeek, OpenAI, etc.) refuse security/pentest content. Pentest mod
 - Pentest mode forces `scenario_id="pentest"` and `response_style="concise"`
 - Router returns `complex-default` (not `complex-cloud`) for pentest
 
+### Pentest Infrastructure (Kali VM)
+
+Owlynn uses **Lima** (Apple Virtualization Framework) to run Kali Linux locally on macOS.
+
+| Component | Setup | RAM |
+|-----------|-------|-----|
+| Lima VM | `./scripts/setup-kali-lima.sh` | ~2GB |
+| Kali tools | Auto-installed on first boot (kali-linux-headless + tool suites) | — |
+| SSH | Key auth, port 60022, user `kali` | — |
+| tmux | Session `main` for Owlynn screen assist | — |
+
+- Lima config: `lima/kali.yaml`
+- VM name: `owlynn-kali`
+- Auto-detected by pentest status API (`/api/pentest/status`)
+- Bridged networking for raw socket access (nmap SYN scan, masscan)
+- Falls back to remote Kali via SSH if Lima not available
+
 ## Study System
 
 16 study tools in `src/tools/study_tools.py`:

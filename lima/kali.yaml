@@ -1,0 +1,155 @@
+# Lima VM config for Kali Linux (Owlynn pentest mode)
+# Usage: limactl start kali.yaml
+# Connect: ssh -F ~/.lima/kali/ssh.config kali-default
+#
+# This VM provides a local Kali environment with:
+# - Full root + raw socket access (nmap SYN scan, masscan, etc.)
+# - Bridged networking for LAN pentest
+# - tmux session for Owlynn screen assist integration
+# - SSH key auth (no passwords)
+
+# Use Debian cloud image + Kali tools overlay
+# (Kali doesn't publish official Lima/cloud images, so we use Debian and install kali-linux-headless)
+images:
+  # Debian 12 (Bookworm) — closest to Kali
+  - location: "https://cloud.debian.org/images/cloud/bookworm/20241201-1893/debian-12-generic-arm64.qcow2"
+    arch: "aarch64"
+  - location: "https://cloud.debian.org/images/cloud/bookworm/20241201-1893/debian-12-generic-amd64.qcow2"
+    arch: "x8664"
+
+# VM resources — tuned for M4 Air 24GB
+cpus: 2
+memory: "2GiB"
+disk: "30GiB"
+
+# Mount the Owlynn workspace into the VM (read-only for safety)
+mounts:
+  - location: "~/.owlynn"
+    writable: false
+  - location: "/tmp/owlynn-exchange"
+    writable: true
+
+# Networking
+networks:
+  # Lima user-mode network (NAT) — always available
+  - lima: user-v2
+  # Bridged network — gives VM real LAN access for pentest
+  # Uncomment and set to your active interface:
+  #   - en0 (WiFi), en1 (Ethernet), etc.
+  # Check with: networksetup -listallhardwareports
+  # - vzNAT: true  # Alternative: Apple Virtualization NAT
+
+# SSH config
+ssh:
+  localPort: 60022
+  loadDotSSHPubKeys: false
+
+# Container runtime inside the VM
+containerd:
+  system: false
+  user: false
+
+# Provision scripts — run on first boot
+provision:
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -eux -o pipefail
+
+      # Add Kali repository
+      echo "deb http://http.kali.org/kali kali-rolling main contrib non-free non-free-firmware" > /etc/apt/sources.list.d/kali.list
+      wget -q -O - https://archive.kali.org/archive-key.asc | gpg --dearmor -o /etc/apt/trusted.gpg.d/kali-archive-keyring.gpg
+
+      # Pin Kali packages to prevent system-wide upgrade
+      cat > /etc/apt/preferences.d/kali-pin << 'EOF'
+      Package: *
+      Pin: release o=Kali
+      Pin-Priority: 50
+
+      Package: kali-linux-headless
+      Pin: release o=Kali
+      Pin-Priority: 500
+
+      Package: kali-tools-*
+      Pin: release o=Kali
+      Pin-Priority: 500
+      EOF
+
+      apt-get update
+
+      # Install Kali headless tools (no GUI, ~2GB)
+      DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        kali-linux-headless \
+        kali-tools-information-gathering \
+        kali-tools-vulnerability-analysis \
+        kali-tools-web-applications \
+        kali-tools-password-attacks \
+        kali-tools-exploitation \
+        kali-tools-post-exploitation \
+        kali-tools-forensics \
+        kali-tools-sniffing-spoofing \
+        kali-tools-wireless \
+        tmux \
+        openssh-server
+
+      # Enable and start SSH
+      systemctl enable ssh
+      systemctl start ssh
+
+      # Create kali user with passwordless sudo
+      useradd -m -s /bin/bash kali || true
+      echo "kali ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/kali
+      chmod 440 /etc/sudoers.d/kali
+
+      # Set up SSH key auth for kali user
+      mkdir -p /home/kali/.ssh
+      cp /root/.ssh/authorized_keys /home/kali/.ssh/authorized_keys 2>/dev/null || true
+      chown -R kali:kali /home/kali/.ssh
+      chmod 700 /home/kali/.ssh
+      chmod 600 /home/kali/.ssh/authorized_keys 2>/dev/null || true
+
+      # Create default tmux session
+      cat > /home/kali/.tmux.conf << 'TMUX'
+      set -g default-terminal "screen-256color"
+      set -g history-limit 10000
+      set -g mouse on
+      TMUX
+      chown kali:kali /home/kali/.tmux.conf
+
+      echo "Kali provisioning complete."
+
+  - mode: user
+    script: |
+      #!/bin/bash
+      # Start a default tmux session named "main"
+      tmux new-session -d -s main -n shell 2>/dev/null || true
+
+  - mode: user
+    script: |
+      #!/bin/bash
+      # Create exchange directory for file transfers
+      mkdir -p /tmp/owlynn-exchange
+
+# Start tmux session on boot
+probes:
+  - script: |
+      #!/bin/bash
+      set -eux -o pipefail
+      systemctl is-active ssh
+      tmux has-session -t main
+    hint: |
+      SSH and tmux session must be running.
+      See /var/log/cloud-init-output.log for provisioning logs.
+
+# Host resolver
+hostResolver:
+  enabled: true
+
+# Port forwarding (for tools that need to expose services back to Mac)
+portForwards:
+  - guestPort: 8080
+    hostPort: 18080
+    ignore: true
+  - guestPort: 9090
+    hostPort: 19090
+    ignore: true
