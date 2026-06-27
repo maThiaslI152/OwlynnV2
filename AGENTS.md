@@ -67,6 +67,16 @@ Owlynn has three modes that change the UI, tools, and system prompt:
 - Backend maps `scenario_id` to forced response_style and scenario injection
 - `src/memory/project.py`: `_PROJECT_WRITABLE_FIELDS` includes `mode`
 
+## Pentest Mode — Local-Only (Hard Enforcement)
+
+Cloud APIs (DeepSeek, OpenAI, etc.) refuse security/pentest content. Pentest mode **always** uses the local model. No override.
+
+- Config: `models.pentest` in `defaults.yaml` — set `model_name` to a dedicated pentest model
+- Falls back to `models.small` (Qwen3 VL 4B) if no pentest model configured
+- Accessor: `ConfigLoader.get_pentest_model_name()`
+- Pentest mode forces `scenario_id="pentest"` and `response_style="concise"`
+- Router returns `complex-default` (not `complex-cloud`) for pentest
+
 ## Study System
 
 16 study tools in `src/tools/study_tools.py`:

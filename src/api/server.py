@@ -16,6 +16,7 @@ from src.api.routes import (
     browser_extension,
     study,
     notebook,
+    pentest,
 )
 from src.api.ws import handler as ws_handler
 from fastapi import FastAPI
@@ -197,6 +198,7 @@ app.include_router(openai.router)
 app.include_router(browser_extension.router)
 app.include_router(study.router)
 app.include_router(notebook.router)
+app.include_router(pentest.router)
 app.include_router(ws_handler.router)
 
 from src.api.local_auth import cors_allowed_origins

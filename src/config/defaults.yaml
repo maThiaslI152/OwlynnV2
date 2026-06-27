@@ -87,6 +87,18 @@ models:
       flash: "deepseek-v4-flash"
       pro: "deepseek-v4-pro"
 
+  pentest:
+    base_url: "http://127.0.0.1:1234/v1"    # Pentest mode local-only model
+    model_name: ""                            # Set to dedicated pentest model; falls back to small if empty
+    temperature: 0.3
+    max_tokens: 8192
+    timeout: 180
+    request_timeout: 180
+    context_window: 65536
+    extra_body:
+      keep_alive: -1
+    note: "Cloud APIs refuse security content. Pentest mode always uses this local model."
+
   embedding:
     base_url: "http://127.0.0.1:1234/v1"
     model_name: "text-embedding-nomic-embed-text-v1.5-embedding"

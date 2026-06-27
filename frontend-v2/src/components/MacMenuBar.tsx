@@ -4,6 +4,8 @@ import { CloudSettingsPanel } from './CloudSettingsPanel'
 import { CloudUsagePanel } from './CloudUsagePanel'
 import { OrchestrationPanel } from './OrchestrationPanel'
 import { MemoryPanel } from './MemoryPanel'
+import { PentestToolsPanel } from './PentestToolsPanel'
+import { StudyProgressPanel } from './StudyProgressPanel'
 import { useAppStore } from '../state/useAppStore'
 
 const IconFolder = () => <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
@@ -20,6 +22,7 @@ export function MacMenuBar({ isCompact, onToggleMode }: MacMenuBarProps) {
   const [activeMenu, setActiveMenu] = useState<string | null>(null)
   const connectionState = useAppStore((s) => s.connectionState)
   const cloudStatus = useAppStore((s) => s.cloudStatus)
+  const activeMode = useAppStore((s) => s.activeMode)
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -135,6 +138,21 @@ export function MacMenuBar({ isCompact, onToggleMode }: MacMenuBarProps) {
           {activeMenu === 'status_pill' && (
             <div className="menu-dropdown right-dropdown large-dropdown">
               <div className="menu-dropdown-content">
+                {/* Mode-specific panels */}
+                {activeMode === 'study' && (
+                  <>
+                    <h4>Study Progress</h4>
+                    <StudyProgressPanel />
+                    <hr />
+                  </>
+                )}
+                {activeMode === 'pentest' && (
+                  <>
+                    <h4>Pentest Tools</h4>
+                    <PentestToolsPanel />
+                    <hr />
+                  </>
+                )}
                 <h4>Cloud & Usage</h4>
                 <CloudUsagePanel />
                 <hr />

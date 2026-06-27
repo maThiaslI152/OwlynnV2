@@ -305,6 +305,15 @@ class ConfigLoader:
             "text-embedding-nomic-embed-text-v1.5-embedding",
         )
 
+    @classmethod
+    def get_pentest_model_name(cls) -> str:
+        """Return the configured pentest model name (local-only, falls back to small if empty)."""
+        pentest = cls.get("models.pentest.model_name", "")
+        if pentest:
+            return pentest
+        # Fall back to small model when no dedicated pentest model is configured
+        return cls.get_small_model_name()
+
 
 # ── Module-level singleton for convenience ───────────────────────────────────
 
