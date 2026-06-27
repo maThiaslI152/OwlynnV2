@@ -205,7 +205,7 @@ screen_assist:
   browser_cdp_url: ""                      # Optional Playwright CDP (e.g. :9222)
   kali:
     host: "127.0.0.1"                      # Lima VM (auto-started on Pentest mode)
-    user: "tim"                            # Lima SSH user (host user)
+    user: "kali"                           # Anonymized user (not host user)
     port: 60022                            # Lima SSH port
     tmux_session: "main"
     history_lines: 200

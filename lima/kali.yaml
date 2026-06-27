@@ -1,27 +1,29 @@
 # Lima VM config for pentest tools (Owlynn pentest mode)
 # Usage: limactl start --name=owlynn-kali kali.yaml
 #
-# Uses Debian 12 with pentest tools from Debian repos + pip.
-# No Kali repo mixing to avoid dependency conflicts.
+# ANONYMIZED: No host-identifying information leaks to the VM.
+# - No host home directory mount
+# - Generic hostname
+# - SSH as 'kali' user (not host user)
+# - Generic SSH host key
 
 minimumLimaVersion: 2.0.0
 
 base:
 - template:_images/debian-12
-- template:_default/mounts
 
 # VM resources — tuned for M4 Air 24GB
 cpus: 2
 memory: "2GiB"
 disk: "20GiB"
 
-# Mount the Owlynn workspace into the VM
-mounts:
-- location: "~"
+# NO host mounts — prevents leaking host username, files, SSH keys
+mounts: []
 
-# SSH config
+# SSH config — connect as 'kali' user
 ssh:
   localPort: 60022
+  user: "kali"
 
 # Provision scripts — run on first boot
 provision:
@@ -31,6 +33,13 @@ provision:
     set -eux -o pipefail
 
     export DEBIAN_FRONTEND=noninteractive
+
+    # Set generic hostname
+    hostnamectl set-hostname pentest-vm
+
+    # Remove any host-identifying info
+    rm -f /etc/machine-id /var/lib/dbus/machine-id 2>/dev/null || true
+    systemd-machine-id-setup 2>/dev/null || true
 
     apt-get update -q
     apt-get install -y -q \
@@ -51,11 +60,17 @@ provision:
       openssh-server \
       wget \
       unzip \
-      sqlite3
+      sqlite3 \
+      macchanger
 
     # Enable and start SSH
     systemctl enable ssh
     systemctl start ssh
+
+    # Anonymize SSH server — remove identifying info from banner
+    sed -i 's/#Banner none/Banner none/' /etc/ssh/sshd_config
+    sed -i 's/^DebianBanner.*/DebianBanner no/' /etc/ssh/sshd_config 2>/dev/null || echo "DebianBanner no" >> /etc/ssh/sshd_config
+    systemctl restart ssh
 
     # Create kali user with passwordless sudo
     useradd -m -s /bin/bash kali || true
@@ -71,13 +86,20 @@ provision:
     chmod 700 /home/kali/.ssh
     [ -f /home/kali/.ssh/authorized_keys ] && chmod 600 /home/kali/.ssh/authorized_keys
 
-    # Create tmux config
+    # Generic tmux config — no identifying info
     cat > /home/kali/.tmux.conf << 'TMUX'
     set -g default-terminal "screen-256color"
     set -g history-limit 10000
     set -g mouse on
+    set -g set-titles off
     TMUX
     chown kali:kali /home/kali/.tmux.conf
+
+    # Clean up apt cache and logs
+    apt-get clean
+    rm -rf /var/lib/apt/lists/*
+    rm -f /var/log/*.log /var/log/*.gz
+    history -c 2>/dev/null || true
 
     echo "Pentest VM provisioning complete."
 
