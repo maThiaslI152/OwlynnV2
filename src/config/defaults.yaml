@@ -89,14 +89,15 @@ models:
 
   pentest:
     base_url: "http://127.0.0.1:1234/v1"    # Pentest mode local-only model
-    model_name: ""                            # Set to dedicated pentest model; falls back to small if empty
+    model_name: "gemma-4-12b-coder-fable5-composer2.5-v1@q4_k_m"  # Winner of pentest benchmark (84.1%)
     temperature: 0.3
     max_tokens: 8192
     timeout: 180
     request_timeout: 180
-    context_window: 65536
+    context_window: 16384
     extra_body:
       keep_alive: -1
+      flash_attention: true
     note: "Cloud APIs refuse security content. Pentest mode always uses this local model."
 
   embedding:
