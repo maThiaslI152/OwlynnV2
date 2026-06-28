@@ -1035,28 +1035,52 @@ async def complex_llm_node(state: AgentState) -> AgentState:
 
     # ── tools_off mode (no tools) ────────────────────────────────────────
     loop_start_time: float | None = None
+    scenario_id = state.get("scenario_id")
     if mode == "tools_off":
-        try:
-            loop_start_time = asyncio.get_running_loop().time()
-            llm = await get_cloud_llm(profile.get("cloud_model_tier"))
-            model_label = "large-cloud"
-            log_model_attempt(model_label, "success", reason="tools_off_direct")
-        except CloudUnavailableError as e:
-            err_reason = (str(e) or type(e).__name__)[:120]
-            log_model_attempt("large-cloud", "failed", reason=err_reason)
-            logger.warning(
-                "[complex] Cloud unavailable in tools_off mode, trying local fallback: %s",
-                e,
-            )
-            return await handle_cloud_fallback(
-                fallback_chain=fallback_chain,
-                reason="cloud_unavailable",
-                prompt_messages=prompt_messages,
-                tools=None,
-                vision_intake_mode=vision_intake_mode,
-                cloud_brief_tokens_est=cloud_brief_tokens_est,
-                anonymization_placeholders_count=anonymization_placeholders_count,
-            )
+        # Pentest mode: always use dedicated pentest model (local-only, no cloud)
+        if scenario_id == "pentest":
+            try:
+                from src.agent.llm import get_pentest_llm
+
+                loop_start_time = asyncio.get_running_loop().time()
+                llm = await get_pentest_llm()
+                model_label = "pentest-local"
+                log_model_attempt(model_label, "success", reason="pentest_tools_off")
+            except Exception as e:
+                err_reason = (str(e) or type(e).__name__)[:120]
+                log_model_attempt("pentest-local", "failed", reason=err_reason)
+                logger.warning("[complex] Pentest LLM unavailable in tools_off: %s", e)
+                return await handle_cloud_fallback(
+                    fallback_chain=fallback_chain,
+                    reason="pentest_llm_unavailable",
+                    prompt_messages=prompt_messages,
+                    tools=None,
+                    vision_intake_mode=vision_intake_mode,
+                    cloud_brief_tokens_est=cloud_brief_tokens_est,
+                    anonymization_placeholders_count=anonymization_placeholders_count,
+                )
+        else:
+            try:
+                loop_start_time = asyncio.get_running_loop().time()
+                llm = await get_cloud_llm(profile.get("cloud_model_tier"))
+                model_label = "large-cloud"
+                log_model_attempt(model_label, "success", reason="tools_off_direct")
+            except CloudUnavailableError as e:
+                err_reason = (str(e) or type(e).__name__)[:120]
+                log_model_attempt("large-cloud", "failed", reason=err_reason)
+                logger.warning(
+                    "[complex] Cloud unavailable in tools_off mode, trying local fallback: %s",
+                    e,
+                )
+                return await handle_cloud_fallback(
+                    fallback_chain=fallback_chain,
+                    reason="cloud_unavailable",
+                    prompt_messages=prompt_messages,
+                    tools=None,
+                    vision_intake_mode=vision_intake_mode,
+                    cloud_brief_tokens_est=cloud_brief_tokens_est,
+                    anonymization_placeholders_count=anonymization_placeholders_count,
+                )
 
         budget = _cap_budget_to_context(
             prompt_messages,
@@ -1122,34 +1146,60 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         )
 
     # ── 9.4: Cloud model acquisition ─────────────────────────────────────
-    try:
-        loop_start_time = asyncio.get_running_loop().time()
-        llm = await get_cloud_llm(profile.get("cloud_model_tier"))
-        model_label = "large-cloud"
-        log_model_attempt("large-cloud", "success", reason="initial_route")
-    except CloudUnavailableError as e:
-        err_reason = (str(e) or type(e).__name__)[:120]
-        log_model_attempt("large-cloud", "failed", reason=err_reason)
-        error_text = (
-            e.response.text
-            if hasattr(e, "response") and hasattr(e.response, "text")
-            else str(e)
-        )
-        logger.warning(
-            "[complex] Cloud unavailable, trying local fallback: %s - Body: %s",
-            e,
-            error_text,
-        )
-        return await handle_cloud_fallback(
-            invoke_local_fallback=_invoke_local_fallback,
-            fallback_chain=fallback_chain,
-            reason="cloud_unavailable",
-            prompt_messages=prompt_messages,
-            tools=tools_for_invoke,
-            vision_intake_mode=vision_intake_mode,
-            cloud_brief_tokens_est=cloud_brief_tokens_est,
-            anonymization_placeholders_count=anonymization_placeholders_count,
-        )
+    # Pentest mode: always use dedicated pentest model (local-only, no cloud)
+    if scenario_id == "pentest":
+        try:
+            from src.agent.llm import get_pentest_llm
+
+            loop_start_time = asyncio.get_running_loop().time()
+            llm = await get_pentest_llm()
+            model_label = "pentest-local"
+            log_model_attempt("pentest-local", "success", reason="pentest_scenario")
+        except Exception as e:
+            err_reason = (str(e) or type(e).__name__)[:120]
+            log_model_attempt("pentest-local", "failed", reason=err_reason)
+            logger.warning(
+                "[complex] Pentest LLM unavailable, falling back to small: %s", e
+            )
+            return await handle_cloud_fallback(
+                invoke_local_fallback=_invoke_local_fallback,
+                fallback_chain=fallback_chain,
+                reason="pentest_llm_unavailable",
+                prompt_messages=prompt_messages,
+                tools=tools_for_invoke,
+                vision_intake_mode=vision_intake_mode,
+                cloud_brief_tokens_est=cloud_brief_tokens_est,
+                anonymization_placeholders_count=anonymization_placeholders_count,
+            )
+    else:
+        try:
+            loop_start_time = asyncio.get_running_loop().time()
+            llm = await get_cloud_llm(profile.get("cloud_model_tier"))
+            model_label = "large-cloud"
+            log_model_attempt("large-cloud", "success", reason="initial_route")
+        except CloudUnavailableError as e:
+            err_reason = (str(e) or type(e).__name__)[:120]
+            log_model_attempt("large-cloud", "failed", reason=err_reason)
+            error_text = (
+                e.response.text
+                if hasattr(e, "response") and hasattr(e.response, "text")
+                else str(e)
+            )
+            logger.warning(
+                "[complex] Cloud unavailable, trying local fallback: %s - Body: %s",
+                e,
+                error_text,
+            )
+            return await handle_cloud_fallback(
+                invoke_local_fallback=_invoke_local_fallback,
+                fallback_chain=fallback_chain,
+                reason="cloud_unavailable",
+                prompt_messages=prompt_messages,
+                tools=tools_for_invoke,
+                vision_intake_mode=vision_intake_mode,
+                cloud_brief_tokens_est=cloud_brief_tokens_est,
+                anonymization_placeholders_count=anonymization_placeholders_count,
+            )
 
     budget = _cap_budget_to_context(
         prompt_messages,

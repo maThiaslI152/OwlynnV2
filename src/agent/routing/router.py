@@ -647,6 +647,11 @@ def _resolve_complex_route(
     if cloud_available is None:
         cloud_available = _check_cloud_available()
 
+    # 0. Pentest scenario — always local (cloud APIs refuse security content)
+    scenario_id = state.get("scenario_id")
+    if scenario_id == "pentest":
+        return "complex-default", toolbox
+
     text_len = len(user_text)
     estimated_input = 4000 + (text_len // 4)  # input_reserve + message tokens
 

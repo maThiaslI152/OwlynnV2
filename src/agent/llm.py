@@ -58,6 +58,7 @@ class LLMPool:
 
     _small_llm: Optional[ChatOpenAI] = None
     _fallback_llm: Optional[ChatOpenAI] = None
+    _pentest_llm: Optional[ChatOpenAI] = None
 
     _cloud_llm_flash: Optional[ChatOpenAI] = None
     _cloud_llm_pro: Optional[ChatOpenAI] = None
@@ -155,6 +156,64 @@ class LLMPool:
         else:
             audit_debug("agent.model", "pool_cache_hit", slot="fallback")
         return cls._fallback_llm
+
+    # ── pentest (dedicated pentest model) ──────────────────────────────
+
+    @classmethod
+    async def get_pentest_llm(cls) -> ChatOpenAI:
+        """Get or create cached pentest LLM instance.
+
+        Uses the dedicated pentest model configured in models.pentest.* in defaults.yaml.
+        Falls back to small model if no pentest model is configured.
+        """
+        if "pentest" in cls._test_overrides:
+            audit_debug("agent.model", "pool_test_override", slot="pentest")
+            return cls._test_overrides["pentest"]
+        _PENTEST_DEFAULTS = dict(
+            temperature=0.3,
+            max_tokens=8192,
+            max_output_tokens=8192,
+            timeout=180,
+        )
+        if cls._pentest_llm is None:
+            try:
+                async with cls._lock:
+                    if cls._pentest_llm is None:
+                        model_cfg = get_model_config("pentest")
+                        pentest_model_name = config.get_pentest_model_name()
+                        extra_body = dict(model_cfg.get("extra_body") or {})
+                        extra_body["max_output_tokens"] = model_cfg.get(
+                            "max_output_tokens", _PENTEST_DEFAULTS["max_output_tokens"]
+                        )
+                        cls._pentest_llm = ChatOpenAI(
+                            model=pentest_model_name,
+                            api_key="sk-local-no-key-needed",
+                            base_url=model_cfg.get(
+                                "base_url", "http://127.0.0.1:1234/v1"
+                            ),
+                            temperature=model_cfg.get(
+                                "temperature", _PENTEST_DEFAULTS["temperature"]
+                            ),
+                            max_tokens=model_cfg.get(
+                                "max_tokens", _PENTEST_DEFAULTS["max_tokens"]
+                            ),
+                            extra_body=extra_body,
+                            request_timeout=model_cfg.get("request_timeout")
+                            or model_cfg.get("timeout", _PENTEST_DEFAULTS["timeout"]),
+                            stream_chunk_timeout=None,
+                        )
+                        audit_info(
+                            "agent.model",
+                            "pool_instance_created",
+                            slot="pentest",
+                            model=pentest_model_name,
+                        )
+            except Exception as e:
+                logger.warning("Pentest LLM creation error: %s", e)
+                return _build_local_llm_client(**_PENTEST_DEFAULTS)
+        else:
+            audit_debug("agent.model", "pool_cache_hit", slot="pentest")
+        return cls._pentest_llm
 
     # ── cloud (DeepSeek API) ──────────────────────────────────────────
 
@@ -285,6 +344,11 @@ async def get_extraction_llm(*, foreground: bool = True) -> ChatOpenAI:
 async def get_cloud_llm(tier: Optional[str] = None) -> ChatOpenAI:
     """Get cloud LLM instance (DeepSeek API) for optional tier flash|pro."""
     return await LLMPool.get_cloud_llm(tier)
+
+
+async def get_pentest_llm() -> ChatOpenAI:
+    """Get pentest LLM instance (dedicated pentest model, local-only)."""
+    return await LLMPool.get_pentest_llm()
 
 
 async def get_fallback_llm() -> ChatOpenAI:
