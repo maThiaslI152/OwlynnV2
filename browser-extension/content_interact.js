@@ -28,6 +28,188 @@
       return { success: true, result: "Hints removed." };
     }
 
+    // ── Phase 1: Navigation Actions ──────────────────────────────────────
+
+    if (action === "wait_for_navigation") {
+      const timeout = args.timeout || 10000;
+      return new Promise((resolve) => {
+        const timer = setTimeout(() => {
+          resolve({ success: true, result: `Waited ${timeout}ms (timeout).` });
+        }, timeout);
+        window.addEventListener('load', () => {
+          clearTimeout(timer);
+          resolve({ success: true, result: "Page loaded." });
+        }, { once: true });
+      });
+    }
+
+    if (action === "scroll_to_element") {
+      let els = [];
+      if (element_ids && element_ids.length > 0 && window.__owlynn_dom_map) {
+        element_ids.forEach(id => {
+          const el = window.__owlynn_dom_map.get(id);
+          if (el) els.push(el);
+        });
+      } else if (element_id !== undefined && element_id !== -1 && window.__owlynn_dom_map) {
+        const el = window.__owlynn_dom_map.get(element_id);
+        if (el) els = [el];
+      } else if (selector) {
+        els = Array.from(document.querySelectorAll(selector));
+      }
+      if (els.length === 0) return { success: false, error: "No element found for scroll_to_element." };
+      els.forEach(el => el.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+      return { success: true, result: `Scrolled to ${els.length} elements.` };
+    }
+
+    if (action === "select_option") {
+      let els = [];
+      if (element_ids && element_ids.length > 0 && window.__owlynn_dom_map) {
+        element_ids.forEach(id => {
+          const el = window.__owlynn_dom_map.get(id);
+          if (el) els.push(el);
+        });
+      } else if (element_id !== undefined && element_id !== -1 && window.__owlynn_dom_map) {
+        const el = window.__owlynn_dom_map.get(element_id);
+        if (el) els = [el];
+      } else if (selector) {
+        els = Array.from(document.querySelectorAll(selector));
+      }
+      if (els.length === 0) return { success: false, error: "No element found for select_option." };
+      const optionValue = args.value || args.option_text || text;
+      els.forEach(el => {
+        if (el.tagName.toLowerCase() === 'select') {
+          // Find option by value or text
+          const options = Array.from(el.options);
+          const match = options.find(o => o.value === optionValue || o.text === optionValue);
+          if (match) {
+            el.value = match.value;
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+        }
+      });
+      return { success: true, result: `Selected option in ${els.length} elements.` };
+    }
+
+    if (action === "submit_form") {
+      let els = [];
+      if (element_ids && element_ids.length > 0 && window.__owlynn_dom_map) {
+        element_ids.forEach(id => {
+          const el = window.__owlynn_dom_map.get(id);
+          if (el) els.push(el);
+        });
+      } else if (element_id !== undefined && element_id !== -1 && window.__owlynn_dom_map) {
+        const el = window.__owlynn_dom_map.get(element_id);
+        if (el) els = [el];
+      } else if (selector) {
+        els = Array.from(document.querySelectorAll(selector));
+      }
+      if (els.length === 0) return { success: false, error: "No element found for submit_form." };
+      let submitted = 0;
+      els.forEach(el => {
+        const form = el.closest('form');
+        if (form) {
+          form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+          submitted++;
+        }
+      });
+      return { success: true, result: `Submitted ${submitted} forms.` };
+    }
+
+    if (action === "focus") {
+      let els = [];
+      if (element_ids && element_ids.length > 0 && window.__owlynn_dom_map) {
+        element_ids.forEach(id => {
+          const el = window.__owlynn_dom_map.get(id);
+          if (el) els.push(el);
+        });
+      } else if (element_id !== undefined && element_id !== -1 && window.__owlynn_dom_map) {
+        const el = window.__owlynn_dom_map.get(element_id);
+        if (el) els = [el];
+      } else if (selector) {
+        els = Array.from(document.querySelectorAll(selector));
+      }
+      if (els.length === 0) return { success: false, error: "No element found for focus." };
+      els.forEach(el => el.focus());
+      return { success: true, result: `Focused ${els.length} elements.` };
+    }
+
+    // ── Phase 2: Batch Selection Actions ─────────────────────────────────
+
+    if (action === "select_checkboxes") {
+      const checked = args.checked !== undefined ? args.checked : true;
+      let els = [];
+      if (element_ids && element_ids.length > 0 && window.__owlynn_dom_map) {
+        element_ids.forEach(id => {
+          const el = window.__owlynn_dom_map.get(id);
+          if (el && (el.type === 'checkbox' || el.tagName.toLowerCase() === 'input')) els.push(el);
+        });
+      } else if (selector) {
+        els = Array.from(document.querySelectorAll(selector)).filter(el => el.type === 'checkbox');
+      }
+      if (els.length === 0) return { success: false, error: "No checkboxes found." };
+      els.forEach(el => {
+        el.checked = checked;
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      return { success: true, result: `${checked ? 'Checked' : 'Unchecked'} ${els.length} checkboxes.` };
+    }
+
+    if (action === "select_radio") {
+      let els = [];
+      if (element_id !== undefined && element_id !== -1 && window.__owlynn_dom_map) {
+        const el = window.__owlynn_dom_map.get(element_id);
+        if (el) els = [el];
+      } else if (selector) {
+        els = Array.from(document.querySelectorAll(selector));
+      }
+      if (els.length === 0) return { success: false, error: "No radio button found." };
+      els.forEach(el => {
+        el.checked = true;
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      return { success: true, result: `Selected ${els.length} radio buttons.` };
+    }
+
+    if (action === "type_into_sequence") {
+      // Type into multiple fields sequentially with Tab between
+      const texts = args.texts || [];
+      if (!element_ids || element_ids.length === 0) return { success: false, error: "element_ids required for type_into_sequence." };
+      if (texts.length === 0) return { success: false, error: "texts array required for type_into_sequence." };
+
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+      const nativeTextAreaValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+
+      let typed = 0;
+      for (let i = 0; i < element_ids.length; i++) {
+        const el = window.__owlynn_dom_map.get(element_ids[i]);
+        if (!el) continue;
+        const t = texts[i] || texts[texts.length - 1] || "";
+
+        el.focus();
+        if (el.tagName.toLowerCase() === 'textarea' && nativeTextAreaValueSetter) {
+          nativeTextAreaValueSetter.call(el, t);
+        } else if (nativeInputValueSetter) {
+          nativeInputValueSetter.call(el, t);
+        } else {
+          el.value = t;
+        }
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        typed++;
+
+        // Press Tab between fields (not after last)
+        if (i < element_ids.length - 1) {
+          el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', code: 'Tab', keyCode: 9, bubbles: true }));
+          el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Tab', code: 'Tab', keyCode: 9, bubbles: true }));
+        }
+      }
+      return { success: true, result: `Typed into ${typed} fields with Tab between.` };
+    }
+
+    // ── Element Resolution ───────────────────────────────────────────────
+
     let els = [];
     if (element_ids && element_ids.length > 0 && window.__owlynn_dom_map) {
       element_ids.forEach(id => {
