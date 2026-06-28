@@ -12,7 +12,23 @@ audience: agent
 
 ## Overview
 
-Project status tracker. Last updated: 2026-06-28 — Study mode hardening & features complete; quiz, flashcards, notes, analytics.
+Project status tracker. Last updated: 2026-06-28 — Browser extension hardening complete; security, navigation, batch selection, Moodle.
+
+## Recent Changes (2026-06-28 — Browser Extension)
+
+| Change | Impact | Doc |
+|--------|--------|-----|
+| **XSS Fix** | Replaced `innerHTML` with `textContent`/DOM APIs in `content_ui.js`. All WS-sourced values sanitized. | [`changes/browser-extension-hardening/CHANGELOG.md`](changes/browser-extension-hardening/CHANGELOG.md) |
+| **WS Token Auth** | Token exchange authentication. Backend generates token on startup, extension fetches and sends on connect. | [`changes/browser-extension-hardening/CHANGELOG.md`](changes/browser-extension-hardening/CHANGELOG.md) |
+| **Cookie Consent** | Toast confirmation before returning cookies. Per-session cache. | [`changes/browser-extension-hardening/CHANGELOG.md`](changes/browser-extension-hardening/CHANGELOG.md) |
+| **CSP in Manifest** | Content Security Policy added to `manifest.json`. | [`changes/browser-extension-hardening/CHANGELOG.md`](changes/browser-extension-hardening/CHANGELOG.md) |
+| **Popup URL Config** | Backend URL field in popup UI. Stored in `chrome.storage.local`. | [`changes/browser-extension-hardening/CHANGELOG.md`](changes/browser-extension-hardening/CHANGELOG.md) |
+| **DOM Tree Size Cap** | `MAX_ELEMENTS=500`, `MAX_CHARS=100000` in `buildDomTree.js`. | [`changes/browser-extension-hardening/CHANGELOG.md`](changes/browser-extension-hardening/CHANGELOG.md) |
+| **Rate Limiting** | `MAX_QUEUE_SIZE=10`, `MIN_COMMAND_INTERVAL_MS=100`. | [`changes/browser-extension-hardening/CHANGELOG.md`](changes/browser-extension-hardening/CHANGELOG.md) |
+| **Navigation Actions** | 5 new actions: `wait_for_navigation`, `scroll_to_element`, `select_option`, `submit_form`, `focus`. | [`changes/browser-extension-hardening/CHANGELOG.md`](changes/browser-extension-hardening/CHANGELOG.md) |
+| **Batch Selection** | 3 new actions: `select_checkboxes`, `select_radio`, `type_into_sequence`. | [`changes/browser-extension-hardening/CHANGELOG.md`](changes/browser-extension-hardening/CHANGELOG.md) |
+| **Moodle Extractions** | 6 new extractions: grades, sections, assignments, files, quiz nav, user profile. | [`changes/browser-extension-hardening/CHANGELOG.md`](changes/browser-extension-hardening/CHANGELOG.md) |
+| **Service Worker Keepalive** | `chrome.alarms` with 0.5min period. | [`changes/browser-extension-hardening/CHANGELOG.md`](changes/browser-extension-hardening/CHANGELOG.md) |
 
 ## Recent Changes (2026-06-28 — Study Mode)
 

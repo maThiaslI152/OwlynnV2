@@ -151,4 +151,4 @@ When generating cache keys for chat histories or context gatekeepers (e.g., in `
 
 ## Last updated
 
-2026-06-28 — Added mode system (Normal/Study/Pentest), study suite (16 tools, 6 skills), file viewer, mode persistence per-project, pentest model benchmark (Gemma 4 12B Coder Q4 winner).
+2026-06-28 — Added mode system (Normal/Study/Pentest), study suite (16 tools, 6 skills), file viewer, mode persistence per-project, pentest model benchmark (Gemma 4 12B Coder Q4 winner), browser extension hardening (XSS fix, WS auth, cookie consent, 5 navigation actions, 3 batch selection actions, 6 Moodle extractions).

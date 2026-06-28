@@ -668,6 +668,130 @@ audience: agent
 
 **Files Changed:** `scripts/bench_pentest_models.py`
 
+---
+
+## BUG-33 [HIGH] [FIXED]: XSS via innerHTML in Browser Extension
+
+**Symptom:** `content_ui.js` sets `innerHTML` from WebSocket messages, allowing potential script injection if backend is compromised.
+
+**Root Cause:** `showUI()` function at line 42 sets `textContainer.innerHTML = messageHtml`. Status values (`action`, `target`, `value`) are interpolated directly into HTML without sanitization.
+
+**Fix Applied:**
+1. Replaced `innerHTML` with `textContent` for all WS-sourced values
+2. Added `sanitize()` function that uses DOM API to escape HTML
+3. Status updates now use `buildStatusHtml()` with DOM APIs instead of string interpolation
+
+**Verification:**
+- All status updates use `textContent` instead of `innerHTML`
+- No raw HTML insertion from WS messages
+
+**Files Changed:** `browser-extension/content_ui.js`
+
+---
+
+## BUG-34 [MEDIUM] [FIXED]: No WS Authentication in Browser Extension
+
+**Symptom:** Any local process can connect to `ws://127.0.0.1:8000/api/browser_extension/ws` and issue browser commands.
+
+**Root Cause:** No authentication on WebSocket endpoint. Backend accepts all connections without validation.
+
+**Fix Applied:**
+1. Backend generates token on startup → writes to `~/.owlynn/browser_extension_token`
+2. Added `GET /api/browser_extension/token` endpoint (CORS restricted to extension origin)
+3. WS handler validates auth token as first message
+4. Extension fetches token on connect, sends `{type: "auth", token: "..."}`
+5. Re-fetches token on reconnect (may have changed if backend restarted)
+
+**Verification:**
+- Test `test_extension_websocket_lifecycle` passes with auth token
+- Invalid tokens rejected with close code 4001
+
+**Files Changed:** `browser-extension/background.js`, `src/api/routes/browser_extension.py`
+
+---
+
+## BUG-35 [LOW] [FIXED]: `.lower` Typo in Google Scraper
+
+**Symptom:** `content_google.js` line 32 uses `.lower` instead of `.toLowerCase()`, causing dead code.
+
+**Root Cause:** JavaScript doesn't have `.lower` property — it should be `.toLowerCase()`.
+
+**Fix Applied:** Changed `.lower` to `.toLowerCase()`
+
+**Files Changed:** `browser-extension/content_google.js`
+
+---
+
+## BUG-36 [MEDIUM] [FIXED]: Unconsented Cookie Extraction
+
+**Symptom:** Backend can request cookies for any domain without user approval.
+
+**Root Cause:** `handleGetCookiesRequest` returns cookies immediately without consent check.
+
+**Fix Applied:**
+1. Added cookie consent cache (per-session only, cleared on extension restart)
+2. Shows `confirm()` dialog asking user to approve cookie access
+3. Caches approval per domain for session duration
+
+**Files Changed:** `browser-extension/background.js`
+
+---
+
+## BUG-37 [MEDIUM] [FIXED]: DOM Tree Size Unbounded
+
+**Symptom:** `buildDomTree.js` has no size limit, potentially causing memory issues on large pages.
+
+**Root Cause:** No cap on number of elements or output size.
+
+**Fix Applied:**
+1. Added `MAX_ELEMENTS = 500` constant
+2. Added `MAX_CHARS = 100000` (100KB) limit
+3. Returns `{truncated: true}` when limits exceeded
+
+**Files Changed:** `browser-extension/buildDomTree.js`
+
+---
+
+## BUG-38 [MEDIUM] [FIXED]: Study Quiz Grading Too Lenient
+
+**Symptom:** Substring matching allows `"a"` to match any answer containing "a".
+
+**Root Cause:** `quiz_session_answer` uses `expected in given or given in expected` substring check.
+
+**Fix Applied:**
+1. Added `_normalize_answer()` function (lowercase, strip punctuation, collapse whitespace)
+2. Added `_word_boundary_match()` function (checks all expected words present as whole words)
+3. MCQ questions use exact index match
+
+**Files Changed:** `src/tools/study_tools.py`
+
+---
+
+## BUG-39 [LOW] [FIXED]: Flashcard Rating Race Condition
+
+**Symptom:** Rating always targets first due card, which may be wrong card if user takes time.
+
+**Root Cause:** No card ID tracking — rating always uses `due_cards[0]`.
+
+**Fix Applied:**
+1. Added `card_id: uuid.uuid4().hex[:12]` to each card on creation
+2. `flashcard_review` now accepts `card_id` parameter
+3. Rating uses `card_id` to find correct card
+
+**Files Changed:** `src/tools/study_tools.py`
+
+---
+
+## BUG-40 [LOW] [FIXED]: Dashboard Bug — chat_count Always 0
+
+**Symptom:** `study_dashboard` returns `chat_count: 0` for all courses.
+
+**Root Cause:** `c.get("chats")` references field that doesn't exist in course metadata.
+
+**Fix Applied:** Removed `chat_count` from dashboard response.
+
+**Files Changed:** `src/api/routes/study.py`
+
 ## Test Results
 
 - **Backend pytest (BUG-1, BUG-4):** `tests/test_bugfix_persona_leak.py`, `tests/test_bugfix_chat_title.py`
@@ -675,6 +799,8 @@ audience: agent
 - **BUG-9..12:** verified by code review and/or targeted tests; BUG-12 also live network CI
 - **BUG-17..29:** identified from local-frontier-eval & notebook loops — fixes verified with unit tests (`tests/test_recursion_limit.py`, `tests/test_notebook_timeout.py`, `tests/test_word_extraction.py`) and local-frontier-eval pipeline runs (2026-06-20).
 - **BUG-30..32:** identified and fixed during pentest infrastructure work (2026-06-28).
+- **BUG-33..37:** identified and fixed during browser extension hardening (2026-06-28).
+- **BUG-38..40:** identified and fixed during study mode hardening (2026-06-28).
 
 ## Related
 
@@ -685,7 +811,8 @@ audience: agent
 - [`docs/evaluations/local-frontier-eval-2026-06-20.md`](evaluations/local-frontier-eval-2026-06-20.md) — eval run confirming fixes for BUG-25..29.
 - [`docs/changes/stirlingpdf-oom-fix/CHANGELOG.md`](changes/stirlingpdf-oom-fix/CHANGELOG.md) — StirlingPDF OOM fix details
 - [`docs/changes/pentest-infrastructure/CHANGELOG.md`](changes/pentest-infrastructure/CHANGELOG.md) — Pentest infrastructure details
+- [`docs/changes/browser-extension-hardening/CHANGELOG.md`](changes/browser-extension-hardening/CHANGELOG.md) — Browser extension hardening details
 
 ## Last updated
 
-2026-06-28 — BUG-30..32 fixed: StirlingPDF OOM crash loop, GGUF model loading when SSD not mounted, Qwen3.5 thinking mode empty content.
+2026-06-28 — BUG-33..40 fixed: XSS in extension, WS auth, cookie consent, DOM tree size, quiz grading, flashcard race condition, dashboard bug.
