@@ -76,6 +76,10 @@ Cloud APIs (DeepSeek, OpenAI, etc.) refuse security/pentest content. Pentest mod
 - Accessor: `ConfigLoader.get_pentest_model_name()`
 - Pentest mode forces `scenario_id="pentest"` and `response_style="concise"`
 - Router returns `complex-default` (not `complex-cloud`) for pentest
+- **Pentest model**: Gemma 4 12B Coder Q4 (`gemma-4-12b-coder-fable5-composer2.5-v1@q4_k_m`)
+  - Winner of pentest benchmark (84.1% overall, 41 tok/s)
+  - Benchmark: `scripts/bench_pentest_models.py`
+  - Results: `docs/evaluations/pentest-model-benchmark-2026-06-28.md`
 
 ### Pentest Infrastructure (Kali VM)
 
@@ -147,4 +151,4 @@ When generating cache keys for chat histories or context gatekeepers (e.g., in `
 
 ## Last updated
 
-2026-06-28 — Added mode system (Normal/Study/Pentest), study suite (16 tools, 6 skills), file viewer, mode persistence per-project.
+2026-06-28 — Added mode system (Normal/Study/Pentest), study suite (16 tools, 6 skills), file viewer, mode persistence per-project, pentest model benchmark (Gemma 4 12B Coder Q4 winner).
