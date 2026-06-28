@@ -1,7 +1,7 @@
 ---
 status: active
 category: planning
-last_updated: 2026-06-26
+last_updated: 2026-06-28
 owner: ai-agent
 audience: human
 ---
@@ -58,3 +58,43 @@ While the major known bugs are squashed, the project's `STATUS.md` outlines seve
 8. **Cloud Fallback + Privacy Anonymization**
    - **Why:** We currently rely on best-effort redaction and a hashed cloud `user` fingerprint. 
    - **Action:** Implement a full Named Entity Recognition (NER) pipeline and build a preview UI, giving users manual control over exactly what PII is redacted before it hits the cloud.
+
+## 🟢 P4: Study & Pentest Enhancements
+
+9. **NLP Quiz Grading**
+   - **Why:** Current substring matching is too simplistic for open-ended answers. Students get partial credit for mentioning keywords but miss nuance.
+   - **Action:** Implement NLP-based grading using the LLM to evaluate answers for correctness, completeness, and understanding.
+
+10. **Flashcard Import/Export**
+    - **Why:** Users want to import existing flashcard decks from Anki or CSV files, and export their decks for use in other tools.
+    - **Action:** Add Anki (.apkg) and CSV import/export to `flashcard_deck_create` and `flashcard_review` tools.
+
+11. **Pentest Screen Assist Live Panel**
+    - **Why:** Users want to see real-time Kali SSH terminal output in the right panel instead of using the `capture_kali_terminal` tool.
+    - **Action:** Implement a live terminal preview component that streams tmux pane output from the Kali VM.
+
+12. **Speculative Decoding**
+    - **Why:** LM Studio supports speculative decoding with MTP draft models, which can significantly speed up inference.
+    - **Status:** Blocked on LM Studio fixing MTP draft model segfault. Monitor for updates.
+
+13. **Course-Project Linking**
+    - **Why:** Users want course files (syllabus, notes, readings) to automatically sync with the workspace project.
+    - **Action:** Implement auto-sync when `course_register` is called with `linked_files`, and manual sync via `course_workspace_create`.
+
+14. **Study Analytics Dashboard**
+    - **Why:** Users want to see charts for study time, mastery trends, and exam countdowns.
+    - **Action:** Add visualization components to the study progress panel.
+
+## ⚫ P5: Blocked / Low Priority
+
+15. **Additional Pentest Models**
+    - **Why:** Current benchmark only evaluated 3 Gemma 12B models. Other models (Qwen3.5 9B, Gemma 4 26B A4B) were skipped due to thinking mode issues or VRAM constraints.
+    - **Status:** Blocked on LM Studio fixing GGUF loading when external SSD is mounted. Monitor for updates.
+
+16. **Cloud Pentest Proxy**
+    - **Why:** Some pentest queries (e.g., CVE lookups, exploit databases) don't contain sensitive target information and could be sent to cloud APIs for faster responses.
+    - **Action:** Implement a proxy that anonymizes non-sensitive pentest queries and routes them to cloud APIs.
+
+17. **Wireless Pentest Tools**
+    - **Why:** Users want WiFi scanning, deauthentication, and handshake capture tools for wireless pentesting.
+    - **Action:** Add tools for `aircrack-ng`, `airodump-ng`, `aireplay-ng` with proper safety checks and HITL approval.

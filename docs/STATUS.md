@@ -1,7 +1,7 @@
 ---
 status: active
 category: standards
-last_updated: 2026-06-27
+last_updated: 2026-06-28
 owner: ai-agent
 audience: agent
 ---
@@ -12,7 +12,20 @@ audience: agent
 
 ## Overview
 
-Project status tracker. Last updated: 2026-06-26 — F6.1 memory recall fix (100/100); eval score 93.7% (1780/1900).
+Project status tracker. Last updated: 2026-06-28 — Pentest infrastructure complete; mode system, benchmark, routing, Lima VM.
+
+## Recent Changes (2026-06-28)
+
+| Change | Impact | Doc |
+|--------|--------|-----|
+| **Pentest Model Benchmark** | Evaluated 3 Gemma 12B models. Winner: Gemma 4 12B Coder Q4 (84.1%, 41 tok/s). | [`evaluations/pentest-model-benchmark-2026-06-28.md`](evaluations/pentest-model-benchmark-2026-06-28.md) |
+| **Pentest Force-Local Routing** | Pentest mode now skips cloud entirely and uses dedicated pentest model. Router returns `complex-default` for pentest scenario. | [`changes/pentest-infrastructure/CHANGELOG.md`](changes/pentest-infrastructure/CHANGELOG.md) |
+| **Lima Kali VM** | Kali Linux VM operational via Lima (Apple Virtualization Framework). SSH 127.0.0.1:60022, pentest-vm hostname, 2GB RAM. Auto-start/stop on mode change. | [`features/PENTEST.md`](features/PENTEST.md) |
+| **Mode System** | Three modes (Normal/Study/Pentest) with persisted per-project mode, mode switcher, conditional sidebar/right panel sections. | [`features/MODES.md`](features/MODES.md) |
+| **Study Suite** | 16 study tools, 7 skills. Course registration, flashcards, quizzes, study notes, streak tracking, weak area detection. | [`features/STUDY.md`](features/STUDY.md) |
+| **StirlingPDF OOM Fix** | Fixed crash loop: increased memory limit from 1GB to 2GB, cleaned up 10 stale heap dumps (2.5GB). | [`changes/stirlingpdf-oom-fix/CHANGELOG.md`](changes/stirlingpdf-oom-fix/CHANGELOG.md) |
+| **File Viewer** | `FileViewerModal.tsx` — PDF iframe, image preview, text viewer, download fallback. Knowledge panel click-to-preview. | — |
+| **Documentation** | Created MODES.md, STUDY.md, PENTEST.md, updated TOOLS.md, AGENTS.md, BUG-TRACKER.md, FUTURE_WORKS.md. | — |
 
 ## Recent Changes (2026-06-26)
 

@@ -1,7 +1,7 @@
 ---
 status: active
 category: reference
-last_updated: 2026-06-11
+last_updated: 2026-06-28
 owner: ai-agent
 audience: agent
 ---
@@ -12,8 +12,8 @@ audience: agent
 
 ```yaml
 manifest:
-  version: 9
-  generated: "2026-06-26T20:00:00Z"
+  version: 10
+  generated: "2026-06-28T22:45:00Z"
   files:
     - path: AGENTS.md
       status: active
@@ -155,6 +155,26 @@ manifest:
       category: architecture
       audience: agent
       last_updated: 2026-06-11
+    - path: docs/features/MODES.md
+      status: active
+      category: reference
+      audience: agent
+      last_updated: 2026-06-28
+    - path: docs/features/PENTEST.md
+      status: active
+      category: reference
+      audience: agent
+      last_updated: 2026-06-28
+    - path: docs/features/STUDY.md
+      status: active
+      category: reference
+      audience: agent
+      last_updated: 2026-06-28
+    - path: docs/features/TOOLS.md
+      status: active
+      category: reference
+      audience: agent
+      last_updated: 2026-06-28
     - path: docs/architecture/DEEPSEEK_V4_INTEGRATION.md
       status: active
       category: architecture
@@ -495,6 +515,16 @@ manifest:
       category: reference
       audience: archive
       last_updated: 2026-06-10
+    - path: docs/changes/pentest-infrastructure/CHANGELOG.md
+      status: active
+      category: changelog
+      audience: agent
+      last_updated: 2026-06-28
+    - path: docs/changes/stirlingpdf-oom-fix/CHANGELOG.md
+      status: active
+      category: changelog
+      audience: agent
+      last_updated: 2026-06-28
     - path: docs/debugging/2026-05-27_session_summary.md
       status: active
       category: debugging
@@ -610,6 +640,16 @@ manifest:
       category: evaluation
       audience: agent
       last_updated: 2026-06-26
+    - path: docs/evaluations/pentest-model-benchmark-2026-06-28.md
+      status: active
+      category: evaluation
+      audience: agent
+      last_updated: 2026-06-28
+    - path: docs/evaluations/pentest-model-eval-plan.md
+      status: active
+      category: evaluation
+      audience: agent
+      last_updated: 2026-06-28
     - path: docs/evaluations/long-conversation-2026-06-04.md
       status: active
       category: reference
