@@ -50,6 +50,35 @@
         font-size: 11px;
         min-height: 16px;
       }
+      .config-section {
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid #e5e7eb;
+      }
+      .config-section label {
+        display: block;
+        font-size: 11px;
+        color: #666;
+        margin-bottom: 4px;
+      }
+      .config-section input {
+        width: 100%;
+        padding: 6px 8px;
+        border: 1px solid #d1d5db;
+        border-radius: 4px;
+        font-size: 12px;
+        box-sizing: border-box;
+      }
+      .config-section input:focus {
+        outline: none;
+        border-color: #2563eb;
+      }
+      .config-section .save-btn {
+        margin-top: 6px;
+        background: #059669;
+        font-size: 12px;
+        padding: 6px 10px;
+      }
     </style>
   </head>
   <body>
@@ -60,8 +89,16 @@
     <div id="feedback" class="feedback"></div>
     <p class="hint">
       Sends the active tab URL, title, and text to Owlynn’s composer. You can also
-      right-click any page and choose “Send page to Owlynn”.
+      right-click any page and choose "Send page to Owlynn".
     </p>
+    
+    <div class="config-section">
+      <label for="backendUrl">Owlynn Backend URL</label>
+      <input type="text" id="backendUrl" placeholder="http://127.0.0.1:5173" />
+      <button id="saveUrlBtn" class="save-btn">Save URL</button>
+      <div id="urlFeedback" class="feedback"></div>
+    </div>
+
     <script src="popup.js"></script>
   </body>
 </html>

@@ -2,6 +2,9 @@ const statusEl = document.getElementById("status");
 const sendBtn = document.getElementById("sendBtn");
 const liveBtn = document.getElementById("liveBtn");
 const feedbackEl = document.getElementById("feedback");
+const backendUrlInput = document.getElementById("backendUrl");
+const saveUrlBtn = document.getElementById("saveUrlBtn");
+const urlFeedbackEl = document.getElementById("urlFeedback");
 
 function setConnected(connected) {
   if (connected) {
@@ -58,6 +61,37 @@ liveBtn.addEventListener("click", () => {
   chrome.storage.local.set({ liveTracking: isLive });
   updateLiveBtn();
   chrome.runtime.sendMessage({ type: "LIVE_TRACKING_TOGGLED", isLive });
+});
+
+// ── Backend URL Configuration ──────────────────────────────────────────
+const DEFAULT_BACKEND_URL = "http://127.0.0.1:5173";
+
+// Load saved URL
+chrome.storage.local.get(["owlynnBackendUrl"], (result) => {
+  backendUrlInput.value = result.owlynnBackendUrl || DEFAULT_BACKEND_URL;
+});
+
+saveUrlBtn.addEventListener("click", () => {
+  const url = backendUrlInput.value.trim() || DEFAULT_BACKEND_URL;
+  
+  // Validate URL
+  try {
+    new URL(url);
+  } catch {
+    urlFeedbackEl.textContent = "Invalid URL format.";
+    urlFeedbackEl.style.color = "#c33";
+    setTimeout(() => { urlFeedbackEl.textContent = ""; }, 3000);
+    return;
+  }
+
+  chrome.storage.local.set({ owlynnBackendUrl: url }, () => {
+    urlFeedbackEl.textContent = "URL saved! Reload extension to apply.";
+    urlFeedbackEl.style.color = "#0a7";
+    setTimeout(() => { urlFeedbackEl.textContent = ""; }, 3000);
+    
+    // Notify background script to update
+    chrome.runtime.sendMessage({ type: "BACKEND_URL_UPDATED", url });
+  });
 });
 
 refreshStatus();

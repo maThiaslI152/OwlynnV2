@@ -29,7 +29,7 @@
     const hits = [];
 
     // Check for CAPTCHA/bot block pages
-    const bodyText = document.body?.innerText?.lower || document.body?.innerText || "";
+    const bodyText = document.body?.innerText?.toLowerCase() || document.body?.innerText || "";
     const isCaptcha = bodyText.includes("unusual traffic") || 
                       bodyText.includes("verify you are human") || 
                       bodyText.includes("captcha") || 

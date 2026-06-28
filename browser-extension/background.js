@@ -1,5 +1,6 @@
 let socket = null;
 let keepAliveInterval = null;
+let authToken = null; // Cached auth token
 const activeSearches = new Map();
 const RESTRICTED_PREFIXES = ["chrome://", "chrome-extension://", "brave://", "edge://", "about:"];
 
@@ -9,10 +10,50 @@ const SENSITIVE_DOMAINS = [
   "localhost", "127.0.0.1"
 ];
 
+// ── Rate Limiting ──────────────────────────────────────────────────────
+const MAX_QUEUE_SIZE = 10;
+const MIN_COMMAND_INTERVAL_MS = 100;
+let commandQueue = [];
+let lastCommandTime = 0;
+
+// ── Service Worker Keepalive ───────────────────────────────────────────
+// MV3 service workers can be terminated. Use chrome.alarms to prevent this.
+chrome.alarms.create('owlynn-keepalive', { periodInMinutes: 0.5 });
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'owlynn-keepalive') {
+    // Just keeping the service worker alive
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type: "ping" }));
+    }
+  }
+});
+
 let isLiveTracking = false;
 chrome.storage.local.get(["liveTracking"], (res) => {
   isLiveTracking = !!res.liveTracking;
 });
+
+// ── Auth token management ──────────────────────────────────────────────
+async function fetchAuthToken() {
+  try {
+    const resp = await fetch("http://127.0.0.1:8000/api/browser_extension/token");
+    if (resp.ok) {
+      const data = await resp.json();
+      authToken = data.token;
+      chrome.storage.local.set({ owlynnAuthToken: authToken });
+      return authToken;
+    }
+  } catch (err) {
+    console.error("[Owlynn Bridge] Failed to fetch auth token:", err);
+  }
+  // Fallback: try from storage
+  return new Promise((resolve) => {
+    chrome.storage.local.get(["owlynnAuthToken"], (result) => {
+      authToken = result.owlynnAuthToken || null;
+      resolve(authToken);
+    });
+  });
+}
 
 function isSecureUrl(url) {
   if (isRestrictedUrl(url)) return false;
@@ -27,12 +68,28 @@ function isSecureUrl(url) {
   }
 }
 
-function connect() {
+async function connect() {
   console.log("[Owlynn Bridge] Connecting to backend WebSocket...");
+  
+  // Fetch auth token first
+  if (!authToken) {
+    await fetchAuthToken();
+  }
+
   socket = new WebSocket("ws://127.0.0.1:8000/api/browser_extension/ws");
 
   socket.onopen = () => {
-    console.log("[Owlynn Bridge] WebSocket connected.");
+    console.log("[Owlynn Bridge] WebSocket connected. Sending auth...");
+    
+    // Send auth token as first message
+    if (authToken) {
+      socket.send(JSON.stringify({ type: "auth", token: authToken }));
+    } else {
+      console.error("[Owlynn Bridge] No auth token available!");
+      socket.close();
+      return;
+    }
+
     chrome.runtime.sendMessage({ type: "CONNECTION_STATUS", connected: true }).catch(() => {});
     
     // Send a ping every 20 seconds to keep the Service Worker and WebSocket alive
@@ -89,6 +146,8 @@ function connect() {
     console.log("[Owlynn Bridge] WebSocket disconnected. Retrying in 3s...", e.reason);
     if (keepAliveInterval) clearInterval(keepAliveInterval);
     socket = null;
+    // Re-fetch token on reconnect (may have changed if backend restarted)
+    authToken = null;
     chrome.runtime.sendMessage({ type: "CONNECTION_STATUS", connected: false }).catch(() => {});
     setTimeout(connect, 3000);
   };
@@ -242,9 +301,35 @@ async function handleCaptureScreenshotRequest(requestId) {
 }
 
 async function handleBrowserActionRequest(requestId, payload) {
+  // Rate limiting
+  if (commandQueue.length >= MAX_QUEUE_SIZE) {
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ 
+        id: requestId, 
+        error: `Queue full (${commandQueue.length}/${MAX_QUEUE_SIZE}). Try again later.` 
+      }));
+    }
+    return;
+  }
+  
+  // Throttle commands to same tab
+  const now = Date.now();
+  const timeSinceLastCommand = now - lastCommandTime;
+  if (timeSinceLastCommand < MIN_COMMAND_INTERVAL_MS) {
+    await new Promise(r => setTimeout(r, MIN_COMMAND_INTERVAL_MS - timeSinceLastCommand));
+  }
+  
+  commandQueue.push(requestId);
+  lastCommandTime = Date.now();
+  
   try {
     const tab = await getActiveTab();
     if (!tab) throw new Error("No active tab.");
+    
+    // Tab ID pinning: verify the tab is still active
+    if (payload.tabId && payload.tabId !== tab.id) {
+      throw new Error(`Tab mismatch: expected ${payload.tabId}, got ${tab.id}`);
+    }
     
     // Broadcast status to UI
     chrome.tabs.sendMessage(tab.id, {
@@ -341,6 +426,7 @@ async function handleBrowserActionRequest(requestId, payload) {
       socket.send(JSON.stringify({ id: requestId, error: String(err) }));
     }
   } finally {
+    commandQueue = commandQueue.filter(id => id !== requestId);
     const tab = await getActiveTab();
     if (tab) {
       chrome.tabs.sendMessage(tab.id, { type: 'OWLYNN_STATUS_UPDATE', data: { action: 'Thinking...', duration: 15000 } }).catch(() => {});
@@ -374,10 +460,44 @@ async function handleFetchUrlsRequest(requestId, urls) {
     }
   }
 }
+// Cookie consent cache (per-session only, cleared on extension restart)
+const cookieConsentCache = new Map();
+
 async function handleGetCookiesRequest(requestId, targetUrl) {
   try {
     const urlObj = new URL(targetUrl);
     const domain = urlObj.hostname;
+    
+    // Check if user already approved this domain this session
+    if (!cookieConsentCache.has(domain)) {
+      // Show toast notification asking for consent
+      const tab = await getActiveTab();
+      if (tab) {
+        const approved = await new Promise((resolve) => {
+          chrome.tabs.sendMessage(tab.id, {
+            type: 'OWLYNN_COOKIE_CONSENT',
+            domain: domain,
+            callbackId: requestId
+          }, (response) => {
+            resolve(response && response.approved);
+          });
+          
+          // Timeout after 10 seconds
+          setTimeout(() => resolve(false), 10000);
+        });
+        
+        if (!approved) {
+          if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ id: requestId, error: "User denied cookie access for " + domain }));
+          }
+          return;
+        }
+        
+        // Cache approval for this session
+        cookieConsentCache.set(domain, true);
+      }
+    }
+    
     const cookies = await chrome.cookies.getAll({ domain });
     const cookieString = cookies.map(c => `${c.name}=${c.value}`).join('; ');
     if (socket && socket.readyState === WebSocket.OPEN) {
@@ -573,4 +693,4 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   }
 });
 
-connect();
+connect().catch(err => console.error("[Owlynn Bridge] Initial connection failed:", err));

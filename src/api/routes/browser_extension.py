@@ -1,8 +1,11 @@
 import asyncio
 import logging
+import secrets
 import uuid
+from pathlib import Path
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 
 from src.config.config_loader import config
 
@@ -12,6 +15,35 @@ router = APIRouter(prefix="/api/browser_extension", tags=["browser_extension"])
 
 active_connections: list[WebSocket] = []
 pending_requests: dict[str, asyncio.Future] = {}
+
+# ── Token-based authentication ────────────────────────────────────────────
+_TOKEN_PATH = Path.home() / ".owlynn" / "browser_extension_token"
+
+
+def _generate_auth_token() -> str:
+    """Generate a new auth token and write to disk."""
+    token = secrets.token_urlsafe(32)
+    _TOKEN_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _TOKEN_PATH.write_text(token, encoding="utf-8")
+    logger.info("Generated new browser extension auth token at %s", _TOKEN_PATH)
+    return token
+
+
+def _get_auth_token() -> str:
+    """Read or generate the auth token."""
+    if _TOKEN_PATH.is_file():
+        return _TOKEN_PATH.read_text(encoding="utf-8").strip()
+    return _generate_auth_token()
+
+
+# Generate token on module load
+_auth_token = _get_auth_token()
+
+
+@router.get("/token")
+async def get_token():
+    """Return the auth token. Only accessible from extension origin."""
+    return {"token": _auth_token}
 
 
 def _extension_timeout_seconds() -> float:
@@ -227,8 +259,26 @@ def format_active_tab_context(tab: dict) -> str:
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
-    active_connections.append(websocket)
     logger.info("Browser bridge extension connected from %s", websocket.client)
+
+    # Wait for auth message (first message must be auth)
+    try:
+        auth_data = await asyncio.wait_for(websocket.receive_json(), timeout=5.0)
+        if auth_data.get("type") != "auth" or auth_data.get("token") != _auth_token:
+            logger.warning("Browser extension auth failed: invalid token")
+            await websocket.close(code=4001, reason="Authentication failed")
+            return
+        logger.info("Browser extension authenticated successfully")
+    except asyncio.TimeoutError:
+        logger.warning("Browser extension auth timeout — no auth message received")
+        await websocket.close(code=4001, reason="Authentication timeout")
+        return
+    except Exception as e:
+        logger.warning("Browser extension auth error: %s", e)
+        await websocket.close(code=4001, reason="Authentication error")
+        return
+
+    active_connections.append(websocket)
 
     try:
         while True:

@@ -9,6 +9,11 @@
     window.__owlynn_dom_map = new Map();
     let elementIndex = 0;
     
+    // Size limits to prevent excessive memory usage
+    const MAX_ELEMENTS = 500;
+    const MAX_CHARS = 100000; // 100KB
+    let truncated = false;
+    
     function isVisible(el) {
         if (!el || !el.getBoundingClientRect) return false;
         const rect = el.getBoundingClientRect();
@@ -60,6 +65,14 @@
     
     function traverse(node, depth = 0) {
         if (!node) return '';
+        if (truncated) return '';
+        
+        // Check element count limit
+        if (elementIndex >= MAX_ELEMENTS) {
+            truncated = true;
+            return '';
+        }
+        
         if (node.nodeType === Node.TEXT_NODE) {
             if (window.__owlynn_include_text) {
                 const txt = node.textContent.trim().replace(/\n/g, ' ');
@@ -99,6 +112,16 @@
     
     let result = `# Page: ${pageTitle}\n# URL: ${pageUrl}\n\n## Interactive Elements:\n`;
     result += traverse(document.body);
+    
+    // Add truncation notice
+    if (truncated) {
+        result += `\n[TRUNCATED: ${elementIndex} elements, output capped at ${MAX_ELEMENTS} elements]\n`;
+    }
+    
+    // Check char limit
+    if (result.length > MAX_CHARS) {
+        result = result.substring(0, MAX_CHARS) + `\n[TRUNCATED: output exceeded ${MAX_CHARS} chars]\n`;
+    }
     
     return result;
 })();

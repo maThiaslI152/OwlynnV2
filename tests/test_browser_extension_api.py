@@ -11,6 +11,7 @@ from src.api.routes.browser_extension import (
     format_active_tab_context,
     is_extension_connected,
     pending_requests,
+    _auth_token,
 )
 from src.api.server import app
 from src.tools.web_tools import web_search
@@ -24,6 +25,12 @@ def test_extension_websocket_lifecycle():
     assert not is_extension_connected()
 
     with client.websocket_connect("/api/browser_extension/ws") as ws:
+        # Send auth token as first message
+        ws.send_json({"type": "auth", "token": _auth_token})
+        # Give the server time to process the auth message
+        import time
+
+        time.sleep(0.1)
         assert is_extension_connected()
 
     assert not is_extension_connected()
