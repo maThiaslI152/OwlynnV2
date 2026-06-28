@@ -178,7 +178,6 @@ async def study_dashboard():
             {
                 "course_id": cid,
                 "project_id": c.get("project_id"),
-                "chat_count": len(c.get("chats") or []),
                 "knowledge_files": len(c.get("linked_files") or []),
                 "flashcard_decks": len(c_decks),
                 "total_cards": total_cards,
@@ -210,3 +209,179 @@ async def study_dashboard():
             "last_active": last_active or None,
         },
     }
+
+
+@router.get("/api/study/analytics")
+async def study_analytics():
+    """Study analytics: score trends, topic mastery, study time by course."""
+    progress = _read_json(_PROGRESS_PATH, {"sessions": [], "streaks": {}})
+    sessions = progress.get("sessions") or []
+    streaks = progress.get("streaks") or {}
+
+    # Score trend by course (last 30 sessions)
+    score_by_course: dict[str, list[dict]] = {}
+    for s in sessions[-30:]:
+        cid = s.get("course_id", "unknown")
+        if s.get("score") is not None:
+            score_by_course.setdefault(cid, []).append(
+                {
+                    "date": s.get("started_at", "")[:10],
+                    "score": round(s.get("score", 0) * 100),
+                }
+            )
+
+    # Topic mastery from Mem0 (if available)
+    topics: list[dict] = []
+    try:
+        from src.memory.educator import detect_weak_topics
+        from src.memory.long_term import memory
+
+        if memory:
+            weak = detect_weak_topics(memory, "owner")
+            for w in weak[:10]:
+                topics.append(
+                    {
+                        "topic": w.get("topic", "Unknown"),
+                        "mastery": round((1 - w.get("weakness", 0.5)) * 100),
+                        "struggles": w.get("struggles", 0),
+                    }
+                )
+    except Exception:
+        pass
+
+    # Study time by course
+    time_by_course: dict[str, int] = {}
+    for s in sessions:
+        cid = s.get("course_id", "unknown")
+        time_by_course[cid] = time_by_course.get(cid, 0) + s.get("duration_minutes", 0)
+
+    # Sessions by type
+    sessions_by_type: dict[str, int] = {}
+    for s in sessions:
+        stype = s.get("type", "unknown")
+        sessions_by_type[stype] = sessions_by_type.get(stype, 0) + 1
+
+    return {
+        "status": "ok",
+        "score_trend": score_by_course,
+        "topic_mastery": topics,
+        "study_time": {
+            "total_minutes": sum(time_by_course.values()),
+            "by_course": time_by_course,
+        },
+        "sessions_by_type": sessions_by_type,
+        "total_sessions": len(sessions),
+    }
+
+
+_NOTES_DIR = DATA_DIR / "study_notes"
+
+
+@router.get("/api/study/notes")
+async def list_notes(q: str = "", course_id: str = ""):
+    """List/search study notes."""
+    if not _NOTES_DIR.is_dir():
+        return {"status": "ok", "notes": []}
+
+    notes = []
+    q_lower = q.lower().strip()
+    q_words = set(q_lower.split()) if q_lower else set()
+
+    for path in sorted(_NOTES_DIR.glob("*.json")):
+        note = _read_json(path, {})
+        if course_id and note.get("course_id") != course_id.strip():
+            continue
+
+        if q_lower:
+            blob = f"{note.get('chapter', '')} {note.get('content', '')} {' '.join(note.get('tags') or [])}".lower()
+            if q_lower not in blob:
+                # Fuzzy match
+                blob_words = set(blob.split())
+                matched = len(q_words.intersection(blob_words))
+                if matched / len(q_words) < 0.3 if q_words else True:
+                    continue
+
+        notes.append(
+            {
+                "id": note.get("id"),
+                "course_id": note.get("course_id"),
+                "chapter": note.get("chapter"),
+                "content": note.get("content", "")[:500],
+                "tags": note.get("tags") or [],
+                "created_at": note.get("created_at"),
+            }
+        )
+
+    return {"status": "ok", "notes": notes[:20]}
+
+
+@router.get("/api/flashcards/{deck_id}")
+async def get_deck(deck_id: str):
+    """Get a specific flashcard deck with all cards."""
+    if not _FLASHCARDS_DIR.is_dir():
+        return {"status": "error", "message": "No flashcard decks found."}
+    deck_path = _FLASHCARDS_DIR / f"{deck_id.strip()}.json"
+    if not deck_path.is_file():
+        return {"status": "error", "message": f"Deck '{deck_id}' not found."}
+    deck = _read_json(deck_path, {})
+    return {"status": "ok", "deck": deck}
+
+
+@router.put("/api/flashcards/{deck_id}")
+async def update_deck(deck_id: str, body: dict):
+    """Update a flashcard deck (add/edit/remove cards)."""
+    if not _FLASHCARDS_DIR.is_dir():
+        return {"status": "error", "message": "No flashcard decks found."}
+    deck_path = _FLASHCARDS_DIR / f"{deck_id.strip()}.json"
+    if not deck_path.is_file():
+        return {"status": "error", "message": f"Deck '{deck_id}' not found."}
+
+    deck = _read_json(deck_path, {})
+    cards = deck.get("cards") or []
+    action = body.get("action")
+
+    if action == "update_card":
+        card_id = body.get("card_id")
+        for card in cards:
+            if card.get("card_id") == card_id:
+                if "front" in body:
+                    card["front"] = body["front"]
+                if "back" in body:
+                    card["back"] = body["back"]
+                break
+        else:
+            return {"status": "error", "message": f"Card '{card_id}' not found."}
+    elif action == "delete_card":
+        card_id = body.get("card_id")
+        cards = [c for c in cards if c.get("card_id") != card_id]
+        deck["cards"] = cards
+    elif action == "add_card":
+        import uuid
+        from datetime import datetime
+
+        cards.append(
+            {
+                "card_id": uuid.uuid4().hex[:12],
+                "front": body.get("front", ""),
+                "back": body.get("back", ""),
+                "interval": 0.0,
+                "ease": 2.5,
+                "due": datetime.now().isoformat(timespec="seconds"),
+            }
+        )
+        deck["cards"] = cards
+    else:
+        return {"status": "error", "message": f"Unknown action: {action}"}
+
+    _write_json(deck_path, deck)
+    return {"status": "ok", "deck": deck}
+
+
+def _write_json(path: Path, data) -> None:
+    """Write JSON to file atomically."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    tmp.replace(path)

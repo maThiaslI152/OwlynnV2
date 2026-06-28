@@ -12,6 +12,7 @@ import { ToolActivityCard } from './ToolActivityCard'
 import { ModeSwitcher } from './ModeSwitcher'
 import { PentestScopePanel } from './PentestScopePanel'
 import { StudyProgressPanel } from './StudyProgressPanel'
+import { StudyNotesSearch } from './StudyNotesSearch'
 import type { InterruptChoice } from '../state/useAppStore'
 import type { ConversationItem, ConversationToolActivity, ConversationHitlPrompt, ConversationChartEmbed } from '../appEventHandlers'
 import { useAppStore } from '../state/useAppStore'
@@ -748,6 +749,15 @@ export function AppShell({
               <summary>Study Progress</summary>
               <div className="sidebar-accordion-content">
                 <StudyProgressPanel />
+              </div>
+            </details>
+          )}
+
+          {activeMode === 'study' && (
+            <details className="sidebar-accordion" open>
+              <summary>Study Notes</summary>
+              <div className="sidebar-accordion-content">
+                <StudyNotesSearch />
               </div>
             </details>
           )}

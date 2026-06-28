@@ -43,6 +43,71 @@ def _session_key() -> str:
     return f"graph_{tid}" if tid else "default"
 
 
+def _normalize_answer(s: str) -> str:
+    """Lowercase, strip punctuation, collapse whitespace for answer comparison."""
+    return re.sub(r"[^\w\s]", "", s.lower()).strip()
+
+
+def _word_boundary_match(expected: str, given: str) -> bool:
+    """Check if expected answer appears as whole words in given answer."""
+    exp = _normalize_answer(expected)
+    giv = _normalize_answer(given)
+    if not exp:
+        return False
+    # Exact match after normalization
+    if exp == giv:
+        return True
+    # All expected words present in given
+    exp_words = set(exp.split())
+    giv_words = set(giv.split())
+    return exp_words.issubset(giv_words)
+
+
+def _auto_log_session(
+    course_id: str,
+    session_type: str,
+    topic: str = "",
+    duration_minutes: int = 0,
+    cards_reviewed: int = 0,
+    score: float = 0.0,
+) -> None:
+    """Auto-log a study session to progress tracking."""
+    _PROGRESS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    progress = _read_json(_PROGRESS_PATH, {"sessions": [], "streaks": {}})
+    now = datetime.now()
+    today = now.date().isoformat()
+
+    # Add session
+    progress.setdefault("sessions", []).append(
+        {
+            "course_id": course_id,
+            "type": session_type,
+            "topic": topic,
+            "started_at": now.isoformat(timespec="seconds"),
+            "duration_minutes": duration_minutes,
+            "cards_reviewed": cards_reviewed,
+            "score": score,
+        }
+    )
+
+    # Update streak
+    streaks = progress.setdefault("streaks", {})
+    streak = streaks.setdefault(
+        course_id, {"current": 0, "longest": 0, "last_active_date": None}
+    )
+    last = streak.get("last_active_date")
+    if last == today:
+        pass  # Already active today
+    elif last == (now - timedelta(days=1)).date().isoformat():
+        streak["current"] = streak.get("current", 0) + 1
+    else:
+        streak["current"] = 1
+    streak["longest"] = max(streak.get("longest", 0), streak["current"])
+    streak["last_active_date"] = today
+
+    _write_json(_PROGRESS_PATH, progress)
+
+
 def sm2_next_interval(
     *,
     interval: float,
@@ -325,24 +390,67 @@ def study_note_save(
 
 @tool
 def study_note_search(query: str, course_id: str = "") -> str:
-    """Search study notes by keyword (optional course filter)."""
+    """
+    Search study notes by keyword or semantic similarity.
+
+    Args:
+        query: Search query.
+        course_id: Optional course filter.
+    """
     if not _NOTES_DIR.is_dir():
         return "No study notes yet."
     q = query.lower().strip()
-    hits: list[str] = []
+    q_words = set(q.split())
+    hits: list[tuple[float, str]] = []
     for path in sorted(_NOTES_DIR.glob("*.json")):
         note = _read_json(path, {})
         if course_id and note.get("course_id") != course_id.strip():
             continue
         blob = f"{note.get('chapter', '')} {note.get('content', '')} {' '.join(note.get('tags') or [])}".lower()
-        if not q or q in blob:
+
+        if not q:
+            score = 1.0
+        elif q in blob:
+            # Exact substring match — high score
+            score = 1.0
+        else:
+            # Fuzzy: count matching words
+            blob_words = set(blob.split())
+            matched = len(q_words.intersection(blob_words))
+            score = matched / len(q_words) if q_words else 0.0
+
+        if score > 0.3:
             hits.append(
-                f"  [{note.get('id')}] {note.get('course_id')} / {note.get('chapter')}: "
-                f"{str(note.get('content', ''))[:120]}..."
+                (
+                    score,
+                    f"  [{note.get('id')}] {note.get('course_id')} / {note.get('chapter')}: "
+                    f"{str(note.get('content', ''))[:120]}...",
+                )
             )
+
     if not hits:
         return "No matching study notes."
-    return "Study notes:\n" + "\n".join(hits[:15])
+
+    # Sort by score descending
+    hits.sort(key=lambda x: x[0], reverse=True)
+    return "Study notes:\n" + "\n".join(h[1] for h in hits[:15])
+
+
+@tool
+def study_note_delete(note_id: str) -> str:
+    """
+    Delete a study note by ID.
+
+    Args:
+        note_id: Note ID to delete.
+    """
+    if not _NOTES_DIR.is_dir():
+        return "No study notes yet."
+    path = _NOTES_DIR / f"{note_id.strip()}.json"
+    if not path.is_file():
+        return f"Error: note '{note_id}' not found."
+    path.unlink()
+    return f"✅ Study note '{note_id}' deleted."
 
 
 @tool
@@ -382,6 +490,7 @@ def flashcard_deck_create(
             continue
         cards.append(
             {
+                "card_id": uuid.uuid4().hex[:12],
                 "front": front,
                 "back": back,
                 "interval": 0.0,
@@ -403,13 +512,110 @@ def flashcard_deck_create(
 
 
 @tool
-def flashcard_review(deck_id: str = "", rating: str = "") -> str:
+def flashcard_import(deck_name: str, file_path: str, course_id: str = "") -> str:
+    """
+    Import flashcards from a CSV file.
+
+    Supported CSV formats (auto-detected by header):
+    - front,back
+    - term,definition
+    - question,answer
+
+    Args:
+        deck_name: Human-readable deck name.
+        file_path: Path to CSV file.
+        course_id: Optional course association.
+    """
+    import csv
+
+    path = Path(file_path)
+    if not path.is_file():
+        return f"Error: file not found — {file_path}"
+
+    try:
+        with open(path, newline="", encoding="utf-8-sig") as f:
+            reader = csv.DictReader(f)
+            # Auto-detect column names
+            headers = reader.fieldnames or []
+            front_col = None
+            back_col = None
+            for h in headers:
+                h_lower = h.strip().lower()
+                if h_lower in ("front", "term", "question"):
+                    front_col = h
+                elif h_lower in ("back", "definition", "answer"):
+                    back_col = h
+            if not front_col or not back_col:
+                return f"Error: could not detect columns. Expected headers like 'front,back' or 'term,definition'. Found: {headers}"
+
+            cards_json = []
+            for row in reader:
+                front = str(row.get(front_col, "")).strip()
+                back = str(row.get(back_col, "")).strip()
+                if front and back:
+                    cards_json.append({"front": front, "back": back})
+
+    except Exception as e:
+        return f"Error reading CSV: {e}"
+
+    if not cards_json:
+        return "Error: no valid cards found in CSV."
+
+    return flashcard_deck_create(
+        deck_name=deck_name,
+        cards_json=json.dumps(cards_json, ensure_ascii=False),
+        course_id=course_id,
+    )
+
+
+@tool
+def flashcard_export(deck_id: str, format: str = "csv") -> str:
+    """
+    Export a flashcard deck to CSV format.
+
+    Args:
+        deck_id: Deck id to export.
+        format: Export format (currently only 'csv' supported).
+    """
+    import csv
+    import io
+
+    _FLASHCARDS_DIR.mkdir(parents=True, exist_ok=True)
+    deck_path = _FLASHCARDS_DIR / f"{deck_id.strip()}.json"
+    if not deck_path.is_file():
+        return f"Error: deck '{deck_id}' not found."
+
+    deck = _read_json(deck_path, {})
+    cards = deck.get("cards") or []
+    if not cards:
+        return f"Error: deck '{deck_id}' is empty."
+
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=["front", "back"])
+    writer.writeheader()
+    for card in cards:
+        writer.writerow({"front": card.get("front", ""), "back": card.get("back", "")})
+
+    csv_content = output.getvalue()
+
+    # Save to exports directory
+    export_dir = DATA_DIR / "flashcard_exports"
+    export_dir.mkdir(parents=True, exist_ok=True)
+    export_path = export_dir / f"{deck_id}.csv"
+    export_path.write_text(csv_content, encoding="utf-8")
+
+    return f"✅ Exported {len(cards)} cards to {export_path}"
+
+
+@tool
+def flashcard_review(deck_id: str = "", rating: str = "", card_id: str = "") -> str:
     """
     Present the next due flashcard or rate the previous card.
 
     Args:
         deck_id: Deck id (required on first call in a review).
         rating: After answering — again, hard, good, or easy. Omit to draw next card.
+        card_id: Card id to rate (required when rating, prevents race condition).
     """
     _FLASHCARDS_DIR.mkdir(parents=True, exist_ok=True)
     decks = list(_FLASHCARDS_DIR.glob("*.json"))
@@ -431,9 +637,15 @@ def flashcard_review(deck_id: str = "", rating: str = "") -> str:
 
     now = datetime.now()
     if rating:
-        # Rate last shown card (first due card before reorder)
-        due_cards = sorted(cards, key=lambda c: c.get("due") or "")
-        card = due_cards[0]
+        # Rate specific card by card_id (prevents race condition)
+        if card_id:
+            card = next((c for c in cards if c.get("card_id") == card_id), None)
+            if not card:
+                return f"Error: card_id '{card_id}' not found in deck."
+        else:
+            # Fallback: first due card (legacy behavior)
+            due_cards = sorted(cards, key=lambda c: c.get("due") or "")
+            card = due_cards[0]
         interval, ease = sm2_next_interval(
             interval=float(card.get("interval") or 0),
             ease=float(card.get("ease") or 2.5),
@@ -445,6 +657,13 @@ def flashcard_review(deck_id: str = "", rating: str = "") -> str:
             timespec="seconds"
         )
         _write_json(deck_path, deck)
+        # Auto-log flashcard review session
+        _auto_log_session(
+            course_id=deck.get("course_id", ""),
+            session_type="flashcard_review",
+            topic=deck.get("name", ""),
+            cards_reviewed=1,
+        )
         return f"Rated '{rating}'. Next review in {interval:.1f} day(s). Call again without rating for next card."
 
     due = [
@@ -456,19 +675,23 @@ def flashcard_review(deck_id: str = "", rating: str = "") -> str:
     card = sorted(pool, key=lambda c: c.get("due") or "")[0]
     return (
         f"Deck: {deck.get('name')} ({deck_path.stem})\n"
+        f"Card ID: {card.get('card_id', 'unknown')}\n"
         f"FRONT: {card.get('front')}\n"
-        f"(Answer aloud, then call flashcard_review with deck_id='{deck_path.stem}' and rating=again|hard|good|easy)"
+        f"(Answer aloud, then call flashcard_review with deck_id='{deck_path.stem}', card_id='{card.get('card_id', '')}' and rating=again|hard|good|easy)"
     )
 
 
 @tool
-def quiz_session_start(topic: str, questions_json: str) -> str:
+def quiz_session_start(topic: str, questions_json: str, course_id: str = "") -> str:
     """
     Start a multi-question quiz session in the current chat thread.
 
     Args:
         topic: Quiz topic label.
-        questions_json: JSON array of {"q": "...", "a": "..."} objects.
+        questions_json: JSON array of question objects.
+            Free-text: {"q": "...", "a": "..."}
+            MCQ: {"q": "...", "options": ["A", "B", "C"], "correctIndex": 0, "explanation": "..."}
+        course_id: Optional course association for context-aware grading.
     """
     try:
         questions = json.loads(questions_json)
@@ -477,18 +700,33 @@ def quiz_session_start(topic: str, questions_json: str) -> str:
     if not isinstance(questions, list) or not questions:
         return "Error: questions_json must be a non-empty array."
 
+    # Normalize questions — add type field
+    for q in questions:
+        if "options" in q and "correctIndex" in q:
+            q["type"] = "mcq"
+        else:
+            q["type"] = "free_text"
+
     _QUIZ_DIR.mkdir(parents=True, exist_ok=True)
     session = {
         "topic": topic.strip(),
+        "course_id": course_id.strip(),
         "questions": questions,
         "index": 0,
         "score": 0,
+        "answers": [],  # Track per-question answers
         "started_at": datetime.now().isoformat(timespec="seconds"),
     }
     path = _QUIZ_DIR / f"{_session_key()}.json"
     _write_json(path, session)
     first = questions[0]
-    return f"Quiz started: {topic}\nQ1/{len(questions)}: {first.get('q', first)}"
+    q_text = first.get("q", first)
+    if first.get("type") == "mcq":
+        options = "\n".join(
+            f"  {chr(65 + i)}. {opt}" for i, opt in enumerate(first.get("options", []))
+        )
+        return f"Quiz started: {topic}\nQ1/{len(questions)}: {q_text}\n{options}"
+    return f"Quiz started: {topic}\nQ1/{len(questions)}: {q_text}"
 
 
 @tool
@@ -497,7 +735,7 @@ def quiz_session_answer(answer: str) -> str:
     Submit an answer for the current quiz question.
 
     Args:
-        answer: User's answer text.
+        answer: User's answer text (for free-text) or letter/number (for MCQ).
     """
     path = _QUIZ_DIR / f"{_session_key()}.json"
     session = _read_json(path, None)
@@ -510,20 +748,104 @@ def quiz_session_answer(answer: str) -> str:
         return f"Quiz complete. Score: {session.get('score', 0)}/{len(questions)}"
 
     q = questions[idx]
-    expected = str(q.get("a", "")).strip().lower()
-    given = answer.strip().lower()
-    correct = expected and (expected in given or given in expected)
+    q_type = q.get("type", "free_text")
+    given = answer.strip()
+
+    # Grade based on question type
+    if q_type == "mcq":
+        # MCQ: exact match on correctIndex
+        try:
+            # Accept letter (A, B, C) or number (0, 1, 2)
+            if given.isalpha():
+                selected = ord(given.upper()) - 65
+            else:
+                selected = int(given)
+            correct = selected == q.get("correctIndex")
+        except (ValueError, IndexError):
+            correct = False
+        feedback = "✓ Correct" if correct else "✗ Incorrect"
+        if not correct and q.get("explanation"):
+            feedback += f" — {q['explanation']}"
+    else:
+        # Free-text: word-boundary matching (fast, no LLM call)
+        expected = str(q.get("a", "")).strip()
+        correct = _word_boundary_match(expected, given)
+        feedback = "✓ Correct" if correct else f"✗ Expected: {q.get('a', '')}"
+
     if correct:
         session["score"] = int(session.get("score") or 0) + 1
+
+    # Track answer
+    session.setdefault("answers", []).append(
+        {
+            "question_idx": idx,
+            "given": given,
+            "correct": correct,
+        }
+    )
 
     session["index"] = idx + 1
     _write_json(path, session)
 
-    feedback = "✓ Correct" if correct else f"✗ Expected: {q.get('a', '')}"
     if session["index"] >= len(questions):
+        # Auto-log quiz session on completion
+        score_pct = session["score"] / len(questions) if len(questions) > 0 else 0
+        _auto_log_session(
+            course_id=session.get("course_id", session.get("topic", "")),
+            session_type="quiz",
+            topic=session.get("topic", ""),
+            score=score_pct,
+        )
         return f"{feedback}\n\nQuiz finished — {session['score']}/{len(questions)} correct."
     next_q = questions[session["index"]]
-    return f"{feedback}\n\nQ{session['index'] + 1}/{len(questions)}: {next_q.get('q', next_q)}"
+    q_text = next_q.get("q", next_q)
+    if next_q.get("type") == "mcq":
+        options = "\n".join(
+            f"  {chr(65 + i)}. {opt}" for i, opt in enumerate(next_q.get("options", []))
+        )
+        return f"{feedback}\n\nQ{session['index'] + 1}/{len(questions)}: {q_text}\n{options}"
+    return f"{feedback}\n\nQ{session['index'] + 1}/{len(questions)}: {q_text}"
+
+
+@tool
+def quiz_session_results() -> str:
+    """
+    Get results of the current or most recent quiz session.
+
+    Returns per-question breakdown with scores.
+    """
+    path = _QUIZ_DIR / f"{_session_key()}.json"
+    session = _read_json(path, None)
+    if not session:
+        return "No quiz session found."
+
+    questions = session.get("questions") or []
+    answers = session.get("answers") or []
+    score = session.get("score", 0)
+    total = len(questions)
+
+    lines = [f"Quiz: {session.get('topic', 'Unknown')}"]
+    lines.append(
+        f"Score: {score}/{total} ({score / total * 100:.0f}%)"
+        if total > 0
+        else "Score: 0/0"
+    )
+    lines.append("")
+
+    for i, q in enumerate(questions):
+        a = next((x for x in answers if x.get("question_idx") == i), None)
+        status = "✓" if a and a.get("correct") else "✗" if a else "—"
+        lines.append(f"  {status} Q{i + 1}: {q.get('q', '?')[:80]}")
+        if a and not a.get("correct"):
+            lines.append(f"      Given: {a.get('given', '?')}")
+            if q.get("type") == "mcq":
+                lines.append(
+                    f"      Correct: {q.get('options', [])[q.get('correctIndex', 0)]}"
+                )
+            else:
+                lines.append(f"      Expected: {q.get('a', '?')}")
+
+    return "\n".join(lines)
 
 
 @tool

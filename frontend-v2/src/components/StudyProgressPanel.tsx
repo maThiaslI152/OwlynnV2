@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import toast from 'react-hot-toast'
 
 interface StudyDashboard {
   study_streak?: { current: number; longest: number; last_active: string | null }
@@ -22,7 +23,10 @@ export function StudyProgressPanel() {
       .then((d) => {
         if (d?.status === 'ok') setData(d)
       })
-      .catch(() => {})
+      .catch((err) => {
+        toast.error('Failed to load study progress')
+        console.error('[StudyProgressPanel]', err)
+      })
   }, [])
 
   if (!data) return null
