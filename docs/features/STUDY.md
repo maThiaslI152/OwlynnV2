@@ -2,7 +2,7 @@
 
 Owlynn's study system provides course tracking, flashcards with spaced repetition, quizzes, study notes, and progress analytics.
 
-## Tools (16)
+## Tools (20)
 
 All tools defined in `src/tools/study_tools.py`.
 
@@ -21,22 +21,26 @@ All tools defined in `src/tools/study_tools.py`.
 | Tool | Parameters | Purpose |
 |------|-----------|---------|
 | `study_note_save` | `course_id, chapter, content, tags?` | Save structured study note. Stored as `data/study_notes/{id}.json`. |
-| `study_note_search` | `query, course_id?` | Search notes by keyword (brute-force substring match). |
+| `study_note_search` | `query, course_id?` | Search notes by keyword with fuzzy matching (word overlap). |
+| `study_note_delete` | `note_id` | Delete a study note by ID. |
 
 ### Flashcards
 
 | Tool | Parameters | Purpose |
 |------|-----------|---------|
 | `flashcard_deck_create` | `deck_name, cards_json, course_id?` | Create deck from JSON `[{"front": "...", "back": "..."}]`. SM-2 init. |
-| `flashcard_review` | `deck_id?, rating?` | Two-phase: draw next due card, then rate (again/hard/good/easy). |
+| `flashcard_review` | `deck_id?, rating?, card_id?` | Two-phase: draw next due card, then rate (again/hard/good/easy). Uses `card_id` to prevent race condition. |
 | `flashcard_suggest` | `course_id, chapter, count?` | Generate flashcard content from course files. Returns JSON pairs. |
+| `flashcard_import` | `deck_name, file_path, course_id?` | Import flashcards from CSV (supports `front,back` / `term,definition` / `question,answer` headers). |
+| `flashcard_export` | `deck_id, format?` | Export deck to CSV format. Saves to `data/flashcard_exports/`. |
 
 ### Quizzes
 
 | Tool | Parameters | Purpose |
 |------|-----------|---------|
-| `quiz_session_start` | `topic, questions_json` | Start quiz session. Questions: `[{"q": "...", "a": "..."}]`. |
-| `quiz_session_answer` | `answer` | Submit answer. Substring grading. Advances to next question. |
+| `quiz_session_start` | `topic, questions_json, course_id?` | Start quiz session. Supports MCQ (`options` + `correctIndex`) and free-text (`a`). |
+| `quiz_session_answer` | `answer` | Submit answer. MCQ: exact index match. Free-text: word-boundary matching. |
+| `quiz_session_results` | — | Get per-question breakdown with scores. |
 
 ### Progress & Memory
 
@@ -46,6 +50,37 @@ All tools defined in `src/tools/study_tools.py`.
 | `study_weak_areas` | `course_id?` | Detect weak topics from misconception history in Mem0. |
 | `mastery_record` | `kind, topic, detail?` | Save mastery/misconception atom to Mem0 long-term memory. |
 | `export_study_sheet` | `title, content, format?` | Export study guide as PDF or DOCX. |
+
+## Quiz System
+
+### Question Types
+
+**MCQ (Multiple Choice):**
+```json
+{
+  "q": "What does DNS stand for?",
+  "options": ["Domain Name System", "Data Network Service", "Digital Node Standard"],
+  "correctIndex": 0,
+  "explanation": "DNS translates domain names to IP addresses."
+}
+```
+
+**Free-text:**
+```json
+{
+  "q": "What is the purpose of a firewall?",
+  "a": "A firewall monitors and controls network traffic based on security rules."
+}
+```
+
+### Grading
+
+- **MCQ:** Exact match on `correctIndex` (accepts letter A/B/C or number 0/1/2)
+- **Free-text:** Word-boundary matching (normalizes punctuation, checks all expected words present)
+
+### Auto-logging
+
+Quiz sessions are automatically logged to `data/study_progress.json` when completed.
 
 ## SM-2 Spaced Repetition
 
@@ -58,15 +93,20 @@ Initial ease: **2.5**, minimum: **1.3**
 | Good | interval × ease | — |
 | Easy | interval × ease × 1.3 | +0.15 |
 
+### Card ID Tracking
+
+Each flashcard has a unique `card_id` (12-char hex). When rating, pass `card_id` to prevent rating the wrong card (race condition fix).
+
 ## Data Files
 
 | File | Schema |
 |------|--------|
 | `data/courses.json` | `[{course_id, name, exam_date, linked_files, project_id, updated_at}]` |
 | `data/study_notes/{id}.json` | `{id, course_id, chapter, content, tags, created_at}` |
-| `data/flashcards/{deck_id}.json` | `{deck_id, name, course_id, cards: [{front, back, interval, ease, due}], created_at}` |
-| `data/quiz_sessions/{key}.json` | `{topic, questions, index, score, started_at}` |
+| `data/flashcards/{deck_id}.json` | `{deck_id, name, course_id, cards: [{card_id, front, back, interval, ease, due}], created_at}` |
+| `data/quiz_sessions/{key}.json` | `{topic, course_id, questions, index, score, answers, started_at}` |
 | `data/study_progress.json` | `{sessions: [...], streaks: {course_id: {current, longest, last_active_date}}}` |
+| `data/flashcard_exports/{deck_id}.csv` | CSV export of flashcard decks |
 
 ## Skills (6)
 
@@ -81,12 +121,26 @@ Initial ease: **2.5**, minimum: **1.3**
 
 ## API Endpoints
 
-| Endpoint | Purpose |
-|----------|---------|
-| `GET /api/courses` | List all courses |
-| `GET /api/flashcards` | List all flashcard decks with due counts |
-| `GET /api/study/dashboard` | Aggregate: courses, exams, todos, decks, progress, streaks |
-| `GET /api/study/exam-countdown` | Upcoming exams with study progress |
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/courses` | GET | List all courses |
+| `/api/flashcards` | GET | List all flashcard decks with due counts |
+| `/api/flashcards/{deck_id}` | GET | Get specific deck with all cards |
+| `/api/flashcards/{deck_id}` | PUT | Update deck (add/edit/remove cards) |
+| `/api/study/dashboard` | GET | Aggregate: courses, exams, todos, decks, progress, streaks |
+| `/api/study/exam-countdown` | GET | Upcoming exams with study progress |
+| `/api/study/analytics` | GET | Score trends, topic mastery, session types |
+| `/api/study/notes` | GET | List/search study notes |
+
+## Frontend Components
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| `StudyPanel` | `frontend-v2/src/components/StudyPanel.tsx` | Main study panel (courses, exams, todos, decks) |
+| `StudyProgressPanel` | `frontend-v2/src/components/StudyProgressPanel.tsx` | Streak, per-course progress, exams |
+| `StudyAnalytics` | `frontend-v2/src/components/StudyAnalytics.tsx` | Score trend chart, topic mastery radar |
+| `StudyNotesSearch` | `frontend-v2/src/components/StudyNotesSearch.tsx` | Searchable notes in sidebar |
+| `DeckBrowserModal` | `frontend-v2/src/components/DeckBrowserModal.tsx` | Modal deck editor (view/edit/delete cards) |
 
 ## Memory Integration
 
@@ -112,3 +166,14 @@ This gives each course:
 - Per-project memory isolation (`project:<id>` in Mem0)
 - Knowledge files indexed for semantic search
 - Dedicated chat list for subject organization
+
+## Session Cleanup
+
+Stale quiz sessions (older than 30 days) can be archived:
+
+```bash
+python scripts/cleanup_study_sessions.py --dry-run  # Preview
+python scripts/cleanup_study_sessions.py             # Execute
+```
+
+Archives to `data/quiz_archive/`.

@@ -12,8 +12,8 @@ audience: agent
 
 ```yaml
 manifest:
-  version: 10
-  generated: "2026-06-28T22:45:00Z"
+  version: 11
+  generated: "2026-06-29T01:30:00Z"
   files:
     - path: AGENTS.md
       status: active

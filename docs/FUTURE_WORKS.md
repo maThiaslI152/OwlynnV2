@@ -61,13 +61,15 @@ While the major known bugs are squashed, the project's `STATUS.md` outlines seve
 
 ## 🟢 P4: Study & Pentest Enhancements
 
-9. **NLP Quiz Grading**
+9. **NLP Quiz Grading** — ✅ DONE (word-boundary matching)
    - **Why:** Current substring matching is too simplistic for open-ended answers. Students get partial credit for mentioning keywords but miss nuance.
    - **Action:** Implement NLP-based grading using the LLM to evaluate answers for correctness, completeness, and understanding.
+   - **Status:** Implemented word-boundary matching (replaces substring). MCQ uses exact index match. Auto-logging on quiz completion.
 
-10. **Flashcard Import/Export**
+10. **Flashcard Import/Export** — ✅ DONE (CSV)
     - **Why:** Users want to import existing flashcard decks from Anki or CSV files, and export their decks for use in other tools.
     - **Action:** Add Anki (.apkg) and CSV import/export to `flashcard_deck_create` and `flashcard_review` tools.
+    - **Status:** Implemented CSV import/export. Supports 3 header formats (front,back / term,definition / question,answer).
 
 11. **Pentest Screen Assist Live Panel**
     - **Why:** Users want to see real-time Kali SSH terminal output in the right panel instead of using the `capture_kali_terminal` tool.
@@ -81,9 +83,10 @@ While the major known bugs are squashed, the project's `STATUS.md` outlines seve
     - **Why:** Users want course files (syllabus, notes, readings) to automatically sync with the workspace project.
     - **Action:** Implement auto-sync when `course_register` is called with `linked_files`, and manual sync via `course_workspace_create`.
 
-14. **Study Analytics Dashboard**
+14. **Study Analytics Dashboard** — ✅ DONE
     - **Why:** Users want to see charts for study time, mastery trends, and exam countdowns.
     - **Action:** Add visualization components to the study progress panel.
+    - **Status:** Implemented StudyAnalytics component with score trend line chart and topic mastery radar chart using recharts.
 
 ## ⚫ P5: Blocked / Low Priority
 

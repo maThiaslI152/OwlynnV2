@@ -12,9 +12,31 @@ audience: agent
 
 ## Overview
 
-Project status tracker. Last updated: 2026-06-28 — Pentest infrastructure complete; mode system, benchmark, routing, Lima VM.
+Project status tracker. Last updated: 2026-06-28 — Study mode hardening & features complete; quiz, flashcards, notes, analytics.
 
-## Recent Changes (2026-06-28)
+## Recent Changes (2026-06-28 — Study Mode)
+
+| Change | Impact | Doc |
+|--------|--------|-----|
+| **Quiz Grading Fix** | Replaced substring matching with word-boundary matching. Substring was too lenient ("a" matched any answer containing "a"). | [`features/STUDY.md`](features/STUDY.md) |
+| **Unified Quiz System** | MCQ (exact index match) + free-text (word-boundary). `quiz_session_start` now supports both question types. | [`features/STUDY.md`](features/STUDY.md) |
+| **Quiz Session Results** | New `quiz_session_results` tool returns per-question breakdown with scores. | [`features/STUDY.md`](features/STUDY.md) |
+| **Flashcard Card ID** | Each card has unique `card_id` (12-char hex). Rating uses `card_id` to prevent race condition. | [`features/STUDY.md`](features/STUDY.md) |
+| **Flashcard Import/Export** | New `flashcard_import` (CSV) and `flashcard_export` tools. Supports 3 CSV header formats. | [`features/STUDY.md`](features/STUDY.md) |
+| **Study Notes Fuzzy Search** | `study_note_search` now uses fuzzy matching (word overlap, score > 0.3 threshold). | [`features/STUDY.md`](features/STUDY.md) |
+| **Study Notes Delete** | New `study_note_delete` tool. | [`features/STUDY.md`](features/STUDY.md) |
+| **Auto-log Sessions** | Quiz/flashcard completion auto-logs to `data/study_progress.json`. | [`features/STUDY.md`](features/STUDY.md) |
+| **Study Analytics API** | `GET /api/study/analytics` — score trends, topic mastery, session types. | [`features/STUDY.md`](features/STUDY.md) |
+| **Study Notes API** | `GET /api/study/notes` — list/search notes with fuzzy matching. | [`features/STUDY.md`](features/STUDY.md) |
+| **Deck API** | `GET/PUT /api/flashcards/{deck_id}` — get/update deck (add/edit/remove cards). | [`features/STUDY.md`](features/STUDY.md) |
+| **StudyAnalytics Component** | Score trend line chart + topic mastery radar chart using recharts. | [`features/STUDY.md`](features/STUDY.md) |
+| **StudyNotesSearch Component** | Searchable notes in sidebar with expandable content. | [`features/STUDY.md`](features/STUDY.md) |
+| **DeckBrowserModal Component** | Modal deck editor with view/edit/delete cards. | [`features/STUDY.md`](features/STUDY.md) |
+| **Error Handling Fix** | `StudyProgressPanel` now surfaces fetch errors via toast (was silently swallowing). | — |
+| **Dashboard Bug Fix** | Removed `chat_count` from dashboard response (field didn't exist, always returned 0). | — |
+| **Session Cleanup Script** | `scripts/cleanup_study_sessions.py` — archive quiz sessions older than 30 days. | [`features/STUDY.md`](features/STUDY.md) |
+
+## Recent Changes (2026-06-28 — Pentest)
 
 | Change | Impact | Doc |
 |--------|--------|-----|
