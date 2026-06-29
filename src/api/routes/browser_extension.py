@@ -4,7 +4,7 @@ import secrets
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.config.config_loader import config
@@ -41,8 +41,24 @@ _auth_token = _get_auth_token()
 
 
 @router.get("/token")
-async def get_token():
-    """Return the auth token. Only accessible from extension origin."""
+async def get_token(request: Request):
+    """Return the auth token. Only accessible from browser extension origin."""
+    origin = request.headers.get("origin", "")
+    # Allow Chrome/Firefox extension origins and localhost
+    allowed = (
+        origin.startswith("chrome-extension://")
+        or origin.startswith("moz-extension://")
+        or origin.startswith("http://127.0.0.1")
+        or origin.startswith("http://localhost")
+        or origin == ""  # Non-browser clients (curl, etc.)
+    )
+    if not allowed:
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "Token endpoint only accessible from browser extension"},
+        )
     return {"token": _auth_token}
 
 

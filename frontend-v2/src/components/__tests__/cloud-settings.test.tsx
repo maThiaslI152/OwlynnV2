@@ -5,6 +5,11 @@ import { parseCloudUsagePayload } from '../../lib/cloudUsage'
 import { CloudSettingsPanel } from '../CloudSettingsPanel'
 import { CloudUsagePanel } from '../CloudUsagePanel'
 
+vi.mock('../../lib/localRunToken', () => ({
+  getLocalRunToken: vi.fn().mockResolvedValue('test-token'),
+  fetchWithAuth: vi.fn().mockImplementation((url: string, init?: RequestInit) => fetch(url, init)),
+}))
+
 beforeEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true)
 })

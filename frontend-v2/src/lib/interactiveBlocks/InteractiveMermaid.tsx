@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
+import DOMPurify from 'dompurify'
 
 interface Props {
   source: string
@@ -17,7 +18,7 @@ export function InteractiveMermaid({ source }: Props) {
         mermaid.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'strict' })
         const { svg } = await mermaid.render(`owlynn-mmd-${uniqueId}`, source.trim())
         if (!cancelled && containerRef.current) {
-          containerRef.current.innerHTML = svg
+          containerRef.current.innerHTML = DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true } })
           setError(null)
         }
       } catch (err) {

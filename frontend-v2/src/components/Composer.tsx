@@ -8,6 +8,7 @@ import {
 } from '../lib/attachments'
 import { buildPageContextDraft } from '../lib/browserPageContext'
 import { electronBridge } from '../lib/electronBridge'
+import { fetchWithAuth } from '../lib/localRunToken'
 import toast from 'react-hot-toast'
 
 interface Persona {
@@ -70,7 +71,7 @@ export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitl
     let disposed = false
     const fetchPersonas = async () => {
       try {
-        const res = await fetch('/api/personas')
+        const res = await fetchWithAuth('/api/personas')
         if (res.ok) {
           const data = await res.json()
           if (!disposed && Array.isArray(data)) {

@@ -26,6 +26,7 @@ import { isToolPreambleText } from './lib/toolPreamble'
 import type { BrowserPageContext } from './lib/browserPageContext'
 import type { ChatMessage, ServerEvent } from './types/protocol'
 import toast from 'react-hot-toast'
+import { fetchWithAuth } from './lib/localRunToken'
 
 interface ProjectChat {
   id: string
@@ -49,6 +50,25 @@ type TauriEventPayload = ServerEvent
 
 function App() {
   const wsBaseUrl = import.meta.env.VITE_WS_BASE_URL ?? 'ws://127.0.0.1:8000/ws/chat'
+  const [localRunToken, setLocalRunToken] = useState<string>('')
+
+  // Fetch the local run token for WS authentication
+  useEffect(() => {
+    const fetchToken = async () => {
+      try {
+        const resp = await fetch('/api/health')
+        if (!resp.ok) return
+        // Token is validated server-side; we just need to fetch it once
+        // The token is set via a separate endpoint
+        const tokenResp = await fetch('/api/local-run-token')
+        if (tokenResp.ok) {
+          const data = await tokenResp.json()
+          if (data?.token) setLocalRunToken(data.token)
+        }
+      } catch { /* non-critical */ }
+    }
+    void fetchToken()
+  }, [])
   const setConnection = useAppStore((s) => s.setConnectionState)
   const addMessage = useAppStore((s) => s.addMessage)
   const setPendingCorrelationId = useAppStore((s) => s.setPendingCorrelationId)
@@ -113,7 +133,7 @@ function App() {
     loadProjectsAbortRef.current = controller
 
     try {
-      const response = await fetch('/api/projects' + '?_t=' + Date.now(), {
+      const response = await fetchWithAuth('/api/projects' + '?_t=' + Date.now(), {
         signal: controller.signal
       })
       if (!response.ok) return
@@ -243,7 +263,7 @@ function App() {
     let disposed = false
     const loadExecutionPolicy = async () => {
       try {
-        const response = await fetch('/api/unified-settings')
+        const response = await fetchWithAuth('/api/unified-settings')
         if (!response.ok) return
         const payload = (await response.json()) as { execution_policy?: string }
         if (disposed) return
@@ -286,7 +306,7 @@ function App() {
     const controller = new AbortController()
     const loadHistory = async () => {
       try {
-        const response = await fetch(`/api/history/${encodeURIComponent(currentThreadId)}`, {
+        const response = await fetchWithAuth(`/api/history/${encodeURIComponent(currentThreadId)}`, {
           signal: controller.signal
         })
         if (!response.ok) return
@@ -318,7 +338,7 @@ function App() {
       }
     }
 
-    const wsUrl = `${wsBaseUrl}/${encodeURIComponent(currentThreadId)}`
+    const wsUrl = `${wsBaseUrl}/${encodeURIComponent(currentThreadId)}${localRunToken ? `?token=${encodeURIComponent(localRunToken)}` : ''}`
     const wsClient = new WsClient(wsUrl)
     wsClientRef.current = wsClient
     const disconnect = wsClient.connect({
@@ -584,7 +604,7 @@ function App() {
         pendingTimeoutRef.current = null
       }
     }
-  }, [activeProjectId, addMessage, appendStreamChunk, applyBrowserPageContext, currentThreadId, executionPolicy, pushToolExecution, setConnection, setLatestToolExecution, setPendingCorrelationId, setMemoryUpdatedAt, setModelInfo, setContextCompression, setContextBreakdown, setCloudUsage, setCoherenceRetryActive, setCloudFallback, setOperatorNote, setRouterMetadata, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setTtsSpeaking, upsertActionProposal, updateActionProposalStatus, isTauriRuntime, wsBaseUrl])
+  }, [activeProjectId, addMessage, appendStreamChunk, applyBrowserPageContext, currentThreadId, executionPolicy, localRunToken, pushToolExecution, setConnection, setLatestToolExecution, setPendingCorrelationId, setMemoryUpdatedAt, setModelInfo, setContextCompression, setContextBreakdown, setCloudUsage, setCoherenceRetryActive, setCloudFallback, setOperatorNote, setRouterMetadata, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setTtsSpeaking, upsertActionProposal, updateActionProposalStatus, isTauriRuntime, wsBaseUrl])
 
   // Listen for Tauri runtime events (TTS state, screen assist, etc.)
   useEffect(() => {
@@ -842,7 +862,7 @@ function App() {
     const prevMode = useAppStore.getState().activeMode
     setActiveMode(mode)
     // Persist mode to project metadata
-    fetch(`/api/projects/${encodeURIComponent(activeProjectId)}`, {
+    fetchWithAuth(`/api/projects/${encodeURIComponent(activeProjectId)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mode }),
@@ -851,7 +871,7 @@ function App() {
     // Auto-start Kali VM when switching to pentest mode
     if (mode === 'pentest' && prevMode !== 'pentest') {
       setOperatorNote('Starting Kali VM...')
-      fetch('/api/pentest/vm/start', { method: 'POST' })
+      fetchWithAuth('/api/pentest/vm/start', { method: 'POST' })
         .then((r) => r.json())
         .then((d) => {
           if (d.status === 'ok') {
@@ -866,7 +886,7 @@ function App() {
 
     // Auto-stop Kali VM when switching away from pentest mode
     if (prevMode === 'pentest' && mode !== 'pentest') {
-      fetch('/api/pentest/vm/stop', { method: 'POST' })
+      fetchWithAuth('/api/pentest/vm/stop', { method: 'POST' })
         .then(() => { setOperatorNote('Kali VM stopped.') })
         .catch(() => { /* non-critical */ })
     }
@@ -886,7 +906,7 @@ function App() {
   const handleDeleteChat = useCallback(async (chatId: string) => {
     try {
       const url = `/api/projects/${encodeURIComponent(activeProjectId)}/chats/${encodeURIComponent(chatId)}`
-      const response = await fetch(url, {
+      const response = await fetchWithAuth(url, {
         method: 'DELETE',
       })
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
@@ -904,7 +924,7 @@ function App() {
 
   const handleRenameChat = useCallback(async (chatId: string, newName: string) => {
     try {
-      await fetch(`/api/projects/${encodeURIComponent(activeProjectId)}/chats/${encodeURIComponent(chatId)}`, {
+      await fetchWithAuth(`/api/projects/${encodeURIComponent(activeProjectId)}/chats/${encodeURIComponent(chatId)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newName }),
@@ -931,7 +951,7 @@ function App() {
     const trimmedName = projectName.trim()
     if (!trimmedName) return
     try {
-      const response = await fetch(apiUrl('/api/projects'), {
+      const response = await fetchWithAuth(apiUrl('/api/projects'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: trimmedName }),
@@ -955,7 +975,7 @@ function App() {
 
   const handleEditProject = useCallback(async (projectId: string, name: string) => {
     try {
-      await fetch(`/api/projects/${encodeURIComponent(projectId)}`, {
+      await fetchWithAuth(`/api/projects/${encodeURIComponent(projectId)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
@@ -970,7 +990,7 @@ function App() {
   const handleDeleteProject = useCallback(async (projectId: string) => {
     try {
       const url = `/api/projects/${encodeURIComponent(projectId)}`
-      const response = await fetch(url, {
+      const response = await fetchWithAuth(url, {
         method: 'DELETE',
       })
       if (!response.ok) throw new Error(`HTTP ${response.status}`)

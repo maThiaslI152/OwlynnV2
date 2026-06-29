@@ -19,6 +19,11 @@ vi.mock('../../lib/electronBridge', () => ({
   electronAvailable: vi.fn().mockReturnValue(true)
 }))
 
+vi.mock('../../lib/localRunToken', () => ({
+  getLocalRunToken: vi.fn().mockResolvedValue('test-token'),
+  fetchWithAuth: vi.fn().mockImplementation((url: string, init?: RequestInit) => fetch(url, init)),
+}))
+
 
 beforeEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true)

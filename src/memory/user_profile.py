@@ -79,7 +79,6 @@ VALID_FIELDS = {
     "large_llm_model_name": str,
     "cloud_llm_base_url": str,
     "cloud_llm_model_name": str,
-    "deepseek_api_key": str,
     "redis_url": str,
     "lm_studio_fold_system": (bool, type(None)),
     "temperature": (int, float, type(None)),

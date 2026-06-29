@@ -1,6 +1,7 @@
 import { useAppStore, type ExecutionPolicy, type SafeModeLevel } from '../state/useAppStore'
 import { electronBridge as tauriBridge } from '../lib/electronBridge'
 import toast from 'react-hot-toast'
+import { fetchWithAuth } from '../lib/localRunToken'
 
 const SAFE_MODES: SafeModeLevel[] = ['normal', 'safe_readonly', 'safe_confirmed_exec', 'safe_isolated']
 
@@ -30,7 +31,7 @@ export function SafeModePanel() {
     console.warn('[SafeModePanel] Tauri IPC unavailable, falling back to REST API')
     setSafeMode(mode) // optimistic update — prevents visual bounce
     try {
-      const response = await fetch('/api/advanced-settings', {
+        const response = await fetchWithAuth('/api/advanced-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ safe_mode: mode }),
@@ -48,7 +49,7 @@ export function SafeModePanel() {
   const onPolicyChange = (policy: ExecutionPolicy) => {
     void (async () => {
       try {
-        const response = await fetch('/api/advanced-settings', {
+      const response = await fetchWithAuth('/api/advanced-settings', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ execution_policy: policy }),

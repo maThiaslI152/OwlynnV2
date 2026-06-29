@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { getLocalRunToken } from '../localRunToken'
+import { fetchWithAuth } from '../localRunToken'
 import type { CellPayload } from './types'
 
 interface Props {
@@ -27,12 +27,10 @@ export function InteractiveCell({ payload, projectId, threadId }: Props) {
     setRunning(true)
     setError(null)
     try {
-      const token = await getLocalRunToken()
-      const res = await fetch('/api/notebook/run', {
+      const res = await fetchWithAuth('/api/notebook/run', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Owlynn-Run-Token': token,
         },
         body: JSON.stringify({
           code: payload.code,

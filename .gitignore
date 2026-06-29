@@ -42,6 +42,11 @@ workspace/
 .env.*.local
 secrets/
 *.secret
+*.pem
+*.key
+*.cert
+*.p12
+*.pfx
 
 # Test caches
 .pytest_cache/

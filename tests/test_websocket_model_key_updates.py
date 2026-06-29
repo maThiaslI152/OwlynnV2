@@ -66,12 +66,18 @@ def _collect_ws_events(ws, max_events=40):
     return events
 
 
+def _ws_url(client, thread_id):
+    """Build WS URL with auth token."""
+    token = getattr(client.app.state, "local_run_token", "test-token")
+    return f"/ws/chat/{thread_id}?token={token}"
+
+
 def test_websocket_uses_updated_model_key_after_profile_post(client):
     new_model = "qwen2.5-1.5b-instruct"
     resp = client.post("/api/profile", json={"small_llm_model_name": new_model})
     assert resp.status_code == 200
 
-    with client.websocket_connect("/ws/chat/test-model-update") as ws:
+    with client.websocket_connect(_ws_url(client, "test-model-update")) as ws:
         ws.send_text(
             json.dumps(
                 {"message": "hello", "mode": "tools_on", "web_search_enabled": False}
@@ -90,7 +96,7 @@ def test_websocket_run_does_not_emit_legacy_model_key_after_update(client):
     resp = client.post("/api/profile", json={"small_llm_model_name": new_model})
     assert resp.status_code == 200
 
-    with client.websocket_connect("/ws/chat/test-model-no-stale") as ws:
+    with client.websocket_connect(_ws_url(client, "test-model-no-stale")) as ws:
         ws.send_text(
             json.dumps(
                 {

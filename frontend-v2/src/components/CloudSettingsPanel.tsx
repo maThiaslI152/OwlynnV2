@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAppStore } from '../state/useAppStore'
 import toast from 'react-hot-toast'
+import { fetchWithAuth } from '../lib/localRunToken'
 
 type CloudModelTier = 'flash' | 'pro'
 type CloudThinkingMode = 'auto' | 'always' | 'never'
@@ -19,7 +20,7 @@ export function CloudSettingsPanel() {
     let disposed = false
     const load = async () => {
       try {
-        const response = await fetch('/api/unified-settings')
+        const response = await fetchWithAuth('/api/unified-settings')
         if (!response.ok) return
         const payload = (await response.json()) as Record<string, unknown>
         if (disposed) return
@@ -46,7 +47,7 @@ export function CloudSettingsPanel() {
 
   const saveField = async (fields: Record<string, string | boolean>) => {
     try {
-      const response = await fetch('/api/unified-settings', {
+      const response = await fetchWithAuth('/api/unified-settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(fields),

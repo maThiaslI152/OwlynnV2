@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
+import { fetchWithAuth } from '../lib/localRunToken'
 
 interface Card {
   card_id: string
@@ -31,7 +32,7 @@ export function DeckBrowserModal({ deckId, onClose }: DeckBrowserModalProps) {
   const [editBack, setEditBack] = useState('')
 
   useEffect(() => {
-    fetch(`/api/flashcards/${deckId}`)
+    fetchWithAuth(`/api/flashcards/${deckId}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (d?.status === 'ok') setDeck(d.deck)
@@ -46,7 +47,7 @@ export function DeckBrowserModal({ deckId, onClose }: DeckBrowserModalProps) {
   const handleSaveCard = async (cardId: string) => {
     if (!deck) return
     try {
-      const r = await fetch(`/api/flashcards/${deckId}`, {
+      const r = await fetchWithAuth(`/api/flashcards/${deckId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -74,7 +75,7 @@ export function DeckBrowserModal({ deckId, onClose }: DeckBrowserModalProps) {
   const handleDeleteCard = async (cardId: string) => {
     if (!deck) return
     try {
-      const r = await fetch(`/api/flashcards/${deckId}`, {
+      const r = await fetchWithAuth(`/api/flashcards/${deckId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'delete_card', card_id: cardId }),

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useAppStore } from '../state/useAppStore'
 import toast from 'react-hot-toast'
+import { fetchWithAuth } from '../lib/localRunToken'
 
 interface TopicTuple {
   category: string
@@ -41,8 +42,8 @@ export function MemoryPanel() {
         const controller = new AbortController()
         timeoutId = setTimeout(() => controller.abort(), 5_000)
         const [topicsRes, interestsRes] = await Promise.all([
-          fetch('/api/topics', { signal: controller.signal }),
-          fetch('/api/interests', { signal: controller.signal }),
+          fetchWithAuth('/api/topics', { signal: controller.signal }),
+          fetchWithAuth('/api/interests', { signal: controller.signal }),
         ])
         clearTimeout(timeoutId)
         if (!disposed) {
@@ -99,7 +100,7 @@ export function MemoryPanel() {
       const params = new URLSearchParams()
       if (query) params.set('query', query)
       params.set('limit', '50')
-      const res = await fetch(`/api/mem0/search?${params.toString()}`, { signal: controller.signal })
+      const res = await fetchWithAuth(`/api/mem0/search?${params.toString()}`, { signal: controller.signal })
       if (res.ok) {
         const data = await res.json()
         if (data.status === 'ok') {
@@ -130,7 +131,7 @@ export function MemoryPanel() {
   const handleDeleteMemory = async (e: React.MouseEvent, memoryId: string) => {
     e.stopPropagation()
     try {
-      const res = await fetch('/api/mem0/delete', {
+      const res = await fetchWithAuth('/api/mem0/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ memory_id: memoryId }),
@@ -152,7 +153,7 @@ export function MemoryPanel() {
   const loadContext = async () => {
     setContextLoading(true)
     try {
-      const res = await fetch('/api/memory-context')
+      const res = await fetchWithAuth('/api/memory-context')
       if (res.ok) {
         const data = await res.json()
         setContextText(data.memory_context ?? '')
@@ -193,8 +194,8 @@ export function MemoryPanel() {
                   const controller = new AbortController()
                   const timeoutId = setTimeout(() => controller.abort(), 5_000)
                   const [topicsRes, interestsRes] = await Promise.all([
-                    fetch('/api/topics', { signal: controller.signal }),
-                    fetch('/api/interests', { signal: controller.signal }),
+                    fetchWithAuth('/api/topics', { signal: controller.signal }),
+                    fetchWithAuth('/api/interests', { signal: controller.signal }),
                   ])
                   clearTimeout(timeoutId)
                   if (topicsRes.ok) {

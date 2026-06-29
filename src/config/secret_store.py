@@ -204,12 +204,8 @@ def rotate_deepseek_api_key(new_api_key: str) -> None:
     new_api_key : str
         The new API key.
     """
-    old_key = resolve_deepseek_api_key()
-    old_prefix = old_key[:7] + "..." if len(old_key) > 7 else "(none)"
-    new_prefix = new_api_key[:7] + "..." if len(new_api_key) > 7 else "(empty)"
-
     store_deepseek_api_key(new_api_key)
-    logger.info("DeepSeek API key rotated: old=%s → new=%s", old_prefix, new_prefix)
+    logger.info("DeepSeek API key rotated successfully")
 
 
 # ── private helpers ──────────────────────────────────────────────

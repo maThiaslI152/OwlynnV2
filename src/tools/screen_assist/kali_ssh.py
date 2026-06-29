@@ -29,11 +29,18 @@ async def capture_remote_tmux_pane(
         "BatchMode=yes",
         "-o",
         "ConnectTimeout=15",
-        "-o",
-        "StrictHostKeyChecking=no",
-        "-o",
-        "UserKnownHostsFile=/dev/null",
     ]
+    # Only disable host key checking for localhost (Lima VM)
+    is_localhost = host in ("127.0.0.1", "localhost", "::1")
+    if is_localhost:
+        ssh_cmd.extend(
+            [
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-o",
+                "UserKnownHostsFile=/dev/null",
+            ]
+        )
     if port != 22:
         ssh_cmd.extend(["-p", str(port)])
     if identity_file.strip():

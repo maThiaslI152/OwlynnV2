@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain } from 'electron'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
-import { exec } from 'node:child_process'
+import { execFile } from 'node:child_process'
 
 const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -102,7 +102,7 @@ app.whenReady().then(() => {
       const previewPath = path.join(app.getPath('temp'), `owlynn-preview-${source}-${millis}.jpg`)
       
       if (process.platform === 'darwin') {
-        exec(`screencapture -x -t jpg "${previewPath}"`, (error) => {
+        execFile('screencapture', ['-x', '-t', 'jpg', previewPath], (error) => {
           if (error) {
             reject(new Error(`screencapture failed: ${error.message}`))
           } else {

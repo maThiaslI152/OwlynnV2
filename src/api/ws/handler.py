@@ -60,6 +60,16 @@ from src.api.controllers.graph_session import GraphSession
 
 @router.websocket("/ws/chat/{thread_id}")
 async def websocket_endpoint(websocket: WebSocket, thread_id: str):
+    # ── Token-based authentication ──────────────────────────────────────
+    from src.api.local_auth import get_local_run_token, is_loopback_client
+    import secrets as _secrets
+
+    token = websocket.query_params.get("token")
+    expected = get_local_run_token(websocket.app)
+    if not token or not _secrets.compare_digest(token, expected):
+        await websocket.close(code=4001, reason="Authentication failed")
+        return
+
     await websocket.accept()
     websocket.scope["thread_id"] = thread_id
     connected_websockets.add(websocket)  # Track connection

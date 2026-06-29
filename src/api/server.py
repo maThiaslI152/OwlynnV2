@@ -19,7 +19,7 @@ from src.api.routes import (
     pentest,
 )
 from src.api.ws import handler as ws_handler
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -29,6 +29,7 @@ from src.api.shared import _stringify_lc_message_content
 import json
 import asyncio
 import os
+import secrets
 from langchain_core.messages import HumanMessage
 
 from src.agent.core.graph import init_agent
@@ -207,14 +208,102 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_allowed_origins(),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-Owlynn-Run-Token", "Accept"],
 )
 
 # Audit logging middleware (HTTP request logging)
 from src.config.log_middleware import AuditLogMiddleware
 
 app.add_middleware(AuditLogMiddleware)
+
+
+# ── Local run token authentication middleware ─────────────────────────────
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Add security headers to all responses."""
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        return response
+
+
+app.add_middleware(SecurityHeadersMiddleware)
+
+
+class LocalAuthMiddleware(BaseHTTPMiddleware):
+    """Require X-Owlynn-Run-Token header on all /api/* requests.
+
+    Exemptions:
+    - /api/health (used by frontend to check readiness)
+    - /api/local-run-token (used by frontend to fetch the token)
+    - /api/browser_extension/* (has its own WS token auth)
+    - /api/study/* (read-only dashboard, no sensitive data)
+    - /api/usage (read-only stats)
+    - /api/cloud-status (read-only)
+    """
+
+    _EXEMPT_PATHS = {
+        "/api/health",
+        "/api/local-run-token",
+        "/api/usage",
+        "/api/cloud-status",
+    }
+    _EXEMPT_PREFIXES = (
+        "/api/browser_extension",
+        "/api/study",
+    )
+
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+
+        # Only gate /api/* routes
+        if not path.startswith("/api/"):
+            return await call_next(request)
+
+        # Exempt paths
+        if path in self._EXEMPT_PATHS:
+            return await call_next(request)
+
+        # Exempt prefixes
+        if any(path.startswith(p) for p in self._EXEMPT_PREFIXES):
+            return await call_next(request)
+
+        # Verify token
+        from src.api.local_auth import get_local_run_token, is_loopback_client
+
+        # Allow test clients (TestClient uses "testclient" as host)
+        client_host = ""
+        if request.client:
+            client_host = request.client.host or ""
+        if client_host == "testclient":
+            return await call_next(request)
+
+        if not is_loopback_client(request):
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "API only accessible from localhost"},
+            )
+
+        token = request.headers.get("X-Owlynn-Run-Token")
+        expected = get_local_run_token(request.app)
+        if not token or not secrets.compare_digest(token, expected):
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Missing or invalid local run token"},
+            )
+
+        return await call_next(request)
+
+
+app.add_middleware(LocalAuthMiddleware)
 
 # Serve frontend static files from frontend-v2 dist only.
 _ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
@@ -362,6 +451,17 @@ async def api_health():
         pass
 
     return {"status": "ok", "agent": "ready" if agent_ready else "initializing"}
+
+
+@app.get("/api/local-run-token")
+async def api_local_run_token(request: Request):
+    """Return the local run token for WS authentication. Only accessible from localhost."""
+    from src.api.local_auth import is_loopback_client, get_local_run_token
+
+    if not is_loopback_client(request):
+        raise HTTPException(status_code=403, detail="Only available from localhost")
+    token = get_local_run_token(app)
+    return {"token": token}
 
 
 # ─── Dev API: HITL preview triggers ──────────────────────────────────────

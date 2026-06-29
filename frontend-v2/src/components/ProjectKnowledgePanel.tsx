@@ -3,6 +3,7 @@ import toast from 'react-hot-toast'
 import { WORKSPACE_REF_DRAG_TYPE, workspaceRefAttachment, type AttachedFile } from '../lib/attachments'
 import { collapseKnowledgeFiles, type KnowledgeFileRow } from '../lib/knowledgeFiles'
 import { FileViewerModal } from './FileViewerModal'
+import { fetchWithAuth } from '../lib/localRunToken'
 
 type KnowledgeFile = KnowledgeFileRow
 
@@ -25,7 +26,7 @@ export function ProjectKnowledgePanel({
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch(`/api/projects/${encodeURIComponent(activeProjectId)}`)
+      const response = await fetchWithAuth(`/api/projects/${encodeURIComponent(activeProjectId)}`)
       if (!response.ok) {
         setError('Failed to load project details')
         setFiles([])

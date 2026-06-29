@@ -364,6 +364,12 @@ def _client_with_agent(tmp_path, fake_agent):
             yield c
 
 
+def _ws_url(client, thread_id):
+    """Build WS URL with auth token."""
+    token = getattr(client.app.state, "local_run_token", "test-token")
+    return f"/ws/chat/{thread_id}?token={token}"
+
+
 def _collect_ws_events(ws, max_events=40):
     events = []
     for _ in range(max_events):
@@ -376,7 +382,7 @@ def _collect_ws_events(ws, max_events=40):
 
 def test_ws_event_lifecycle_has_reasoning_and_idle(tmp_path):
     with _client_with_agent(tmp_path, _ChunkMessageAgent()) as client:
-        with client.websocket_connect("/ws/chat/ws-lifecycle") as ws:
+        with client.websocket_connect(_ws_url(client, "ws-lifecycle")) as ws:
             ws.send_text(json.dumps({"message": "hello"}))
             events = _collect_ws_events(ws)
 
@@ -387,7 +393,7 @@ def test_ws_event_lifecycle_has_reasoning_and_idle(tmp_path):
 
 def test_ws_chunk_and_final_message_contract(tmp_path):
     with _client_with_agent(tmp_path, _ChunkMessageAgent()) as client:
-        with client.websocket_connect("/ws/chat/ws-chunk-message") as ws:
+        with client.websocket_connect(_ws_url(client, "ws-chunk-message")) as ws:
             ws.send_text(json.dumps({"message": "hello"}))
             events = _collect_ws_events(ws)
 
@@ -404,7 +410,7 @@ def test_ws_chunk_and_final_message_contract(tmp_path):
 
 def test_ws_tool_execution_running_to_terminal_contract(tmp_path):
     with _client_with_agent(tmp_path, _ToolAgent()) as client:
-        with client.websocket_connect("/ws/chat/ws-tool-contract") as ws:
+        with client.websocket_connect(_ws_url(client, "ws-tool-contract")) as ws:
             ws.send_text(json.dumps({"message": "use a tool"}))
             events = _collect_ws_events(ws)
 
@@ -426,7 +432,7 @@ def test_ws_tool_execution_running_to_terminal_contract(tmp_path):
 
 def test_ws_tool_execution_running_includes_risk_metadata_when_detected(tmp_path):
     with _client_with_agent(tmp_path, _RiskyToolAgent()) as client:
-        with client.websocket_connect("/ws/chat/ws-tool-risk") as ws:
+        with client.websocket_connect(_ws_url(client, "ws-tool-risk")) as ws:
             ws.send_text(json.dumps({"message": "delete this file"}))
             events = _collect_ws_events(ws)
 
@@ -446,7 +452,7 @@ def test_ws_tool_execution_running_includes_risk_metadata_when_detected(tmp_path
 
 def test_ws_payload_defaults_when_optional_fields_missing(tmp_path):
     with _client_with_agent(tmp_path, _ChunkMessageAgent()) as client:
-        with client.websocket_connect("/ws/chat/ws-defaults") as ws:
+        with client.websocket_connect(_ws_url(client, "ws-defaults")) as ws:
             ws.send_text(json.dumps({"message": "hello defaults"}))
             events = _collect_ws_events(ws)
 
@@ -456,7 +462,7 @@ def test_ws_payload_defaults_when_optional_fields_missing(tmp_path):
 
 def test_ws_interrupt_contract_contains_backend_risk_metadata(tmp_path):
     with _client_with_agent(tmp_path, _InterruptAgent()) as client:
-        with client.websocket_connect("/ws/chat/ws-interrupt-risk") as ws:
+        with client.websocket_connect(_ws_url(client, "ws-interrupt-risk")) as ws:
             ws.send_text(json.dumps({"message": "run sensitive tool"}))
             events = _collect_ws_events(ws)
 
@@ -480,7 +486,7 @@ def test_ask_user_response_preserves_structured_answer(tmp_path):
 
     with patch("src.api.ws.handler.GraphSession.start_run", new=_capture_start_run):
         with _client_with_agent(tmp_path, _ChunkMessageAgent()) as client:
-            with client.websocket_connect("/ws/chat/ws-ask-user") as ws:
+            with client.websocket_connect(_ws_url(client, "ws-ask-user")) as ws:
                 ws.send_text(
                     json.dumps(
                         {
@@ -510,7 +516,9 @@ def test_ws_interleaved_messages_preserve_project_context_per_payload(tmp_path):
         ),
     ):
         with _client_with_agent(tmp_path, _ChunkMessageAgent()) as client:
-            with client.websocket_connect("/ws/chat/ws-project-interleave") as ws:
+            with client.websocket_connect(
+                _ws_url(client, "ws-project-interleave")
+            ) as ws:
                 ws.send_text(
                     json.dumps({"message": "first", "project_id": "proj-alpha"})
                 )
@@ -559,7 +567,9 @@ def test_ws_and_project_crud_interleaving_preserves_project_isolation(tmp_path):
             client.put(f"/api/projects/{pid_a}/chats/a-1", json={"name": "A 1 updated"})
             client.delete(f"/api/projects/{pid_b}/chats/b-1")
 
-            with client.websocket_connect("/ws/chat/ws-crud-project-interleave") as ws:
+            with client.websocket_connect(
+                _ws_url(client, "ws-crud-project-interleave")
+            ) as ws:
                 ws.send_text(json.dumps({"message": "run in A", "project_id": pid_a}))
                 ws.send_text(json.dumps({"message": "run in B", "project_id": pid_b}))
                 ws.send_text(json.dumps({"message": "back to A", "project_id": pid_a}))
@@ -630,7 +640,9 @@ def test_ws_deterministic_multi_switch_sweep_keeps_project_context_and_crud_isol
                 json={"id": "c-1", "name": "C 1", "created_at": 1.0},
             )
 
-            with client.websocket_connect("/ws/chat/ws-multi-switch-sweep") as ws:
+            with client.websocket_connect(
+                _ws_url(client, "ws-multi-switch-sweep")
+            ) as ws:
                 # Deterministic interleaving sequence: A -> B -> C -> B -> A -> C
                 ws.send_text(json.dumps({"message": "run-A-1", "project_id": pid_a}))
                 client.put(
@@ -747,7 +759,9 @@ def test_ws_high_pressure_interleaving_preserves_ordered_project_context_and_cru
                 pid_a,
                 pid_c,
             ]
-            with client.websocket_connect("/ws/chat/ws-high-pressure-interleave") as ws:
+            with client.websocket_connect(
+                _ws_url(client, "ws-high-pressure-interleave")
+            ) as ws:
                 ws.send_text(json.dumps({"message": "p-a-1", "project_id": pid_a}))
                 client.put(f"/api/projects/{pid_b}/chats/b-1", json={"name": "B 1 u1"})
 
@@ -845,7 +859,7 @@ def test_ws_high_pressure_interleaving_preserves_ordered_project_context_and_cru
 def test_ws_router_info_event_emitted(tmp_path):
     """router_info event is emitted when router_metadata is present in router node output."""
     with _client_with_agent(tmp_path, _RouterInfoAgent()) as client:
-        with client.websocket_connect("/ws/chat/ws-router-info") as ws:
+        with client.websocket_connect(_ws_url(client, "ws-router-info")) as ws:
             ws.send_text(json.dumps({"message": "hi"}))
             events = _collect_ws_events(ws)
 
@@ -863,7 +877,7 @@ def test_ws_router_info_event_emitted(tmp_path):
 def test_ws_router_info_contains_reasoning_key(tmp_path):
     """router_info metadata must contain a reasoning field."""
     with _client_with_agent(tmp_path, _RouterInfoAgent()) as client:
-        with client.websocket_connect("/ws/chat/ws-router-reasoning") as ws:
+        with client.websocket_connect(_ws_url(client, "ws-router-reasoning")) as ws:
             ws.send_text(json.dumps({"message": "hi"}))
             events = _collect_ws_events(ws)
 
@@ -877,7 +891,7 @@ def test_ws_router_info_contains_reasoning_key(tmp_path):
 def test_ws_model_info_includes_fallback_chain(tmp_path):
     """model_info event includes fallback_chain when the complex node returns one."""
     with _client_with_agent(tmp_path, _FallbackChainAgent()) as client:
-        with client.websocket_connect("/ws/chat/ws-fallback-chain") as ws:
+        with client.websocket_connect(_ws_url(client, "ws-fallback-chain")) as ws:
             ws.send_text(json.dumps({"message": "trigger fallback"}))
             events = _collect_ws_events(ws)
 
@@ -900,7 +914,7 @@ def test_ws_model_info_includes_fallback_chain(tmp_path):
 def test_ws_fallback_chain_entry_shape(tmp_path):
     """Each fallback_chain entry has the required fields (model, status, reason, duration_ms)."""
     with _client_with_agent(tmp_path, _FallbackChainAgent()) as client:
-        with client.websocket_connect("/ws/chat/ws-fallback-shape") as ws:
+        with client.websocket_connect(_ws_url(client, "ws-fallback-shape")) as ws:
             ws.send_text(json.dumps({"message": "check shape"}))
             events = _collect_ws_events(ws)
 
@@ -918,7 +932,7 @@ def test_ws_fallback_chain_entry_shape(tmp_path):
 def test_ws_error_event_shape(tmp_path):
     """error event must have type='error' and a string content field."""
     with _client_with_agent(tmp_path, _ChunkMessageAgent()) as client:
-        with client.websocket_connect("/ws/chat/ws-error-shape") as ws:
+        with client.websocket_connect(_ws_url(client, "ws-error-shape")) as ws:
             ws.send_text(json.dumps({"message": "hello"}))
             events = _collect_ws_events(ws)
 
@@ -931,7 +945,7 @@ def test_ws_error_event_shape(tmp_path):
 def test_ws_interrupt_plan_review_shape(tmp_path):
     """plan_review_required interrupt must contain stated_intent, planned_actions, pitfalls, and sensitive_tool_calls."""
     with _client_with_agent(tmp_path, _PlanReviewHITLAgent()) as client:
-        with client.websocket_connect("/ws/chat/ws-plan-review") as ws:
+        with client.websocket_connect(_ws_url(client, "ws-plan-review")) as ws:
             ws.send_text(json.dumps({"message": "add authentication"}))
             events = _collect_ws_events(ws)
 
@@ -953,7 +967,7 @@ def test_ws_interrupt_plan_review_shape(tmp_path):
 def test_ws_interrupt_scope_clarify_shape(tmp_path):
     """scope_clarification_required interrupt must contain task_summary, questions, and pitfalls."""
     with _client_with_agent(tmp_path, _ScopeClarifyHITLAgent()) as client:
-        with client.websocket_connect("/ws/chat/ws-scope-clarify") as ws:
+        with client.websocket_connect(_ws_url(client, "ws-scope-clarify")) as ws:
             ws.send_text(json.dumps({"message": "build a calculator"}))
             events = _collect_ws_events(ws)
 
