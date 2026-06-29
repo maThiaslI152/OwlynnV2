@@ -50,6 +50,7 @@
 | Change mode system (Normal/Study/Pentest) | — | `frontend-v2/src/components/ModeSwitcher.tsx`, `frontend-v2/src/state/useAppStore.ts`, `src/api/ws/handler.py` |
 | Change study tools / courses | — | `src/tools/study_tools.py`, `src/api/routes/study.py`, `skills/` |
 | Change pentest scenario | — | `scenarios/pentest/`, `src/memory/scenarios.py`, `frontend-v2/src/components/PentestScopePanel.tsx` |
+| Change browser extension | [`docs/features/BROWSER_EXTENSION.md`](docs/features/BROWSER_EXTENSION.md) | `browser-extension/`, `src/api/routes/browser_extension.py` |
 
 ## Mode System
 
@@ -151,4 +152,4 @@ When generating cache keys for chat histories or context gatekeepers (e.g., in `
 
 ## Last updated
 
-2026-06-28 — Added mode system (Normal/Study/Pentest), study suite (16 tools, 6 skills), file viewer, mode persistence per-project, pentest model benchmark (Gemma 4 12B Coder Q4 winner), browser extension hardening (XSS fix, WS auth, cookie consent, 5 navigation actions, 3 batch selection actions, 6 Moodle extractions).
+2026-06-29 — Deep browser extension security audit (v1.3.0→v1.4.0): 12 critical/high fixes (fetch_urls broken, selector injection, get_html leaks, password masking, submit_form, constant-time token comparison), 8 medium fixes (WS message limits, message type allowlist, isSecureUrl exact match, reconnect backoff, configurable URL, cookieConsentCache persistence, screenshot consolidation, fetch_urls parallel), 3 low fixes (wait_for_navigation readyState check, innerHTML dead code removed, Moodle selector escaping). Memory multimodal content fix (BUG-41), base64 image display fix (BUG-42), WS error schema fix (BUG-43). Total BUG-41..52 fixed.

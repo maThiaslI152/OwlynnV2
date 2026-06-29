@@ -544,8 +544,14 @@ async def _should_save_memory(last_human: str, last_ai: str) -> bool:
     - Purely casual/greeting exchanges
     - Messages where the AI response is just a confirmation/hand-off
     """
-    human_stripped = last_human.strip()
-    ai_stripped = last_ai.strip()
+    # Handle multimodal content (list of dicts with text/image parts)
+    if isinstance(last_human, list):
+        human_stripped = " ".join(
+            p.get("text", "") for p in last_human if isinstance(p, dict)
+        ).strip()
+    else:
+        human_stripped = str(last_human).strip()
+    ai_stripped = str(last_ai).strip()
 
     # Skip empty
     if not human_stripped or not ai_stripped:
@@ -760,6 +766,12 @@ async def memory_write_node(state: AgentState) -> AgentState:
                 role = msg.get("role", "user")
 
             content = msg.content if hasattr(msg, "content") else msg.get("content", "")
+            # Flatten multimodal content (list of text/image blocks) to text only
+            if isinstance(content, list):
+                content = " ".join(
+                    p.get("text", "") if isinstance(p, dict) else str(p)
+                    for p in content
+                )
             message_dicts.append({"role": role, "content": content})
 
         # Record conversation and extract topics/interests

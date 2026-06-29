@@ -792,6 +792,131 @@ audience: agent
 
 **Files Changed:** `src/api/routes/study.py`
 
+## BUG-41 [CRITICAL] [FIXED]: Memory Write Crash on Multimodal Content
+
+**Symptom:** `AttributeError: 'list' object has no attribute 'strip'` when user uploads an image. Memory write node crashes, preventing conversation from being saved.
+
+**Root Cause:** `_should_save_memory()` in `memory.py:547` calls `.strip()` on `last_human`, which is a list (multimodal content with text + image_url blocks) instead of a string.
+
+**Fix Applied:** Added list type check — extracts text from list parts before stripping. Also fixed `record_conversation` to flatten multimodal content to text.
+
+**Files Changed:** `src/agent/nodes/memory.py`
+
+## BUG-42 [HIGH] [FIXED]: Base64 Images Displayed as Text in Chat History
+
+**Symptom:** Pictures attached in previous conversations display as raw base64 text instead of rendered images when loading chat history.
+
+**Root Cause:** `serialize_message()` in `shared.py` calls `str()` on multimodal content (list with text + image_url blocks), dumping raw base64 into the text field. Frontend `loadHistory()` treats content as a string.
+
+**Fix Applied:**
+1. Added `_extract_multimodal_parts()` — extracts text parts into `content` and image_url data URIs into `attachments` array with `name`, `type`, `previewUrl`
+2. Frontend `loadHistory()` reads `attachments` field and passes to `addMessage()` for proper rendering
+
+**Files Changed:** `src/api/shared.py`, `frontend-v2/src/App.tsx`
+
+## BUG-43 [MEDIUM] [FIXED]: WS Payload Drift — Error Event Not in Schema
+
+**Symptom:** `pydantic` validation error: `Input tag 'error' found using 'type' does not match any of the expected tags`
+
+**Root Cause:** Backend sends `{ type: "error", content: "..." }` on graph execution errors, but `ErrorEvent` was not in the `ServerEvent` tagged union.
+
+**Fix Applied:** Added `ErrorEvent` class with `type: Literal["error"]` and added to `ServerEvent` union.
+
+**Files Changed:** `src/api/ws/schemas.py`
+
+## BUG-44 [MEDIUM] [FIXED]: Browser Extension Auth Timeout Spam
+
+**Symptom:** Browser extension connects every ~13 seconds but never sends auth message. Backend logs filled with `Browser extension auth timeout — no auth message received`.
+
+**Root Cause:** Installed extension in browser was stale (pre-auth version). Auth timeout was 5 seconds (too short for token fetch + WS connect).
+
+**Fix Applied:**
+1. Increased auth timeout from 5s to 10s
+2. Added `try/except` around `websocket.close()` calls to prevent `WebSocketDisconnect` crash on shutdown
+3. User action: reload extension at `brave://extensions`
+
+**Files Changed:** `src/api/routes/browser_extension.py`
+
+## BUG-45 [CRITICAL] [FIXED]: `fetch_urls` Action Broken — Undefined Function
+
+**Symptom:** `fetch_urls` action always returns error. `scrapeSingleUrlInBackground` is called but never defined.
+
+**Root Cause:** Function was referenced in `handleFetchUrlsRequest` but never implemented in `background.js`.
+
+**Fix Applied:** Implemented `fetch_urls` with parallel `fetch()` + `DOMParser` text extraction, concurrency 5, 10s timeout per URL, 12K char truncation.
+
+**Files Changed:** `browser-extension/background.js`
+
+## BUG-46 [HIGH] [FIXED]: Selector Injection via `javascript:` URIs
+
+**Symptom:** Arbitrary selectors from backend could be `javascript:` or `data:` URIs, executing code in the page context.
+
+**Root Cause:** `content_interact.js` passes selectors directly to `document.querySelectorAll()` without validation.
+
+**Fix Applied:** Added scheme validation — blocks selectors starting with `javascript:`, `data:`, or `vbscript:`.
+
+**Files Changed:** `browser-extension/content_interact.js`
+
+## BUG-47 [HIGH] [FIXED]: `get_html` Leaks Hidden Inputs and Passwords
+
+**Symptom:** `get_html` action returns full HTML including `input[type=hidden]` (CSRF tokens), `input[type=password]`, and fields named `token`/`csrf`/`secret`/`api_key`.
+
+**Root Cause:** Clone serialization includes all elements without filtering.
+
+**Fix Applied:** Removes sensitive elements from clone before serialization. Skips `input[type=password]`, `input[type=hidden]`, and fields with secret-related names.
+
+**Files Changed:** `browser-extension/content_interact.js`
+
+## BUG-48 [MEDIUM] [FIXED]: `isSecureUrl` Substring Matching Too Broad
+
+**Symptom:** `something-localhost.com` matches "localhost" blocklist entry. `login.example.com` matches "login" but so does `loginscreen.com`.
+
+**Root Cause:** `hostname.includes(d)` matches substrings, not domains.
+
+**Fix Applied:** Exact match: `hostname === d || hostname.endsWith('.' + d)`.
+
+**Files Changed:** `browser-extension/background.js`
+
+## BUG-49 [LOW] [FIXED]: `submit_form` Doesn't Actually Submit Forms
+
+**Symptom:** `submit_form` action dispatches synthetic `submit` event but forms don't submit.
+
+**Root Cause:** `form.dispatchEvent(new Event('submit'))` doesn't trigger browser form submission. Only `form.submit()` or `form.requestSubmit()` does.
+
+**Fix Applied:** Uses `form.requestSubmit()` (triggers validation + submit event) with fallback to `form.submit()`.
+
+**Files Changed:** `browser-extension/content_interact.js`
+
+## BUG-50 [LOW] [FIXED]: `wait_for_navigation` Hangs on Already-Loaded Pages
+
+**Symptom:** `wait_for_navigation` waits full timeout (10s) even when page is already loaded.
+
+**Root Cause:** `window.addEventListener('load', ...)` doesn't fire if page is already `complete`.
+
+**Fix Applied:** Checks `document.readyState === 'complete'` before adding listener.
+
+**Files Changed:** `browser-extension/content_interact.js`
+
+## BUG-51 [LOW] [FIXED]: Password Values Leaked in DOM Tree
+
+**Symptom:** `buildDomTree.js` shows `(Value: actualpassword)` for password fields.
+
+**Root Cause:** `extractText()` includes `el.value` for all inputs without type check.
+
+**Fix Applied:** Shows `(Value: *****)` for `input[type=password]`.
+
+**Files Changed:** `browser-extension/buildDomTree.js`
+
+## BUG-52 [LOW] [FIXED]: Moodle Selector Injection
+
+**Symptom:** `input.name` or `input.value` containing `"` characters breaks CSS selector in Moodle extraction.
+
+**Root Cause:** String interpolation without escaping.
+
+**Fix Applied:** `CSS.escape()` on all interpolated values.
+
+**Files Changed:** `browser-extension/content_moodle.js`
+
 ## Test Results
 
 - **Backend pytest (BUG-1, BUG-4):** `tests/test_bugfix_persona_leak.py`, `tests/test_bugfix_chat_title.py`
@@ -801,6 +926,7 @@ audience: agent
 - **BUG-30..32:** identified and fixed during pentest infrastructure work (2026-06-28).
 - **BUG-33..37:** identified and fixed during browser extension hardening (2026-06-28).
 - **BUG-38..40:** identified and fixed during study mode hardening (2026-06-28).
+- **BUG-41..52:** identified and fixed during deep security audit (2026-06-29).
 
 ## Related
 
@@ -815,4 +941,4 @@ audience: agent
 
 ## Last updated
 
-2026-06-28 — BUG-33..40 fixed: XSS in extension, WS auth, cookie consent, DOM tree size, quiz grading, flashcard race condition, dashboard bug.
+2026-06-29 — BUG-41..52 fixed: memory crash on multimodal, base64 image display, WS error schema, extension auth timeout, fetch_urls broken, selector injection, get_html leaks, isSecureUrl bypass, submit_form, wait_for_navigation, password in DOM tree, Moodle selector injection.

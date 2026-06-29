@@ -54,7 +54,11 @@
         let text = '';
         if (tagName === 'input' || tagName === 'textarea') {
             text = el.placeholder || el.name || el.id;
-            if (el.value) text += ` (Value: ${el.value})`;
+            if (el.type === 'password') {
+                text += el.value ? ' (Value: *****)' : '';
+            } else if (el.value) {
+                text += ` (Value: ${el.value})`;
+            }
         } else if (tagName === 'select') {
             text = el.name || el.id || '';
         } else {

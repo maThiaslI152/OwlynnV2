@@ -310,7 +310,7 @@ function App() {
           signal: controller.signal
         })
         if (!response.ok) return
-        const history = (await response.json()) as Array<{ type: string; content: string; tool_calls?: unknown[] }>
+        const history = (await response.json()) as Array<{ type: string; content: string; tool_calls?: unknown[]; attachments?: Array<{ name: string; type: string; previewUrl: string }> }>
         if (disposed) return
         if (!Array.isArray(history)) return
         for (const msg of history) {
@@ -327,6 +327,7 @@ function App() {
               role: 'user',
               content: msg.content || '',
               ts: Date.now(),
+              attachments: msg.attachments?.length ? msg.attachments : undefined,
             })
           }
         }

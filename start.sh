@@ -99,10 +99,12 @@ sleep 1
 # Start backend
 if [ "$DEBUG_MODE" == "1" ]; then
     uv run python -m uvicorn src.api.server:app \
-        --host 127.0.0.1 --port 8000 &
+        --host 127.0.0.1 --port 8000 \
+        --ws-max-size 1048576 &
 else
     uv run python -m uvicorn src.api.server:app \
         --host 127.0.0.1 --port 8000 \
+        --ws-max-size 1048576 \
         --no-access-log &
 fi
 _PIDS+=("$!")

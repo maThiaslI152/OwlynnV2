@@ -1,8 +1,26 @@
 let socket = null;
-let keepAliveInterval = null;
-let authToken = null; // Cached auth token
+let authToken = null; // Memory-only auth token (not persisted to storage)
 const activeSearches = new Map();
 const RESTRICTED_PREFIXES = ["chrome://", "chrome-extension://", "brave://", "edge://", "about:"];
+
+// ── Backend URL Configuration ──────────────────────────────────────────
+const DEFAULT_BACKEND_HTTP = "http://127.0.0.1:8000";
+const DEFAULT_BACKEND_WS = "ws://127.0.0.1:8000";
+let backendHttpUrl = DEFAULT_BACKEND_HTTP;
+let backendWsUrl = DEFAULT_BACKEND_WS;
+
+// Load configured URL from storage on startup
+chrome.storage.local.get(["owlynnBackendUrl"], (result) => {
+  if (result.owlynnBackendUrl) {
+    try {
+      const url = new URL(result.owlynnBackendUrl);
+      backendHttpUrl = url.origin;
+      backendWsUrl = `ws://${url.host}`;
+    } catch {
+      // Invalid URL, keep defaults
+    }
+  }
+});
 
 const SENSITIVE_DOMAINS = [
   "bank", "paypal", "stripe", "chase", "wellsfargo", "citi", "capitalone",
@@ -16,12 +34,18 @@ const MIN_COMMAND_INTERVAL_MS = 100;
 let commandQueue = [];
 let lastCommandTime = 0;
 
+// ── Reconnect Backoff ─────────────────────────────────────────────────
+const RECONNECT_BASE_MS = 3000;
+const RECONNECT_MAX_MS = 30000;
+const RECONNECT_MAX_RETRIES = 20;
+let reconnectAttempts = 0;
+let reconnectTimer = null;
+
 // ── Service Worker Keepalive ───────────────────────────────────────────
-// MV3 service workers can be terminated. Use chrome.alarms to prevent this.
+// MV3 service workers can be terminated. Use chrome.alarms to keep alive.
 chrome.alarms.create('owlynn-keepalive', { periodInMinutes: 0.5 });
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'owlynn-keepalive') {
-    // Just keeping the service worker alive
     if (socket && socket.readyState === WebSocket.OPEN) {
       socket.send(JSON.stringify({ type: "ping" }));
     }
@@ -36,17 +60,16 @@ chrome.storage.local.get(["liveTracking"], (res) => {
 // ── Auth token management ──────────────────────────────────────────────
 async function fetchAuthToken() {
   try {
-    const resp = await fetch("http://127.0.0.1:8000/api/browser_extension/token");
+    const resp = await fetch(`${backendHttpUrl}/api/browser_extension/token`);
     if (resp.ok) {
       const data = await resp.json();
       authToken = data.token;
-      chrome.storage.local.set({ owlynnAuthToken: authToken });
       return authToken;
     }
   } catch (err) {
-    console.error("[Owlynn Bridge] Failed to fetch auth token:", err);
+    console.error("[Owlynn Bridge] Failed to fetch auth token:", err.message || err);
   }
-  // Fallback: try from storage
+  // Fallback: try from storage (cached from previous successful fetch)
   return new Promise((resolve) => {
     chrome.storage.local.get(["owlynnAuthToken"], (result) => {
       authToken = result.owlynnAuthToken || null;
@@ -59,8 +82,9 @@ function isSecureUrl(url) {
   if (isRestrictedUrl(url)) return false;
   try {
     const hostname = new URL(url).hostname.toLowerCase();
+    // Exact match or subdomain match (not substring)
     for (const d of SENSITIVE_DOMAINS) {
-      if (hostname.includes(d)) return false;
+      if (hostname === d || hostname.endsWith('.' + d)) return false;
     }
     return true;
   } catch (e) {
@@ -69,6 +93,12 @@ function isSecureUrl(url) {
 }
 
 async function connect() {
+  // Exponential backoff — don't retry infinitely
+  if (reconnectAttempts >= RECONNECT_MAX_RETRIES) {
+    console.warn(`[Owlynn Bridge] Max reconnect retries (${RECONNECT_MAX_RETRIES}) reached. Stopping.`);
+    return;
+  }
+
   console.log("[Owlynn Bridge] Connecting to backend WebSocket...");
   
   // Fetch auth token first
@@ -76,10 +106,11 @@ async function connect() {
     await fetchAuthToken();
   }
 
-  socket = new WebSocket("ws://127.0.0.1:8000/api/browser_extension/ws");
+  socket = new WebSocket(`${backendWsUrl}/api/browser_extension/ws`);
 
   socket.onopen = () => {
     console.log("[Owlynn Bridge] WebSocket connected. Sending auth...");
+    reconnectAttempts = 0; // Reset backoff on successful connection
     
     // Send auth token as first message
     if (authToken) {
@@ -91,20 +122,27 @@ async function connect() {
     }
 
     chrome.runtime.sendMessage({ type: "CONNECTION_STATUS", connected: true }).catch(() => {});
-    
-    // Send a ping every 20 seconds to keep the Service Worker and WebSocket alive
-    if (keepAliveInterval) clearInterval(keepAliveInterval);
-    keepAliveInterval = setInterval(() => {
-      if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ type: "ping" }));
-      }
-    }, 20000);
   };
 
   socket.onmessage = async (event) => {
     try {
+      // Reject oversized messages (1MB)
+      if (event.data && event.data.length > 1048576) {
+        console.warn("[Owlynn Bridge] Rejected oversized message");
+        return;
+      }
       const message = JSON.parse(event.data);
-      console.log("[Owlynn Bridge] Message received:", message);
+      // Log message type/action only — never full content (may contain sensitive data)
+      const msgType = message.action || message.type || 'unknown';
+      console.debug(`[Owlynn Bridge] Message received: ${msgType}`);
+      // Validate message type — allowlist of known types
+      const knownActions = new Set(["search", "get_active_tab", "capture_screenshot", "browser_action", "fetch_urls", "get_cookies", "ui_status"]);
+      const knownTypes = new Set(["page_context_response", "RELOAD"]);
+      if (!knownActions.has(message.action) && !knownTypes.has(message.type)) {
+        console.debug(`[Owlynn Bridge] Ignoring unknown message type: ${msgType}`);
+        return;
+      }
+
       if (message.action === "search") {
         await handleSearchRequest(message.id, message.url);
       } else if (message.action === "get_active_tab") {
@@ -143,17 +181,20 @@ async function connect() {
   };
 
   socket.onclose = (e) => {
-    console.log("[Owlynn Bridge] WebSocket disconnected. Retrying in 3s...", e.reason);
-    if (keepAliveInterval) clearInterval(keepAliveInterval);
     socket = null;
-    // Re-fetch token on reconnect (may have changed if backend restarted)
-    authToken = null;
+    authToken = null; // Re-fetch on next reconnect
     chrome.runtime.sendMessage({ type: "CONNECTION_STATUS", connected: false }).catch(() => {});
-    setTimeout(connect, 3000);
+    
+    // Exponential backoff
+    reconnectAttempts++;
+    const delay = Math.min(RECONNECT_BASE_MS * Math.pow(2, reconnectAttempts - 1), RECONNECT_MAX_MS);
+    console.log(`[Owlynn Bridge] Disconnected. Reconnecting in ${Math.round(delay / 1000)}s (attempt ${reconnectAttempts}/${RECONNECT_MAX_RETRIES})...`);
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    reconnectTimer = setTimeout(connect, delay);
   };
 
-  socket.onerror = (err) => {
-    console.error("[Owlynn Bridge] WebSocket error:", err);
+  socket.onerror = () => {
+    console.error("[Owlynn Bridge] WebSocket error occurred");
     socket.close();
   };
 }
@@ -263,34 +304,50 @@ async function handleCaptureScreenshotRequest(requestId) {
     const tab = await getActiveTab();
     if (!tab) throw new Error("No active tab.");
     
-    // Inject visual hints based on the DOM map
-    await chrome.scripting.executeScript({
+    // Inject hints, capture, remove hints — all in one script injection
+    const [{ result: dataUrl }] = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      func: () => { window.__owlynn_interact_args = { action: 'inject_hints' }; }
+      func: () => {
+        // Inject hints
+        const domMap = window.__owlynn_dom_map;
+        const hints = [];
+        if (domMap) {
+          domMap.forEach((el, id) => {
+            const rect = el.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0 || rect.top < 0 || rect.left < 0 || rect.bottom > window.innerHeight || rect.right > window.innerWidth) return;
+            const hint = document.createElement('div');
+            hint.textContent = `[${id}]`;
+            hint.setAttribute('data-owlynn-hint', '1');
+            hint.style.cssText = `position: absolute; top: ${rect.top + window.scrollY}px; left: ${rect.left + window.scrollX}px; background: yellow; color: black; font-size: 12px; font-weight: bold; border: 1px solid black; z-index: 2147483647; padding: 2px; pointer-events: none;`;
+            document.body.appendChild(hint);
+            hints.push(hint);
+          });
+        }
+        // Store for removal
+        window.__owlynn_hints = hints;
+        return null; // We don't need the result, just the side effect
+      }
     });
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: ["content_interact.js"]
-    }).catch(err => console.warn("Failed to inject hints:", err));
-    
-    // Wait for DOM to render the hints
-    await new Promise(resolve => setTimeout(resolve, 150));
 
-    const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "jpeg", quality: 50 });
+    // Wait for hints to render
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    const screenshot = await chrome.tabs.captureVisibleTab(tab.windowId, { format: "jpeg", quality: 50 });
     
-    // Remove hints
+    // Remove hints in a separate call (can't return screenshot from first call due to DOM mutation)
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      func: () => { window.__owlynn_interact_args = { action: 'remove_hints' }; }
+      func: () => {
+        if (window.__owlynn_hints) {
+          window.__owlynn_hints.forEach(h => h.remove());
+          window.__owlynn_hints = [];
+        }
+      }
     });
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: ["content_interact.js"]
-    }).catch(err => console.warn("Failed to remove hints:", err));
 
     if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify({ id: requestId, image_data: dataUrl }));
-      console.log(`[Owlynn Bridge] Sent screenshot for ID ${requestId}`);
+      socket.send(JSON.stringify({ id: requestId, image_data: screenshot }));
+      console.debug(`[Owlynn Bridge] Sent screenshot for ID ${requestId}`);
     }
   } catch (err) {
     console.error("[Owlynn Bridge] capture_screenshot failed:", err);
@@ -331,13 +388,13 @@ async function handleBrowserActionRequest(requestId, payload) {
       throw new Error(`Tab mismatch: expected ${payload.tabId}, got ${tab.id}`);
     }
     
-    // Broadcast status to UI
+    // Broadcast status to UI (sanitized — no raw selectors or text)
     chrome.tabs.sendMessage(tab.id, {
       type: 'OWLYNN_STATUS_UPDATE',
       data: {
         action: payload.action,
-        target: payload.selector || (payload.element_ids ? `Elements: ${payload.element_ids.join(',')}` : payload.element_id),
-        value: payload.text
+        target: payload.element_id !== undefined ? `Element #${payload.element_id}` : '',
+        value: payload.text ? '...' : ''
       }
     }).catch(() => {});
 
@@ -439,29 +496,48 @@ async function handleFetchUrlsRequest(requestId, urls) {
     const results = [];
     const urlList = Array.isArray(urls) ? urls : [urls];
     
-    for (const u of urlList) {
-      if (isRestrictedUrl(u)) {
-        results.push({ url: u, text: "Restricted URL", error: true });
-        continue;
-      }
-      try {
-        const text = await scrapeSingleUrlInBackground(u);
-        results.push({ url: u, text });
-      } catch (e) {
-        results.push({ url: u, text: "", error: String(e) });
-      }
+    // Parallel fetch with concurrency limit
+    const CONCURRENCY = 5;
+    for (let i = 0; i < urlList.length; i += CONCURRENCY) {
+      const batch = urlList.slice(i, i + CONCURRENCY);
+      const batchResults = await Promise.all(batch.map(async (u) => {
+        if (isRestrictedUrl(u)) {
+          return { url: u, text: "Restricted URL", error: true };
+        }
+        try {
+          const resp = await fetch(u, { signal: AbortSignal.timeout(10000) });
+          if (!resp.ok) return { url: u, text: "", error: `HTTP ${resp.status}` };
+          const html = await resp.text();
+          // Extract visible text from HTML
+          const doc = new DOMParser().parseFromString(html, 'text/html');
+          // Remove script/style/nav/footer
+          doc.querySelectorAll('script,style,nav,footer,header,noscript,svg').forEach(el => el.remove());
+          const text = (doc.body?.innerText || doc.body?.textContent || '').trim().substring(0, 12000);
+          return { url: u, text };
+        } catch (e) {
+          return { url: u, text: "", error: String(e.message || e) };
+        }
+      }));
+      results.push(...batchResults);
     }
     if (socket && socket.readyState === WebSocket.OPEN) {
       socket.send(JSON.stringify({ id: requestId, results }));
     }
   } catch (err) {
     if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify({ id: requestId, error: String(err) }));
+      socket.send(JSON.stringify({ id: requestId, error: String(err.message || err) }));
     }
   }
 }
-// Cookie consent cache (per-session only, cleared on extension restart)
+// Cookie consent cache — persisted to chrome.storage.session (survives SW restart, cleared on browser close)
 const cookieConsentCache = new Map();
+chrome.storage.session.get(["cookieConsentCache"], (res) => {
+  if (res.cookieConsentCache) {
+    for (const [k, v] of Object.entries(res.cookieConsentCache)) {
+      cookieConsentCache.set(k, v);
+    }
+  }
+});
 
 async function handleGetCookiesRequest(requestId, targetUrl) {
   try {
@@ -495,6 +571,7 @@ async function handleGetCookiesRequest(requestId, targetUrl) {
         
         // Cache approval for this session
         cookieConsentCache.set(domain, true);
+        chrome.storage.session.set({ cookieConsentCache: Object.fromEntries(cookieConsentCache) });
       }
     }
     
@@ -546,7 +623,8 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 
 async function handleSearchRequest(requestId, url) {
   try {
-    console.log(`[Owlynn Bridge] Search ID ${requestId} -> ${url}`);
+    const urlObj = new URL(url);
+    console.debug(`[Owlynn Bridge] Search ID ${requestId} -> ${urlObj.hostname}`);
     const tab = await chrome.tabs.create({ url, active: false });
 
     const timeoutId = setTimeout(async () => {
@@ -569,18 +647,14 @@ async function handleSearchRequest(requestId, url) {
 function sendSearchResponse(requestId, results) {
   if (socket && socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify({ id: requestId, results }));
-    console.log(`[Owlynn Bridge] Sent search results for ID ${requestId}. Count: ${results.length}`);
-  } else {
-    console.error("[Owlynn Bridge] Failed to send search response: WebSocket closed");
+    console.debug(`[Owlynn Bridge] Sent search results for ID ${requestId}. Count: ${results.length}`);
   }
 }
 
 function sendTabResponse(requestId, tab) {
   if (socket && socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify({ id: requestId, tab }));
-    console.log(`[Owlynn Bridge] Sent active tab for ID ${requestId}`);
-  } else {
-    console.error("[Owlynn Bridge] Failed to send tab response: WebSocket closed");
+    console.debug(`[Owlynn Bridge] Sent active tab for ID ${requestId}`);
   }
 }
 
@@ -632,6 +706,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponseCallback) => 
       console.log("[Owlynn Bridge] User aborted automation. Closing WebSocket to interrupt backend.");
       socket.close();
     }
+    return false;
+  }
+
+  if (message.type === "BACKEND_URL_UPDATED") {
+    console.log("[Owlynn Bridge] Backend URL updated. Reconnecting...");
+    // Update URLs from the new value
+    try {
+      const url = new URL(message.url);
+      backendHttpUrl = url.origin;
+      backendWsUrl = `ws://${url.host}`;
+    } catch {
+      // Invalid URL, keep current
+    }
+    if (socket) socket.close();
+    reconnectAttempts = 0; // Reset backoff for new URL
+    // connect() will be triggered by onclose handler
     return false;
   }
 

@@ -44,21 +44,9 @@
     document.body.appendChild(uiContainer);
   }
 
-  function showUI(messageHtml, duration = null) {
+  function showUI(messageText, duration = null) {
     if (!uiContainer) initUI();
-    
-    // Accept either a pre-sanitized HTML string or plain text
-    if (typeof messageHtml === 'string' && messageHtml.includes('<span')) {
-      // Legacy HTML path — sanitize each segment
-      textContainer.textContent = '';
-      const wrapper = document.createElement('div');
-      wrapper.innerHTML = messageHtml;
-      // Extract text content only, ignore any script tags
-      textContainer.textContent = wrapper.textContent;
-    } else {
-      textContainer.textContent = sanitize(messageHtml);
-    }
-    
+    textContainer.textContent = sanitize(messageText);
     uiContainer.classList.remove('hidden');
     uiContainer.classList.add('visible');
 
@@ -76,7 +64,7 @@
   }
 
   let sidebarContainer = null;
-  let sidebarBaseUrl = 'http://127.0.0.1:5173'; // Default, overridden by popup config
+  let sidebarBaseUrl = 'http://127.0.0.1:8000'; // Default, overridden by popup config
 
   // Load configured URL from storage
   chrome.storage.local.get(['owlynnBackendUrl'], (result) => {
@@ -180,9 +168,5 @@
       sendResponse({ approved: approved });
     }
   });
-
-  // Export a function just in case background script needs to call it directly
-  window.owlynnShowStatus = showUI;
-  window.owlynnHideStatus = hideUI;
 
 })();

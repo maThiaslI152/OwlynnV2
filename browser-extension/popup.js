@@ -64,7 +64,7 @@ liveBtn.addEventListener("click", () => {
 });
 
 // ── Backend URL Configuration ──────────────────────────────────────────
-const DEFAULT_BACKEND_URL = "http://127.0.0.1:5173";
+const DEFAULT_BACKEND_URL = "http://127.0.0.1:8000";
 
 // Load saved URL
 chrome.storage.local.get(["owlynnBackendUrl"], (result) => {

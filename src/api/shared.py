@@ -88,11 +88,56 @@ def _strip_injected_file_content(content: str) -> str:
     return stripped.strip()
 
 
+def _extract_multimodal_parts(content):
+    """Extract text and image_url parts from multimodal message content.
+
+    Returns (text: str, attachments: list[dict]) where attachments contain
+    image data suitable for the frontend ChatMessageAttachment type.
+    """
+    text_parts = []
+    attachments = []
+    for block in content:
+        if isinstance(block, str):
+            text_parts.append(block)
+        elif isinstance(block, dict):
+            if block.get("type") == "image_url":
+                image_url = block.get("image_url", {})
+                url = (
+                    image_url.get("url", "")
+                    if isinstance(image_url, dict)
+                    else str(image_url)
+                )
+                if url.startswith("data:image/"):
+                    # Extract mime type from data URI
+                    mime = url.split(";")[0].replace("data:", "")
+                    ext = mime.split("/")[-1]
+                    attachments.append(
+                        {
+                            "name": f"image.{ext}",
+                            "type": mime,
+                            "previewUrl": url,
+                        }
+                    )
+            else:
+                text = block.get("text")
+                if text is not None:
+                    text_parts.append(str(text))
+                else:
+                    nested = block.get("content")
+                    if nested is not None:
+                        text_parts.append(_stringify_lc_message_content(nested))
+        else:
+            text_parts.append(str(block))
+    return "".join(text_parts), attachments
+
+
 def serialize_message(msg):
     """
     Converts Langchain BaseMessage objects into raw UI-friendly dictionaries
     so they can be safely streamed over WebSockets to a React client.
     """
+    attachments = []
+
     if isinstance(msg, AIMessage):
         content_ui = _stringify_lc_message_content(msg.content)
         # Strip DSML/Qwen XML tags from assistant messages
@@ -110,11 +155,18 @@ def serialize_message(msg):
     else:
         content_ui = msg.content
         if getattr(msg, "type", None) == "human":
-            content_ui = _strip_injected_file_content(
-                content_ui if isinstance(content_ui, str) else str(content_ui or "")
-            )
+            if isinstance(content_ui, list):
+                # Multimodal content — extract text and image attachments
+                content_ui, attachments = _extract_multimodal_parts(content_ui)
+                content_ui = _strip_injected_file_content(content_ui)
+            else:
+                content_ui = _strip_injected_file_content(
+                    content_ui if isinstance(content_ui, str) else str(content_ui or "")
+                )
 
     serialized = {"type": getattr(msg, "type", "unknown"), "content": content_ui}
+    if attachments:
+        serialized["attachments"] = attachments
 
     if isinstance(msg, AIMessage) and getattr(msg, "tool_calls", None):
         serialized["tool_calls"] = msg.tool_calls

@@ -33,13 +33,19 @@
     if (action === "wait_for_navigation") {
       const timeout = args.timeout || 10000;
       return new Promise((resolve) => {
+        if (document.readyState === 'complete') {
+          resolve({ success: true, result: "Page already loaded." });
+          return;
+        }
         const timer = setTimeout(() => {
+          window.removeEventListener('load', onLoad);
           resolve({ success: true, result: `Waited ${timeout}ms (timeout).` });
         }, timeout);
-        window.addEventListener('load', () => {
+        function onLoad() {
           clearTimeout(timer);
           resolve({ success: true, result: "Page loaded." });
-        }, { once: true });
+        }
+        window.addEventListener('load', onLoad, { once: true });
       });
     }
 
@@ -108,7 +114,11 @@
       els.forEach(el => {
         const form = el.closest('form');
         if (form) {
-          form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+          if (form.requestSubmit) {
+            form.requestSubmit();
+          } else {
+            form.submit();
+          }
           submitted++;
         }
       });
@@ -222,6 +232,10 @@
       if (el) els = [el];
       else if (action !== "scroll") return { success: false, error: "Element ID " + element_id + " not found in DOM map." };
     } else if (selector) {
+      // Validate selector — block dangerous URI schemes
+      if (/^(javascript|data|vbscript):/i.test(selector.trim())) {
+        return { success: false, error: "Blocked dangerous selector scheme." };
+      }
       els = Array.from(document.querySelectorAll(selector));
     }
     
@@ -245,6 +259,11 @@
         // Clone to avoid mutating the live DOM
         const clone = el.cloneNode(true);
         
+        // Remove sensitive elements from clone
+        clone.querySelectorAll('input[type="password"], input[type="hidden"]').forEach(e => e.remove());
+        // Remove elements with names suggesting secrets
+        clone.querySelectorAll('input[name*="token"], input[name*="csrf"], input[name*="secret"], input[name*="api_key"]').forEach(e => e.remove());
+        
         // Sync input/textarea values to attributes for outerHTML serialization
         const inputs = el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' ? [el] : Array.from(el.querySelectorAll('input, textarea, select'));
         const cloneInputs = clone.tagName === 'INPUT' || clone.tagName === 'TEXTAREA' || clone.tagName === 'SELECT' ? [clone] : Array.from(clone.querySelectorAll('input, textarea, select'));
@@ -252,6 +271,9 @@
         for (let i = 0; i < inputs.length; i++) {
           const original = inputs[i];
           const clonedInput = cloneInputs[i];
+          // Skip sensitive fields
+          if (original.type === 'password' || original.type === 'hidden') continue;
+          if (/token|csrf|secret|api_key/i.test(original.name || '')) continue;
           if (original.tagName === 'INPUT' && (original.type === 'checkbox' || original.type === 'radio')) {
             if (original.checked) clonedInput.setAttribute('checked', 'checked');
             else clonedInput.removeAttribute('checked');

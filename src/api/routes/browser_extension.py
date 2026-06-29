@@ -1,4 +1,5 @@
 import asyncio
+import hmac
 import logging
 import secrets
 import uuid
@@ -279,19 +280,30 @@ async def websocket_endpoint(websocket: WebSocket):
 
     # Wait for auth message (first message must be auth)
     try:
-        auth_data = await asyncio.wait_for(websocket.receive_json(), timeout=5.0)
-        if auth_data.get("type") != "auth" or auth_data.get("token") != _auth_token:
+        auth_data = await asyncio.wait_for(websocket.receive_json(), timeout=10.0)
+        token_ok = (
+            auth_data.get("type") == "auth"
+            and isinstance(auth_data.get("token"), str)
+            and hmac.compare_digest(auth_data.get("token", ""), _auth_token)
+        )
+        if not token_ok:
             logger.warning("Browser extension auth failed: invalid token")
             await websocket.close(code=4001, reason="Authentication failed")
             return
         logger.info("Browser extension authenticated successfully")
     except asyncio.TimeoutError:
         logger.warning("Browser extension auth timeout — no auth message received")
-        await websocket.close(code=4001, reason="Authentication timeout")
+        try:
+            await websocket.close(code=4001, reason="Authentication timeout")
+        except Exception:
+            pass
         return
     except Exception as e:
         logger.warning("Browser extension auth error: %s", e)
-        await websocket.close(code=4001, reason="Authentication error")
+        try:
+            await websocket.close(code=4001, reason="Authentication error")
+        except Exception:
+            pass
         return
 
     active_connections.append(websocket)
@@ -299,6 +311,19 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         while True:
             data = await websocket.receive_json()
+
+            # Validate message type — allowlist of known types
+            msg_type = data.get("type")
+            action = data.get("action")
+            allowed_types = {"page_context_push", "ping", "auth"}
+            allowed_actions = set()  # Responses use "id" field, not "action"
+            if msg_type not in allowed_types and not (
+                data.get("id") and isinstance(data.get("id"), str)
+            ):
+                logger.debug(
+                    "Ignoring unknown message type from extension: %s", msg_type
+                )
+                continue
 
             if data.get("type") == "page_context_push":
                 if data.get("is_live_tracking"):

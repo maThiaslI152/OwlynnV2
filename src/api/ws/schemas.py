@@ -293,6 +293,12 @@ class CloudFallbackEvent(BaseModel):
     correlation_id: Optional[str] = None
 
 
+class ErrorEvent(BaseModel):
+    type: Literal["error"] = "error"
+    content: str
+    correlation_id: Optional[str] = None
+
+
 ServerEvent = Annotated[
     Union[
         AssistantMessageEvent,
@@ -322,6 +328,7 @@ ServerEvent = Annotated[
         CoherenceRetryCompletedEvent,
         ResponseCoherenceEvent,
         CloudFallbackEvent,
+        ErrorEvent,
     ],
     Field(discriminator="type"),
 ]

@@ -52,21 +52,24 @@
       answers.forEach(input => {
         let labelText = "";
         if (input.id) {
-          const label = q.querySelector(`label[for="${input.id}"]`);
+          const safeId = CSS.escape ? CSS.escape(input.id) : input.id.replace(/"/g, '\\"');
+          const label = q.querySelector(`label[for="${safeId}"]`);
           if (label) labelText = label.innerText.trim();
         }
         if (!labelText && input.parentElement) {
           labelText = input.parentElement.innerText.replace(input.value, '').trim();
         }
-        structuredData.push(`  - Choice: ${labelText} (Selector: input[name="${input.name}"][value="${input.value}"])`);
+        const safeName = CSS.escape ? CSS.escape(input.name || '') : (input.name || '').replace(/"/g, '\\"');
+        const safeValue = CSS.escape ? CSS.escape(input.value || '') : (input.value || '').replace(/"/g, '\\"');
+        structuredData.push(`  - Choice: ${labelText} (Selector: input[name="${safeName}"][value="${safeValue}"])`);
       });
     });
     
     const nextBtn = document.querySelector('input[name="next"], button[name="next"], input[value="Next page"], input[value="Finish attempt ..."]');
     if (nextBtn) {
       let selector = nextBtn.tagName.toLowerCase();
-      if (nextBtn.name) selector += `[name="${nextBtn.name}"]`;
-      else if (nextBtn.value) selector += `[value="${nextBtn.value}"]`;
+      if (nextBtn.name) selector += `[name="${CSS.escape ? CSS.escape(nextBtn.name) : nextBtn.name.replace(/"/g, '\\"')}"]`;
+      else if (nextBtn.value) selector += `[value="${CSS.escape ? CSS.escape(nextBtn.value) : nextBtn.value.replace(/"/g, '\\"')}"]`;
       structuredData.push(`\n[Next Button Selector: ${selector}]`);
     }
   }
