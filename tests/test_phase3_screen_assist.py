@@ -76,6 +76,8 @@ def test_screen_assist_toolbox_registered():
         "get_active_browser_screenshot",
         "active_browser_action",
         "capture_kali_terminal",
+        "run_kali_command",
+        "host_browser_action",
         "upload_from_workspace",
     }
 
@@ -93,6 +95,7 @@ def test_user_wants_screen_assist_keywords():
 
 
 def test_augment_toolbox_pentest_adds_screen_assist():
+    # Pentest now replaces the toolbox entirely with ["pentest"]
     out = _augment_toolbox_for_scenario(["web_search"], "pentest", "nmap scan")
-    assert "screen_assist" in out
+    assert out == ["pentest"]
     assert _augment_toolbox_for_scenario(["all"], "pentest", "nmap") == ["all"]

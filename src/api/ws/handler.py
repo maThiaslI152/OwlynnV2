@@ -20,6 +20,7 @@ from src.config.audit_log import set_thread_id, audit_info
 import json
 import asyncio
 import os
+import uuid
 
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from langgraph.types import Command
@@ -153,10 +154,12 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                         for tool_call_id, tc in list(pending_tool_calls.items()):
                             tool_name = str(tc.get("tool_name") or "unknown_tool")
                             tool_input = tc.get("tool_input")
+                            batch_id = tc.get("batch_id")
                             started_at = asyncio.get_running_loop().time()
                             running_tool_calls[tool_call_id] = {
                                 "tool_name": tool_name,
                                 "started_at": started_at,
+                                "batch_id": batch_id,
                             }
                             await _send_ws(
                                 {
@@ -165,6 +168,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                     "tool_name": tool_name,
                                     "tool_call_id": tool_call_id or None,
                                     "input": tool_input,
+                                    "batch_id": batch_id,
                                     **(
                                         _tool_risk_metadata(tool_name, tool_input) or {}
                                     ),
@@ -572,6 +576,8 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                                 "message": aw_msg,
                                             }
                                         )
+                                    # Generate a batch_id to group parallel tool calls from the same LLM response
+                                    batch_id = str(uuid.uuid4().hex[:12])
                                     for tc in tc_list:
                                         tool_call_id = str(
                                             tc.get("id")
@@ -587,6 +593,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                         pending_tool_calls[tool_call_id] = {
                                             "tool_name": tool_name,
                                             "tool_input": tool_input,
+                                            "batch_id": batch_id,
                                         }
                                 if text_for_ui and not tc_list:
                                     # Final assistant text after tools (or non-streaming turns). Without this,
@@ -718,6 +725,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                             )
                                         content = str(getattr(msg, "content", "") or "")
                                         status = _tool_status_from_content(content)
+                                        batch_id = (stored or {}).get("batch_id")
                                         tool_payload: dict = {
                                             "type": "tool_execution",
                                             "status": status,
@@ -730,6 +738,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                             if status == "error"
                                             else None,
                                             "duration": duration,
+                                            "batch_id": batch_id,
                                         }
                                         if (
                                             status == "success"

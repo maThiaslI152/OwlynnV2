@@ -19,7 +19,7 @@ from mem0 import Memory  # noqa: E402
 _qdrant_host = config.get("external_services.qdrant.host", "localhost")
 _qdrant_port = int(config.get("external_services.qdrant.port", 6333))
 _qdrant_collection = config.get(
-    "external_services.qdrant.collection_name", "cowork_memory_nomic"
+    "external_services.qdrant.collection_name", "owlynn_memory_nomic"
 )
 _qdrant_dims = int(config.get("external_services.qdrant.embedding_dims", 768))
 _embed_model = config.get(

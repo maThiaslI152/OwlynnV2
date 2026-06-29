@@ -262,6 +262,31 @@ def recall_memories(query: str) -> str:
     Args:
         query: Topic or question to search for.
     """
+    from .workspace_context import get_active_scenario_id
+
+    # Pentest mode: return engagement findings instead of global memory
+    if get_active_scenario_id() == "pentest":
+        from src.memory.pentest_engagement import (
+            get_active_engagement,
+            list_findings,
+            get_findings_summary,
+        )
+
+        eng = get_active_engagement()
+        if not eng:
+            return "No active engagement."
+        findings = list_findings(eng["id"])
+        if not findings:
+            return "No findings yet in this engagement."
+        summary = get_findings_summary(eng["id"])
+        lines = [f"Engagement '{eng['name']}' — {summary['total']} finding(s):"]
+        for f in findings[:10]:
+            sev = f.get("severity", "info").upper()
+            lines.append(
+                f"  [{sev}] {f.get('id')}: {f.get('title', 'Untitled')} ({f.get('status', '?')})"
+            )
+        return "\n".join(lines)
+
     memories = search_memories(query, top_k=8)
     if not memories:
         return "No relevant memories found."
@@ -283,6 +308,55 @@ def recall_all_memories(query: str = "", project_id: str = "", tags: str = "") -
         project_id: Optional project ID to scope search (e.g. "my-project"). Leave empty for global.
         tags: Optional comma-separated metadata tags to filter (e.g. study,misconception).
     """
+    from .workspace_context import get_active_scenario_id
+
+    # Pentest mode: return full engagement context instead of global memory
+    if get_active_scenario_id() == "pentest":
+        from src.memory.pentest_engagement import (
+            get_active_engagement,
+            get_engagement_context,
+            list_findings,
+            list_targets,
+            get_scope,
+        )
+
+        eng = get_active_engagement()
+        if not eng:
+            return "No active engagement."
+        parts = [get_engagement_context(eng["id"])]
+
+        scope = get_scope(eng["id"])
+        if scope.get("rules_of_engagement"):
+            parts.append(f"\n### Rules of Engagement\n{scope['rules_of_engagement']}")
+
+        findings = list_findings(eng["id"])
+        if findings:
+            parts.append("\n### All Findings")
+            for f in findings:
+                sev = f.get("severity", "info").upper()
+                cwe = f.get("cwe", "")
+                owasp = f.get("owasp_category", "")
+                parts.append(
+                    f"  [{sev}] {f.get('id')}: {f.get('title')} — {f.get('status', '?')}"
+                    f"{f' (CWE: {cwe})' if cwe else ''}{f' ({owasp})' if owasp else ''}"
+                )
+                if f.get("description"):
+                    parts.append(f"    Description: {f['description'][:200]}")
+                if f.get("remediation"):
+                    parts.append(f"    Remediation: {f['remediation'][:200]}")
+
+        targets = list_targets(eng["id"])
+        if targets:
+            parts.append("\n### Discovered Hosts")
+            for t in targets:
+                ports = ", ".join(
+                    f"{p['port']}/{p.get('service', '?')}" for p in t.get("ports", [])
+                )
+                parts.append(
+                    f"  {t.get('ip')} ({t.get('hostname', '?')}): {ports or 'no ports'}"
+                )
+
+        return "\n".join(parts)
     try:
         from ..memory.long_term import memory as mem0_memory
     except Exception as e:

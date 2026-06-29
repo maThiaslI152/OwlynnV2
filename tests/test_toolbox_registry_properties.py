@@ -58,11 +58,17 @@ class TestResolveToolsProperty:
         (except web tools when disabled)."""
         result = resolve_tools(toolbox_names, web_search_enabled=web_enabled)
         result_ids = set(id(t) for t in result)
+        web_tool_ids = set(id(t) for t in TOOLBOX_REGISTRY.get("web_search", []))
 
         for name in toolbox_names:
             if name == "web_search" and not web_enabled:
                 continue
+            if name not in TOOLBOX_REGISTRY:
+                continue
             for tool in TOOLBOX_REGISTRY[name]:
+                # Web tools may be filtered from pentest toolbox when web is disabled
+                if not web_enabled and id(tool) in web_tool_ids:
+                    continue
                 assert id(tool) in result_ids, (
                     f"Tool from toolbox '{name}' missing in resolve_tools result"
                 )

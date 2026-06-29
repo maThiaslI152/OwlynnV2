@@ -10,7 +10,7 @@ from typing import Any
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from src.agent.pii_scrubber import scrub_for_storage
-from src.config.audit_log import audit_info, audit_warn
+from src.config.audit_log import audit_debug, audit_info, audit_warn
 from src.config.config_loader import config
 from src.memory.extraction.prompts import build_extraction_messages
 from src.memory.extraction.queue import CONSUMER_GROUP, STREAM_KEY
@@ -104,6 +104,12 @@ async def process_extraction_job(payload: dict[str, Any]) -> None:
     """PII scrub → 8B extract → validate → Mem0 store."""
     turn_text = str(payload.get("turn_text", "")).strip()
     if not turn_text:
+        return
+
+    # Safety net: skip pentest turns (memory_write_node should already filter)
+    scenario_id = payload.get("scenario_id")
+    if scenario_id == "pentest":
+        audit_debug("memory.extract", "pentest_skipped", reason="pentest_scenario")
         return
 
     scrubbed, redactions = scrub_for_storage(turn_text)

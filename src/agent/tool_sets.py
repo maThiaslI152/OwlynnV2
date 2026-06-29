@@ -49,6 +49,7 @@ from src.tools.study_tools import (
 )
 from src.tools.rag_tools import search_workspace_docs
 from src.tools.screen_assist.tools import SCREEN_ASSIST_TOOLS
+from src.tools.pentest_tools import PENTEST_TOOLS
 
 # Full tool set with web search enabled
 COMPLEX_TOOLS_WITH_WEB: list = [
@@ -237,6 +238,39 @@ TOOLBOX_REGISTRY: dict[str, list] = {
         search_workspace_docs,
     ],
     "screen_assist": list(SCREEN_ASSIST_TOOLS),
+    "pentest": [
+        *PENTEST_TOOLS,
+        # File ops
+        read_workspace_file,
+        write_workspace_file,
+        edit_workspace_file,
+        list_workspace_files,
+        delete_workspace_file,
+        download_to_workspace,
+        # Screen assist / Kali
+        *SCREEN_ASSIST_TOOLS,
+        # Web (recon)
+        web_search,
+        fetch_webpage,
+        deep_research,
+        browser_background_fetch,
+        # Report generation
+        create_pdf,
+        create_docx,
+        # Data analysis
+        notebook_run,
+        notebook_reset,
+        notebook_vars,
+        # Task tracking
+        todo_add,
+        todo_list,
+        todo_complete,
+        todo_update,
+        todo_filter,
+        # Skills
+        list_skills,
+        invoke_skill,
+    ],
     # MCP tools are loaded at runtime from mcp_config.json — see merge_mcp_tools()
     "mcp": [],
 }
@@ -295,6 +329,7 @@ def resolve_tools(toolbox_names: list[str], web_search_enabled: bool = True) -> 
 
     tools: list = []
     seen_ids: set = set()
+    web_tool_ids = set(id(t) for t in TOOLBOX_REGISTRY.get("web_search", []))
     for name in toolbox_names:
         if name == "web_search" and not web_search_enabled:
             continue
@@ -304,6 +339,9 @@ def resolve_tools(toolbox_names: list[str], web_search_enabled: bool = True) -> 
             for t in TOOLBOX_REGISTRY[name]:
                 tid = id(t)
                 if tid not in seen_ids:
+                    # Skip web tools when web is disabled (even if embedded in pentest box)
+                    if not web_search_enabled and tid in web_tool_ids:
+                        continue
                     seen_ids.add(tid)
                     tools.append(t)
 

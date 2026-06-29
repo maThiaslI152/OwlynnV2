@@ -24,7 +24,7 @@ external_services:
   qdrant:
     host: "localhost"        # QDRANT_HOST env
     port: 6333               # QDRANT_PORT env
-    collection_name: "cowork_memory_nomic"
+    collection_name: "owlynn_memory_nomic"
     embedding_dims: 768
   redis:
     url: "redis://localhost:6379"  # REDIS_URL env
@@ -54,6 +54,7 @@ models:
   small:
     base_url: "http://127.0.0.1:1234/v1"      # SMALL_LLM_BASE_URL env
     model_name: "qwen3-vl-4b-instruct-c_abliterated-v2-mlx"
+    lm_studio_model_key: "qwen3-vl-4b-instruct-c_abliterated-v2-mlx"  # For model swap API
     temperature: 0.1                          # Low temp for consistent routing classification
     max_tokens: 8192                          # Increased budget for vision/extraction tasks
     max_output_tokens: 8192
@@ -89,15 +90,18 @@ models:
 
   pentest:
     base_url: "http://127.0.0.1:1234/v1"    # Pentest mode local-only model
-    model_name: "gemma-4-12b-coder-fable5-composer2.5-v1@q4_k_m"  # Winner of pentest benchmark (84.1%)
+    model_name: "gemma-4-12b-coder-fable5-composer2.5-v1"  # Winner of pentest benchmark (84.1%)
+    lm_studio_model_key: "gemma-4-12b-coder-fable5-composer2.5-v1"  # For model swap API
     temperature: 0.3
-    max_tokens: 8192
+    max_tokens: 8192                          # Output token budget
+    max_output_tokens: 8192
     timeout: 180
     request_timeout: 180
-    context_window: 16384
+    context_window: 32768                     # 32K — model supports up to 262K, 32K balances VRAM
     extra_body:
-      keep_alive: -1
+      keep_alive: 0                           # Unload after idle (model swap handles lifecycle)
       flash_attention: true
+      top_p: 0.95
     note: "Cloud APIs refuse security content. Pentest mode always uses this local model."
 
   embedding:

@@ -61,7 +61,16 @@ provision:
       wget \
       unzip \
       sqlite3 \
-      macchanger
+      macchanger \
+      nikto \
+      gobuster \
+      dirb \
+      enum4linux \
+      smbclient \
+      sslscan \
+      whatweb \
+      seclists \
+      wordlists
 
     # Enable and start SSH
     systemctl enable ssh

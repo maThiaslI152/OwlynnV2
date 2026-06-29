@@ -454,6 +454,18 @@ function App() {
               ts: Date.now(),
             })
           }
+          // Populate pentest Activity Feed with agent messages
+          if (finalContent.trim()) {
+            const feedStore = useAppStore.getState()
+            if (feedStore.activeMode === 'pentest') {
+              feedStore.appendActivityFeedItem({
+                id: `agent-${Date.now()}`,
+                type: 'agent_message',
+                summary: finalContent.slice(0, 500),
+                ts: Date.now(),
+              })
+            }
+          }
           if (finalContent.trim() && isTauriRuntime) {
             void tauriBridge.speakText(finalContent.trim())
           }
@@ -524,6 +536,39 @@ function App() {
           const chartEmbed = buildChartEmbedItem(event, Date.now())
           if (chartEmbed) {
             store.appendConversationItem(chartEmbed)
+          }
+          // Populate pentest Activity Feed
+          const feedStore = useAppStore.getState()
+          if (feedStore.activeMode === 'pentest') {
+            const feedItem = {
+              id: snapshot.toolCallId || `tool-${Date.now()}`,
+              type: snapshot.status === 'running' ? 'tool_running' as const
+                : snapshot.status === 'success' ? 'tool_success' as const
+                : 'tool_error' as const,
+              batchId: snapshot.batchId ?? null,
+              toolName: snapshot.toolName,
+              toolCallId: snapshot.toolCallId ?? null,
+              summary: snapshot.toolName,
+              output: snapshot.status === 'success' ? (event as any).output?.slice(0, 500) : undefined,
+              error: snapshot.status === 'error' ? (event as any).error?.slice(0, 500) : undefined,
+              duration: snapshot.duration ?? null,
+              ts: Date.now(),
+              riskLabel: snapshot.riskLabel ?? null,
+            }
+            // Update existing or append
+            const existing = feedStore.activityFeedItems.find(
+              (item) => item.toolCallId === snapshot.toolCallId
+            )
+            if (existing) {
+              feedStore.updateActivityFeedItem(existing.id, {
+                type: feedItem.type,
+                output: feedItem.output,
+                error: feedItem.error,
+                duration: feedItem.duration,
+              })
+            } else {
+              feedStore.appendActivityFeedItem(feedItem)
+            }
           }
         } else if (event.type === 'interrupt') {
           handleInterruptRef.current(event.interrupts)
@@ -860,7 +905,6 @@ function App() {
   }, [activeProjectId, currentThreadId, clearSession, refreshCloudUsage, projects, setActiveMode])
 
   const handleModeChange = useCallback((mode: 'normal' | 'study' | 'pentest') => {
-    const prevMode = useAppStore.getState().activeMode
     setActiveMode(mode)
     // Persist mode to project metadata
     fetchWithAuth(`/api/projects/${encodeURIComponent(activeProjectId)}`, {
@@ -869,29 +913,8 @@ function App() {
       body: JSON.stringify({ mode }),
     }).catch(() => { /* non-critical */ })
 
-    // Auto-start Kali VM when switching to pentest mode
-    if (mode === 'pentest' && prevMode !== 'pentest') {
-      setOperatorNote('Starting Kali VM...')
-      fetchWithAuth('/api/pentest/vm/start', { method: 'POST' })
-        .then((r) => r.json())
-        .then((d) => {
-          if (d.status === 'ok') {
-            setOperatorNote('Kali VM ready for pentest.')
-          } else {
-            setOperatorNote(`Kali VM: ${d.error || 'startup failed'}`)
-            toast.error(`Kali VM: ${d.error || 'startup failed'}`)
-          }
-        })
-        .catch(() => { /* non-critical */ })
-    }
-
-    // Auto-stop Kali VM when switching away from pentest mode
-    if (prevMode === 'pentest' && mode !== 'pentest') {
-      fetchWithAuth('/api/pentest/vm/stop', { method: 'POST' })
-        .then(() => { setOperatorNote('Kali VM stopped.') })
-        .catch(() => { /* non-critical */ })
-    }
-  }, [activeProjectId, setActiveMode, setOperatorNote])
+    // VM lifecycle is handled by the ModeSwitchModal in AppShell
+  }, [activeProjectId, setActiveMode])
 
   const handleNewChat = useCallback(() => {
     const newThreadId = makeThreadId()

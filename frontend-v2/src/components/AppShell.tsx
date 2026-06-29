@@ -11,8 +11,15 @@ import { HitlPromptCard, type HitlPromptViewModel } from './HitlPromptCard'
 import { ToolActivityCard } from './ToolActivityCard'
 import { ModeSwitcher } from './ModeSwitcher'
 import { PentestScopePanel } from './PentestScopePanel'
+import { PentestToolsPanel } from './PentestToolsPanel'
+import { ModeSwitchConfirmation, PentestLoadingOverlay } from './ModeSwitchModal'
 import { StudyProgressPanel } from './StudyProgressPanel'
 import { StudyNotesSearch } from './StudyNotesSearch'
+import { PentestDashboard } from './PentestDashboard'
+import { EngagementSelector } from './EngagementSelector'
+import { PhaseTracker } from './PhaseTracker'
+import { FindingsBadges } from './FindingsBadges'
+import { QuickStats } from './QuickStats'
 import type { InterruptChoice } from '../state/useAppStore'
 import type { ConversationItem, ConversationToolActivity, ConversationHitlPrompt, ConversationChartEmbed } from '../appEventHandlers'
 import { useAppStore } from '../state/useAppStore'
@@ -33,6 +40,7 @@ import {
   InteractiveBlockRenderer,
   renderMarkdownSegment,
 } from '../lib/interactiveBlocks'
+import { fetchWithAuth } from '../lib/localRunToken'
 
 interface ProjectChat {
   id: string
@@ -320,6 +328,89 @@ function MessageBubble({
 }
 
 
+function VmStatusBanner() {
+  const [vmRunning, setVmRunning] = useState(false)
+  const [stopping, setStopping] = useState(false)
+  const pendingCorrelationId = useAppStore((s) => s.pendingCorrelationId)
+  const conversationItems = useAppStore((s) => s.conversationItems)
+  const activeMode = useAppStore((s) => s.activeMode)
+
+  useEffect(() => {
+    let disposed = false
+    const check = async () => {
+      try {
+        const resp = await fetchWithAuth('/api/pentest/status')
+        if (resp.ok && !disposed) {
+          const data = await resp.json()
+          setVmRunning(data?.lima?.running ?? false)
+        }
+      } catch { /* non-critical */ }
+    }
+    void check()
+    const interval = setInterval(check, 15000)
+    return () => { disposed = true; clearInterval(interval) }
+  }, [activeMode])
+
+  if (!vmRunning) return null
+
+  const handleStop = async () => {
+    // Check for active work
+    const hasActiveWork = pendingCorrelationId || conversationItems.some(
+      (item) => item.kind === 'tool_activity' && item.status === 'running'
+    )
+    if (hasActiveWork) {
+      const ok = confirm(
+        'Pentest mode is actively working. Stopping the VM will interrupt running tools and SSH sessions. Continue?'
+      )
+      if (!ok) return
+    }
+    setStopping(true)
+    try {
+      const resp = await fetchWithAuth('/api/pentest/vm/stop', { method: 'POST' })
+      if (resp.ok) {
+        setVmRunning(false)
+      }
+    } catch { /* non-critical */ }
+    finally { setStopping(false) }
+  }
+
+  return (
+    <div style={{
+      margin: '0 10px 6px',
+      padding: '6px 10px',
+      borderRadius: 6,
+      background: 'rgba(76,175,80,0.08)',
+      border: '1px solid rgba(76,175,80,0.15)',
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      fontSize: 11,
+    }}>
+      <span style={{ color: '#4caf50', fontWeight: 500 }}>
+        Kali VM running (~2GB)
+      </span>
+      <button
+        type="button"
+        onClick={handleStop}
+        disabled={stopping}
+        style={{
+          background: 'rgba(233,69,96,0.15)',
+          border: '1px solid rgba(233,69,96,0.25)',
+          color: '#e94560',
+          borderRadius: 4,
+          padding: '2px 8px',
+          fontSize: 10,
+          cursor: stopping ? 'wait' : 'pointer',
+          opacity: stopping ? 0.5 : 1,
+        }}
+      >
+        {stopping ? 'Stopping...' : 'Stop'}
+      </button>
+    </div>
+  )
+}
+
+
 const SUGGESTIONS = [
   'What can you help me with?',
   'Explain how this workspace works',
@@ -411,6 +502,71 @@ export function AppShell({
   const [creatingProject, setCreatingProject] = useState(false)
   const [safeModePopoverOpen, setSafeModePopoverOpen] = useState(false)
   const attachWorkspaceFileRef = useRef<(file: AttachedFile) => void>(() => {})
+  const [modeSwitchPending, setModeSwitchPending] = useState<'normal' | 'study' | 'pentest' | null>(null)
+  const [pentestLoading, setPentestLoading] = useState(false)
+  const [pentestLoadingStatus, setPentestLoadingStatus] = useState('')
+
+  // Mode switch with confirmation modal (only for pentest transitions)
+  const handleModeSwitchRequest = useCallback((mode: 'normal' | 'study' | 'pentest') => {
+    if (mode === activeMode) return
+    // Only show modal when switching to or from pentest mode
+    if (mode === 'pentest' || activeMode === 'pentest') {
+      setModeSwitchPending(mode)
+    } else {
+      // Normal <-> Study: switch directly
+      onModeChange?.(mode)
+    }
+  }, [activeMode, onModeChange])
+
+  const handleModeSwitchConfirm = useCallback(async () => {
+    if (!modeSwitchPending || !onModeChange) return
+    const target = modeSwitchPending
+    setModeSwitchPending(null)
+
+    if (target === 'pentest') {
+      setPentestLoading(true)
+      try {
+        // Step 1: Stop StirlingPDF to free RAM
+        setPentestLoadingStatus('Freeing RAM (stopping StirlingPDF)...')
+        await fetchWithAuth('/api/pentest/services/stop-stirling', { method: 'POST' }).catch(() => {})
+
+        // Step 2: Swap models (unload Qwen3, load Gemma 4 12B)
+        setPentestLoadingStatus('Swapping to pentest model (Gemma 4 12B)...')
+        const swapResp = await fetchWithAuth('/api/pentest/model/swap-to-pentest', { method: 'POST' })
+        const swapData = await swapResp.json()
+        if (swapData.status === 'ok') {
+          setPentestLoadingStatus('Pentest model loaded.')
+        } else {
+          setPentestLoadingStatus(`Model swap: ${swapData.message || 'using current model'}`)
+        }
+
+        // Step 3: Start Kali VM
+        setPentestLoadingStatus('Starting Kali VM...')
+        const vmResp = await fetchWithAuth('/api/pentest/vm/start', { method: 'POST' })
+        const vmData = await vmResp.json()
+        if (vmData.status === 'ok') {
+          setPentestLoadingStatus('Kali VM ready.')
+        } else {
+          setPentestLoadingStatus(`Kali VM: ${vmData.error || 'startup failed'}`)
+        }
+      } catch {
+        setPentestLoadingStatus('Setup encountered an error.')
+      }
+      await new Promise((r) => setTimeout(r, 800))
+      setPentestLoading(false)
+    }
+
+    if (target !== 'pentest' && activeMode === 'pentest') {
+      // Exiting pentest: swap model back to default
+      fetchWithAuth('/api/pentest/model/swap-to-default', { method: 'POST' }).catch(() => {})
+    }
+
+    onModeChange(target)
+  }, [modeSwitchPending, onModeChange, activeMode])
+
+  const handleModeSwitchCancel = useCallback(() => {
+    setModeSwitchPending(null)
+  }, [])
 
   const handleToggleMode = useCallback(async (targetMode: 'compact' | 'full') => {
     if (targetMode === 'compact') {
@@ -519,10 +675,14 @@ export function AppShell({
           {/* ── Mode Switcher ── */}
           {onModeChange && (
             <div style={{ padding: '8px 10px 4px' }}>
-              <ModeSwitcher activeMode={activeMode} onModeChange={onModeChange} />
+              <ModeSwitcher activeMode={activeMode} onModeChange={handleModeSwitchRequest} />
             </div>
           )}
 
+          {/* ── VM Status Banner (visible in all modes when VM is running) ── */}
+          <VmStatusBanner />
+
+          {activeMode !== 'pentest' && (
           <details className="sidebar-accordion" open>
             <summary>
               Workspace
@@ -623,7 +783,10 @@ export function AppShell({
               </div>
             </div>
           </details>
+          )}
 
+          {activeMode !== 'pentest' && (
+          <>
           {/* ── Chat List ── */}
           <details className="sidebar-accordion" open>
             <summary>
@@ -710,6 +873,8 @@ export function AppShell({
               />
             </div>
           </details>
+          </>
+          )}
 
           {/* ── Exam Countdown ── */}
           {activeMode !== 'pentest' && examCountdown && examCountdown.length > 0 && (
@@ -763,17 +928,28 @@ export function AppShell({
           )}
 
           {activeMode === 'pentest' && (
-            <details className="sidebar-accordion" open>
-              <summary>Scope & Constraints</summary>
-              <div className="sidebar-accordion-content">
-                <PentestScopePanel activeProjectId={activeProjectId} />
-              </div>
-            </details>
+            <>
+              <EngagementSelector />
+              <PhaseTracker />
+              <FindingsBadges />
+              <QuickStats />
+              <details className="sidebar-accordion" open>
+                <summary>Infrastructure</summary>
+                <div className="sidebar-accordion-content">
+                  <PentestToolsPanel />
+                </div>
+              </details>
+            </>
           )}
         </aside>
       )}
 
-      {/* ── Center Panel ── */}
+      {/* ── Center Panel / Pentest Dashboard ── */}
+      {activeMode === 'pentest' ? (
+        <main className="panel pentest-dashboard">
+          <PentestDashboard onSend={onSend} />
+        </main>
+      ) : (
       <main className={`panel center-panel${isCompact ? ' center-panel-compact' : ''}`}>
         {showDragStrip && <div className="window-drag-strip" data-tauri-drag-region />}
 
@@ -997,7 +1173,23 @@ export function AppShell({
           }}
         />
       </main>
+      )}
       </div>
+
+      {/* ── Mode Switch Confirmation Modal ── */}
+      {modeSwitchPending && (
+        <ModeSwitchConfirmation
+          targetMode={modeSwitchPending}
+          currentMode={activeMode}
+          onConfirm={handleModeSwitchConfirm}
+          onCancel={handleModeSwitchCancel}
+        />
+      )}
+
+      {/* ── Pentest Loading Overlay ── */}
+      {pentestLoading && (
+        <PentestLoadingOverlay status={pentestLoadingStatus} />
+      )}
     </div>
   )
 }

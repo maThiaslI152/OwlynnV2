@@ -2892,6 +2892,7 @@ source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },
     { name = "crawl4ai" },
+    { name = "cryptography" },
     { name = "curl-cffi" },
     { name = "docling" },
     { name = "duckduckgo-search" },
@@ -2930,6 +2931,7 @@ dependencies = [
 requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.12" },
     { name = "crawl4ai" },
+    { name = "cryptography", specifier = ">=42.0" },
     { name = "curl-cffi", specifier = ">=0.7" },
     { name = "docling", specifier = ">=2.0" },
     { name = "duckduckgo-search", specifier = ">=6.0" },

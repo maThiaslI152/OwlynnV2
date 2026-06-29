@@ -26,6 +26,7 @@ export interface ToolExecutionSnapshot {
   ts: number
   input?: string | null
   toolCallId?: string | null
+  batchId?: string | null
   status: 'running' | 'success' | 'error'
   duration?: number | null
   riskLabel?: string | null
@@ -132,6 +133,26 @@ export interface InlineSecurityPrompt {
   backendInterrupt?: unknown
 }
 
+export interface PentestVmStatus {
+  installed: boolean
+  running: boolean
+  vm_name: string
+}
+
+export interface ActivityFeedItem {
+  id: string
+  type: 'tool_running' | 'tool_success' | 'tool_error' | 'agent_message' | 'hitl_prompt' | 'phase_change'
+  batchId?: string | null
+  toolName?: string
+  toolCallId?: string
+  summary: string
+  output?: string
+  error?: string
+  duration?: number | null
+  ts: number
+  riskLabel?: string | null
+}
+
 interface AppState {
   connectionState: ConnectionState
   messages: ChatMessage[]
@@ -167,6 +188,9 @@ interface AppState {
   coherenceRetryOriginalConfidence: number | null
   cloudFallback: { reason: string; fallback_model: string; can_retry: boolean } | null
   activeMode: 'normal' | 'study' | 'pentest'
+  activeEngagementId: string | null
+  pentestVmStatus: PentestVmStatus | null
+  activityFeedItems: ActivityFeedItem[]
   setConnectionState: (state: ConnectionState) => void
   addMessage: (message: ChatMessage) => void
   appendStreamChunk: (chunk: string) => void
@@ -204,6 +228,11 @@ interface AppState {
   setEvalResponseStyle: (style: string | null) => void
   setResponseStyle: (style: string | null) => void
   setActiveMode: (mode: 'normal' | 'study' | 'pentest') => void
+  setActiveEngagementId: (id: string | null) => void
+  setPentestVmStatus: (status: PentestVmStatus | null) => void
+  appendActivityFeedItem: (item: ActivityFeedItem) => void
+  updateActivityFeedItem: (id: string, update: Partial<ActivityFeedItem>) => void
+  clearActivityFeed: () => void
   applyBrowserPageContext: (ctx: import('../lib/browserPageContext').BrowserPageContext) => void
 }
 
@@ -246,6 +275,9 @@ export const useAppStore = create<AppState>((set) => ({
   coherenceRetryOriginalConfidence: null,
   cloudFallback: null,
   activeMode: 'normal',
+  activeEngagementId: null,
+  pentestVmStatus: null,
+  activityFeedItems: [],
   setConnectionState: (connectionState) => set({ connectionState }),
   addMessage: (message) =>
     set((state) => ({
@@ -387,6 +419,19 @@ export const useAppStore = create<AppState>((set) => ({
     }),
   setCloudFallback: (cloudFallback) => set({ cloudFallback }),
   setActiveMode: (activeMode) => set({ activeMode }),
+  setActiveEngagementId: (activeEngagementId) => set({ activeEngagementId }),
+  setPentestVmStatus: (pentestVmStatus) => set({ pentestVmStatus }),
+  appendActivityFeedItem: (item) =>
+    set((state) => ({
+      activityFeedItems: [...state.activityFeedItems.slice(-199), item],
+    })),
+  updateActivityFeedItem: (id, update) =>
+    set((state) => ({
+      activityFeedItems: state.activityFeedItems.map((item) =>
+        item.id === id ? { ...item, ...update } : item
+      ),
+    })),
+  clearActivityFeed: () => set({ activityFeedItems: [] }),
   setEvalResponseStyle: (evalResponseStyle) => set({ evalResponseStyle }),
   setResponseStyle: (responseStyle) => set({ responseStyle }),
   applyBrowserPageContext: (ctx) =>

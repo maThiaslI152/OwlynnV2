@@ -1,0 +1,123 @@
+import { useState, useEffect, useCallback } from 'react'
+import { fetchWithAuth } from '../lib/localRunToken'
+
+interface Port {
+  port: number
+  service: string
+  protocol: string
+}
+
+interface Host {
+  ip: string
+  hostname: string
+  os: string
+  ports: Port[]
+  discovered_at: string
+}
+
+interface TargetsPanelProps {
+  engagementId: string
+}
+
+export function TargetsPanel({ engagementId }: TargetsPanelProps) {
+  const [targets, setTargets] = useState<Host[]>([])
+  const [expandedIp, setExpandedIp] = useState<string | null>(null)
+  const [showAdd, setShowAdd] = useState(false)
+  const [addIp, setAddIp] = useState('')
+  const [addHostname, setAddHostname] = useState('')
+  const [addPorts, setAddPorts] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  const loadTargets = useCallback(async () => {
+    try {
+      const resp = await fetchWithAuth(`/api/pentest/engagements/${engagementId}/targets`)
+      if (resp.ok) {
+        const data = await resp.json()
+        setTargets(data.targets || [])
+      }
+    } catch { /* non-critical */ }
+    finally { setLoading(false) }
+  }, [engagementId])
+
+  useEffect(() => {
+    void loadTargets()
+    const interval = setInterval(loadTargets, 10000)
+    return () => clearInterval(interval)
+  }, [loadTargets])
+
+  const handleAdd = async () => {
+    if (!addIp.trim()) return
+    try {
+      const portsList = addPorts.split(',').map((p) => p.trim()).filter(Boolean)
+      await fetchWithAuth(`/api/pentest/engagements/${engagementId}/targets`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ip: addIp, hostname: addHostname, ports: portsList }),
+      })
+      setAddIp(''); setAddHostname(''); setAddPorts(''); setShowAdd(false)
+      void loadTargets()
+    } catch { /* non-critical */ }
+  }
+
+  if (loading && targets.length === 0) {
+    return <div className="pd-panel"><div className="pd-panel-header">Targets</div><div className="pd-empty">Loading...</div></div>
+  }
+
+  return (
+    <div className="pd-panel" style={{ height: '100%' }}>
+      <div className="pd-panel-header">
+        <span>Targets ({targets.length})</span>
+        <button
+          type="button"
+          onClick={() => setShowAdd(!showAdd)}
+          style={{
+            background: 'transparent', border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: 4, color: 'inherit', fontSize: 10, padding: '2px 6px', cursor: 'pointer',
+          }}
+        >
+          {showAdd ? 'Cancel' : '+ Add'}
+        </button>
+      </div>
+      <div className="pd-panel-body">
+        {showAdd && (
+          <div style={{ marginBottom: 8, padding: 8, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 6 }}>
+            <input value={addIp} onChange={(e) => setAddIp(e.target.value)} placeholder="IP address" style={{ width: '100%', padding: '3px 6px', marginBottom: 4, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4, color: 'inherit', fontSize: 11, boxSizing: 'border-box' }} />
+            <input value={addHostname} onChange={(e) => setAddHostname(e.target.value)} placeholder="Hostname (optional)" style={{ width: '100%', padding: '3px 6px', marginBottom: 4, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4, color: 'inherit', fontSize: 11, boxSizing: 'border-box' }} />
+            <input value={addPorts} onChange={(e) => setAddPorts(e.target.value)} placeholder="Ports (comma-separated, e.g. 80,443,22)" style={{ width: '100%', padding: '3px 6px', marginBottom: 4, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 4, color: 'inherit', fontSize: 11, boxSizing: 'border-box' }} />
+            <button type="button" onClick={handleAdd} style={{ padding: '3px 10px', borderRadius: 4, border: '1px solid rgba(76,175,80,0.3)', background: 'rgba(76,175,80,0.15)', color: '#4caf50', fontSize: 11, cursor: 'pointer' }}>Add Target</button>
+          </div>
+        )}
+        {targets.length === 0 ? (
+          <div className="pd-empty">No targets yet</div>
+        ) : (
+          targets.map((h) => (
+            <div key={h.ip} style={{ marginBottom: 4 }}>
+              <div
+                onClick={() => setExpandedIp(expandedIp === h.ip ? null : h.ip)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '4px 6px',
+                  borderRadius: 4, cursor: 'pointer', fontSize: 11,
+                  background: expandedIp === h.ip ? 'rgba(255,255,255,0.03)' : 'transparent',
+                }}
+              >
+                <span style={{ fontWeight: 600 }}>{h.ip}</span>
+                {h.hostname && <span style={{ opacity: 0.5 }}>({h.hostname})</span>}
+                {h.os && <span style={{ opacity: 0.3, fontSize: 10 }}>[{h.os}]</span>}
+                <span style={{ opacity: 0.3, fontSize: 10, marginLeft: 'auto' }}>
+                  {h.ports.length} port{h.ports.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+              {expandedIp === h.ip && h.ports.length > 0 && (
+                <div style={{ paddingLeft: 16, fontSize: 10, opacity: 0.6, lineHeight: 1.8 }}>
+                  {h.ports.map((p) => (
+                    <div key={p.port}>{p.port}/{p.service || p.protocol}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  )
+}

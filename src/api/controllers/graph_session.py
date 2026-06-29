@@ -1,7 +1,12 @@
 import asyncio
 import logging
 from src.config.settings import normalize_project_id
-from src.tools.workspace_context import set_active_project_for_run, reset_active_project
+from src.tools.workspace_context import (
+    set_active_project_for_run,
+    reset_active_project,
+    set_active_scenario_for_run,
+    reset_active_scenario,
+)
 from src.config.audit_log import set_thread_id
 
 logger = logging.getLogger(__name__)
@@ -19,6 +24,7 @@ class GraphSession:
         self.event_buffer = []  # Store all events for the current turn
         self.is_running = False
         self.last_project_id = "default"
+        self.last_scenario_id = None
         self._run_queue = asyncio.Queue()
         self._queue_processor = asyncio.create_task(self._process_queue())
 
@@ -62,6 +68,9 @@ class GraphSession:
             pid = input_data.get("project_id")
             if pid is not None:
                 self.last_project_id = normalize_project_id(pid)
+            sid = input_data.get("scenario_id")
+            if sid is not None:
+                self.last_scenario_id = str(sid).strip() or None
         await self._run_queue.put((input_data, config, correlation_id))
 
     async def _execute(self, input_data, config, correlation_id=None):
@@ -72,6 +81,7 @@ class GraphSession:
 
         LocalLLMScheduler.graph_run_started()
         token = set_active_project_for_run(self.last_project_id)
+        scenario_token = set_active_scenario_for_run(self.last_scenario_id)
         try:
             # Initial status
             start_msg = {"type": "status", "content": "reasoning"}
@@ -107,6 +117,7 @@ class GraphSession:
         finally:
             LocalLLMScheduler.graph_run_finished()
             reset_active_project(token)
+            reset_active_scenario(scenario_token)
             self.is_running = False
             # Final status update
             done_msg = {"type": "status", "content": "idle"}

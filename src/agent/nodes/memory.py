@@ -322,14 +322,52 @@ def _last_user_message_content(state: AgentState) -> str:
 
 @log_node("memory_inject_lite")
 async def memory_inject_lite_node(state: AgentState) -> AgentState:
-    """Fast pre-router inject: profile, persona, topics — no vector search."""
+    """Fast pre-router inject: profile, persona, topics — no vector search.
+
+    Pentest mode: bypasses global memory entirely, injects engagement context.
+    """
     import time
 
     thread_id = state.get("thread_id", "default")
     user_message = _last_user_message_content(state)
     project_id = state.get("project_id") or "default"
     persona_id = state.get("persona_id") or "default"
+    scenario_id = state.get("scenario_id")
 
+    # Pentest mode: engagement-scoped context, no global memory
+    if scenario_id == "pentest":
+        from src.memory.pentest_engagement import (
+            get_active_engagement,
+            get_engagement_context,
+        )
+
+        eng = get_active_engagement()
+        if eng:
+            memory_context = get_engagement_context(eng["id"])
+        else:
+            memory_context = (
+                "No active engagement. Use engagement_create to start a new pentest."
+            )
+        profile = get_profile()
+        name = (profile.get("name") or "").strip()
+        persona_str = (
+            f"You are a penetration testing assistant. "
+            f"Be concise and technical. User: {name or 'operator'}."
+        )
+        audit_info(
+            "memory.inject",
+            "pentest_context_injected",
+            context_chars=len(memory_context),
+            engagement=eng["id"] if eng else None,
+        )
+        return {
+            "memory_context": memory_context,
+            "knowledge_context": "",
+            "persona": persona_str,
+            "turn_start_time": time.time(),
+        }
+
+    # Normal/study mode: global memory
     memory_context, _knowledge = await _build_memory_context_async(
         thread_id,
         project_id,
@@ -353,7 +391,10 @@ async def memory_inject_lite_node(state: AgentState) -> AgentState:
 
 @log_node("memory_retrieve")
 async def memory_retrieve_node(state: AgentState) -> AgentState:
-    """Post-router vector retrieval and scenario markdown (gated)."""
+    """Post-router vector retrieval and scenario markdown (gated).
+
+    Pentest mode: skips global Mem0/Qdrant entirely, returns engagement context.
+    """
     from src.memory.scenarios import format_scenario_context
 
     thread_id = state.get("thread_id", "default")
@@ -363,6 +404,57 @@ async def memory_retrieve_node(state: AgentState) -> AgentState:
     scenario_id = state.get("scenario_id")
     scenario_block = format_scenario_context(scenario_id)
 
+    # Pentest mode: engagement-scoped retrieval, no global memory
+    if scenario_id == "pentest":
+        from src.memory.pentest_engagement import (
+            get_active_engagement,
+            get_engagement_context,
+            get_findings_summary,
+        )
+
+        eng = get_active_engagement()
+        if eng:
+            engagement_context = get_engagement_context(eng["id"])
+            f_summary = get_findings_summary(eng["id"])
+            # Include playbook + constraints alongside engagement context
+            merged = engagement_context
+            if scenario_block:
+                merged = f"{merged}\n\n{scenario_block}".strip()
+            # Inject finding details for the agent to reference
+            if f_summary["total"] > 0:
+                from src.memory.pentest_engagement import list_findings
+
+                findings = list_findings(eng["id"])
+                finding_lines = []
+                for f in findings[:20]:  # Cap at 20 findings
+                    sev = f.get("severity", "info").upper()
+                    title = f.get("title", "Untitled")
+                    fid = f.get("id", "?")
+                    status = f.get("status", "unknown")
+                    finding_lines.append(f"  [{sev}] {fid}: {title} ({status})")
+                merged = f"{merged}\n\n### Current Findings\n" + "\n".join(
+                    finding_lines
+                )
+        else:
+            merged = (
+                "No active engagement. Use engagement_create to start a new pentest."
+            )
+            if scenario_block:
+                merged = f"{merged}\n\n{scenario_block}".strip()
+
+        audit_info(
+            "memory.retrieve",
+            "pentest_engagement_context",
+            context_chars=len(merged),
+            engagement=eng["id"] if eng else None,
+        )
+        return {
+            "memory_context": merged,
+            "knowledge_context": "",
+            "scenario_context": scenario_block or None,
+        }
+
+    # Normal/study mode: global memory retrieval
     needs = state.get("needs_memory_retrieval")
     if needs is None:
         route = state.get("route") or ""
@@ -712,10 +804,13 @@ async def memory_write_node(state: AgentState) -> AgentState:
     5. Save enriched fact to Mem0 with stable user ID
     6. Invalidate memory context cache so next request gets fresh data
     7. Set ``memory_invalidated=True`` to trigger WebSocket notification
+
+    Pentest mode: skips all global memory writes, logs to engagement timeline.
     """
     thread_id = state.get("thread_id", "default")
     messages = state.get("messages", [])
     session_id = state.get("session_id", thread_id)
+    scenario_id = state.get("scenario_id")
 
     if not messages:
         return {}
@@ -740,6 +835,34 @@ async def memory_write_node(state: AgentState) -> AgentState:
 
     if not (last_human and last_ai):
         return {}
+
+    # Pentest mode: skip global memory, log to engagement timeline
+    if scenario_id == "pentest":
+        if not await _should_save_memory(last_human, last_ai):
+            return {}
+        try:
+            from src.memory.pentest_engagement import (
+                get_active_engagement,
+                log_event,
+            )
+
+            eng = get_active_engagement()
+            if eng:
+                human_preview = str(last_human)[:200]
+                log_event(
+                    eng["id"],
+                    "conversation_turn",
+                    f"User: {human_preview}...",
+                    phase=eng.get("phase"),
+                )
+                audit_info(
+                    "memory.write",
+                    "pentest_timeline_logged",
+                    engagement=eng["id"],
+                )
+        except Exception as e:
+            logger.warning("[Memory] Failed to log pentest timeline: %s", e)
+        return {"memory_invalidated": True}
 
     # --- Selective memory gate ---
     if not await _should_save_memory(last_human, last_ai):

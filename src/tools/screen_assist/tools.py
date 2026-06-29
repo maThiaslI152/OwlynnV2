@@ -144,6 +144,115 @@ async def capture_kali_terminal(session: str = "") -> str:
 
 
 @tool
+async def run_kali_command(command: str, timeout: int = 60) -> str:
+    """
+    Execute a command in the Kali VM tmux session and return the output.
+
+    Sends the command via tmux send-keys, waits for completion using an end
+    marker, then captures and returns the output. This is the primary way
+    to run pentest tools (nmap, nikto, sqlmap, hydra, etc.) on Kali.
+
+    Args:
+        command: The shell command to execute in Kali (e.g., "nmap -sV 10.0.0.1").
+        timeout: Max seconds to wait for command completion (default 60).
+    """
+    if not _enabled():
+        return "Error: screen assist is disabled in configuration."
+
+    from src.tools.screen_assist.kali_ssh import run_remote_kali_command
+    from src.config.config_loader import config
+
+    kali = config.get("screen_assist.kali", {})
+    host = str(kali.get("host", "") or "").strip()
+    if not host:
+        return "Error: screen_assist.kali.host is not configured."
+
+    return await run_remote_kali_command(
+        host=host,
+        user=str(kali.get("user", "kali")),
+        session=str(kali.get("tmux_session", "main")),
+        command=command,
+        port=int(kali.get("port", 22)),
+        identity_file=str(kali.get("identity_file", "")),
+        timeout=float(timeout),
+    )
+
+
+@tool
+async def host_browser_action(
+    action: str,
+    url: str = "",
+    selector: str = "",
+    text: str = "",
+    element_id: int = -1,
+) -> str:
+    """
+    Interact with a web-based tool running on the host Mac (e.g., Burp Suite, OWASP ZAP).
+
+    Uses the Owlynn Browser Bridge extension to navigate to and interact with
+    web-based pentest tool UIs. These tools run on the host Mac, NOT in Kali.
+
+    Supported actions:
+    - 'navigate_to': Navigate to the tool's URL (e.g., http://localhost:8080 for Burp).
+    - 'read_dom_tree': Read the interactive elements of the tool's UI.
+    - 'read_full_dom_tree': Read all visible text + interactive elements.
+    - 'click': Click an element by selector or element_id.
+    - 'type': Type text into an input field.
+    - 'get_html': Get raw HTML of matching elements.
+
+    Common tool URLs:
+    - Burp Suite: http://localhost:8080
+    - OWASP ZAP: http://localhost:8081
+
+    Args:
+        action: The action to perform (navigate_to, read_dom_tree, read_full_dom_tree, click, type, get_html).
+        url: The URL to navigate to (required for navigate_to action).
+        selector: CSS selector for click/type/get_html actions.
+        text: Text to type (for type action).
+        element_id: Element ID from read_dom_tree (alternative to selector).
+    """
+    if not _enabled():
+        return "Error: screen assist is disabled in configuration."
+
+    try:
+        from src.api.routes.browser_extension import (
+            dispatch_extension_browser_action,
+            is_extension_connected,
+        )
+
+        if not is_extension_connected():
+            return "Error: Browser extension is not connected. Connect the Owlynn Browser Bridge extension in Brave/Chrome."
+
+        if action == "navigate_to":
+            if not url:
+                return "Error: URL is required for navigate_to action."
+            # Use the extension to navigate to the tool URL
+            res = await dispatch_extension_browser_action(
+                "navigate", "", url, 0, -1, None
+            )
+            if res.get("success"):
+                return f"Navigated to {url}. Use 'read_dom_tree' to see the tool's UI elements."
+            return f"Error navigating to {url}: {res.get('error')}"
+
+        # For other actions, use the extension directly
+        res = await dispatch_extension_browser_action(
+            action, selector, text, 0, element_id, None
+        )
+        if res.get("success"):
+            extras = {k: v for k, v in res.items() if k != "success"}
+            if extras:
+                if "dom_tree" in extras and len(extras) == 1:
+                    return f"Action '{action}' executed successfully.\nDOM Tree:\n{extras['dom_tree']}"
+                import json
+
+                return f"Action '{action}' executed successfully.\nResult:\n{json.dumps(extras, indent=2)}"
+            return f"Action '{action}' executed successfully."
+        return f"Error: {res.get('error')}"
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+
+@tool
 async def upload_from_workspace(selector: str, filename: str) -> str:
     """
     Upload a file from the active workspace into a file input on the active browser tab.
@@ -200,5 +309,7 @@ SCREEN_ASSIST_TOOLS = [
     get_active_browser_screenshot,
     active_browser_action,
     capture_kali_terminal,
+    run_kali_command,
+    host_browser_action,
     upload_from_workspace,
 ]

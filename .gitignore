@@ -28,7 +28,7 @@ Thumbs.db
 .antigravity/
 openclaw-*/
 
-# Project-specific logs and data
+# Project-specific logs and data (includes pentest engagements, memory, study data)
 graph_error.log
 data/
 workspace/

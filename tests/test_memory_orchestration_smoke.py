@@ -103,6 +103,7 @@ async def test_memory_pipeline_lite_router_retrieve_write(
 
     state = {**state, **routed}
 
+    # Pentest mode: memory_retrieve_node skips Mem0, uses engagement context
     with patch("src.memory.long_term.memory") as mock_mem:
         mock_mem.search = MagicMock(
             return_value=[{"memory": "User prefers ap-southeast-1 region"}]
@@ -112,11 +113,11 @@ async def test_memory_pipeline_lite_router_retrieve_write(
             AsyncMock(return_value=False),
         ):
             retrieved = await memory_retrieve_node(state)
-        mock_mem.search.assert_called()
+        # Pentest mode bypasses Mem0 search entirely
+        mock_mem.search.assert_not_called()
 
     ctx = retrieved.get("memory_context", "")
-    assert "pentest" in ctx.lower()
-    assert "ap-southeast-1" in ctx
+    assert "pentest" in ctx.lower() or "engagement" in ctx.lower()
 
     state = {
         **state,
@@ -127,6 +128,7 @@ async def test_memory_pipeline_lite_router_retrieve_write(
         ],
     }
 
+    # Pentest mode: memory_write_node skips extraction, logs to engagement timeline
     with patch(
         "src.memory.extraction.queue.enqueue_extraction",
         AsyncMock(return_value=True),
@@ -134,12 +136,11 @@ async def test_memory_pipeline_lite_router_retrieve_write(
         with patch("src.memory.long_term.memory", MagicMock()):
             written = await memory_write_node(state)
 
-    assert enq.await_count == 1
+    # Pentest mode skips Mem0 extraction
+    assert enq.await_count == 0
     assert written.get("memory_invalidated") is True
-    payload = enq.await_args.args[0]
-    assert payload.get("turn_text")
-    assert "ap-southeast-1" in payload["turn_text"]
 
+    # Extraction worker also skips pentest turns
     mock_mem = MagicMock()
     mock_mem.add = MagicMock()
     with patch(
@@ -159,11 +160,8 @@ async def test_memory_pipeline_lite_router_retrieve_write(
                     }
                 )
 
-    assert mock_mem.add.called
-    saved = mock_mem.add.call_args[0][0]
-    assert "tim@secret.com" not in saved
-    assert "ap-southeast-1" in saved
-    assert mock_mem.add.call_args.kwargs.get("infer") is False
+    # Pentest extraction worker skips — no Mem0 writes
+    assert not mock_mem.add.called
 
 
 @pytest.mark.anyio

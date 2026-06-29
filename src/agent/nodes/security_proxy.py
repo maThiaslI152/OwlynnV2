@@ -196,6 +196,7 @@ async def security_proxy_node(state: AgentState) -> AgentState:
     - Sensitive calls trigger HITL interrupt.
     - If plan_review was already approved and sensitive calls are unchanged,
       skip the second interrupt (dedup).
+    - Pentest mode: scope enforcement blocks out-of-scope targets.
     """
     tool_calls = _tool_calls_from_last_message(state)
     if not tool_calls:
@@ -205,6 +206,39 @@ async def security_proxy_node(state: AgentState) -> AgentState:
             "security_reason": "No tool call found for security validation.",
             "pending_tool_calls": False,
         }
+
+    # ── Pentest scope enforcement ──────────────────────────────────────────
+    scenario_id = state.get("scenario_id")
+    if scenario_id == "pentest":
+        from src.tools.scope_guard import guard_tool_call
+
+        for call in tool_calls:
+            name = str(call.get("name", "unknown"))
+            args = call.get("args", {})
+            allowed, reason = guard_tool_call(name, args)
+            if not allowed:
+                from langgraph.types import interrupt as lg_interrupt
+
+                decision = lg_interrupt(
+                    {
+                        "type": "scope_violation",
+                        "tool": name,
+                        "reason": reason,
+                        "args_summary": str(args)[:200],
+                    }
+                )
+                if decision.get("approved"):
+                    log_hitl_event(
+                        "scope_override", tool=name, decision="user_approved"
+                    )
+                else:
+                    log_hitl_event("scope_blocked", tool=name, decision="denied")
+                    return {
+                        "execution_approved": False,
+                        "security_decision": "denied",
+                        "security_reason": f"Scope violation: {reason}",
+                        "pending_tool_calls": False,
+                    }
 
     # ── Fast-path: all calls are information retrieval (no HITL needed) ──
     if tool_calls and all(

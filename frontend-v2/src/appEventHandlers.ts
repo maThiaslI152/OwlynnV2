@@ -18,6 +18,7 @@ export function toToolExecutionSnapshot(
     ts: now,
     input: event.input ?? null,
     toolCallId: event.tool_call_id ?? null,
+    batchId: event.batch_id ?? null,
     status: event.status,
     duration: event.duration ?? null,
     riskLabel: event.risk_label ?? null,

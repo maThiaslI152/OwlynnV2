@@ -9,7 +9,7 @@ def test_long_term_source_uses_lmstudio_nomic_embedder():
     root = Path(__file__).resolve().parents[1]
     text = (root / "src/memory/long_term.py").read_text(encoding="utf-8")
     assert '"text-embedding-nomic-embed-text-v1.5-embedding"' in text
-    assert '"cowork_memory_nomic"' in text
+    assert '"owlynn_memory_nomic"' in text
     assert '"provider": "lmstudio"' in text
     assert '"provider": "qdrant"' in text
     assert "6333" in text

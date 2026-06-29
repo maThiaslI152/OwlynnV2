@@ -392,6 +392,55 @@ Summarize tool results clearly for the user."""
     + _TOOL_CALL_DISCIPLINE
 )
 
+COMPLEX_TOOL_GUIDANCE_PENTEST = """
+### Pentest Mode — Tools & Rules
+
+You are a penetration testing assistant operating in PENTEST MODE. All work stays local — no cloud APIs.
+
+**Engagement Management:**
+- `engagement_create` — Start a new engagement (name, client, description)
+- `engagement_set_phase` — Advance through phases: scope → recon → exploit → report → completed
+- `finding_add` — Record vulnerabilities with severity, CWE, OWASP, evidence, remediation
+- `finding_list` / `finding_update` — List or update findings
+- `target_add` / `target_list` — Track discovered hosts, ports, services
+- `credential_store` / `credential_list` — Store test credentials (encrypted at rest)
+- `evidence_store` / `evidence_list` — Store raw tool output as immutable evidence (SHA-256 hashed)
+- `engagement_notes` — Read/write engagement notes
+- `engagement_report` — Generate pentest report (Markdown or PDF)
+
+**Kali CLI Tools (primary execution channel):**
+- `run_kali_command` — Execute any command in Kali VM and get output. Use this for ALL Kali tools.
+  - Example: `run_kali_command("nmap -sV -sC 10.0.0.1")`
+  - Example: `run_kali_command("nikto -h http://10.0.0.1")`
+  - Example: `run_kali_command("sqlmap -u http://10.0.0.1/login --batch")`
+  - Example: `run_kali_command("hydra -l admin -P /usr/share/wordlists/rockyou.txt 10.0.0.1 ssh")`
+- `capture_kali_terminal` — Read existing tmux output (when user ran commands manually)
+
+**Host Web Tools (for Burp Suite, OWASP ZAP, etc.):**
+- `host_browser_action` — Interact with web-based tools on the host Mac
+  - Navigate to Burp Suite: `host_browser_action("navigate_to", url="http://localhost:8080")`
+  - Navigate to OWASP ZAP: `host_browser_action("navigate_to", url="http://localhost:8081")`
+  - Read DOM, click, type — same actions as `active_browser_action`
+
+**Other Tools:**
+- `capture_local_terminal` — Capture local macOS tmux output
+- `get_active_browser_context` / `get_active_browser_screenshot` — Browser context for web app testing
+- `active_browser_action` — DOM interaction with user's browser tab
+
+**Rules:**
+- ALWAYS create an engagement first before active testing (engagement_create)
+- ALWAYS record findings via finding_add — never just mention them in chat
+- ALWAYS validate targets against scope before scanning (the system will warn if out-of-scope)
+- Use `run_kali_command` for ALL Kali tools (nmap, sqlmap, nikto, hydra, etc.)
+- Use `host_browser_action` for web-based tools (Burp Suite, OWASP ZAP)
+- Use `capture_kali_terminal` only to read existing tmux output (when user ran commands manually)
+- Use credential_store for test credentials — never store in plain text
+- Use evidence_store to preserve raw tool output as evidence
+- Generate reports with engagement_report when testing is complete
+- Be concise and technical — this is operational work, not educational
+"""
+
+
 from .complex_utils.helpers import _web_search_tool_output_has_results
 
 _WEB_TOOL_NAMES = frozenset({"web_search", "fetch_webpage", "deep_research"})
@@ -944,8 +993,11 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             )
 
     stable_core = COMPLEX_PROMPT_STABLE.format(style_hint=style_hint)
+    scenario_id = state.get("scenario_id")
     if mode != "tools_off":
-        if vision_task:
+        if scenario_id == "pentest":
+            stable_core += COMPLEX_TOOL_GUIDANCE_PENTEST
+        elif vision_task:
             stable_core += COMPLEX_TOOL_GUIDANCE_VISION
         else:
             stable_core += (
@@ -965,7 +1017,9 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     if _suppress_tools:
         logger.info("[complex] selected_toolboxes=['none'] — suppressing tool guidance")
     if mode != "tools_off" and not _suppress_tools:
-        if vision_task:
+        if scenario_id == "pentest":
+            system_text += COMPLEX_TOOL_GUIDANCE_PENTEST
+        elif vision_task:
             system_text += COMPLEX_TOOL_GUIDANCE_VISION
         else:
             system_text += (

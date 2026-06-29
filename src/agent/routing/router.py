@@ -296,9 +296,15 @@ def _memory_gate_fields(
             knowledge_context=state.get("knowledge_context"),
         )
     )
+    # Derive scenario_id from LLM classifier output and keyword heuristics.
+    # If neither matches, preserve the authoritative scenario_id from the
+    # frontend mode switch (set in WS handler → graph initial state).
+    resolved_scenario = _resolve_scenario_id(parsed_scenario, user_text)
+    if resolved_scenario is None:
+        resolved_scenario = state.get("scenario_id")
     return {
         "needs_memory_retrieval": needs,
-        "scenario_id": _resolve_scenario_id(parsed_scenario, user_text),
+        "scenario_id": resolved_scenario,
     }
 
 
@@ -525,9 +531,17 @@ def _augment_toolbox_for_scenario(
     scenario_id: str | None,
     user_text: str,
 ) -> list[str]:
-    """Add screen_assist / mcp toolboxes for pentest and terminal workflows."""
+    """Add screen_assist / mcp toolboxes for pentest and terminal workflows.
+
+    For pentest: REPLACES the toolbox entirely with the pentest toolbox
+    (pentest tools are curated — no study tools, no global memory tools).
+    """
     if "all" in toolbox:
         return toolbox
+
+    # Pentest: replace with curated pentest toolbox
+    if scenario_id == "pentest":
+        return ["pentest"]
 
     if scenario_id == "pentest" or _user_wants_screen_assist(user_text):
         if "screen_assist" not in toolbox:
@@ -1775,7 +1789,11 @@ async def router_node(state: AgentState) -> AgentState:
                 "toolbox": skill_toolbox,
                 "score": match_result.best_score,
             }
-            if set(skill_toolbox) != set(toolbox) and toolbox != ["all"]:
+            if (
+                set(skill_toolbox) != set(toolbox)
+                and toolbox != ["all"]
+                and toolbox != ["pentest"]
+            ):
                 logger.info(
                     "[router] Skill-driven toolbox: LLM=%s → skill=%s",
                     toolbox,

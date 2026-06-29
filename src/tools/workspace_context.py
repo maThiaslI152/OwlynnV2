@@ -8,6 +8,10 @@ _active_project_id: ContextVar[str | None] = ContextVar(
     "owlynn_active_project_id", default=None
 )
 
+_active_scenario_id: ContextVar[str | None] = ContextVar(
+    "owlynn_active_scenario_id", default=None
+)
+
 
 def tool_workspace_root() -> str:
     """Directory where chat uploads and project files for this turn live."""
@@ -19,10 +23,24 @@ def get_active_project_id() -> str:
     return normalize_project_id(_active_project_id.get())
 
 
+def get_active_scenario_id() -> str | None:
+    """Return the active scenario_id for this turn (e.g. 'pentest', 'study')."""
+    return _active_scenario_id.get()
+
+
 def set_active_project_for_run(project_id: str | None) -> Token:
     token = _active_project_id.set(normalize_project_id(project_id))
     return token
 
 
+def set_active_scenario_for_run(scenario_id: str | None) -> Token:
+    """Set the active scenario for this graph run."""
+    return _active_scenario_id.set(scenario_id)
+
+
 def reset_active_project(token: Token) -> None:
     _active_project_id.reset(token)
+
+
+def reset_active_scenario(token: Token) -> None:
+    _active_scenario_id.reset(token)
