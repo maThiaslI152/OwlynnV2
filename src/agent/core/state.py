@@ -9,7 +9,8 @@ import operator
 from typing import Annotated, TypedDict, Sequence
 from langchain_core.messages import BaseMessage
 
-from langgraph.graph.message import add_messages
+from langgraph.channels.delta import DeltaChannel
+from langgraph.graph.message import add_messages, _messages_delta_reducer
 
 
 class AgentState(TypedDict):
@@ -19,8 +20,8 @@ class AgentState(TypedDict):
     """
 
     # The active conversation/reasoning history
-    # Using `add_messages` allows handling `RemoveMessage` to delete older items.
-    messages: Annotated[Sequence[BaseMessage], add_messages]
+    # Using DeltaChannel to incrementally save changes and avoid O(N^2) bloat.
+    messages: Annotated[Sequence[BaseMessage], DeltaChannel(_messages_delta_reducer)]
 
     # Internal scratchpad/status that doesn't need to be kept forever in messages
     current_task: str | None

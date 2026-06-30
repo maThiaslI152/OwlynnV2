@@ -25,6 +25,7 @@ from langchain_core.messages import (
     HumanMessage,
     SystemMessage,
     ToolMessage,
+    RemoveMessage,
 )
 
 from src.agent.llm import get_small_llm
@@ -278,8 +279,10 @@ async def auto_summarize_node(state: AgentState) -> dict:
         content=f"[Auto-Summary of earlier conversation]\n{summary_text}"
     )
 
-    # ── Assemble new message list: summary + protected older + recent ────
-    new_messages = [summary_msg] + protected + recent
+    # ── Assemble new message list: remove old + summary + protected older + recent
+    # To delete messages in LangGraph, we must return RemoveMessage with their IDs
+    remove_msgs = [RemoveMessage(id=msg.id) for msg in to_summarize if msg.id]
+    new_messages = remove_msgs + [summary_msg] + protected + recent
 
     # ── Compute token deltas ─────────────────────────────────────────────
     old_tokens = _estimate_messages_tokens(to_summarize)
