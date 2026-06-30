@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import shlex
 import uuid
+from src.memory.pentest_engagement import get_active_engagement, store_evidence
+import time
 
 
 def _build_ssh_cmd(
@@ -74,6 +76,7 @@ async def capture_remote_tmux_pane(
     host: str,
     user: str,
     session: str,
+    window: str = "main",
     port: int = 22,
     lines: int = 200,
     identity_file: str = "",
@@ -85,7 +88,8 @@ async def capture_remote_tmux_pane(
         return "Error: screen_assist.kali.host is not configured."
 
     session = session.strip() or "main"
-    remote = f"tmux capture-pane -p -t {shlex.quote(session)} -S -{max(1, lines)}"
+    target = f"{session}:{window}"
+    remote = f"tmux capture-pane -p -t {shlex.quote(target)} -S -{max(1, lines)}"
 
     stdout, stderr, rc = await _ssh_exec(
         host, user, remote, port, identity_file, timeout
@@ -104,6 +108,7 @@ async def run_remote_kali_command(
     host: str,
     user: str,
     session: str,
+    window: str = "main",
     command: str,
     port: int = 22,
     identity_file: str = "",
@@ -121,6 +126,8 @@ async def run_remote_kali_command(
         return "Error: screen_assist.kali.host is not configured."
 
     session = session.strip() or "main"
+    window = window.strip() or "main"
+    target = f"{session}:{window}"
     marker = f"__OWLYNN_DONE_{uuid.uuid4().hex[:12]}__"
 
     # Escape the command for tmux send-keys
@@ -128,9 +135,9 @@ async def run_remote_kali_command(
 
     # Send command + end marker to tmux
     send_cmd = (
-        f"tmux send-keys -t {shlex.quote(session)} {shlex.quote(escaped_cmd)} Enter && "
+        f"tmux send-keys -t {shlex.quote(target)} {shlex.quote(escaped_cmd)} Enter && "
         f"sleep 0.1 && "
-        f"tmux send-keys -t {shlex.quote(session)} {shlex.quote(f'echo {marker}')} Enter"
+        f"tmux send-keys -t {shlex.quote(target)} {shlex.quote(f'echo {marker}')} Enter"
     )
 
     stdout, stderr, rc = await _ssh_exec(
@@ -140,13 +147,12 @@ async def run_remote_kali_command(
         return f"Error: Failed to send command to Kali tmux ({stderr.strip() or rc})"
 
     # Poll for marker in tmux output
-    import time
 
     deadline = time.monotonic() + timeout
     last_output = ""
 
     while time.monotonic() < deadline:
-        capture_cmd = f"tmux capture-pane -p -t {shlex.quote(session)} -S -500"
+        capture_cmd = f"tmux capture-pane -p -t {shlex.quote(target)} -S -500"
         stdout, stderr, rc = await _ssh_exec(
             host, user, capture_cmd, port, identity_file, timeout=10.0
         )
@@ -177,19 +183,156 @@ async def run_remote_kali_command(
                 # Remove trailing empty lines
                 while output_lines and not output_lines[-1].strip():
                     output_lines.pop()
-                return "\n".join(output_lines) if output_lines else "(no output)"
+                final_output = (
+                    "\n".join(output_lines) if output_lines else "(no output)"
+                )
+                return _process_output_for_evidence(final_output, command)
             elif marker_line_idx >= 0:
                 # Couldn't find command line, return everything before marker
                 output_lines = lines[:marker_line_idx]
                 while output_lines and not output_lines[-1].strip():
                     output_lines.pop()
-                return "\n".join(output_lines) if output_lines else "(no output)"
+                final_output = (
+                    "\n".join(output_lines) if output_lines else "(no output)"
+                )
+                return _process_output_for_evidence(final_output, command)
 
         await asyncio.sleep(poll_interval)
 
     # Timeout — return whatever we captured last
-    return (
-        f"(command timed out after {timeout}s)\n{last_output[-2000:]}"
-        if last_output
-        else f"Error: Command timed out after {timeout}s"
+    final_output = (
+        last_output if last_output else f"Error: Command timed out after {timeout}s"
     )
+    return _process_output_for_evidence(final_output, command, timed_out=True)
+
+
+async def send_remote_kali_input(
+    *,
+    host: str,
+    user: str,
+    session: str,
+    window: str = "main",
+    text: str,
+    port: int = 22,
+    identity_file: str = "",
+    timeout: float = 15.0,
+) -> str:
+    """Send literal text input (keystrokes) to a tmux window.
+    Useful for interacting with msfconsole, reverse shells, etc.
+    """
+    host = host.strip()
+    if not host:
+        return "Error: screen_assist.kali.host is not configured."
+
+    session = session.strip() or "main"
+    window = window.strip() or "main"
+    target = f"{session}:{window}"
+
+    # Use tmux send-keys. We use -l for literal string so we don't have to escape special chars.
+    # To send Enter, the caller should include '\n' in the text, or we can just send it.
+    # Let's just escape it manually to avoid issues.
+    escaped_text = text.replace("'", "'\\''")
+    send_cmd = f"tmux send-keys -t {shlex.quote(target)} -l {shlex.quote(text)} && tmux send-keys -t {shlex.quote(target)} Enter"
+    # Actually wait, if the text already contains newlines, -l might send them as literal newlines which tmux handles.
+    # But wait, if they just want to type "exploit" and press enter, they can send "exploit\\n".
+    # Let's just use regular send-keys without -l, but properly quoted. Wait, -l is safer for raw input.
+    # Actually, if we just use python's shlex.quote, we can pass it without -l.
+
+    send_cmd = f"tmux send-keys -t {shlex.quote(target)} {shlex.quote(text)}"
+
+    stdout, stderr, rc = await _ssh_exec(
+        host, user, send_cmd, port, identity_file, timeout
+    )
+    if rc != 0:
+        return f"Error: Failed to send input ({stderr.strip() or rc})"
+    return f"Sent input to {target}"
+
+
+async def create_remote_tmux_window(
+    *,
+    host: str,
+    user: str,
+    session: str,
+    window_name: str,
+    port: int = 22,
+    identity_file: str = "",
+    timeout: float = 15.0,
+) -> str:
+    """Create a new tmux window in the session."""
+    host = host.strip()
+    if not host:
+        return "Error: host not configured."
+    session = session.strip() or "main"
+
+    cmd = f"tmux new-window -t {shlex.quote(session)} -n {shlex.quote(window_name)}"
+    stdout, stderr, rc = await _ssh_exec(host, user, cmd, port, identity_file, timeout)
+    if rc != 0:
+        return f"Error: Failed to create window '{window_name}': {stderr.strip()}"
+    return f"Created new window: {window_name}"
+
+
+async def list_remote_tmux_windows(
+    *,
+    host: str,
+    user: str,
+    session: str,
+    port: int = 22,
+    identity_file: str = "",
+    timeout: float = 15.0,
+) -> str:
+    """List windows in the tmux session."""
+    host = host.strip()
+    if not host:
+        return "Error: host not configured."
+    session = session.strip() or "main"
+
+    cmd = f"tmux list-windows -t {shlex.quote(session)}"
+    stdout, stderr, rc = await _ssh_exec(host, user, cmd, port, identity_file, timeout)
+    if rc != 0:
+        return f"Error: Failed to list windows: {stderr.strip()}"
+    return stdout.strip()
+
+
+def _process_output_for_evidence(
+    output: str, command: str, timed_out: bool = False
+) -> str:
+    """Save full output to evidence store and return a truncated preview."""
+    eng = get_active_engagement()
+    if not eng:
+        # If no engagement, just truncate it to 2000 chars and return
+        if len(output) > 2000:
+            return (
+                output[:1000]
+                + "\n... [OUTPUT TRUNCATED - NO ACTIVE ENGAGEMENT] ...\n"
+                + output[-1000:]
+            )
+        return output
+
+    # Save to evidence
+    content_bytes = f"Command: {command}\n\n{output}".encode("utf-8")
+
+    # Extract binary name for filename
+    binary = command.split()[0].split("/")[-1] if command else "command"
+    filename = f"{binary}_output.log"
+
+    sha = store_evidence(eng["id"], content_bytes, filename, "text/plain")
+
+    # Truncate for LLM context (50 lines or ~2000 chars)
+    lines = output.split("\n")
+    if len(lines) > 50:
+        preview = (
+            "\n".join(lines[:25])
+            + "\n\n... [OUTPUT TRUNCATED (Saved to Evidence)] ...\n\n"
+            + "\n".join(lines[-25:])
+        )
+    elif len(output) > 2000:
+        preview = (
+            output[:1000]
+            + "\n\n... [OUTPUT TRUNCATED (Saved to Evidence)] ...\n\n"
+            + output[-1000:]
+        )
+    else:
+        preview = output
+
+    status = " (TIMED OUT)" if timed_out else ""
+    return f"[Command Output{status}]\n{preview}\n\n[Full output saved to evidence_store: {sha}]"

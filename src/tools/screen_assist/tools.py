@@ -131,20 +131,40 @@ async def active_browser_action(
 
 
 @tool
-async def capture_kali_terminal(session: str = "") -> str:
+async def capture_kali_terminal(window: str = "main", lines: int = 200) -> str:
     """
     Capture tmux pane output from a remote Kali VM over SSH.
 
-    Requires ``screen_assist.kali.host`` in config. Session defaults to ``kali.tmux_session``.
+    Args:
+        window: The tmux window name (default: "main").
+        lines: The number of lines to capture.
     """
     if not _enabled():
         return "Error: screen assist is disabled in configuration."
-    gw = get_screen_assist_gateway()
-    return await gw.capture_kali_pane(session or None)
+
+    from src.tools.screen_assist.kali_ssh import capture_remote_tmux_pane
+    from src.config.config_loader import config
+
+    kali = config.get("screen_assist.kali", {})
+    host = str(kali.get("host", "") or "").strip()
+    if not host:
+        return "Error: screen_assist.kali.host is not configured."
+
+    return await capture_remote_tmux_pane(
+        host=host,
+        user=str(kali.get("user", "kali")),
+        session=str(kali.get("tmux_session", "main")),
+        window=window,
+        port=int(kali.get("port", 22)),
+        lines=lines,
+        identity_file=str(kali.get("identity_file", "")),
+    )
 
 
 @tool
-async def run_kali_command(command: str, timeout: int = 60) -> str:
+async def run_kali_command(
+    command: str, window: str = "main", timeout: int = 60
+) -> str:
     """
     Execute a command in the Kali VM tmux session and return the output.
 
@@ -155,6 +175,7 @@ async def run_kali_command(command: str, timeout: int = 60) -> str:
     Args:
         command: The shell command to execute in Kali (e.g., "nmap -sV 10.0.0.1").
         timeout: Max seconds to wait for command completion (default 60).
+        window: The tmux window name (default: "main").
     """
     if not _enabled():
         return "Error: screen assist is disabled in configuration."
@@ -171,6 +192,7 @@ async def run_kali_command(command: str, timeout: int = 60) -> str:
         host=host,
         user=str(kali.get("user", "kali")),
         session=str(kali.get("tmux_session", "main")),
+        window=window,
         command=command,
         port=int(kali.get("port", 22)),
         identity_file=str(kali.get("identity_file", "")),
@@ -302,6 +324,91 @@ async def upload_from_workspace(selector: str, filename: str) -> str:
         return f"Error: CDP upload failed ({exc})"
 
 
+@tool
+async def send_kali_input(text: str, window: str = "main") -> str:
+    """
+    Send literal text input (keystrokes) to a running tmux window in the Kali VM.
+
+    This is essential for interacting with tools that don't exit automatically,
+    such as msfconsole, reverse shells (nc -lvnp), or interactive prompts.
+
+    Args:
+        text: The exact keystrokes to send.
+        window: The tmux window name (default: "main").
+    """
+    if not _enabled():
+        return "Error: screen assist is disabled in configuration."
+
+    from src.tools.screen_assist.kali_ssh import send_remote_kali_input
+    from src.config.config_loader import config
+
+    kali = config.get("screen_assist.kali", {})
+    host = str(kali.get("host", "") or "").strip()
+    if not host:
+        return "Error: screen_assist.kali.host is not configured."
+
+    return await send_remote_kali_input(
+        host=host,
+        user=str(kali.get("user", "kali")),
+        session=str(kali.get("tmux_session", "main")),
+        window=window,
+        text=text,
+        port=int(kali.get("port", 22)),
+        identity_file=str(kali.get("identity_file", "")),
+    )
+
+
+@tool
+async def kali_tmux_new_window(window_name: str) -> str:
+    """
+    Create a new tmux window in the Kali VM.
+
+    Useful when you need to run multiple tools in parallel (e.g., starting a listener
+    in one window, and running an exploit in another).
+
+    Args:
+        window_name: A short, descriptive name for the window (e.g., "listener", "nmap").
+    """
+    if not _enabled():
+        return "Error: screen assist is disabled in configuration."
+
+    from src.tools.screen_assist.kali_ssh import create_remote_tmux_window
+    from src.config.config_loader import config
+
+    kali = config.get("screen_assist.kali", {})
+    host = str(kali.get("host", "") or "").strip()
+
+    return await create_remote_tmux_window(
+        host=host,
+        user=str(kali.get("user", "kali")),
+        session=str(kali.get("tmux_session", "main")),
+        window_name=window_name,
+        port=int(kali.get("port", 22)),
+    )
+
+
+@tool
+async def kali_tmux_list_windows() -> str:
+    """
+    List all active tmux windows in the Kali VM.
+    """
+    if not _enabled():
+        return "Error: screen assist is disabled in configuration."
+
+    from src.tools.screen_assist.kali_ssh import list_remote_tmux_windows
+    from src.config.config_loader import config
+
+    kali = config.get("screen_assist.kali", {})
+    host = str(kali.get("host", "") or "").strip()
+
+    return await list_remote_tmux_windows(
+        host=host,
+        user=str(kali.get("user", "kali")),
+        session=str(kali.get("tmux_session", "main")),
+        port=int(kali.get("port", 22)),
+    )
+
+
 SCREEN_ASSIST_TOOLS = [
     capture_local_terminal,
     read_screen_element,
@@ -310,6 +417,9 @@ SCREEN_ASSIST_TOOLS = [
     active_browser_action,
     capture_kali_terminal,
     run_kali_command,
+    send_kali_input,
+    kali_tmux_new_window,
+    kali_tmux_list_windows,
     host_browser_action,
     upload_from_workspace,
 ]
