@@ -952,7 +952,10 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                         pass  # WS already closed
 
             # On first user message in a thread, register the chat in the project
-            if thread_id not in sessions or not sessions[thread_id].event_buffer:
+            # Note: We skip this for pentest mode to maintain isolation from standard projects
+            if scenario_id != "pentest" and (
+                thread_id not in sessions or not sessions[thread_id].event_buffer
+            ):
                 chat_id = thread_id
                 file_names = [f.get("name", "") for f in files if f.get("name")]
                 try:

@@ -1385,6 +1385,44 @@ async def router_node(state: AgentState) -> AgentState:
             "router_metadata": metadata,
         }
 
+    # ── Deterministic pentest-mode bypass ──────────────────────────────
+    if state.get("scenario_id") == "pentest":
+        logger.info(
+            "[router] Complex path — pentest mode detected, bypassing LLM router"
+        )
+        route, toolbox = _resolve_complex_route(
+            user_text, state, ["pentest"], cloud_available=cloud_available
+        )
+        budget = estimate_token_budget(user_text, route)
+        metadata = _build_router_metadata(
+            route,
+            confidence=1.0,
+            reasoning="pentest_mode_bypass",
+            classification_source="deterministic",
+            cloud_available=cloud_available,
+            has_images=has_images,
+            task_category="security",
+            estimated_tokens=budget,
+            web_on=web_on,
+        )
+        audit_info(
+            "agent.lifecycle",
+            "router_decision",
+            route=route,
+            confidence=1.0,
+            source="pentest_mode_bypass",
+            task_category="security",
+        )
+        return {
+            "route": route,
+            "token_budget": budget,
+            "selected_toolboxes": toolbox,
+            "router_clarification_used": False,
+            "skill_matched": None,
+            "router_metadata": metadata,
+            **_memory_gate_fields(state, user_text, route, force_needs=False),
+        }
+
     # ── Stage 1: Ask Small LLM for simple/complex + toolbox ──────────────
     small_llm = await get_small_llm()
     decision = "complex"

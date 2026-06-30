@@ -47,6 +47,7 @@ export function EngagementSelector() {
     try {
       await fetchWithAuth(`/api/pentest/engagements/${id}/activate`, { method: 'POST' })
       setActiveEngagementId(id)
+      setShowCreate(false)
     } catch { /* non-critical */ }
   }
 

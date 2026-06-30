@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+
 
 interface ModeSwitchModalProps {
   targetMode: 'normal' | 'study' | 'pentest'
@@ -60,10 +60,8 @@ const spinnerStyle: React.CSSProperties = {
   animation: 'spin 0.8s linear infinite',
   margin: '0 auto 16px',
 }
-
 export function ModeSwitchConfirmation({
   targetMode,
-  currentMode,
   onConfirm,
   onCancel,
 }: ModeSwitchModalProps) {

@@ -17,8 +17,8 @@ export function toToolExecutionSnapshot(
     toolName: event.tool_name,
     ts: now,
     input: event.input ?? null,
-    toolCallId: event.tool_call_id ?? null,
-    batchId: event.batch_id ?? null,
+    toolCallId: (event.tool_call_id as string) ?? undefined,
+    batchId: (event.batch_id as string) ?? null,
     status: event.status,
     duration: event.duration ?? null,
     riskLabel: event.risk_label ?? null,
@@ -104,7 +104,7 @@ export function buildChartEmbedItem(
     filename: artifact.filename,
     chartKind: artifact.kind,
     mimeType: artifact.mime_type,
-    toolCallId: event.tool_call_id ?? null,
+    toolCallId: (event.tool_call_id as string) ?? undefined,
     ts: now,
   }
 }

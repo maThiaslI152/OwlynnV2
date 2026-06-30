@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { fetchWithAuth } from '../lib/localRunToken'
+import { useAppStore } from '../state/useAppStore'
 
 interface Finding {
   id: string
@@ -30,6 +31,7 @@ export function FindingsTable({ engagementId }: FindingsTableProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [filterSev, setFilterSev] = useState<string>('')
   const [loading, setLoading] = useState(true)
+  const activityCount = useAppStore((s) => s.activityFeedItems.length)
 
   const loadFindings = useCallback(async () => {
     try {
@@ -54,7 +56,7 @@ export function FindingsTable({ engagementId }: FindingsTableProps) {
     void loadFindings()
     const interval = setInterval(loadFindings, 10000)
     return () => clearInterval(interval)
-  }, [loadFindings])
+  }, [loadFindings, activityCount])
 
   if (loading && findings.length === 0) {
     return <div className="pd-panel"><div className="pd-panel-header">Findings</div><div className="pd-empty">Loading...</div></div>

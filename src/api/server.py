@@ -292,7 +292,9 @@ class LocalAuthMiddleware(BaseHTTPMiddleware):
                 content={"detail": "API only accessible from localhost"},
             )
 
-        token = request.headers.get("X-Owlynn-Run-Token")
+        token = request.headers.get("X-Owlynn-Run-Token") or request.query_params.get(
+            "token"
+        )
         expected = get_local_run_token(request.app)
         if not token or not secrets.compare_digest(token, expected):
             return JSONResponse(

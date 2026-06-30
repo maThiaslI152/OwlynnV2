@@ -10,15 +10,16 @@ import { MacMenuBar } from './MacMenuBar'
 import { HitlPromptCard, type HitlPromptViewModel } from './HitlPromptCard'
 import { ToolActivityCard } from './ToolActivityCard'
 import { ModeSwitcher } from './ModeSwitcher'
-import { PentestScopePanel } from './PentestScopePanel'
 import { PentestToolsPanel } from './PentestToolsPanel'
+import { StudyDashboard } from './StudyDashboard'
+import { motion } from 'framer-motion'
 import { ModeSwitchConfirmation, PentestLoadingOverlay } from './ModeSwitchModal'
 import { StudyProgressPanel } from './StudyProgressPanel'
 import { StudyNotesSearch } from './StudyNotesSearch'
 import { PentestDashboard } from './PentestDashboard'
 import { EngagementSelector } from './EngagementSelector'
+import { PentestScopePanel } from './PentestScopePanel'
 import { PhaseTracker } from './PhaseTracker'
-import { FindingsBadges } from './FindingsBadges'
 import { QuickStats } from './QuickStats'
 import type { InterruptChoice } from '../state/useAppStore'
 import type { ConversationItem, ConversationToolActivity, ConversationHitlPrompt, ConversationChartEmbed } from '../appEventHandlers'
@@ -48,7 +49,7 @@ interface ProjectChat {
   created_at: number
 }
 
-interface WorkspaceProject {
+export interface WorkspaceProject {
   id: string
   name: string
   chats?: ProjectChat[]
@@ -328,87 +329,10 @@ function MessageBubble({
 }
 
 
-function VmStatusBanner() {
-  const [vmRunning, setVmRunning] = useState(false)
-  const [stopping, setStopping] = useState(false)
-  const pendingCorrelationId = useAppStore((s) => s.pendingCorrelationId)
-  const conversationItems = useAppStore((s) => s.conversationItems)
-  const activeMode = useAppStore((s) => s.activeMode)
 
-  useEffect(() => {
-    let disposed = false
-    const check = async () => {
-      try {
-        const resp = await fetchWithAuth('/api/pentest/status')
-        if (resp.ok && !disposed) {
-          const data = await resp.json()
-          setVmRunning(data?.lima?.running ?? false)
-        }
-      } catch { /* non-critical */ }
-    }
-    void check()
-    const interval = setInterval(check, 15000)
-    return () => { disposed = true; clearInterval(interval) }
-  }, [activeMode])
 
-  if (!vmRunning) return null
 
-  const handleStop = async () => {
-    // Check for active work
-    const hasActiveWork = pendingCorrelationId || conversationItems.some(
-      (item) => item.kind === 'tool_activity' && item.status === 'running'
-    )
-    if (hasActiveWork) {
-      const ok = confirm(
-        'Pentest mode is actively working. Stopping the VM will interrupt running tools and SSH sessions. Continue?'
-      )
-      if (!ok) return
-    }
-    setStopping(true)
-    try {
-      const resp = await fetchWithAuth('/api/pentest/vm/stop', { method: 'POST' })
-      if (resp.ok) {
-        setVmRunning(false)
-      }
-    } catch { /* non-critical */ }
-    finally { setStopping(false) }
-  }
 
-  return (
-    <div style={{
-      margin: '0 10px 6px',
-      padding: '6px 10px',
-      borderRadius: 6,
-      background: 'rgba(76,175,80,0.08)',
-      border: '1px solid rgba(76,175,80,0.15)',
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      fontSize: 11,
-    }}>
-      <span style={{ color: '#4caf50', fontWeight: 500 }}>
-        Kali VM running (~2GB)
-      </span>
-      <button
-        type="button"
-        onClick={handleStop}
-        disabled={stopping}
-        style={{
-          background: 'rgba(233,69,96,0.15)',
-          border: '1px solid rgba(233,69,96,0.25)',
-          color: '#e94560',
-          borderRadius: 4,
-          padding: '2px 8px',
-          fontSize: 10,
-          cursor: stopping ? 'wait' : 'pointer',
-          opacity: stopping ? 0.5 : 1,
-        }}
-      >
-        {stopping ? 'Stopping...' : 'Stop'}
-      </button>
-    </div>
-  )
-}
 
 
 const SUGGESTIONS = [
@@ -492,6 +416,7 @@ export function AppShell({
   const setCloudStatus = useAppStore((s) => s.setCloudStatus)
   const windowMode = useAppStore((s) => s.windowMode)
   const setWindowMode = useAppStore((s) => s.setWindowMode)
+  const studyView = useAppStore((s) => s.studyView)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const [streamActive, setStreamActive] = useState(false)
@@ -656,12 +581,12 @@ export function AppShell({
   const activeProject = projects.find((p) => p.id === activeProjectId)
   const searchParams = new URLSearchParams(window.location.search)
   const isSidebarMode = searchParams.get('mode') === 'sidebar'
-  const isCompact = windowMode === 'compact' || isSidebarMode
+  const isCompact = (windowMode === 'compact' || isSidebarMode) && activeMode === 'normal'
   const projectChats = activeProject?.chats ?? []
   const showDragStrip = isTauriRuntime()
 
   return (
-    <div className="app-shell-wrapper" data-connection-state={connectionState}>
+    <div className={`app-shell-wrapper theme-${activeMode}`} data-connection-state={connectionState}>
       <MacMenuBar 
         isCompact={isCompact} 
         onToggleMode={() => handleToggleMode(isCompact ? 'full' : 'compact')} 
@@ -669,7 +594,12 @@ export function AppShell({
       <div className={`app-shell ${isCompact ? 'app-shell-compact' : ''}`}>
         {/* ── Left Panel (hidden in compact) ── */}
       {!isCompact && (
-        <aside className="panel left-panel">
+        <motion.aside 
+          className="panel left-panel glass-panel"
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.3 }}
+        >
           {showDragStrip && <div className="window-drag-strip" data-tauri-drag-region />}
 
           {/* ── Mode Switcher ── */}
@@ -679,8 +609,7 @@ export function AppShell({
             </div>
           )}
 
-          {/* ── VM Status Banner (visible in all modes when VM is running) ── */}
-          <VmStatusBanner />
+
 
           {activeMode !== 'pentest' && (
           <details className="sidebar-accordion" open>
@@ -910,6 +839,16 @@ export function AppShell({
 
           {/* ── Mode-Specific Sidebar Sections ── */}
           {activeMode === 'study' && (
+            <button 
+              className="glass-card" 
+              style={{ width: '100%', marginBottom: '16px', padding: '12px', background: 'var(--accent)', color: 'black', border: 'none', cursor: 'pointer', fontWeight: '600', borderRadius: '8px' }}
+              onClick={() => useAppStore.getState().setStudyView('dashboard')}
+            >
+              ← Subjects Dashboard
+            </button>
+          )}
+
+          {activeMode === 'study' && (
             <details className="sidebar-accordion" open>
               <summary>Study Progress</summary>
               <div className="sidebar-accordion-content">
@@ -931,8 +870,8 @@ export function AppShell({
             <>
               <EngagementSelector />
               <PhaseTracker />
-              <FindingsBadges />
               <QuickStats />
+              <PentestScopePanel />
               <details className="sidebar-accordion" open>
                 <summary>Infrastructure</summary>
                 <div className="sidebar-accordion-content">
@@ -941,16 +880,40 @@ export function AppShell({
               </details>
             </>
           )}
-        </aside>
+        </motion.aside>
       )}
 
-      {/* ── Center Panel / Pentest Dashboard ── */}
       {activeMode === 'pentest' ? (
-        <main className="panel pentest-dashboard">
-          <PentestDashboard onSend={onSend} />
-        </main>
+        <motion.main 
+          className="panel pentest-dashboard glass-panel"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+        >
+          <PentestDashboard 
+            onSend={onSend} 
+            onStop={onStop} 
+            isGenerating={!!pendingCorrelationId} 
+          />
+        </motion.main>
+      ) : activeMode === 'study' && studyView === 'dashboard' ? (
+        <motion.main 
+          className="panel center-panel glass-panel"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+        >
+          <StudyDashboard 
+            projects={projects}
+            activeProjectId={activeProjectId}
+            onSwitchProject={onSwitchProject}
+            onCreateProject={onCreateProject}
+          />
+        </motion.main>
       ) : (
-      <main className={`panel center-panel${isCompact ? ' center-panel-compact' : ''}`}>
+      <motion.main 
+        className={`panel center-panel glass-panel${isCompact ? ' center-panel-compact' : ''}`}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+      >
         {showDragStrip && <div className="window-drag-strip" data-tauri-drag-region />}
 
         {operatorNote ? <p className="operator-note">ⓘ {operatorNote}</p> : null}
@@ -1172,9 +1135,9 @@ export function AppShell({
             attachWorkspaceFileRef.current = attach
           }}
         />
-      </main>
+      </motion.main>
       )}
-      </div>
+    </div>
 
       {/* ── Mode Switch Confirmation Modal ── */}
       {modeSwitchPending && (

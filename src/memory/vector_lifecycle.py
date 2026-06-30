@@ -61,8 +61,11 @@ class VectorLifecycleManager:
 
     @staticmethod
     async def index_processed_file(project_id: str, filename: str, text: str) -> int:
-        """Centralized indexing path. De-duplicates previous chunks before indexing."""
+        """Centralized indexing path. De-duplicates previous chunks before indexing and skips identical files."""
         from src.api.attachment_intake import is_vision_filename
+        import hashlib
+        import json
+        from src.config.settings import get_project_workspace
 
         if is_vision_filename(filename):
             logger.info(
@@ -71,42 +74,72 @@ class VectorLifecycleManager:
             )
             return 0
 
-        from src.memory.project import project_manager
-
-        # 1. Delete old vectors for this file to prevent duplicates (H1)
-        project_manager.remove_knowledge(project_id, filename)
-
         if not text or len(text.strip()) < 50:
             return 0
 
-        # 2. Index new chunks
-        from src.config.config_loader import config
+        # 1. Delta-Indexing: Check if file content has changed using MD5
+        file_hash = hashlib.md5(text.encode("utf-8")).hexdigest()
 
-        chunks = []
+        project_workspace = get_project_workspace(project_id)
+        hashes_path = os.path.join(project_workspace, ".processed", "hashes.json")
+
+        file_hashes = {}
+        if os.path.exists(hashes_path):
+            try:
+                with open(hashes_path, "r", encoding="utf-8") as f:
+                    file_hashes = json.load(f)
+            except Exception:
+                pass
+
+        if file_hashes.get(filename) == file_hash:
+            logger.info(
+                "VectorLifecycle: File %s has not changed, skipping indexing.", filename
+            )
+            return 0
+
+        # Update hash record
+        file_hashes[filename] = file_hash
+        try:
+            with open(hashes_path, "w", encoding="utf-8") as f:
+                json.dump(file_hashes, f)
+        except Exception as e:
+            logger.warning(f"Could not save hash for {filename}: {e}")
+
+        from src.memory.project import project_manager
+
+        # 2. Delete old vectors for this file to prevent duplicates (H1)
+        project_manager.remove_knowledge(project_id, filename)
+
+        # 3. Index new chunks using Langchain Text Splitter
+        from src.config.config_loader import config
+        from langchain_text_splitters import RecursiveCharacterTextSplitter
+
         chunk_size = int(config.get("file_indexing.chunk_size", 1500))
         overlap = int(config.get("file_indexing.overlap", 200))
         max_chunks = int(config.get("file_indexing.max_chunks", 20))
 
-        start = 0
-        content_len = len(text)
-        while start < content_len:
-            end = start + chunk_size
-            chunk = text[start:end].strip()
-            if chunk:
-                chunks.append(chunk)
-            start += chunk_size - overlap
+        splitter = RecursiveCharacterTextSplitter(
+            chunk_size=chunk_size,
+            chunk_overlap=overlap,
+            separators=["\n\n", "\n", " ", ""],
+        )
+
+        chunks = [c.strip() for c in splitter.split_text(text) if c.strip()]
 
         # Execute sequentially or chunked to avoid overloading memory
-        await project_manager.index_knowledge_document(
-            project_id, filename, chunks[:max_chunks]
-        )
+        chunks_to_index = chunks[:max_chunks]
+        if chunks_to_index:
+            await project_manager.index_knowledge_document(
+                project_id, filename, chunks_to_index
+            )
+
         logger.info(
             "Auto-indexed %d chunks of %s into project %s",
-            len(chunks[:max_chunks]),
+            len(chunks_to_index),
             filename,
             project_id,
         )
-        return len(chunks[:max_chunks])
+        return len(chunks_to_index)
 
     @staticmethod
     def delete_project_cascade(project_id: str):

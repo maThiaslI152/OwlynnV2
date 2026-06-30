@@ -79,6 +79,10 @@ def test_screen_assist_toolbox_registered():
         "run_kali_command",
         "host_browser_action",
         "upload_from_workspace",
+        "kali_tmux_list_windows",
+        "kali_reset_vm",
+        "send_kali_input",
+        "kali_tmux_new_window",
     }
 
 

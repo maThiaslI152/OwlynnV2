@@ -409,12 +409,11 @@ async def kali_tmux_list_windows() -> str:
     )
 
 
-
 @tool
 async def kali_reset_vm() -> str:
     """
     Reset the Kali VM to a clean state.
-    
+
     This is useful between engagements to ensure no files or states leak from one pentest to another.
     Note: This will delete all files in the kali user's home directory and recreate the default tmux session.
     """
@@ -433,15 +432,46 @@ async def kali_reset_vm() -> str:
     user = str(kali.get("user", "kali"))
     port = int(kali.get("port", 22))
     identity_file = str(kali.get("identity_file", ""))
-    
+
     cmd = "killall tmux; rm -rf /home/kali/*; tmux new-session -d -s main -n shell"
-    
+
     from src.tools.screen_assist.kali_ssh import _ssh_exec
-    stdout, stderr, rc = await _ssh_exec(host, user, cmd, port, identity_file, timeout=10.0)
-    
+
+    # Try to use Lima snapshots first
+    import subprocess
+
+    vm_name = str(kali.get("vm_name", "owlynn-kali"))
+
+    # Check if 'clean' snapshot exists
+    snap_check = subprocess.run(
+        ["limactl", "snapshot", "list", vm_name], capture_output=True, text=True
+    )
+    if "clean" in snap_check.stdout:
+        # Restore the snapshot
+        res = subprocess.run(
+            ["limactl", "snapshot", "restore", vm_name, "clean"],
+            capture_output=True,
+            text=True,
+        )
+        if res.returncode == 0:
+            return "Successfully restored Kali VM to the 'clean' snapshot."
+
+    # Fallback/Initial setup: run manual cleanup, then save as 'clean' snapshot
+    stdout, stderr, rc = await _ssh_exec(
+        host, user, cmd, port, identity_file, timeout=10.0
+    )
+
     if rc != 0:
         return f"Error: Failed to reset VM: {stderr.strip()}"
-    return "Successfully reset Kali VM to a clean state."
+
+    # Take a snapshot for next time
+    subprocess.run(
+        ["limactl", "snapshot", "create", vm_name, "--tag", "clean"],
+        capture_output=True,
+    )
+
+    return "Successfully reset Kali VM to a clean state and created 'clean' snapshot for future resets."
+
 
 SCREEN_ASSIST_TOOLS = [
     capture_local_terminal,

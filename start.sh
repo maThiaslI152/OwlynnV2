@@ -100,11 +100,11 @@ sleep 1
 if [ "$DEBUG_MODE" == "1" ]; then
     uv run python -m uvicorn src.api.server:app \
         --host 127.0.0.1 --port 8000 \
-        --ws-max-size 1048576 &
+        --ws-max-size 16777216 &
 else
     uv run python -m uvicorn src.api.server:app \
         --host 127.0.0.1 --port 8000 \
-        --ws-max-size 1048576 \
+        --ws-max-size 16777216 \
         --no-access-log &
 fi
 _PIDS+=("$!")

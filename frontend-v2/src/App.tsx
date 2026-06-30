@@ -113,6 +113,7 @@ function App() {
     total_cards: number; due_cards: number; project_id?: string
   }>>([])
   const activeMode = useAppStore((s) => s.activeMode)
+  const activeEngagementId = useAppStore((s) => s.activeEngagementId)
   const setActiveMode = useAppStore((s) => s.setActiveMode)
   const projectThreadsRef = useRef<Record<string, string>>({ default: initialThreadId })
   const activeProjectIdRef = useRef(activeProjectId)
@@ -301,12 +302,14 @@ function App() {
     void fetchExamCountdown()
   }, [])
 
+  const effectiveThreadId = activeMode === 'pentest' && activeEngagementId ? activeEngagementId : currentThreadId
+
   useEffect(() => {
     let disposed = false
     const controller = new AbortController()
     const loadHistory = async () => {
       try {
-        const response = await fetchWithAuth(`/api/history/${encodeURIComponent(currentThreadId)}`, {
+        const response = await fetchWithAuth(`/api/history/${encodeURIComponent(effectiveThreadId)}`, {
           signal: controller.signal
         })
         if (!response.ok) return
@@ -339,7 +342,7 @@ function App() {
       }
     }
 
-    const wsUrl = `${wsBaseUrl}/${encodeURIComponent(currentThreadId)}${localRunToken ? `?token=${encodeURIComponent(localRunToken)}` : ''}`
+    const wsUrl = `${wsBaseUrl}/${encodeURIComponent(effectiveThreadId)}${localRunToken ? `?token=${encodeURIComponent(localRunToken)}` : ''}`
     const wsClient = new WsClient(wsUrl)
     wsClientRef.current = wsClient
     const disconnect = wsClient.connect({
@@ -352,6 +355,7 @@ function App() {
         })
       },
       onClose: () => {
+        toast.error('Disconnected from backend. Please refresh the page.')
         setConnection('disconnected')
         setLatestToolExecution(null)
         setPendingCorrelationId(null)
@@ -396,8 +400,8 @@ function App() {
         const isMeaningfulEvent = isIdleStatus ||
             event.type === 'assistant.message' ||
             event.type === 'tool_execution' ||
-            event.type === 'hitl_prompt' ||
-            event.type === 'router_decision' ||
+            (event.type as string) === 'hitl_prompt' ||
+            (event.type as string) === 'router_decision' ||
             event.type === 'coherence_retry_started' ||
             event.type === 'coherence_retry_completed'
 
@@ -522,7 +526,7 @@ function App() {
               kind: 'tool_activity',
               id: snapshot.toolCallId || `tool-${Date.now()}`,
               toolName: snapshot.toolName,
-              toolCallId: snapshot.toolCallId ?? null,
+              toolCallId: snapshot.toolCallId || null,
               status: snapshot.status,
               input: snapshot.input ?? null,
               riskLabel: snapshot.riskLabel,
@@ -547,7 +551,7 @@ function App() {
                 : 'tool_error' as const,
               batchId: snapshot.batchId ?? null,
               toolName: snapshot.toolName,
-              toolCallId: snapshot.toolCallId ?? null,
+              toolCallId: snapshot.toolCallId || undefined,
               summary: snapshot.toolName,
               output: snapshot.status === 'success' ? (event as any).output?.slice(0, 500) : undefined,
               error: snapshot.status === 'error' ? (event as any).error?.slice(0, 500) : undefined,
@@ -650,7 +654,7 @@ function App() {
         pendingTimeoutRef.current = null
       }
     }
-  }, [activeProjectId, addMessage, appendStreamChunk, applyBrowserPageContext, currentThreadId, executionPolicy, localRunToken, pushToolExecution, setConnection, setLatestToolExecution, setPendingCorrelationId, setMemoryUpdatedAt, setModelInfo, setContextCompression, setContextBreakdown, setCloudUsage, setCoherenceRetryActive, setCloudFallback, setOperatorNote, setRouterMetadata, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setTtsSpeaking, upsertActionProposal, updateActionProposalStatus, isTauriRuntime, wsBaseUrl])
+  }, [activeProjectId, addMessage, appendStreamChunk, applyBrowserPageContext, effectiveThreadId, executionPolicy, localRunToken, pushToolExecution, setConnection, setLatestToolExecution, setPendingCorrelationId, setMemoryUpdatedAt, setModelInfo, setContextCompression, setContextBreakdown, setCloudUsage, setCoherenceRetryActive, setCloudFallback, setOperatorNote, setRouterMetadata, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setTtsSpeaking, upsertActionProposal, updateActionProposalStatus, isTauriRuntime, wsBaseUrl])
 
   // Listen for Tauri runtime events (TTS state, screen assist, etc.)
   useEffect(() => {
@@ -694,7 +698,7 @@ function App() {
             kind: 'tool_activity',
             id: snapshot.toolCallId || `tool-${Date.now()}`,
             toolName: snapshot.toolName,
-            toolCallId: snapshot.toolCallId ?? null,
+            toolCallId: snapshot.toolCallId || null,
             status: snapshot.status,
             input: snapshot.input ?? null,
             riskLabel: snapshot.riskLabel,

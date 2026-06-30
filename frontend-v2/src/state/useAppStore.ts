@@ -188,6 +188,7 @@ interface AppState {
   coherenceRetryOriginalConfidence: number | null
   cloudFallback: { reason: string; fallback_model: string; can_retry: boolean } | null
   activeMode: 'normal' | 'study' | 'pentest'
+  studyView: 'dashboard' | 'notebook'
   activeEngagementId: string | null
   pentestVmStatus: PentestVmStatus | null
   activityFeedItems: ActivityFeedItem[]
@@ -228,6 +229,7 @@ interface AppState {
   setEvalResponseStyle: (style: string | null) => void
   setResponseStyle: (style: string | null) => void
   setActiveMode: (mode: 'normal' | 'study' | 'pentest') => void
+  setStudyView: (view: 'dashboard' | 'notebook') => void
   setActiveEngagementId: (id: string | null) => void
   setPentestVmStatus: (status: PentestVmStatus | null) => void
   appendActivityFeedItem: (item: ActivityFeedItem) => void
@@ -275,6 +277,7 @@ export const useAppStore = create<AppState>((set) => ({
   coherenceRetryOriginalConfidence: null,
   cloudFallback: null,
   activeMode: 'normal',
+  studyView: 'dashboard',
   activeEngagementId: null,
   pentestVmStatus: null,
   activityFeedItems: [],
@@ -419,6 +422,7 @@ export const useAppStore = create<AppState>((set) => ({
     }),
   setCloudFallback: (cloudFallback) => set({ cloudFallback }),
   setActiveMode: (activeMode) => set({ activeMode }),
+  setStudyView: (studyView) => set({ studyView }),
   setActiveEngagementId: (activeEngagementId) => set({ activeEngagementId }),
   setPentestVmStatus: (pentestVmStatus) => set({ pentestVmStatus }),
   appendActivityFeedItem: (item) =>

@@ -15,6 +15,10 @@ export async function getLocalRunToken(): Promise<string> {
   return cachedToken
 }
 
+export function getCachedToken(): string | null {
+  return cachedToken
+}
+
 /** Fetch with X-Owlynn-Run-Token header for authenticated API calls. */
 export async function fetchWithAuth(url: string, init?: RequestInit): Promise<Response> {
   const token = await getLocalRunToken()

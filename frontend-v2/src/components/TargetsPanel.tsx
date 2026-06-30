@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { fetchWithAuth } from '../lib/localRunToken'
+import { useAppStore } from '../state/useAppStore'
 
 interface Port {
   port: number
@@ -27,6 +28,7 @@ export function TargetsPanel({ engagementId }: TargetsPanelProps) {
   const [addHostname, setAddHostname] = useState('')
   const [addPorts, setAddPorts] = useState('')
   const [loading, setLoading] = useState(true)
+  const activityCount = useAppStore((s) => s.activityFeedItems.length)
 
   const loadTargets = useCallback(async () => {
     try {
@@ -43,7 +45,7 @@ export function TargetsPanel({ engagementId }: TargetsPanelProps) {
     void loadTargets()
     const interval = setInterval(loadTargets, 10000)
     return () => clearInterval(interval)
-  }, [loadTargets])
+  }, [loadTargets, activityCount])
 
   const handleAdd = async () => {
     if (!addIp.trim()) return

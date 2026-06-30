@@ -91,7 +91,7 @@ def create_xlsx(filename: str, data: str, sheet_name: str = "Sheet1") -> str:
     """
     try:
         from openpyxl import Workbook
-        from openpyxl.styles import Font
+        from openpyxl.styles import Font, Border, Side
     except ImportError:
         return "Error: openpyxl not installed. Run: pip install openpyxl"
 
@@ -99,11 +99,27 @@ def create_xlsx(filename: str, data: str, sheet_name: str = "Sheet1") -> str:
     ws = wb.active
     ws.title = sheet_name
 
+    thin_border = Border(
+        left=Side(style="thin"),
+        right=Side(style="thin"),
+        top=Side(style="thin"),
+        bottom=Side(style="thin"),
+    )
+
     rows = [line.strip() for line in data.strip().split("\n") if line.strip()]
     for i, row_text in enumerate(rows):
         cells = [c.strip() for c in row_text.split(",")]
         for j, val in enumerate(cells, 1):
-            cell = ws.cell(row=i + 1, column=j, value=val)
+            # Try to convert to number to avoid storing everything as text
+            parsed_val = val
+            if val.lstrip("-").replace(".", "", 1).isdigit():
+                try:
+                    parsed_val = float(val) if "." in val else int(val)
+                except ValueError:
+                    pass
+
+            cell = ws.cell(row=i + 1, column=j, value=parsed_val)
+            cell.border = thin_border
             if i == 0:
                 cell.font = Font(bold=True)
 

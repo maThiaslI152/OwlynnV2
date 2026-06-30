@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { fetchWithAuth } from '../lib/localRunToken'
+import { useAppStore } from '../state/useAppStore'
 
 interface ScopeData {
   targets: string[]
@@ -17,6 +18,7 @@ export function ScopeBar({ engagementId }: ScopeBarProps) {
   const [editTargets, setEditTargets] = useState('')
   const [editExclusions, setEditExclusions] = useState('')
   const [editRules, setEditRules] = useState('')
+  const activityCount = useAppStore((s) => s.activityFeedItems.length)
 
   const loadScope = useCallback(async () => {
     try {
@@ -28,7 +30,7 @@ export function ScopeBar({ engagementId }: ScopeBarProps) {
     } catch { /* non-critical */ }
   }, [engagementId])
 
-  useEffect(() => { void loadScope() }, [loadScope])
+  useEffect(() => { void loadScope() }, [loadScope, activityCount])
 
   const startEdit = () => {
     setEditTargets(scope.targets.join(', '))

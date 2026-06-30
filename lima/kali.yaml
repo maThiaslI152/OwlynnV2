@@ -104,6 +104,11 @@ provision:
     TMUX
     chown kali:kali /home/kali/.tmux.conf
 
+    # Unzip rockyou wordlist if it exists
+    if [ -f /usr/share/wordlists/rockyou.txt.gz ]; then
+      gzip -d /usr/share/wordlists/rockyou.txt.gz
+    fi
+
     # Clean up apt cache and logs
     apt-get clean
     rm -rf /var/lib/apt/lists/*

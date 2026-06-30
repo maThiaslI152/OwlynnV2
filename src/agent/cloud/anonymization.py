@@ -47,15 +47,15 @@ _PATTERNS: list[tuple[str, re.Pattern]] = [
             r"|:(?::[0-9a-fA-F]{1,4}){1,7})\b"
         ),
     ),
-    # 6. Phone numbers (international formats)
+    # 6. Phone numbers (international and US formats only to prevent false positives with large amounts)
     (
         "PHONE",
         re.compile(
-            r"(?<!\d)(?<![=/?&])"
-            r"(?:\+\d{1,3}[\s\-]?)?"
-            r"(?:\(\d{1,4}\)[\s\-]?)?"
-            r"\d{2,4}[\s.\-]?\d{2,4}[\s.\-]?\d{2,4}"
-            r"(?!\d)(?![a-zA-Z=&])"
+            r"(?<!\d)(?<![=/?&.])"
+            r"(?:\+\d{1,3}[\s\-]?\d{2,4}[\s\-]?\d{3,4}[\s\-]?\d{3,4}"
+            r"|\(\d{3}\)[\s\-]?\d{3}[\s\-]?\d{4}"
+            r"|\b\d{3}-\d{3}-\d{4}\b)"
+            r"(?!\d)(?![a-zA-Z=&.])"
         ),
     ),
 ]

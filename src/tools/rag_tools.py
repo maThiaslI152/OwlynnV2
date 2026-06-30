@@ -15,7 +15,10 @@ logger = logging.getLogger(__name__)
 
 
 def _keyword_search_local(project_id: str, query: str, limit: int = 5) -> list[dict]:
-    """Helper to perform case-insensitive exact substring searches inside processed files."""
+    """Helper to perform BM25 keyword searches inside processed files."""
+    import math
+    from collections import Counter
+
     project_workspace = get_project_workspace(project_id)
     processed_dir = os.path.join(project_workspace, ".processed")
 
@@ -23,11 +26,12 @@ def _keyword_search_local(project_id: str, query: str, limit: int = 5) -> list[d
         return []
 
     query_lower = query.lower().strip()
-    words = [w.strip() for w in query_lower.split() if len(w.strip()) >= 3]
-    if not words and not query_lower:
+    query_words = [w.strip() for w in query_lower.split() if len(w.strip()) >= 3]
+    if not query_words and not query_lower:
         return []
 
-    hits = []
+    # 1. Parse corpus and build paragraphs
+    corpus_paragraphs = []
     for f in os.listdir(processed_dir):
         if not f.endswith((".txt", ".md")):
             continue
@@ -38,35 +42,74 @@ def _keyword_search_local(project_id: str, query: str, limit: int = 5) -> list[d
         except Exception:
             continue
 
-        content_lower = content.lower()
         filename = os.path.splitext(f)[0]
-
-        # Split content into paragraphs for clean context extraction
         paragraphs = [p.strip() for p in content.split("\n\n") if p.strip()]
         if not paragraphs:
             paragraphs = [p.strip() for p in content.split("\n") if p.strip()]
 
         for p in paragraphs:
-            p_lower = p.lower()
-            score = 0.0
-            if query_lower in p_lower:
-                score += 15.0
-            # Count matching words
-            word_matches = sum(1 for w in words if w in p_lower)
-            if word_matches > 0:
-                score += word_matches * 2.0
+            corpus_paragraphs.append(
+                {"text": p, "filename": filename, "words": p.lower().split()}
+            )
 
-            if score > 0:
-                hits.append(
-                    {
-                        "memory": p,
-                        "metadata": {
-                            "filename": filename,
-                            "source": "keyword_hybrid",
-                        },
-                        "score": score,
-                    }
-                )
+    N = len(corpus_paragraphs)
+    if N == 0:
+        return []
+
+    # 2. Compute BM25 statistics
+    avgdl = sum(len(doc["words"]) for doc in corpus_paragraphs) / N
+    k1 = 1.2
+    b = 0.75
+
+    # Document frequencies for each query word
+    df = Counter()
+    for doc in corpus_paragraphs:
+        doc_words_set = set(doc["words"])
+        for qw in query_words:
+            # simple substring or exact match check for the word in the document words
+            if any(qw in dw for dw in doc_words_set):
+                df[qw] += 1
+
+    # IDF for each query word
+    idf = {}
+    for qw in query_words:
+        n_q = df[qw]
+        # Standard BM25 IDF formula
+        idf[qw] = math.log(((N - n_q + 0.5) / (n_q + 0.5)) + 1.0)
+
+    # 3. Score documents
+    hits = []
+    for doc in corpus_paragraphs:
+        score = 0.0
+        doc_len = len(doc["words"])
+        if doc_len == 0:
+            continue
+
+        doc_words_counter = Counter(doc["words"])
+
+        for qw in query_words:
+            # Term frequency (allow substring matches for partial keywords)
+            f_q_d = sum(count for dw, count in doc_words_counter.items() if qw in dw)
+            if f_q_d > 0:
+                numerator = f_q_d * (k1 + 1)
+                denominator = f_q_d + k1 * (1 - b + b * (doc_len / avgdl))
+                score += idf[qw] * (numerator / denominator)
+
+        # Bonus for exact substring match of the full query
+        if query_lower in doc["text"].lower():
+            score += 5.0
+
+        if score > 0:
+            hits.append(
+                {
+                    "memory": doc["text"],
+                    "metadata": {
+                        "filename": doc["filename"],
+                        "source": "bm25",
+                    },
+                    "score": score,
+                }
+            )
 
     hits.sort(key=lambda x: x["score"], reverse=True)
     return hits[:limit]

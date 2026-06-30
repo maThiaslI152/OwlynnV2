@@ -67,6 +67,10 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 
+# Configure matplotlib for Unicode support (e.g., Thai)
+plt.rcParams['font.family'] = 'Tahoma'
+plt.rcParams['axes.unicode_minus'] = False
+
 def apply_owlynn_theme(fig, ax, theme="{theme}"):
     """Apply consistent Owlynn styling."""
     if theme == "dark":

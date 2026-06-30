@@ -16,7 +16,7 @@ interface TimelineEvent {
 }
 
 interface BatchGroup {
-  batchId: string | null
+  batchId: string | null | undefined
   items: ActivityFeedItem[]
   minTs: number
 }
@@ -58,7 +58,7 @@ export function ActivityFeed({ engagementId }: ActivityFeedProps) {
     void loadTimeline()
     const interval = setInterval(loadTimeline, 10000)
     return () => clearInterval(interval)
-  }, [loadTimeline])
+  }, [loadTimeline, activityItems.length])
 
   // Auto-scroll to bottom on new items
   useEffect(() => {
