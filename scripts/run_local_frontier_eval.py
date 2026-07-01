@@ -548,7 +548,10 @@ async def poll_api(
 ) -> dict:
     deadline = time.monotonic() + timeout_s
     last: dict = {}
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(
+        timeout=10.0,
+        headers={"X-Owlynn-Run-Token": os.environ.get("OWLYNN_LOCAL_RUN_TOKEN", "")},
+    ) as client:
         while time.monotonic() < deadline:
             try:
                 resp = await client.get(f"{API_URL}{path}")
@@ -562,7 +565,10 @@ async def poll_api(
 
 
 async def fetch_runtime_profile() -> dict:
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(
+        timeout=10.0,
+        headers={"X-Owlynn-Run-Token": os.environ.get("OWLYNN_LOCAL_RUN_TOKEN", "")},
+    ) as client:
         try:
             resp = await client.get(f"{API_URL}/api/unified-settings")
             settings = resp.json() if resp.status_code == 200 else {}
@@ -589,12 +595,18 @@ async def fetch_runtime_profile() -> dict:
 
 
 async def set_unified_settings(**fields: Any) -> None:
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(
+        timeout=10.0,
+        headers={"X-Owlynn-Run-Token": os.environ.get("OWLYNN_LOCAL_RUN_TOKEN", "")},
+    ) as client:
         await client.put(f"{API_URL}/api/unified-settings", json=fields)
 
 
 async def fetch_last_turn_tier() -> str:
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(
+        timeout=10.0,
+        headers={"X-Owlynn-Run-Token": os.environ.get("OWLYNN_LOCAL_RUN_TOKEN", "")},
+    ) as client:
         try:
             resp = await client.get(f"{API_URL}/api/usage")
             if resp.status_code == 200:
@@ -606,7 +618,10 @@ async def fetch_last_turn_tier() -> str:
 
 
 async def mem0_available() -> bool:
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(
+        timeout=10.0,
+        headers={"X-Owlynn-Run-Token": os.environ.get("OWLYNN_LOCAL_RUN_TOKEN", "")},
+    ) as client:
         try:
             resp = await client.get(f"{API_URL}/api/mem0/count")
             if resp.status_code == 200:
@@ -662,8 +677,13 @@ def route_matches(actual: str, expected: str, *, profile: str) -> bool:
 
 async def create_project(name: str) -> str:
     print(f"[EVAL] Creating project '{name}'...")
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(
+        timeout=10.0,
+        headers={"X-Owlynn-Run-Token": os.environ.get("OWLYNN_LOCAL_RUN_TOKEN", "")},
+    ) as client:
         resp = await client.post(f"{API_URL}/api/projects", json={"name": name})
+        if resp.status_code != 200:
+            print(f"Error creating project: {resp.status_code} {resp.text}")
         assert resp.status_code == 200
         proj_id = resp.json()["id"]
         print(f"[EVAL] Project created with ID: {proj_id}")
@@ -672,7 +692,10 @@ async def create_project(name: str) -> str:
 
 async def delete_project(project_id: str) -> None:
     print(f"[EVAL] Deleting project '{project_id}'...")
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(
+        timeout=10.0,
+        headers={"X-Owlynn-Run-Token": os.environ.get("OWLYNN_LOCAL_RUN_TOKEN", "")},
+    ) as client:
         try:
             await client.delete(f"{API_URL}/api/projects/{project_id}")
             print("[EVAL] Project deleted successfully.")
@@ -1229,7 +1252,10 @@ async def attach_file_via_drop(page: Page, filepath: Path) -> None:
 
 async def upload_file_api(project_id: str, filepath: Path) -> None:
     print(f"[EVAL] Uploading {filepath.name} to project {project_id}...")
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with httpx.AsyncClient(
+        timeout=30.0,
+        headers={"X-Owlynn-Run-Token": os.environ.get("OWLYNN_LOCAL_RUN_TOKEN", "")},
+    ) as client:
         with filepath.open("rb") as fh:
             resp = await client.post(
                 f"{API_URL}/api/upload",
@@ -1262,7 +1288,12 @@ async def poll_file_processed(
     deadline = time.monotonic() + timeout_s
     processed_cache = WORKSPACE_DIR / "projects" / project_id / ".processed"
     while time.monotonic() < deadline:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(
+            timeout=10.0,
+            headers={
+                "X-Owlynn-Run-Token": os.environ.get("OWLYNN_LOCAL_RUN_TOKEN", "")
+            },
+        ) as client:
             try:
                 resp = await client.get(
                     f"{API_URL}/api/files",

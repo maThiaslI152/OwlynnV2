@@ -11,6 +11,7 @@ import sys
 import uuid
 import time
 import json
+import os
 import httpx
 from pathlib import Path
 from playwright.async_api import async_playwright
@@ -125,7 +126,10 @@ def calculate_average_age(users):
 
 async def create_project(name: str) -> str:
     print(f"[EVAL] Creating project '{name}'...")
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(
+        timeout=10.0,
+        headers={"X-Owlynn-Run-Token": os.environ.get("OWLYNN_LOCAL_RUN_TOKEN", "")},
+    ) as client:
         resp = await client.post(f"{API_URL}/api/projects", json={"name": name})
         assert resp.status_code == 200
         proj_id = resp.json()["id"]
@@ -135,7 +139,10 @@ async def create_project(name: str) -> str:
 
 async def delete_project(project_id: str) -> None:
     print(f"[EVAL] Deleting project '{project_id}'...")
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(
+        timeout=10.0,
+        headers={"X-Owlynn-Run-Token": os.environ.get("OWLYNN_LOCAL_RUN_TOKEN", "")},
+    ) as client:
         try:
             await client.delete(f"{API_URL}/api/projects/{project_id}")
             print("[EVAL] Project deleted successfully.")
@@ -145,10 +152,8 @@ async def delete_project(project_id: str) -> None:
 
 async def wait_for_ready(page):
     print("[EVAL] Waiting for connection status to be connected...")
-    await (
-        page.locator(".connection-label")
-        .filter(has_text="connected")
-        .wait_for(state="visible", timeout=30000)
+    await page.locator(".connection-dot-connected").wait_for(
+        state="visible", timeout=30000
     )
     await page.wait_for_timeout(1000)
 
@@ -435,7 +440,12 @@ async def main():
             )
 
             # Query the REST APIs to gather personal assistant state
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(
+                timeout=10.0,
+                headers={
+                    "X-Owlynn-Run-Token": os.environ.get("OWLYNN_LOCAL_RUN_TOKEN", "")
+                },
+            ) as client:
                 try:
                     topics_resp = await client.get(f"{API_URL}/api/topics")
                     eval_data["api_topics"] = (

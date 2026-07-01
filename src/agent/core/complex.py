@@ -228,7 +228,12 @@ def _deanonymize_ai_message(
     kwargs = dict(getattr(response, "additional_kwargs", None) or {})
     if reasoning:
         kwargs["reasoning_content"] = reasoning
-    return AIMessage(content=content, tool_calls=tool_calls, additional_kwargs=kwargs)
+    return AIMessage(
+        content=content,
+        tool_calls=tool_calls,
+        additional_kwargs=kwargs,
+        id=getattr(response, "id", None),
+    )
 
 
 def _estimate_message_tokens(messages: list) -> int:
@@ -1114,6 +1119,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                 log_model_attempt("pentest-local", "failed", reason=err_reason)
                 logger.warning("[complex] Pentest LLM unavailable in tools_off: %s", e)
                 return await handle_cloud_fallback(
+                    invoke_local_fallback=_invoke_local_fallback,
                     fallback_chain=fallback_chain,
                     reason="pentest_llm_unavailable",
                     prompt_messages=prompt_messages,
@@ -1136,6 +1142,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                     e,
                 )
                 return await handle_cloud_fallback(
+                    invoke_local_fallback=_invoke_local_fallback,
                     fallback_chain=fallback_chain,
                     reason="cloud_unavailable",
                     prompt_messages=prompt_messages,
@@ -1310,6 +1317,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             except Exception:
                 logger.warning("[complex] Cloud retry failed, trying local fallback")
                 return await handle_cloud_fallback(
+                    invoke_local_fallback=_invoke_local_fallback,
                     fallback_chain=fallback_chain,
                     reason="rate_limit",
                     prompt_messages=prompt_messages,
@@ -1321,6 +1329,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         elif "401" in str(e) or "403" in str(e):
             logger.warning("[complex] Cloud auth error, trying local fallback")
             return await handle_cloud_fallback(
+                invoke_local_fallback=_invoke_local_fallback,
                 fallback_chain=fallback_chain,
                 reason="auth_error",
                 prompt_messages=prompt_messages,
@@ -1334,6 +1343,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                 "[complex] Cloud error, trying local fallback: %s", err_reason
             )
             return await handle_cloud_fallback(
+                invoke_local_fallback=_invoke_local_fallback,
                 fallback_chain=fallback_chain,
                 reason="cloud_error",
                 prompt_messages=prompt_messages,
@@ -1373,6 +1383,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             content=cleaned_visible,
             tool_calls=list(getattr(response, "tool_calls", None) or []),
             additional_kwargs=dict(getattr(response, "additional_kwargs", None) or {}),
+            id=getattr(response, "id", None),
         )
     if has_tool_calls and not cleaned_visible.strip():
         placeholder = placeholder_for_tool_only_turn(
@@ -1383,6 +1394,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             content=placeholder,
             tool_calls=list(getattr(response, "tool_calls", None) or []),
             additional_kwargs=dict(getattr(response, "additional_kwargs", None) or {}),
+            id=getattr(response, "id", None),
         )
     synthesis_retry = False
     retry_still_dsml = False
@@ -1432,6 +1444,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                     additional_kwargs=dict(
                         getattr(retry_resp, "additional_kwargs", None) or {}
                     ),
+                    id=getattr(retry_resp, "id", None),
                 )
                 synthesis_retry = True
                 dsml_stall = False
@@ -1495,6 +1508,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                     additional_kwargs=dict(
                         getattr(msg, "additional_kwargs", None) or {}
                     ),
+                    id=getattr(msg, "id", None),
                 )
 
     # ── Cutoff detection: auto-continue if LLM hit token budget ────────────
