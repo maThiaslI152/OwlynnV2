@@ -24,6 +24,60 @@ def test_extension_websocket_lifecycle():
     active_connections.clear()
     assert not is_extension_connected()
 
+
+def test_token_origin_restrictions():
+    """Test that the /token endpoint strictly filters origins."""
+    client = TestClient(app)
+
+    # 1. Allowed: Chrome Extension
+    resp = client.get(
+        "/api/browser_extension/token", headers={"origin": "chrome-extension://abcdefg"}
+    )
+    assert resp.status_code == 200
+    assert "token" in resp.json()
+
+    # 2. Allowed: Empty origin (native clients)
+    resp = client.get("/api/browser_extension/token", headers={"origin": ""})
+    assert resp.status_code == 200
+
+    # 3. Disallowed: Localhost
+    resp = client.get(
+        "/api/browser_extension/token", headers={"origin": "http://localhost:5173"}
+    )
+    assert resp.status_code == 403
+
+    # 4. Disallowed: External website
+    resp = client.get(
+        "/api/browser_extension/token", headers={"origin": "https://evil.com"}
+    )
+    assert resp.status_code == 403
+
+
+def test_ws_origin_restrictions():
+    """Test that the WebSocket endpoint strictly filters origins."""
+    client = TestClient(app)
+
+    # Disallowed origin should be rejected with 403 (Forbidden)
+    from fastapi.websockets import WebSocketDisconnect
+
+    with pytest.raises(WebSocketDisconnect) as exc_info:
+        with client.websocket_connect(
+            "/api/browser_extension/ws", headers={"origin": "https://evil.com"}
+        ):
+            pass
+    assert exc_info.value.code == 4003
+
+    # Allowed origin should connect
+    with client.websocket_connect(
+        "/api/browser_extension/ws", headers={"origin": "chrome-extension://abcdefg"}
+    ) as ws:
+        # Just connecting and then closing is enough to prove it didn't instantly reject with 4003
+        pass
+
+    with client.websocket_connect("/api/browser_extension/ws") as ws:
+        # Default/empty origin also allowed
+        pass
+
     with client.websocket_connect("/api/browser_extension/ws") as ws:
         # Send auth token as first message
         ws.send_json({"type": "auth", "token": _auth_token})

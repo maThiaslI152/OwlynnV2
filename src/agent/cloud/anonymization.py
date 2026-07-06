@@ -26,6 +26,20 @@ _PATTERNS: list[tuple[str, re.Pattern]] = [
             r"|[A-Za-z0-9]{32,}(?=\s|$|[\"'}),:]))"
         ),
     ),
+    # 2. Credit Card Numbers (PAN)
+    (
+        "CREDIT_CARD",
+        re.compile(r"\b(?:\d{4}[ -]?){3}\d{4}\b|\b\d{4}[ -]?\d{6}[ -]?\d{5}\b"),
+    ),
+    # 3. Social Security Numbers (SSN)
+    ("SSN", re.compile(r"\b\d{3}-\d{2}-\d{4}\b")),
+    # 4. Generic Secrets (passwords, etc)
+    (
+        "SECRET",
+        re.compile(
+            r"(?i)\b(?:password|secret|passwd|pwd|token)\s*[:=]\s*[\"']?[A-Za-z0-9\-._~+/!@#$%^&*]{8,}[\"']?"
+        ),
+    ),
     # 2. Email addresses
     ("EMAIL", re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")),
     # 3. Localhost URLs with ports

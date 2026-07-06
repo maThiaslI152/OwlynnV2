@@ -128,6 +128,21 @@ class TestPatternDetection:
         anon, mapping = anonymize(text)
         assert any("API_KEY" in ph for ph in mapping)
 
+    def test_detect_credit_card(self):
+        text = "My card is 4111-1111-1111-1111"
+        anon, mapping = anonymize(text)
+        assert any("CREDIT_CARD" in ph for ph in mapping)
+
+    def test_detect_ssn(self):
+        text = "My SSN is 123-45-6789"
+        anon, mapping = anonymize(text)
+        assert any("SSN" in ph for ph in mapping)
+
+    def test_detect_generic_secret(self):
+        text = "password=SuperSecretPassword123!"
+        anon, mapping = anonymize(text)
+        assert any("SECRET" in ph for ph in mapping)
+
     def test_detect_localhost_url(self):
         text = "Server at http://localhost:8080"
         anon, mapping = anonymize(text)

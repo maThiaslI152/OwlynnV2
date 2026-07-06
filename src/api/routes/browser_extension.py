@@ -41,19 +41,20 @@ def _get_auth_token() -> str:
 _auth_token = _get_auth_token()
 
 
+def _is_allowed_extension_origin(origin: str) -> bool:
+    """Check if the origin is a valid browser extension or native client."""
+    return (
+        origin.startswith("chrome-extension://")
+        or origin.startswith("moz-extension://")
+        or origin == ""  # Non-browser clients (CLI, etc.)
+    )
+
+
 @router.get("/token")
 async def get_token(request: Request):
     """Return the auth token. Only accessible from browser extension origin."""
     origin = request.headers.get("origin", "")
-    # Allow Chrome/Firefox extension origins and localhost
-    allowed = (
-        origin.startswith("chrome-extension://")
-        or origin.startswith("moz-extension://")
-        or origin.startswith("http://127.0.0.1")
-        or origin.startswith("http://localhost")
-        or origin == ""  # Non-browser clients (curl, etc.)
-    )
-    if not allowed:
+    if not _is_allowed_extension_origin(origin):
         from fastapi.responses import JSONResponse
 
         return JSONResponse(
@@ -275,6 +276,11 @@ def format_active_tab_context(tab: dict) -> str:
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    origin = websocket.headers.get("origin", "")
+    if not _is_allowed_extension_origin(origin):
+        await websocket.close(code=4003, reason="Forbidden origin")
+        return
+
     await websocket.accept()
     logger.info("Browser bridge extension connected from %s", websocket.client)
 
@@ -333,6 +339,18 @@ async def websocket_endpoint(websocket: WebSocket):
                         text = str(data.get("text") or "")
                         url = str(data.get("url") or "")
                         title = str(data.get("title") or "")
+
+                        allowed_domains = config.get(
+                            "browser_extension.allowed_live_tracking_domains", []
+                        )
+                        if not allowed_domains or not any(
+                            domain in url for domain in allowed_domains
+                        ):
+                            logger.debug(
+                                f"Rejected live tracking context for unauthorized URL: {url}"
+                            )
+                            continue
+
                         if len(text) > 200:
                             # Compress text to avoid overwhelming memory
                             content = f"Page: {title} ({url})\n\n{text[:4000]}"
