@@ -13,6 +13,31 @@ async def api_get_memories():
     return load_memories()
 
 
+@router.get("/api/templates/{template_id}")
+async def api_get_template(template_id: str):
+    from src.memory.ui_templates import get_ui_template
+
+    tpl = await get_ui_template(template_id)
+    if not tpl:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return {"status": "ok", "template": tpl}
+
+
+@router.post("/api/templates/cleanup")
+async def api_cleanup_templates(body: dict = None):
+    from src.memory.ui_templates import cleanup_old_templates
+
+    days = 30
+    if body and "days" in body:
+        days = body["days"]
+    deleted_count = await cleanup_old_templates(days)
+    return {
+        "status": "ok",
+        "deleted_count": deleted_count,
+        "message": f"Deleted {deleted_count} templates older than {days} days.",
+    }
+
+
 @router.post("/api/memories")
 async def api_add_memory(body: dict):
     fact = body.get("fact")
@@ -102,6 +127,27 @@ async def api_mem0_count(project_id: str = ""):
         return {"status": "ok", "count": count, "user_id": user_id}
     except Exception as e:
         logger.error("Error: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/mem0/add")
+async def api_mem0_add(body: dict):
+    """Manually add a memory to Mem0.
+
+    Body: { "memory": "fact text here", "user_id": "owner" }
+    """
+    if mem0_memory is None:
+        return {"status": "error", "message": "Mem0/Qdrant not available"}
+    try:
+        memory_text = body.get("memory")
+        if not memory_text:
+            return {"status": "error", "message": "memory text is required"}
+        user_id = body.get("user_id", "owner")
+        # Ensure we always add it for the provided user
+        mem0_memory.add(memory_text, user_id=user_id)
+        return {"status": "ok", "message": f"Added memory for {user_id}"}
+    except Exception as e:
+        logger.error("Error adding mem0 memory: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 

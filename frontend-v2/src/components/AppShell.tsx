@@ -47,6 +47,8 @@ interface ProjectChat {
   id: string
   name: string
   created_at: number
+  pinned?: boolean
+  tags?: string[]
 }
 
 export interface WorkspaceProject {
@@ -107,8 +109,10 @@ function MessageAvatar({ role }: { role: ChatMessage['role'] }) {
 // dangerous elements like <script> and event handlers.
 const markdownSchema: Options = {
   ...defaultSchema,
+  tagNames: [...(defaultSchema.tagNames || []), 'callout'],
   attributes: {
     ...defaultSchema.attributes,
+    callout: ['variant'],
     div: [...(defaultSchema.attributes?.div || []), 'style', 'className'],
     span: [...(defaultSchema.attributes?.span || []), 'style'],
     strong: [...(defaultSchema.attributes?.strong || []), 'style'],
@@ -236,6 +240,15 @@ function buildMarkdownComponents(projectId: string) {
     ol: ({ children, ...props }: { children?: ReactNode }) => (
       <ol className="msg-list" {...props}>{children}</ol>
     ),
+    callout: ({ variant, children, ...props }: any) => {
+      // Use existing interactive callout styling if possible
+      return (
+        <div className={`owlynn-block owlynn-block-callout`} data-variant={variant} {...props}>
+          {variant && <div className="callout-header">{variant.toUpperCase()}</div>}
+          <div className="callout-body">{children}</div>
+        </div>
+      )
+    },
   }
 }
 
@@ -430,6 +443,45 @@ export function AppShell({
   const [modeSwitchPending, setModeSwitchPending] = useState<'normal' | 'study' | 'pentest' | null>(null)
   const [pentestLoading, setPentestLoading] = useState(false)
   const [pentestLoadingStatus, setPentestLoadingStatus] = useState('')
+
+  const [searchQuery, setSearchQuery] = useState('')
+  const [isSearching, setIsSearching] = useState(false)
+  const [searchResults, setSearchResults] = useState<ProjectChat[] | null>(null)
+
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults(null)
+      setIsSearching(false)
+      return
+    }
+    
+    setIsSearching(true)
+    const timeout = setTimeout(async () => {
+      try {
+        const resp = await fetchWithAuth(`/api/projects/${activeProjectId}/chats/search?q=${encodeURIComponent(searchQuery)}`)
+        if (resp.ok) {
+          const data = await resp.json()
+          if (data.status === 'ok') setSearchResults(data.results)
+        }
+      } finally {
+        setIsSearching(false)
+      }
+    }, 400)
+    return () => clearTimeout(timeout)
+  }, [searchQuery, activeProjectId])
+
+  const handlePinToggle = async (chatId: string, pinned: boolean) => {
+    try {
+      await fetchWithAuth(`/api/projects/${activeProjectId}/chats/${chatId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pinned: !pinned })
+      })
+      onRefreshProjects()
+    } catch (e) {
+      toast.error('Failed to update chat pin status')
+    }
+  }
 
   // Mode switch with confirmation modal (only for pentest transitions)
   const handleModeSwitchRequest = useCallback((mode: 'normal' | 'study' | 'pentest') => {
@@ -727,67 +779,137 @@ export function AppShell({
               </div>
             </summary>
             <div className="sidebar-accordion-content">
+              <div className="chat-search-container">
+                <input
+                  type="text"
+                  placeholder="Search chats..."
+                  className="chat-search-input"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                {isSearching && <span className="chat-search-spinner" />}
+              </div>
               <div className="chat-list">
-                {projectChats.length === 0 ? (
-                  <p className="chat-list-empty">No chats yet. Start a new conversation.</p>
-                ) : (
-                  [...projectChats]
-                    .sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))
-                    .map((chat) => (
-                      <div
-                        key={chat.id}
-                        className={`chat-list-item${chat.id === activeChatId ? ' chat-list-item-active' : ''}`}
-                        onClick={() => {
-                          if (renamingChatId !== chat.id) {
-                            onSelectChat(chat.id)
-                          }
-                        }}
-                      >
-                        {renamingChatId === chat.id ? (
-                          <RenameInput
-                            initialName={chat.name}
-                            onSave={(newName) => {
-                              onRenameChat(chat.id, newName)
-                              setRenamingChatId(null)
+                {(() => {
+                  const chatsToRender = searchResults !== null ? searchResults : projectChats;
+                  if (chatsToRender.length === 0) {
+                    return <p className="chat-list-empty">{searchQuery ? 'No chats found.' : 'No chats yet. Start a new conversation.'}</p>
+                  }
+
+                  const now = new Date()
+                  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+                  const startOfYesterday = startOfToday - 86400000
+                  const startOfWeek = startOfToday - 86400000 * 7
+
+                  const groups = {
+                    Pinned: [] as ProjectChat[],
+                    Today: [] as ProjectChat[],
+                    Yesterday: [] as ProjectChat[],
+                    'This Week': [] as ProjectChat[],
+                    Older: [] as ProjectChat[]
+                  }
+
+                  chatsToRender.forEach((chat: any) => {
+                    if (chat.pinned) {
+                      groups.Pinned.push(chat)
+                      return
+                    }
+                    const ts = chat.created_at * 1000
+                    if (ts >= startOfToday) {
+                      groups.Today.push(chat)
+                    } else if (ts >= startOfYesterday) {
+                      groups.Yesterday.push(chat)
+                    } else if (ts >= startOfWeek) {
+                      groups['This Week'].push(chat)
+                    } else {
+                      groups.Older.push(chat)
+                    }
+                  })
+
+                  const renderGroup = (title: string, list: ProjectChat[]) => {
+                    if (list.length === 0) return null
+                    return (
+                      <div key={title} className="chat-list-group">
+                        <div className="chat-list-group-title">{title}</div>
+                        {list.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0)).map((chat: any) => (
+                          <div
+                            key={chat.id}
+                            className={`chat-list-item${chat.id === activeChatId ? ' chat-list-item-active' : ''}`}
+                            onClick={() => {
+                              if (renamingChatId !== chat.id) {
+                                onSelectChat(chat.id)
+                              }
                             }}
-                            onCancel={() => setRenamingChatId(null)}
-                          />
-                        ) : (
-                          <>
-                            <span className="chat-list-item-name" title={chat.name}>
-                              {chat.name}
-                            </span>
-                            <span className="chat-list-item-actions">
-                              <button
-                                type="button"
-                                className="chat-list-action"
-                                title="Rename"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setRenamingChatId(chat.id)
+                          >
+                            {renamingChatId === chat.id ? (
+                              <RenameInput
+                                initialName={chat.name}
+                                onSave={(newName) => {
+                                  onRenameChat(chat.id, newName)
+                                  setRenamingChatId(null)
                                 }}
-                              >
-                                ✎
-                              </button>
-                              <button
-                                type="button"
-                                className="chat-list-action chat-list-action-delete"
-                                title="Delete"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  if (confirm('Delete this chat? This cannot be undone.')) {
-                                    onDeleteChat(chat.id)
-                                  }
-                                }}
-                              >
-                                ✕
-                              </button>
-                            </span>
-                          </>
-                        )}
+                                onCancel={() => setRenamingChatId(null)}
+                              />
+                            ) : (
+                              <>
+                                <span className="chat-list-item-name" title={chat.name}>
+                                  {chat.name}
+                                </span>
+                                <span className="chat-list-item-actions">
+                                  <button
+                                    type="button"
+                                    className={`chat-list-action ${chat.pinned ? 'pinned-active' : ''}`}
+                                    title={chat.pinned ? "Unpin chat" : "Pin chat"}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handlePinToggle(chat.id, !!chat.pinned)
+                                    }}
+                                  >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill={chat.pinned ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="17" x2="12" y2="22"></line><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.68V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3v4.68a2 2 0 0 1-1.11 1.87l-1.78.89A2 2 0 0 0 5 15.24Z"></path></svg>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="chat-list-action"
+                                    title="Rename"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      setRenamingChatId(chat.id)
+                                    }}
+                                  >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="chat-list-action chat-list-action-delete"
+                                    title="Delete"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      if (confirm('Delete this chat? This cannot be undone.')) {
+                                        onDeleteChat(chat.id)
+                                      }
+                                    }}
+                                  >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                                  </button>
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        ))}
                       </div>
-                    ))
-                )}
+                    )
+                  }
+
+                  return (
+                    <>
+                      {renderGroup('Pinned', groups.Pinned)}
+                      {renderGroup('Today', groups.Today)}
+                      {renderGroup('Yesterday', groups.Yesterday)}
+                      {renderGroup('This Week', groups['This Week'])}
+                      {renderGroup('Older', groups.Older)}
+                    </>
+                  )
+                })()}
               </div>
             </div>
           </details>

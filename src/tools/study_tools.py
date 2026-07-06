@@ -144,7 +144,7 @@ def _filter_memories_by_tags(results: list, tags: list[str]) -> list:
     return filtered or results
 
 
-def _auto_create_study_project(
+async def _auto_create_study_project(
     course_id: str, name: str, files: list[str]
 ) -> str | None:
     """Create a study workspace project for a course and index linked files."""
@@ -161,7 +161,7 @@ def _auto_create_study_project(
             f"Use the knowledge files as source material. "
             f"When the user asks about this course, reference the indexed documents."
         )
-        project = project_manager.create_project(project_name, instructions)
+        project = await project_manager.create_project(project_name, instructions)
         project_id = project["id"]
 
         workspace = get_project_workspace(project_id)
@@ -174,15 +174,10 @@ def _auto_create_study_project(
                 # Index as knowledge in Qdrant (non-blocking best-effort)
                 try:
                     content = dst.read_text(encoding="utf-8", errors="replace")[:32000]
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        asyncio.ensure_future(
-                            project_manager.add_knowledge(project_id, fname, content)
-                        )
-                    else:
-                        loop.run_until_complete(
-                            project_manager.add_knowledge(project_id, fname, content)
-                        )
+                    # Since we are now in an async function, we can just spawn a task
+                    asyncio.create_task(
+                        project_manager.add_knowledge(project_id, fname, content)
+                    )
                 except Exception:
                     pass  # Non-critical — files are still in workspace
         return project_id
@@ -191,7 +186,7 @@ def _auto_create_study_project(
 
 
 @tool
-def course_register(
+async def course_register(
     course_id: str,
     name: str,
     exam_date: str = "",
@@ -224,7 +219,7 @@ def course_register(
 
     # Auto-create study workspace when linked files are provided and no project exists
     if files and not project_id:
-        project_id = _auto_create_study_project(cid, name.strip(), files)
+        project_id = await _auto_create_study_project(cid, name.strip(), files)
 
     entry = {
         "course_id": cid,
@@ -278,7 +273,7 @@ def course_get(course_id: str) -> str:
 
 
 @tool
-def course_workspace_create(course_id: str, linked_files: str = "") -> str:
+async def course_workspace_create(course_id: str, linked_files: str = "") -> str:
     """
     Create a study workspace project for an existing course.
 
@@ -306,7 +301,9 @@ def course_workspace_create(course_id: str, linked_files: str = "") -> str:
     if not files:
         return "No files to index. Provide linked_files or register the course with files first."
 
-    project_id = _auto_create_study_project(target["course_id"], target["name"], files)
+    project_id = await _auto_create_study_project(
+        target["course_id"], target["name"], files
+    )
     if not project_id:
         return "Failed to create study workspace."
 
@@ -322,7 +319,7 @@ def course_workspace_create(course_id: str, linked_files: str = "") -> str:
 
 
 @tool
-def course_chat_create(course_id: str, chat_name: str) -> str:
+async def course_chat_create(course_id: str, chat_name: str) -> str:
     """
     Create a named chat in a course's study workspace project.
 
@@ -347,7 +344,7 @@ def course_chat_create(course_id: str, chat_name: str) -> str:
         from src.memory.project import project_manager
 
         chat_id = f"thread-{uuid.uuid4()}"
-        project_manager.add_chat_to_project(
+        await project_manager.add_chat_to_project(
             target["project_id"],
             {"id": chat_id, "name": chat_name.strip(), "created_at": time.time()},
         )
@@ -512,7 +509,7 @@ def flashcard_deck_create(
 
 
 @tool
-def flashcard_import(deck_name: str, file_path: str, course_id: str = "") -> str:
+async def flashcard_import(deck_name: str, file_path: str, course_id: str = "") -> str:
     """
     Import flashcards from a CSV file.
 

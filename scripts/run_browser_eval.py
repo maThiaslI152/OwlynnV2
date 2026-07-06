@@ -17,8 +17,8 @@ from pathlib import Path
 from playwright.async_api import async_playwright
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-BASE_URL = "http://127.0.0.1:5173"
-API_URL = "http://127.0.0.1:8000"
+BASE_URL = os.getenv("OWLYNN_EVAL_BASE_URL", "http://127.0.0.1:5173")
+API_URL = os.getenv("OWLYNN_EVAL_API_URL", "http://127.0.0.1:8000")
 SCREENSHOT_DIR = REPO_ROOT / "assets" / "eval_screenshots"
 OUTPUT_DATA_FILE = REPO_ROOT / "data" / "eval_run_data.json"
 
@@ -268,6 +268,37 @@ async def get_orchestration_data(page) -> dict:
 
 
 async def main():
+    # Wait for backend to be fully started and responsive
+    print(f"[EVAL] Waiting for backend at {API_URL} to start...")
+    backend_ready = False
+    for _ in range(15):
+        try:
+            async with httpx.AsyncClient(timeout=1.0) as client:
+                resp = await client.get(f"{API_URL}/api/health")
+                if resp.status_code == 200:
+                    backend_ready = True
+                    break
+        except Exception:
+            pass
+        await asyncio.sleep(1.0)
+
+    if not backend_ready:
+        print(
+            f"[EVAL] Warning: Backend at {API_URL} not fully responsive. Proceeding anyway."
+        )
+
+    if not os.environ.get("OWLYNN_LOCAL_RUN_TOKEN"):
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                resp = await client.get(f"{API_URL}/api/local-run-token")
+                if resp.status_code == 200:
+                    token = resp.json().get("token")
+                    if token:
+                        os.environ["OWLYNN_LOCAL_RUN_TOKEN"] = token
+                        print("[EVAL] Auto-loaded OWLYNN_LOCAL_RUN_TOKEN from backend")
+        except Exception as e:
+            print(f"[EVAL] Warning: Could not auto-load local run token: {e}")
+
     parser = argparse.ArgumentParser(description="Owlynn browser conversation eval")
     parser.add_argument(
         "--strict-cloud",

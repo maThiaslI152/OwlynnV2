@@ -34,7 +34,6 @@ dependencies = [
     "beautifulsoup4>=4.12",
     "httpx>=0.24",
     "curl_cffi>=0.7",
-    "keyring>=25.0",
     "cryptography>=42.0",
     "langgraph-checkpoint-redis>=0.3.6",
     "numpy>=1.26",
@@ -43,7 +42,11 @@ dependencies = [
     "plotly>=5.0",
     "Pillow>=10.0",
     "lxml>=5.0",
-    "crawl4ai"
+    "crawl4ai",
+    "sqlalchemy[asyncio]>=2.0",
+    "asyncpg>=0.29",
+    "alembic>=1.13",
+    "tenacity>=8.0.0"
 ]
 
 [tool.ruff]

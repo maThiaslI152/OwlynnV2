@@ -74,5 +74,6 @@ export const electronBridge = {
   approveActionProposal: (id: string) => invokeOrResult<string>('approve_action_proposal', id),
   rejectActionProposal: (id: string) => invokeOrResult<string>('reject_action_proposal', id),
   setWindowSize: (width: number, height: number) => invokeOrResult<string>('set_window_size', width, height),
+  launchBrowser: () => invokeOrResult<string>('launch_browser'),
   convertFileSrc,
 }

@@ -16,6 +16,7 @@ We test the core isolation mechanisms:
 
 import os
 import sys
+import asyncio
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -58,19 +59,19 @@ chat_list_st = st.lists(
 # ── Helpers ──────────────────────────────────────────────────────────────
 
 
-def _create_fresh_manager_with_two_projects():
+async def _create_fresh_manager_with_two_projects():
     """Create a ProjectManager and two fresh test projects, returning (pm, proj_a, proj_b)."""
     pm = ProjectManager()
-    proj_a = pm.create_project("Project A")
-    proj_b = pm.create_project("Project B")
+    proj_a = await pm.create_project("Project A")
+    proj_b = await pm.create_project("Project B")
     return pm, proj_a, proj_b
 
 
-def _cleanup(pm, *projects):
+async def _cleanup(pm, *projects):
     """Delete test projects to avoid polluting state."""
     for proj in projects:
         try:
-            pm.delete_project(proj["id"])
+            await pm.delete_project(proj["id"])
         except Exception:
             pass
 
@@ -96,28 +97,35 @@ class TestSeparateChatHistories:
         For any chat info, adding it to project A should leave
         project B's chat list completely unchanged.
         """
-        pm, proj_a, proj_b = _create_fresh_manager_with_two_projects()
-        try:
-            # Snapshot project B's chats before
-            chats_b_before = list(pm.get_project(proj_b["id"])["chats"])
 
-            # Add chat to project A
-            pm.add_chat_to_project(proj_a["id"], chat)
+        async def run():
+            pm, proj_a, proj_b = await _create_fresh_manager_with_two_projects()
+            try:
+                # Snapshot project B's chats before
+                proj_b_fresh = await pm.get_project(proj_b["id"])
+                chats_b_before = list(proj_b_fresh["chats"])
 
-            # Project B's chats should be identical
-            chats_b_after = pm.get_project(proj_b["id"])["chats"]
-            assert chats_b_after == chats_b_before, (
-                f"Project B chats changed after adding chat to Project A. "
-                f"Before: {chats_b_before}, After: {chats_b_after}"
-            )
+                # Add chat to project A
+                await pm.add_chat_to_project(proj_a["id"], chat)
 
-            # Project A should have the new chat
-            chats_a = pm.get_project(proj_a["id"])["chats"]
-            assert any(c["id"] == chat["id"] for c in chats_a), (
-                f"Chat '{chat['id']}' not found in Project A after adding"
-            )
-        finally:
-            _cleanup(pm, proj_a, proj_b)
+                # Project B's chats should be identical
+                proj_b_after = await pm.get_project(proj_b["id"])
+                chats_b_after = proj_b_after["chats"]
+                assert chats_b_after == chats_b_before, (
+                    f"Project B chats changed after adding chat to Project A. "
+                    f"Before: {chats_b_before}, After: {chats_b_after}"
+                )
+
+                # Project A should have the new chat
+                proj_a_after = await pm.get_project(proj_a["id"])
+                chats_a = proj_a_after["chats"]
+                assert any(c["id"] == chat["id"] for c in chats_a), (
+                    f"Chat '{chat['id']}' not found in Project A after adding"
+                )
+            finally:
+                await _cleanup(pm, proj_a, proj_b)
+
+        asyncio.run(run())
 
     @given(chats=chat_list_st)
     @settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow])
@@ -126,22 +134,28 @@ class TestSeparateChatHistories:
         Adding multiple chats to project A should keep project B's
         chat list at zero length (both start empty).
         """
-        pm, proj_a, proj_b = _create_fresh_manager_with_two_projects()
-        try:
-            for chat in chats:
-                pm.add_chat_to_project(proj_a["id"], chat)
 
-            chats_b = pm.get_project(proj_b["id"])["chats"]
-            assert len(chats_b) == 0, (
-                f"Project B has {len(chats_b)} chats after adding {len(chats)} to Project A"
-            )
+        async def run():
+            pm, proj_a, proj_b = await _create_fresh_manager_with_two_projects()
+            try:
+                for chat in chats:
+                    await pm.add_chat_to_project(proj_a["id"], chat)
 
-            chats_a = pm.get_project(proj_a["id"])["chats"]
-            assert len(chats_a) == len(chats), (
-                f"Project A should have {len(chats)} chats but has {len(chats_a)}"
-            )
-        finally:
-            _cleanup(pm, proj_a, proj_b)
+                proj_b_after = await pm.get_project(proj_b["id"])
+                chats_b = proj_b_after["chats"]
+                assert len(chats_b) == 0, (
+                    f"Project B has {len(chats_b)} chats after adding {len(chats)} to Project A"
+                )
+
+                proj_a_after = await pm.get_project(proj_a["id"])
+                chats_a = proj_a_after["chats"]
+                assert len(chats_a) == len(chats), (
+                    f"Project A should have {len(chats)} chats but has {len(chats_a)}"
+                )
+            finally:
+                await _cleanup(pm, proj_a, proj_b)
+
+        asyncio.run(run())
 
     @given(
         chat_a=chat_info_st,
@@ -155,25 +169,30 @@ class TestSeparateChatHistories:
         """
         assume(chat_a["id"] != chat_b["id"])
 
-        pm, proj_a, proj_b = _create_fresh_manager_with_two_projects()
-        try:
-            pm.add_chat_to_project(proj_a["id"], chat_a)
-            pm.add_chat_to_project(proj_b["id"], chat_b)
+        async def run():
+            pm, proj_a, proj_b = await _create_fresh_manager_with_two_projects()
+            try:
+                await pm.add_chat_to_project(proj_a["id"], chat_a)
+                await pm.add_chat_to_project(proj_b["id"], chat_b)
 
-            chats_a = pm.get_project(proj_a["id"])["chats"]
-            chats_b = pm.get_project(proj_b["id"])["chats"]
+                proj_a_after = await pm.get_project(proj_a["id"])
+                chats_a = proj_a_after["chats"]
+                proj_b_after = await pm.get_project(proj_b["id"])
+                chats_b = proj_b_after["chats"]
 
-            # Project A has only chat_a
-            a_ids = {c["id"] for c in chats_a}
-            assert chat_a["id"] in a_ids, "Project A missing its own chat"
-            assert chat_b["id"] not in a_ids, "Project A contains Project B's chat"
+                # Project A has only chat_a
+                a_ids = {c["id"] for c in chats_a}
+                assert chat_a["id"] in a_ids, "Project A missing its own chat"
+                assert chat_b["id"] not in a_ids, "Project A contains Project B's chat"
 
-            # Project B has only chat_b
-            b_ids = {c["id"] for c in chats_b}
-            assert chat_b["id"] in b_ids, "Project B missing its own chat"
-            assert chat_a["id"] not in b_ids, "Project B contains Project A's chat"
-        finally:
-            _cleanup(pm, proj_a, proj_b)
+                # Project B has only chat_b
+                b_ids = {c["id"] for c in chats_b}
+                assert chat_b["id"] in b_ids, "Project B missing its own chat"
+                assert chat_a["id"] not in b_ids, "Project B contains Project A's chat"
+            finally:
+                await _cleanup(pm, proj_a, proj_b)
+
+        asyncio.run(run())
 
     @given(
         chat_a=chat_info_st,
@@ -186,27 +205,32 @@ class TestSeparateChatHistories:
         """
         assume(chat_a["id"] != chat_b["id"])
 
-        pm, proj_a, proj_b = _create_fresh_manager_with_two_projects()
-        try:
-            pm.add_chat_to_project(proj_a["id"], chat_a)
-            pm.add_chat_to_project(proj_b["id"], chat_b)
+        async def run():
+            pm, proj_a, proj_b = await _create_fresh_manager_with_two_projects()
+            try:
+                await pm.add_chat_to_project(proj_a["id"], chat_a)
+                await pm.add_chat_to_project(proj_b["id"], chat_b)
 
-            # Delete chat from project A
-            pm.delete_chat_from_project(proj_a["id"], chat_a["id"])
+                # Delete chat from project A
+                await pm.delete_chat_from_project(proj_a["id"], chat_a["id"])
 
-            # Project A should have no chats
-            chats_a = pm.get_project(proj_a["id"])["chats"]
-            assert len(chats_a) == 0, (
-                f"Project A still has {len(chats_a)} chats after deletion"
-            )
+                # Project A should have no chats
+                proj_a_after = await pm.get_project(proj_a["id"])
+                chats_a = proj_a_after["chats"]
+                assert len(chats_a) == 0, (
+                    f"Project A still has {len(chats_a)} chats after deletion"
+                )
 
-            # Project B should still have its chat
-            chats_b = pm.get_project(proj_b["id"])["chats"]
-            assert len(chats_b) == 1, (
-                f"Project B should have 1 chat but has {len(chats_b)}"
-            )
-            assert chats_b[0]["id"] == chat_b["id"], (
-                "Project B's chat ID changed after deleting from Project A"
-            )
-        finally:
-            _cleanup(pm, proj_a, proj_b)
+                # Project B should still have its chat
+                proj_b_after = await pm.get_project(proj_b["id"])
+                chats_b = proj_b_after["chats"]
+                assert len(chats_b) == 1, (
+                    f"Project B should have 1 chat but has {len(chats_b)}"
+                )
+                assert chats_b[0]["id"] == chat_b["id"], (
+                    "Project B's chat ID changed after deleting from Project A"
+                )
+            finally:
+                await _cleanup(pm, proj_a, proj_b)
+
+        asyncio.run(run())

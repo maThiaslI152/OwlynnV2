@@ -69,6 +69,12 @@ async def main():
     kill_process_on_port(5173)
 
     env = os.environ.copy()
+    if not env.get("OWLYNN_LOCAL_RUN_TOKEN"):
+        import secrets
+
+        env["OWLYNN_LOCAL_RUN_TOKEN"] = secrets.token_urlsafe(32)
+        print(f"Generated test token: {env['OWLYNN_LOCAL_RUN_TOKEN']}")
+
     if args.local_cloud:
         print("Running in --local-cloud mode")
         env["CLOUD_LLM_BASE_URL"] = "http://127.0.0.1:1234/v1"
@@ -118,6 +124,9 @@ async def main():
             async with httpx.AsyncClient() as client:
                 await client.put(
                     "http://127.0.0.1:8000/api/unified-settings",
+                    headers={
+                        "X-Owlynn-Run-Token": env.get("OWLYNN_LOCAL_RUN_TOKEN", "")
+                    },
                     json={
                         "cloud_llm_base_url": "http://127.0.0.1:1234/v1",
                         "cloud_llm_model_name": "qwen3-vl-4b-instruct-c_abliterated-v2-mlx",

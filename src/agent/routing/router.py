@@ -909,7 +909,53 @@ async def router_node(state: AgentState) -> AgentState:
             **_memory_gate_fields(state, user_text, "simple", force_needs=False),
         }
 
+    # ── Personal information disclosure — force complex + memory write ─────
+    # Catches: "My name is Tim", "I'm a software engineer", "I live in Bangkok",
+    # "I work at X", "I'm from Y" etc. These must be routed through complex so
+    # the memory_write node can persist the fact to long-term memory.
+    _personal_info_pattern = re.compile(
+        r"\b(my\s+name\s+is|i\s+am\s+a\s+|i'm\s+a\s+|i\s+work\s+(at|for|in)|i\s+live\s+in|"
+        r"i'm\s+from|i\s+am\s+from|i\s+study\s+(at|in)|my\s+(job|role|title|profession)\s+is|"
+        r"call\s+me\s+\w+|i\s+go\s+by|my\s+email\s+is|my\s+phone\s+is|i\s+was\s+born\s+in|"
+        r"project\s+codeword|codeword\s+is|remember\s+that|remember\s+this)\b",
+        re.IGNORECASE,
+    )
+    if _personal_info_pattern.search(user_text) and not (
+        has_web_intent or has_file_intent
+    ):
+        route = "complex-cloud" if cloud_available else "complex-default"
+        budget = estimate_token_budget(user_text, route)
+        metadata = _build_router_metadata(
+            route,
+            confidence=0.95,
+            reasoning="personal_info_disclosure",
+            classification_source="deterministic",
+            cloud_available=cloud_available,
+            has_images=has_images,
+            task_category="memory_seed",
+            estimated_tokens=budget,
+            web_on=web_on,
+        )
+        audit_info(
+            "agent.lifecycle",
+            "router_decision",
+            route=route,
+            confidence=0.95,
+            source="deterministic",
+            task_category="memory_seed",
+        )
+        return {
+            "route": route,
+            "token_budget": budget,
+            "selected_toolboxes": ["all"],
+            "router_clarification_used": False,
+            "skill_matched": None,
+            "router_metadata": metadata,
+            **_memory_gate_fields(state, user_text, route, force_needs=True),
+        }
+
     # ── Conversation recall bypass (suppress tools for pure recall) ────
+
     _recall_pattern = re.compile(
         r"(earlier|previous|before|last)\s+(in\s+)?(this\s+)?(conversation|chat|session|message)",
         re.IGNORECASE,

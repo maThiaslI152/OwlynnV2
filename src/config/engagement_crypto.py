@@ -1,7 +1,7 @@
 """Per-engagement credential encryption using Fernet (AES-128-CBC).
 
-Master key is stored in macOS Keychain. Credentials are encrypted
-per-engagement and stored in credentials.enc files.
+Master key is stored in ~/.owlynn/.engagement_master_key.
+Credentials are encrypted per-engagement and stored in credentials.enc files.
 
 Usage::
 
@@ -20,32 +20,13 @@ from src.config.settings import DATA_DIR
 
 logger = logging.getLogger(__name__)
 
-_SERVICE_NAME = "com.owlynn.engagement"
-_ACCOUNT_NAME = "master_key"
-
-_keyring = None
 _cached_key: bytes | None = None
 
 
-def _get_keyring():
-    """Lazy-import keyring with graceful fallback."""
-    global _keyring
-    if _keyring is None:
-        try:
-            import keyring as kr
-
-            _keyring = kr
-        except ImportError:
-            logger.debug("keyring not installed — Keychain storage unavailable")
-            _keyring = False
-    return _keyring if _keyring is not False else None
-
-
 def _get_master_key() -> bytes:
-    """Get or create the Fernet master key from Keychain.
+    """Get or create the Fernet master key.
 
-    On first use, generates a random key and stores it in Keychain.
-    Falls back to a file-based key if Keychain is unavailable.
+    On first use, generates a random key and stores it in ~/.owlynn/.engagement_master_key.
     """
     global _cached_key
     if _cached_key:
@@ -53,31 +34,22 @@ def _get_master_key() -> bytes:
 
     from cryptography.fernet import Fernet
 
-    kr = _get_keyring()
+    key_path = Path.home() / ".owlynn" / ".engagement_master_key"
 
-    # Try Keychain first
-    if kr:
+    # Try reading existing key
+    if key_path.exists():
         try:
-            stored = kr.get_password(_SERVICE_NAME, _ACCOUNT_NAME)
+            stored = key_path.read_bytes()
             if stored:
-                _cached_key = stored.encode("utf-8")
+                _cached_key = stored
                 return _cached_key
         except Exception as e:
-            logger.debug("Keychain read failed: %s", e)
+            logger.warning("Failed to read engagement master key: %s", e)
 
     # Generate new key
     new_key = Fernet.generate_key()
 
-    # Store in Keychain
-    if kr:
-        try:
-            kr.set_password(_SERVICE_NAME, _ACCOUNT_NAME, new_key.decode("utf-8"))
-            logger.info("Stored new engagement master key in Keychain")
-        except Exception as e:
-            logger.warning("Keychain write failed: %s", e)
-
-    # Also store in file as fallback
-    key_path = DATA_DIR / ".engagement_master_key"
+    # Store securely in file
     key_path.parent.mkdir(parents=True, exist_ok=True)
     key_path.write_bytes(new_key)
     try:
@@ -86,6 +58,8 @@ def _get_master_key() -> bytes:
         os.chmod(str(key_path), 0o600)
     except OSError:
         pass
+
+    logger.info("Generated new engagement master key at %s", key_path)
 
     _cached_key = new_key
     return new_key

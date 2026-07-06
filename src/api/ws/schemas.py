@@ -206,8 +206,8 @@ class RouterInfoEvent(BaseModel):
 class FallbackChainItem(BaseModel):
     model: str
     status: str
-    reason: str
-    duration_ms: int
+    reason: Optional[str] = None
+    duration_ms: Optional[int] = None
 
 
 class ModelInfoEvent(BaseModel):

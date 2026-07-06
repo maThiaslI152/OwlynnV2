@@ -231,6 +231,13 @@ class AuditLogMiddleware:
         path = scope.get("path", "/")
         started = time.monotonic()
 
+        headers = dict(scope.get("headers", []))
+        correlation_id = headers.get(b"x-correlation-id", b"").decode("utf-8")
+        if not correlation_id:
+            import uuid
+
+            correlation_id = str(uuid.uuid4())
+
         # Capture status code
         status_code = 0
 
@@ -238,10 +245,16 @@ class AuditLogMiddleware:
             nonlocal status_code
             if message["type"] == "http.response.start":
                 status_code = message.get("status", 0)
+                message.setdefault("headers", []).append(
+                    (b"x-correlation-id", correlation_id.encode("utf-8"))
+                )
             await send(message)
 
         try:
-            await self.app(scope, receive, _send)
+            from src.config.audit_log import audit_context
+
+            with audit_context(correlation_id=correlation_id):
+                await self.app(scope, receive, _send)
         except Exception:
             status_code = 500
             raise
@@ -255,4 +268,5 @@ class AuditLogMiddleware:
                 path=path,
                 status=status_code,
                 duration_ms=round(elapsed, 2),
+                correlation_id=correlation_id,
             )

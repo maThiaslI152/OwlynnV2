@@ -47,10 +47,16 @@ def is_loopback_client(request: Request) -> bool:
     if not request.client:
         return False
     host = (request.client.host or "").lower()
-    # Starlette/FastAPI TestClient uses host "testclient" (tests only).
-    if host == "testclient":
+    import ipaddress
+
+    if host == "testclient" or host == "localhost":
         return True
-    return host in ("127.0.0.1", "::1", "localhost")
+
+    try:
+        ip = ipaddress.ip_address(host)
+        return ip.is_loopback or ip.is_private
+    except ValueError:
+        return False
 
 
 def verify_local_run_token(request: Request, token: str | None) -> None:

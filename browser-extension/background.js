@@ -82,9 +82,12 @@ function isSecureUrl(url) {
   if (isRestrictedUrl(url)) return false;
   try {
     const hostname = new URL(url).hostname.toLowerCase();
-    // Exact match or subdomain match (not substring)
+    
     for (const d of SENSITIVE_DOMAINS) {
-      if (hostname === d || hostname.endsWith('.' + d)) return false;
+      // Use word boundary to match domains like paypal.com, my-bank.com, or auth.site.com
+      if (new RegExp('\\b' + d + '\\b').test(hostname)) {
+        return false;
+      }
     }
     return true;
   } catch (e) {
@@ -427,6 +430,14 @@ async function handleBrowserActionRequest(requestId, payload) {
       return;
     }
     
+    if (payload.action === "set_hint_config") {
+      await chrome.storage.local.set({ owlynnHintConfig: payload.config || {} });
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ id: requestId, result: { success: true } }));
+      }
+      return;
+    }
+
     if (payload.action === "go_back") {
       await chrome.scripting.executeScript({
         target: { tabId: tab.id },
@@ -448,6 +459,74 @@ async function handleBrowserActionRequest(requestId, payload) {
       }
       return;
     }
+    
+    if (payload.action === "wait_for_navigation") {
+      const timeout = payload.timeout || 10000;
+      
+      const currentTab = await chrome.tabs.get(tab.id);
+      if (currentTab.status === 'loading') {
+        try {
+          await new Promise((resolve, reject) => {
+            const listener = (tabId, changeInfo) => {
+              if (tabId === tab.id && changeInfo.status === 'complete') {
+                chrome.tabs.onUpdated.removeListener(listener);
+                resolve();
+              }
+            };
+            chrome.tabs.onUpdated.addListener(listener);
+            setTimeout(() => {
+              chrome.tabs.onUpdated.removeListener(listener);
+              reject(new Error("Timeout waiting for navigation"));
+            }, timeout);
+          });
+          if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ id: requestId, result: { success: true, result: "Page loaded." } }));
+          }
+        } catch (err) {
+          if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ id: requestId, result: { success: true, result: `Waited ${timeout}ms (timeout).` } }));
+          }
+        }
+      } else {
+        try {
+          await new Promise((resolve, reject) => {
+            let started = false;
+            const listener = (tabId, changeInfo) => {
+              if (tabId === tab.id) {
+                if (changeInfo.status === 'loading') {
+                  started = true;
+                } else if (changeInfo.status === 'complete' && started) {
+                  chrome.tabs.onUpdated.removeListener(listener);
+                  resolve("Page loaded after transition.");
+                }
+              }
+            };
+            chrome.tabs.onUpdated.addListener(listener);
+            
+            setTimeout(() => {
+              if (!started) {
+                chrome.tabs.onUpdated.removeListener(listener);
+                resolve("Page already loaded (no transition started).");
+              }
+            }, 600);
+            
+            setTimeout(() => {
+              chrome.tabs.onUpdated.removeListener(listener);
+              reject(new Error("Timeout waiting for navigation"));
+            }, timeout);
+          });
+          if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ id: requestId, result: { success: true, result: "Page loaded." } }));
+          }
+        } catch (err) {
+          if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ id: requestId, result: { success: true, result: `Waited ${timeout}ms (timeout).` } }));
+          }
+        }
+      }
+      return;
+    }
+    
     
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
@@ -491,6 +570,85 @@ async function handleBrowserActionRequest(requestId, payload) {
   }
 }
 
+class Semaphore {
+  constructor(max) {
+    this.tasks = [];
+    this.counter = max;
+  }
+  async acquire() {
+    if (this.counter > 0) {
+      this.counter--;
+      return;
+    }
+    await new Promise(resolve => this.tasks.push(resolve));
+  }
+  release() {
+    if (this.tasks.length > 0) {
+      const resolve = this.tasks.shift();
+      resolve();
+    } else {
+      this.counter++;
+    }
+  }
+}
+const tabScrapeSemaphore = new Semaphore(3); // Max 3 hidden tabs concurrently
+
+async function scrapeUrlViaTab(url) {
+  await tabScrapeSemaphore.acquire();
+  let tab = null;
+  try {
+    // Create hidden background tab
+    tab = await chrome.tabs.create({ url, active: false });
+    
+    // Wait for the tab to complete loading (timeout 15 seconds)
+    await new Promise((resolve, reject) => {
+      const listener = (tabId, changeInfo) => {
+        if (tabId === tab.id && changeInfo.status === 'complete') {
+          chrome.tabs.onUpdated.removeListener(listener);
+          resolve();
+        }
+      };
+      chrome.tabs.onUpdated.addListener(listener);
+      setTimeout(() => {
+        chrome.tabs.onUpdated.removeListener(listener);
+        reject(new Error("Timeout waiting for page load"));
+      }, 15000);
+    });
+
+    // Wait a tiny bit for SPA scripting
+    await new Promise(r => setTimeout(r, 1000));
+
+    // Execute content_extract.js in the tab
+    const executionResults = await chrome.scripting.executeScript({
+      target: { tabId: tab.id, allFrames: true },
+      files: ["content_extract.js"],
+    });
+
+    let fullText = "";
+    if (executionResults && executionResults.length > 0) {
+      executionResults.forEach((frame) => {
+        if (frame.result && typeof frame.result === "object" && frame.result.text) {
+          if (fullText) fullText += "\n\n--- iframe ---\n\n";
+          fullText += frame.result.text;
+        }
+      });
+    }
+    return fullText.trim();
+  } catch (err) {
+    console.warn(`[Owlynn Bridge] Tab fallback scrape failed for ${url}:`, err);
+    throw err;
+  } finally {
+    if (tab && tab.id) {
+      try {
+        await chrome.tabs.remove(tab.id);
+      } catch (e) {
+        // Tab may already be closed
+      }
+    }
+    tabScrapeSemaphore.release();
+  }
+}
+
 async function handleFetchUrlsRequest(requestId, urls) {
   try {
     const results = [];
@@ -504,19 +662,38 @@ async function handleFetchUrlsRequest(requestId, urls) {
         if (isRestrictedUrl(u)) {
           return { url: u, text: "Restricted URL", error: true };
         }
+        let useFallback = false;
+        let text = "";
+        let errorMsg = null;
         try {
-          const resp = await fetch(u, { signal: AbortSignal.timeout(10000) });
-          if (!resp.ok) return { url: u, text: "", error: `HTTP ${resp.status}` };
-          const html = await resp.text();
-          // Extract visible text from HTML
-          const doc = new DOMParser().parseFromString(html, 'text/html');
-          // Remove script/style/nav/footer
-          doc.querySelectorAll('script,style,nav,footer,header,noscript,svg').forEach(el => el.remove());
-          const text = (doc.body?.innerText || doc.body?.textContent || '').trim().substring(0, 12000);
-          return { url: u, text };
+          const resp = await fetch(u, { signal: AbortSignal.timeout(6000) });
+          if (!resp.ok) {
+            useFallback = true;
+            errorMsg = `HTTP ${resp.status}`;
+          } else {
+            const html = await resp.text();
+            const doc = new DOMParser().parseFromString(html, 'text/html');
+            doc.querySelectorAll('script,style,nav,footer,header,noscript,svg').forEach(el => el.remove());
+            text = (doc.body?.innerText || doc.body?.textContent || '').trim().substring(0, 12000);
+            if (text.length < 300) {
+              useFallback = true;
+            }
+          }
         } catch (e) {
-          return { url: u, text: "", error: String(e.message || e) };
+          useFallback = true;
+          errorMsg = String(e.message || e);
         }
+
+        if (useFallback) {
+          try {
+            console.log(`[Owlynn Bridge] Falling back to background tab scrape for: ${u} (reason: ${errorMsg || 'short text'})`);
+            const renderedText = await scrapeUrlViaTab(u);
+            return { url: u, text: renderedText.substring(0, 12000) };
+          } catch (fallbackErr) {
+            return { url: u, text: text || "", error: errorMsg || String(fallbackErr.message || fallbackErr) };
+          }
+        }
+        return { url: u, text };
       }));
       results.push(...batchResults);
     }

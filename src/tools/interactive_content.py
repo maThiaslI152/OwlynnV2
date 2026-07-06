@@ -95,13 +95,32 @@ def render_interactive_block(block_type: str, payload: dict) -> str:
     except ValueError as exc:
         return f"Error: {exc}"
 
-    try:
-        from src.tools.workspace_context import get_active_project_id
+        # We still persist to artifacts for backward compatibility if needed,
+        # but the main payload is now stored in ui_templates DB.
+        try:
+            from src.tools.workspace_context import get_active_project_id
 
-        project_id = get_active_project_id() or "default"
-        _persist_artifact(project_id, block_type.strip().lower(), payload)
-    except Exception:
-        logger.warning("Failed to persist interactive artifact", exc_info=True)
+            project_id = get_active_project_id() or "default"
+            _persist_artifact(project_id, block_type.strip().lower(), payload)
+        except Exception as exc:
+            logger.warning("Failed to persist interactive artifact", exc_info=True)
+
+        import asyncio
+        import concurrent.futures
+        from src.memory.ui_templates import create_ui_template
+
+        coro = create_ui_template(block, payload)
+        try:
+            # Check if there is already a loop running in this thread
+            asyncio.get_running_loop()
+            # If so, we must run it in a separate thread to avoid RuntimeError
+            with concurrent.futures.ThreadPoolExecutor(1) as pool:
+                template_id = pool.submit(asyncio.run, coro).result()
+        except RuntimeError:
+            # No loop running, safe to use asyncio.run
+            template_id = asyncio.run(coro)
+
+        fence = f"```owlynn-template\n{template_id}\n```"
 
     return (
         "Interactive block ready — include this fence verbatim in your reply:\n\n"

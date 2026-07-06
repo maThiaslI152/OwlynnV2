@@ -1,12 +1,15 @@
 """
-Secure API Key Storage with macOS Keychain Integration.
+Secure API Key Storage using local environment files.
 
 Priority chain for resolving the DeepSeek API key:
 
-    Keychain → DEEPSEEK_API_KEY env var → deepseek_api_key in user profile
+    DEEPSEEK_API_KEY env var → ~/.owlynn/secrets.env → deepseek_api_key in user profile
 
-On first run, if a key exists in the profile JSON, it is migrated to Keychain
-and the profile field is cleared to avoid plaintext persistence.
+On first run, if a key exists in the profile JSON, it is migrated to secrets.env
+and the profile field is cleared to avoid plaintext persistence in the profile.
+
+``store_deepseek_api_key`` writes to ``~/.owlynn/secrets.env`` so that
+terminal sessions can source the file.
 
 Usage::
 
@@ -16,43 +19,13 @@ Usage::
 """
 
 import logging
-from typing import Optional
+import os
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-_SERVICE_NAME = "com.owlynn.deepseek"
-_ACCOUNT_NAME = "deepseek_api_key"
-
-# Lazy import — keyring is optional (macOS Keychain only)
-_keyring = None
-
-
-def _get_keyring():
-    """Lazy-import keyring with graceful fallback."""
-    global _keyring
-    if _keyring is None:
-        try:
-            import keyring as kr
-
-            _keyring = kr
-        except ImportError:
-            logger.debug("keyring not installed — Keychain storage unavailable")
-            _keyring = False
-    return _keyring if _keyring is not False else None
-
-
-def get_service_name() -> str:
-    """Return the Keychain service name (configurable via defaults.yaml)."""
-    from src.config.config_loader import config
-
-    return config.get("secret_store.keychain_service", _SERVICE_NAME) or _SERVICE_NAME
-
-
-def get_account_name() -> str:
-    """Return the Keychain account name (configurable via defaults.yaml)."""
-    from src.config.config_loader import config
-
-    return config.get("secret_store.keychain_account", _ACCOUNT_NAME) or _ACCOUNT_NAME
+# Path to the shell-sourceable secrets file for terminal fallback
+_SECRETS_ENV_PATH = Path.home() / ".owlynn" / "secrets.env"
 
 
 def resolve_deepseek_api_key() -> str:
@@ -63,16 +36,21 @@ def resolve_deepseek_api_key() -> str:
     str
         The API key, or empty string if none configured.
     """
-    # 1. macOS Keychain (most secure)
-    key = _read_from_keychain()
+    # 1. Environment variable (includes keys set via store_deepseek_api_key in this process)
+    key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
     if key:
         return key
 
-    # 2. Environment variable
-    from src.config.settings import DEEPSEEK_API_KEY
-
-    if DEEPSEEK_API_KEY:
-        return DEEPSEEK_API_KEY
+    # 2. ~/.owlynn/secrets.env — shell-sourceable file written by store_deepseek_api_key
+    try:
+        if _SECRETS_ENV_PATH.exists():
+            for line in _SECRETS_ENV_PATH.read_text(encoding="utf-8").splitlines():
+                if line.startswith("DEEPSEEK_API_KEY="):
+                    file_key = line.split("=", 1)[1].strip()
+                    if file_key:
+                        return file_key
+    except Exception as e:
+        logger.debug("Failed to read secrets.env: %s", e)
 
     # 3. Legacy profile file (deprecated — will be migrated on next store)
     from src.memory.user_profile import get_profile
@@ -81,16 +59,17 @@ def resolve_deepseek_api_key() -> str:
     profile_key = (profile.get("deepseek_api_key") or "").strip()
     if profile_key:
         logger.warning(
-            "DeepSeek API key found in user_profile.json (plaintext). "
-            "Migrate to Keychain via Settings or call store_deepseek_api_key()."
+            "DeepSeek API key found in user_profile.json. "
+            "Call store_deepseek_api_key() to migrate to secrets.env."
         )
     return profile_key
 
 
 def store_deepseek_api_key(api_key: str) -> None:
-    """Store the DeepSeek API key in macOS Keychain.
+    """Store the DeepSeek API key in ~/.owlynn/secrets.env.
 
-    Also clears the key from the legacy profile file.
+    Also updates ``os.environ`` immediately so the running process and future
+    terminal sessions can use it.
 
     Parameters
     ----------
@@ -101,35 +80,23 @@ def store_deepseek_api_key(api_key: str) -> None:
         raise ValueError("API key must be non-empty")
 
     key = api_key.strip()
-    kr = _get_keyring()
-    if kr is None:
-        logger.error("keyring not available — cannot store API key")
-        raise RuntimeError(
-            "keyring library not installed. Install with: pip install keyring"
-        )
 
-    # Store in Keychain
-    try:
-        kr.set_password(get_service_name(), get_account_name(), key)
-        logger.info("DeepSeek API key stored in macOS Keychain")
-    except kr.errors.KeyringError as e:
-        logger.error("Failed to store API key in Keychain: %s", e)
-        raise
+    # Always update current process environment immediately
+    os.environ["DEEPSEEK_API_KEY"] = key
+
+    # Write to ~/.owlynn/secrets.env for terminal session sourcing
+    _write_secrets_env(key)
 
     # Clear from legacy profile
     _clear_profile_key()
 
 
 def delete_deepseek_api_key() -> None:
-    """Remove the DeepSeek API key from Keychain and profile."""
-    kr = _get_keyring()
-    if kr is not None:
-        try:
-            kr.delete_password(get_service_name(), get_account_name())
-            logger.info("DeepSeek API key removed from macOS Keychain")
-        except kr.errors.PasswordDeleteError:
-            pass  # Already deleted
+    """Remove the DeepSeek API key from secrets.env and profile."""
     _clear_profile_key()
+    # Remove from env and secrets file
+    os.environ.pop("DEEPSEEK_API_KEY", None)
+    _write_secrets_env("")
 
 
 def verify_deepseek_api_key(api_key: str) -> tuple[bool, str]:
@@ -211,16 +178,34 @@ def rotate_deepseek_api_key(new_api_key: str) -> None:
 # ── private helpers ──────────────────────────────────────────────
 
 
-def _read_from_keychain() -> Optional[str]:
-    """Read the API key from macOS Keychain. Returns ``None`` if not found."""
-    kr = _get_keyring()
-    if kr is None:
-        return None
+def _write_secrets_env(api_key: str) -> None:
+    """Write (or clear) DEEPSEEK_API_KEY in ~/.owlynn/secrets.env.
+
+    The file is shell-sourceable: ``source ~/.owlynn/secrets.env``.
+    An empty ``api_key`` removes the line from the file.
+    """
     try:
-        return kr.get_password(get_service_name(), get_account_name())
-    except kr.errors.KeyringError as e:
-        logger.debug("Keychain read failed: %s", e)
-        return None
+        _SECRETS_ENV_PATH.parent.mkdir(parents=True, exist_ok=True)
+        existing_lines: list[str] = []
+        if _SECRETS_ENV_PATH.exists():
+            existing_lines = _SECRETS_ENV_PATH.read_text(encoding="utf-8").splitlines()
+        # Remove any previous DEEPSEEK_API_KEY line
+        filtered = [
+            ln for ln in existing_lines if not ln.startswith("DEEPSEEK_API_KEY=")
+        ]
+        if api_key:
+            filtered.append(f"DEEPSEEK_API_KEY={api_key}")
+        _SECRETS_ENV_PATH.write_text(
+            "\n".join(filtered) + ("\n" if filtered else ""), encoding="utf-8"
+        )
+        _SECRETS_ENV_PATH.chmod(0o600)  # owner read/write only
+        logger.info(
+            "DeepSeek API key %s in %s",
+            "written" if api_key else "removed",
+            _SECRETS_ENV_PATH,
+        )
+    except Exception as e:
+        logger.warning("Failed to update secrets.env: %s", e)
 
 
 def _clear_profile_key() -> None:
@@ -235,3 +220,16 @@ def _clear_profile_key() -> None:
             logger.info("Cleared deepseek_api_key from user_profile.json")
     except Exception as e:
         logger.warning("Failed to clear profile key: %s", e)
+
+
+def _store_profile_key(api_key: str) -> None:
+    """Store the deepseek_api_key in the user profile."""
+    try:
+        from src.memory.user_profile import get_profile, _save_profile
+
+        profile = get_profile()
+        profile["deepseek_api_key"] = api_key
+        _save_profile(profile)
+        logger.info("DeepSeek API key stored in user_profile.json (fallback)")
+    except Exception as e:
+        logger.warning("Failed to store profile key: %s", e)

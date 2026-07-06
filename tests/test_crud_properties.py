@@ -26,6 +26,7 @@ Run: ``pytest tests/test_crud_properties.py -v --hypothesis-show-statistics``
 import os
 import sys
 import time
+import asyncio
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -36,9 +37,6 @@ from src.memory.project import ProjectManager
 
 # --- Strategies (Req 8.2, 8.3) ---
 # Hypothesis strategies for generating random but valid test inputs.
-# project_names: arbitrary unicode strings (1-200 chars) to stress-test name handling.
-# chat_names: same range for chat names.
-# chat_ids: UUID strings to match the backend's expected chat ID format.
 project_names = text(min_size=1, max_size=200)
 chat_names = text(min_size=1, max_size=200)
 chat_ids = uuids().map(str)
@@ -49,21 +47,24 @@ chat_ids = uuids().map(str)
 @settings(max_examples=100, deadline=None)
 @given(name=project_names)
 def test_create_get_roundtrip(name):
-    pm = ProjectManager()
-    try:
-        project = pm.create_project(name)
-        assert project["name"] == name
-        assert len(project["id"]) == 8
-        assert project["chats"] == []
-        assert project["files"] == []
-        assert project["category"] == "general"
+    async def run():
+        pm = ProjectManager()
+        try:
+            project = await pm.create_project(name)
+            assert project["name"] == name
+            assert len(project["id"]) == 8
+            assert project["chats"] == []
+            assert project["files"] == []
+            assert project["category"] == "general"
 
-        fetched = pm.get_project(project["id"])
-        assert fetched is not None
-        assert fetched["name"] == name
-        assert fetched["id"] == project["id"]
-    finally:
-        pm.delete_project(project["id"])
+            fetched = await pm.get_project(project["id"])
+            assert fetched is not None
+            assert fetched["name"] == name
+            assert fetched["id"] == project["id"]
+        finally:
+            await pm.delete_project(project["id"])
+
+    asyncio.run(run())
 
 
 # --- Property 2: Rename Isolation ---
@@ -71,26 +72,29 @@ def test_create_get_roundtrip(name):
 @settings(max_examples=100, deadline=None)
 @given(name=project_names, new_name=project_names)
 def test_rename_isolation(name, new_name):
-    pm = ProjectManager()
-    try:
-        project = pm.create_project(name)
-        pid = project["id"]
-        original_id = project["id"]
-        original_instructions = project["instructions"]
-        original_chats = list(project["chats"])
-        original_files = list(project["files"])
-        original_category = project["category"]
+    async def run():
+        pm = ProjectManager()
+        try:
+            project = await pm.create_project(name)
+            pid = project["id"]
+            original_id = project["id"]
+            original_instructions = project["instructions"]
+            original_chats = list(project["chats"])
+            original_files = list(project["files"])
+            original_category = project["category"]
 
-        updated = pm.update_project(pid, name=new_name)
-        assert updated is not None
-        assert updated["name"] == new_name
-        assert updated["id"] == original_id
-        assert updated["instructions"] == original_instructions
-        assert updated["chats"] == original_chats
-        assert updated["files"] == original_files
-        assert updated["category"] == original_category
-    finally:
-        pm.delete_project(project["id"])
+            updated = await pm.update_project(pid, name=new_name)
+            assert updated is not None
+            assert updated["name"] == new_name
+            assert updated["id"] == original_id
+            assert updated["instructions"] == original_instructions
+            assert updated["chats"] == original_chats
+            assert updated["files"] == original_files
+            assert updated["category"] == original_category
+        finally:
+            await pm.delete_project(project["id"])
+
+    asyncio.run(run())
 
 
 # --- Property 3: Delete Completeness ---
@@ -98,12 +102,15 @@ def test_rename_isolation(name, new_name):
 @settings(max_examples=100, deadline=None)
 @given(name=project_names)
 def test_delete_completeness(name):
-    pm = ProjectManager()
-    project = pm.create_project(name)
-    pid = project["id"]
-    result = pm.delete_project(pid)
-    assert result is True
-    assert pm.get_project(pid) is None
+    async def run():
+        pm = ProjectManager()
+        project = await pm.create_project(name)
+        pid = project["id"]
+        result = await pm.delete_project(pid)
+        assert result is True
+        assert await pm.get_project(pid) is None
+
+    asyncio.run(run())
 
 
 # --- Property 4: Default Protection ---
@@ -111,24 +118,27 @@ def test_delete_completeness(name):
 @settings(max_examples=100, deadline=None)
 @given(name=project_names)
 def test_default_protection(name):
-    pm = ProjectManager()
-    try:
-        # Create a project just to exercise the PM with random input
-        project = pm.create_project(name)
+    async def run():
+        pm = ProjectManager()
+        try:
+            # Create a project just to exercise the PM with random input
+            project = await pm.create_project(name)
 
-        # The actual property: default cannot be deleted
-        default_before = pm.get_project("default")
-        assert default_before is not None
+            # The actual property: default cannot be deleted
+            default_before = await pm.get_project("default")
+            assert default_before is not None
 
-        result = pm.delete_project("default")
-        assert result is False
+            result = await pm.delete_project("default")
+            assert result is False
 
-        default_after = pm.get_project("default")
-        assert default_after is not None
-        assert default_after["id"] == "default"
-        assert default_after["name"] == default_before["name"]
-    finally:
-        pm.delete_project(project["id"])
+            default_after = await pm.get_project("default")
+            assert default_after is not None
+            assert default_after["id"] == "default"
+            assert default_after["name"] == default_before["name"]
+        finally:
+            await pm.delete_project(project["id"])
+
+    asyncio.run(run())
 
 
 # --- Property 5: Chat Dedup ---
@@ -136,22 +146,27 @@ def test_default_protection(name):
 @settings(max_examples=100, deadline=None)
 @given(name=project_names, chat_name=chat_names, chat_id=chat_ids)
 def test_chat_dedup(name, chat_name, chat_id):
-    pm = ProjectManager()
-    try:
-        project = pm.create_project(name)
-        pid = project["id"]
-        chat_info = {"id": chat_id, "name": chat_name, "created_at": time.time()}
+    async def run():
+        pm = ProjectManager()
+        try:
+            project = await pm.create_project(name)
+            pid = project["id"]
+            chat_info = {"id": chat_id, "name": chat_name, "created_at": time.time()}
 
-        pm.add_chat_to_project(pid, chat_info)
-        pm.add_chat_to_project(
-            pid, {"id": chat_id, "name": "duplicate", "created_at": 0}
-        )
+            await pm.add_chat_to_project(pid, chat_info)
+            await pm.add_chat_to_project(
+                pid, {"id": chat_id, "name": "duplicate", "created_at": 0}
+            )
 
-        fetched = pm.get_project(pid)
-        matching = [c for c in fetched["chats"] if c["id"] == chat_id]
-        assert len(matching) == 1
-    finally:
-        pm.delete_project(project["id"])
+            fetched = await pm.get_project(pid)
+            matching = [c for c in fetched["chats"] if c["id"] == chat_id]
+            assert len(matching) == 1
+            # Original chat should be preserved, not the duplicate
+            assert matching[0]["name"] == chat_name
+        finally:
+            await pm.delete_project(project["id"])
+
+    asyncio.run(run())
 
 
 # --- Property 6: Chat Rename Isolation ---
@@ -161,23 +176,26 @@ def test_chat_dedup(name, chat_name, chat_id):
     name=project_names, chat_name=chat_names, new_chat_name=chat_names, chat_id=chat_ids
 )
 def test_chat_rename_isolation(name, chat_name, new_chat_name, chat_id):
-    pm = ProjectManager()
-    try:
-        project = pm.create_project(name)
-        pid = project["id"]
-        created_at = time.time()
-        chat_info = {"id": chat_id, "name": chat_name, "created_at": created_at}
-        pm.add_chat_to_project(pid, chat_info)
+    async def run():
+        pm = ProjectManager()
+        try:
+            project = await pm.create_project(name)
+            pid = project["id"]
+            created_at = time.time()
+            chat_info = {"id": chat_id, "name": chat_name, "created_at": created_at}
+            await pm.add_chat_to_project(pid, chat_info)
 
-        pm.update_chat_in_project(pid, chat_id, name=new_chat_name)
+            await pm.update_chat_in_project(pid, chat_id, name=new_chat_name)
 
-        fetched = pm.get_project(pid)
-        chat = next(c for c in fetched["chats"] if c["id"] == chat_id)
-        assert chat["name"] == new_chat_name
-        assert chat["id"] == chat_id
-        assert chat["created_at"] == created_at
-    finally:
-        pm.delete_project(project["id"])
+            fetched = await pm.get_project(pid)
+            chat = next(c for c in fetched["chats"] if c["id"] == chat_id)
+            assert chat["name"] == new_chat_name
+            assert chat["id"] == chat_id
+            assert chat["created_at"] == created_at
+        finally:
+            await pm.delete_project(project["id"])
+
+    asyncio.run(run())
 
 
 # --- Property 7: Chat Delete Count ---
@@ -185,23 +203,26 @@ def test_chat_rename_isolation(name, chat_name, new_chat_name, chat_id):
 @settings(max_examples=100, deadline=None)
 @given(name=project_names, chat_name=chat_names, chat_id=chat_ids)
 def test_chat_delete_count(name, chat_name, chat_id):
-    pm = ProjectManager()
-    try:
-        project = pm.create_project(name)
-        pid = project["id"]
-        chat_info = {"id": chat_id, "name": chat_name, "created_at": time.time()}
-        pm.add_chat_to_project(pid, chat_info)
+    async def run():
+        pm = ProjectManager()
+        try:
+            project = await pm.create_project(name)
+            pid = project["id"]
+            chat_info = {"id": chat_id, "name": chat_name, "created_at": time.time()}
+            await pm.add_chat_to_project(pid, chat_info)
 
-        proj_before = pm.get_project(pid)
-        n = len(proj_before["chats"])
+            proj_before = await pm.get_project(pid)
+            n = len(proj_before["chats"])
 
-        pm.delete_chat_from_project(pid, chat_id)
+            await pm.delete_chat_from_project(pid, chat_id)
 
-        proj_after = pm.get_project(pid)
-        assert len(proj_after["chats"]) == n - 1
-        assert not any(c["id"] == chat_id for c in proj_after["chats"])
-    finally:
-        pm.delete_project(project["id"])
+            proj_after = await pm.get_project(pid)
+            assert len(proj_after["chats"]) == n - 1
+            assert not any(c["id"] == chat_id for c in proj_after["chats"])
+        finally:
+            await pm.delete_project(project["id"])
+
+    asyncio.run(run())
 
 
 # --- Property 8: Nonexistent Operations Safe ---
@@ -209,28 +230,31 @@ def test_chat_delete_count(name, chat_name, chat_id):
 @settings(max_examples=100, deadline=None)
 @given(name=project_names, chat_name=chat_names, chat_id=chat_ids)
 def test_nonexistent_operations_safe(name, chat_name, chat_id):
-    fake_pid = "zz_fake_"
-    fake_cid = "zz-fake-chat-id"
+    async def run():
+        fake_pid = "zz_fake_"
+        fake_cid = "zz-fake-chat-id"
 
-    pm = ProjectManager()
-    try:
-        # Operations on non-existent project ID should not raise
-        pm.update_project(fake_pid, name="x")
-        pm.delete_project(fake_pid)
-        pm.add_chat_to_project(
-            fake_pid, {"id": chat_id, "name": chat_name, "created_at": 0}
-        )
-        pm.update_chat_in_project(fake_pid, chat_id, name="x")
-        pm.delete_chat_from_project(fake_pid, chat_id)
+        pm = ProjectManager()
+        try:
+            # Operations on non-existent project ID should not raise
+            await pm.update_project(fake_pid, name="x")
+            await pm.delete_project(fake_pid)
+            await pm.add_chat_to_project(
+                fake_pid, {"id": chat_id, "name": chat_name, "created_at": 0}
+            )
+            await pm.update_chat_in_project(fake_pid, chat_id, name="x")
+            await pm.delete_chat_from_project(fake_pid, chat_id)
 
-        # Operations on non-existent chat ID within a valid project
-        project = pm.create_project(name)
-        pid = project["id"]
-        pm.update_chat_in_project(pid, fake_cid, name="x")
-        pm.delete_chat_from_project(pid, fake_cid)
-    finally:
-        if "pid" in locals():
-            pm.delete_project(pid)
+            # Operations on non-existent chat ID within a valid project
+            project = await pm.create_project(name)
+            pid = project["id"]
+            await pm.update_chat_in_project(pid, fake_cid, name="x")
+            await pm.delete_chat_from_project(pid, fake_cid)
+        finally:
+            if "pid" in locals():
+                await pm.delete_project(pid)
+
+    asyncio.run(run())
 
 
 # --- Property 9: Repeated interleaved CRUD invariants ---
@@ -246,29 +270,33 @@ op_sequences = st.lists(
 @settings(max_examples=40, deadline=None)
 @given(name=project_names, ops=op_sequences)
 def test_interleaved_operation_sequence_preserves_invariants(name, ops):
-    pm = ProjectManager()
-    project = pm.create_project(name)
-    pid = project["id"]
-    expected_ids = set()
-    try:
-        for op, chat_id, chat_name in ops:
-            if op == "add":
-                pm.add_chat_to_project(
-                    pid, {"id": chat_id, "name": chat_name, "created_at": time.time()}
-                )
-                expected_ids.add(chat_id)
-            elif op == "rename":
-                pm.update_chat_in_project(pid, chat_id, name=chat_name)
-            elif op == "delete":
-                pm.delete_chat_from_project(pid, chat_id)
-                expected_ids.discard(chat_id)
+    async def run():
+        pm = ProjectManager()
+        project = await pm.create_project(name)
+        pid = project["id"]
+        expected_ids = set()
+        try:
+            for op, chat_id, chat_name in ops:
+                if op == "add":
+                    await pm.add_chat_to_project(
+                        pid,
+                        {"id": chat_id, "name": chat_name, "created_at": time.time()},
+                    )
+                    expected_ids.add(chat_id)
+                elif op == "rename":
+                    await pm.update_chat_in_project(pid, chat_id, name=chat_name)
+                elif op == "delete":
+                    await pm.delete_chat_from_project(pid, chat_id)
+                    expected_ids.discard(chat_id)
 
-            current = pm.get_project(pid)
-            chats = current["chats"]
-            ids = [c.get("id") for c in chats]
-            # Invariant 1: no duplicate chat IDs
-            assert len(ids) == len(set(ids))
-            # Invariant 2: persisted IDs match expected add/delete model
-            assert set(ids) == expected_ids
-    finally:
-        pm.delete_project(pid)
+                current = await pm.get_project(pid)
+                chats = current["chats"]
+                ids = [c.get("id") for c in chats]
+                # Invariant 1: no duplicate chat IDs
+                assert len(ids) == len(set(ids))
+                # Invariant 2: persisted IDs match expected add/delete model
+                assert set(ids) == expected_ids
+        finally:
+            await pm.delete_project(pid)
+
+    asyncio.run(run())

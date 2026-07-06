@@ -27,6 +27,7 @@ import asyncio
 import base64
 import importlib.util
 import json
+import os
 import sys
 import time
 import uuid
@@ -38,9 +39,17 @@ import websockets
 from playwright.async_api import Page, async_playwright
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-BASE_URL = "http://127.0.0.1:5173"
-API_URL = "http://127.0.0.1:8000"
-EXT_WS_URL = "ws://127.0.0.1:8000/api/browser_extension/ws"
+BASE_URL = os.getenv("OWLYNN_EVAL_BASE_URL", "http://127.0.0.1:5173")
+API_URL = os.getenv("OWLYNN_EVAL_API_URL", "http://127.0.0.1:8000")
+
+# Dynamically derive extension WebSocket URL from API_URL
+from urllib.parse import urlparse
+
+parsed_api = urlparse(API_URL)
+ws_scheme = "wss" if parsed_api.scheme == "https" else "ws"
+EXT_WS_URL = (
+    f"{ws_scheme}://{parsed_api.netloc or '127.0.0.1:8000'}/api/browser_extension/ws"
+)
 SCREENSHOT_DIR = REPO_ROOT / "assets" / "extension_eval_screenshots"
 OUTPUT_DATA_FILE = REPO_ROOT / "data" / "extension_eval_run_data.json"
 
@@ -449,12 +458,23 @@ class MockExtensionClient:
         self._fixture_override = {"action": action, "fn": fixture_fn}
 
     async def connect(self) -> None:
-        """Connect to the backend extension WebSocket."""
+        """Connect to the backend extension WebSocket and authenticate."""
         for attempt in range(5):
             try:
                 self._ws = await websockets.connect(EXT_WS_URL)
+
+                # Fetch auth token from HTTP token endpoint
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get(
+                        "http://127.0.0.1:8000/api/browser_extension/token"
+                    )
+                    token = resp.json().get("token")
+
+                # Send auth message immediately after connect
+                await self._ws.send(json.dumps({"type": "auth", "token": token}))
+
                 self.connected = True
-                print(f"[MOCK-EXT] Connected to {EXT_WS_URL}")
+                print(f"[MOCK-EXT] Connected and authenticated to {EXT_WS_URL}")
                 self._task = asyncio.create_task(self._listen())
                 return
             except Exception as e:
@@ -716,10 +736,14 @@ async def run_turn(
     # Reset circuit breaker before each turn (via backend API)
     try:
         import requests
+        import os
 
         requests.put(
             "http://127.0.0.1:8000/api/unified-settings",
             json={"cloud_model_tier": "large-cloud"},
+            headers={
+                "X-Owlynn-Run-Token": os.environ.get("OWLYNN_LOCAL_RUN_TOKEN", "")
+            },
             timeout=2,
         )
     except Exception:
@@ -737,12 +761,22 @@ async def run_turn(
 
     # Fully reset backend state to kill any ghost threads from previous tests
     import requests
+    import os
 
     try:
-        requests.post("http://127.0.0.1:8000/api/debug/reset-all", timeout=2)
+        requests.post(
+            "http://127.0.0.1:8000/api/debug/reset-all",
+            headers={
+                "X-Owlynn-Run-Token": os.environ.get("OWLYNN_LOCAL_RUN_TOKEN", "")
+            },
+            timeout=2,
+        )
         requests.put(
             "http://127.0.0.1:8000/api/unified-settings",
             json={"cloud_model_tier": "large-cloud", "mcp.include_on_all": False},
+            headers={
+                "X-Owlynn-Run-Token": os.environ.get("OWLYNN_LOCAL_RUN_TOKEN", "")
+            },
             timeout=2,
         )
     except Exception as e:
@@ -821,6 +855,37 @@ async def run_turn(
 
 
 async def main():
+    # Wait for backend to be fully started and responsive
+    print(f"[EVAL] Waiting for backend at {API_URL} to start...")
+    backend_ready = False
+    for _ in range(15):
+        try:
+            async with httpx.AsyncClient(timeout=1.0) as client:
+                resp = await client.get(f"{API_URL}/api/health")
+                if resp.status_code == 200:
+                    backend_ready = True
+                    break
+        except Exception:
+            pass
+        await asyncio.sleep(1.0)
+
+    if not backend_ready:
+        print(
+            f"[EVAL] Warning: Backend at {API_URL} not fully responsive. Proceeding anyway."
+        )
+
+    if not os.environ.get("OWLYNN_LOCAL_RUN_TOKEN"):
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                resp = await client.get(f"{API_URL}/api/local-run-token")
+                if resp.status_code == 200:
+                    token = resp.json().get("token")
+                    if token:
+                        os.environ["OWLYNN_LOCAL_RUN_TOKEN"] = token
+                        print("[EVAL] Auto-loaded OWLYNN_LOCAL_RUN_TOKEN from backend")
+        except Exception as e:
+            print(f"[EVAL] Warning: Could not auto-load local run token: {e}")
+
     parser = argparse.ArgumentParser(description="Owlynn Browser Extension Eval")
     parser.add_argument(
         "--no-mock",

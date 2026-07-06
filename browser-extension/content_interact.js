@@ -31,22 +31,7 @@
     // ── Phase 1: Navigation Actions ──────────────────────────────────────
 
     if (action === "wait_for_navigation") {
-      const timeout = args.timeout || 10000;
-      return new Promise((resolve) => {
-        if (document.readyState === 'complete') {
-          resolve({ success: true, result: "Page already loaded." });
-          return;
-        }
-        const timer = setTimeout(() => {
-          window.removeEventListener('load', onLoad);
-          resolve({ success: true, result: `Waited ${timeout}ms (timeout).` });
-        }, timeout);
-        function onLoad() {
-          clearTimeout(timer);
-          resolve({ success: true, result: "Page loaded." });
-        }
-        window.addEventListener('load', onLoad, { once: true });
-      });
+      return { success: true, result: "wait_for_navigation handled by background script." };
     }
 
     if (action === "scroll_to_element") {

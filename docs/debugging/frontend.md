@@ -10,7 +10,7 @@ owner: human
 > **Purpose:** Debugging guide for frontend UI and component issues.
 
 
-**Quick Reference:** React 19 + TypeScript (Vite 8). Zustand 5 state management. WebSocket streaming via `frontend-v2/src/lib/wsClient.ts`. Key files: `frontend-v2/src/state/useAppStore.ts`, `frontend-v2/src/lib/wsClient.ts`, `frontend-v2/src/App.tsx`, `frontend-v2/src/components/*.tsx`.
+**Quick Reference:** React 19 + TypeScript (Vite 8). Zustand 5 state management with modular slices. `@tanstack/react-query` for server-state fetching. WebSocket streaming via `frontend-v2/src/lib/wsClient.ts`. Key files: `frontend-v2/src/state/useAppStore.ts` (assembler), `frontend-v2/src/state/slices/` (feature slices), `frontend-v2/src/lib/wsClient.ts`, `frontend-v2/src/App.tsx`, `frontend-v2/src/components/*.tsx`.
 
 ## Common Failure Modes
 
@@ -24,7 +24,7 @@ owner: human
 | Orchestration panel empty (BUG-2) | `router_info` event not emitted or not processed | See dedicated section below | See dedicated section below |
 | Memory panel "Loading..." (BUG-3) | REST fetch hangs or errors | See [memory.md](memory.md) frontend section | See [memory.md](memory.md) |
 | Safe Mode dropdown errors (BUG-5) | Electron IPC unavailable in browser-only mode | Console shows IPC bridge errors | Use Electron (`npm run dev`) or [`electronBridge.ts`](../../frontend-v2/src/lib/electronBridge.ts) |
-| Stale UI after workspace switch | Store not resetting on project change | Check `useAppStore` project-switch logic | Force store reset on project switch |
+| Stale UI after workspace switch | Store not resetting on project change | Check `clearSession()` in `useAppStore` and slice reset actions | Force store reset on project switch |
 | Component re-render storms | Missing useCallback/useMemo or stale closure | React DevTools Profiler | Add memoization, fix dependency arrays |
 | Zustand state desync | Multiple store updates racing | React DevTools → inspect store state | Audit action dispatch order, use middleware |
 
@@ -63,10 +63,34 @@ cd frontend-v2 && npm run lint 2>/dev/null || echo "No lint script configured"
 ```javascript
 // Paste in browser console while app is running
 // Expose store for debugging (if not already exposed)
-// Check useAppStore.ts for __ZUSTAND_DEVTOOLS__ or window.__store__
+// The store is now split into slices — check individual slice files:
+//   frontend-v2/src/state/slices/chatSlice.ts     → messages, connectionState, conversationItems
+//   frontend-v2/src/state/slices/cloudSlice.ts    → cloudUsage, contextBreakdown, modelInfo
+//   frontend-v2/src/state/slices/toolsSlice.ts    → toolExecutionHistory, actionProposals, inlineSecurityPrompt
+//   frontend-v2/src/state/slices/modesSlice.ts    → activeMode, safeMode, activityFeedItems
 
 // Alternative: check via React DevTools → Components → select AppShell → hooks → useStore
 ```
+
+### React Query Cache
+
+For server-state fetching issues (projects not loading, settings not applied, token issues), check the React Query cache:
+
+```javascript
+// In browser console — inspect all active queries
+window.__REACT_QUERY_CLIENT__?.getQueryCache().getAll().map(q => ({key: q.queryKey, state: q.state.status}))
+```
+
+Key query keys and their purpose:
+
+| Query Key | Data Fetched | Source in App.tsx |
+|-----------|-------------|-------------------|
+| `['projects']` | Workspace project list | `loadProjects` → `refetchProjects()` |
+| `['exam-countdown']` | Study exam countdown list | `fetchExamCountdown` |
+| `['unified-settings']` | Execution policy setting | `loadExecutionPolicy` |
+| `['local-run-token']` | WebSocket auth token | `fetchToken` |
+
+If a query is in `error` state, the UI will silently fall back to defaults. Check the console for thrown errors.
 
 ### WebSocket Frame History
 
@@ -209,4 +233,4 @@ Expected message sequence for a normal chat:
 
 ## Last updated
 
-2026-05-31 — `docs-standards-timeline` added frontmatter
+2026-07-02 — Updated for Zustand slice architecture (`src/state/slices/*`) and added React Query cache debugging section (`@tanstack/react-query`)

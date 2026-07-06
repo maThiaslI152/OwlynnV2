@@ -1,5 +1,7 @@
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkDirective from 'remark-directive'
+import { remarkDirectiveHtml } from '../remarkDirectiveHtml'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize from 'rehype-sanitize'
 import type { Options } from 'rehype-sanitize'
@@ -9,6 +11,7 @@ import { InteractiveCallout } from './InteractiveCallout'
 import { InteractiveMermaid } from './InteractiveMermaid'
 import { InteractiveEmbed } from './InteractiveEmbed'
 import { InteractiveCell } from './InteractiveCell'
+import { TemplateRenderer } from './TemplateRenderer'
 import type {
   CalloutPayload,
   CellPayload,
@@ -85,6 +88,13 @@ export function InteractiveBlockRenderer({ segment, projectId, threadId }: Props
       }
       return <InteractiveCell payload={payload} projectId={projectId} threadId={threadId} />
     }
+    case 'owlynn-template': {
+      const templateId = segment.body.trim()
+      if (!templateId) {
+        return <ErrorBlock message="Invalid template block" />
+      }
+      return <TemplateRenderer templateId={templateId} projectId={projectId} threadId={threadId} />
+    }
     case 'mermaid':
       return <InteractiveMermaid source={segment.body} />
     default:
@@ -106,7 +116,7 @@ export function renderMarkdownSegment(
 ) {
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
+      remarkPlugins={[remarkGfm, remarkDirective, remarkDirectiveHtml]}
       rehypePlugins={[rehypeRaw, [rehypeSanitize, schema]]}
       components={components}
     >

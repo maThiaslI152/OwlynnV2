@@ -47,7 +47,6 @@ export class WsClient {
     this.socket.addEventListener('open', () => handlers.onOpen?.())
     this.socket.addEventListener('close', () => handlers.onClose?.())
     this.socket.addEventListener('error', () => {
-      toast.error('WebSocket connection error')
       handlers.onError?.()
     })
     this.socket.addEventListener('message', (event) => {

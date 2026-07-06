@@ -68,7 +68,7 @@ async def handle_cloud_fallback(
             ],
             "model_used": fallback_label,
             "model_generated_by": fallback_label,
-            "pending_tool_calls": False,
+            "pending_tool_calls": bool(getattr(fallback_response, "tool_calls", None)),
             "security_decision": None,
             "security_reason": None,
             "api_tokens_used": None,

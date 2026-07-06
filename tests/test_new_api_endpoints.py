@@ -20,97 +20,101 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from src.memory.project import ProjectManager
 
 
-class TestUpdateProjectEndpoint(unittest.TestCase):
+class TestUpdateProjectEndpoint(unittest.IsolatedAsyncioTestCase):
     """Tests for PUT /api/projects/{project_id} logic (Requirement 6.3)."""
 
-    def setUp(self):
+    async def asyncSetUp(self):
         self.pm = ProjectManager()
-        self.project = self.pm.create_project("Update Test Project")
+        self.project = await self.pm.create_project("Update Test Project")
 
-    def tearDown(self):
+    async def asyncTearDown(self):
         if hasattr(self, "project") and self.project:
-            self.pm.delete_project(self.project["id"])
+            await self.pm.delete_project(self.project["id"])
 
-    def test_update_category(self):
+    async def test_update_category(self):
         """Updating category via update_project persists correctly."""
-        updated = self.pm.update_project(self.project["id"], category="cybersec")
+        updated = await self.pm.update_project(self.project["id"], category="cybersec")
         self.assertIsNotNone(updated)
         self.assertEqual(updated["category"], "cybersec")
 
-    def test_update_name(self):
+    async def test_update_name(self):
         """Updating name via update_project persists correctly."""
-        updated = self.pm.update_project(self.project["id"], name="Renamed Project")
+        updated = await self.pm.update_project(
+            self.project["id"], name="Renamed Project"
+        )
         self.assertIsNotNone(updated)
         self.assertEqual(updated["name"], "Renamed Project")
 
-    def test_update_multiple_fields(self):
+    async def test_update_multiple_fields(self):
         """Updating multiple fields at once works."""
-        updated = self.pm.update_project(
+        updated = await self.pm.update_project(
             self.project["id"], name="Multi Update", category="research"
         )
         self.assertEqual(updated["name"], "Multi Update")
         self.assertEqual(updated["category"], "research")
 
-    def test_update_nonexistent_project_returns_none(self):
+    async def test_update_nonexistent_project_returns_none(self):
         """Updating a non-existent project returns None."""
-        result = self.pm.update_project("nonexistent_id", category="writing")
+        result = await self.pm.update_project("nonexistent_id", category="writing")
         self.assertIsNone(result)
 
-    def test_update_ignores_unknown_fields(self):
+    async def test_update_ignores_unknown_fields(self):
         """Fields not in the project schema are ignored."""
-        updated = self.pm.update_project(self.project["id"], unknown_field="value")
+        updated = await self.pm.update_project(
+            self.project["id"], unknown_field="value"
+        )
         self.assertNotIn("unknown_field", updated)
 
 
-class TestDeleteKnowledgeEndpoint(unittest.TestCase):
+class TestDeleteKnowledgeEndpoint(unittest.IsolatedAsyncioTestCase):
     """Tests for DELETE /api/projects/{project_id}/knowledge/{name} logic (Requirement 9.6)."""
 
-    def setUp(self):
+    async def asyncSetUp(self):
         self.pm = ProjectManager()
-        self.project = self.pm.create_project("Knowledge Test Project")
-        # Add a knowledge file entry to the project
-        self.pm.add_file_to_project(
-            self.project["id"],
-            {
-                "name": "test_doc.md",
-                "type": "knowledge",
-                "added_at": 1700000000,
-            },
-        )
+        self.project = await self.pm.create_project("Knowledge Test Project")
+        # Add a knowledge file entry to the project using add_knowledge mock/db entry
+        # We patch the Mem0 long-term memory to prevent it trying to hit a real Qdrant cluster
+        with patch("src.memory.long_term.memory") as mock_memory:
+            mock_memory.add = MagicMock()
+            await self.pm.add_knowledge(
+                self.project["id"],
+                "test_doc.md",
+                "some test content",
+            )
 
-    def tearDown(self):
+    async def asyncTearDown(self):
         if hasattr(self, "project") and self.project:
-            self.pm.delete_project(self.project["id"])
+            await self.pm.delete_project(self.project["id"])
 
-    def test_remove_knowledge_removes_from_files(self):
+    async def test_remove_knowledge_removes_from_files(self):
         """remove_knowledge removes the entry from the project's files list."""
-        project = self.pm.get_project(self.project["id"])
+        project = await self.pm.get_project(self.project["id"])
         self.assertEqual(len(project["files"]), 1)
 
-        self.pm.remove_knowledge(self.project["id"], "test_doc.md")
+        await self.pm.remove_knowledge(self.project["id"], "test_doc.md")
 
-        project = self.pm.get_project(self.project["id"])
+        project = await self.pm.get_project(self.project["id"])
         self.assertEqual(len(project["files"]), 0)
 
-    def test_remove_knowledge_nonexistent_name_is_safe(self):
+    async def test_remove_knowledge_nonexistent_name_is_safe(self):
         """Removing a knowledge entry that doesn't exist doesn't error."""
-        self.pm.remove_knowledge(self.project["id"], "nonexistent.md")
-        project = self.pm.get_project(self.project["id"])
+        await self.pm.remove_knowledge(self.project["id"], "nonexistent.md")
+        project = await self.pm.get_project(self.project["id"])
         # Original file should still be there
         self.assertEqual(len(project["files"]), 1)
 
-    def test_remove_knowledge_nonexistent_project_is_safe(self):
+    async def test_remove_knowledge_nonexistent_project_is_safe(self):
         """Removing knowledge from a non-existent project doesn't error."""
         # Should not raise
-        self.pm.remove_knowledge("nonexistent_project", "test_doc.md")
+        await self.pm.remove_knowledge("nonexistent_project", "test_doc.md")
 
 
-class TestSearchEndpoint(unittest.TestCase):
+class TestSearchEndpoint(unittest.IsolatedAsyncioTestCase):
     """Tests for GET /api/search logic (Requirement 7.6)."""
 
-    def setUp(self):
+    async def asyncSetUp(self):
         self.pm = ProjectManager()
-        self.project = self.pm.create_project("Search Test Project")
+        self.project = await self.pm.create_project("Search Test Project")
         self.pid = self.project["id"]
 
         # Create workspace files for searching
@@ -131,26 +135,29 @@ class TestSearchEndpoint(unittest.TestCase):
         with open(os.path.join(subdir, "utils.py"), "w") as f:
             f.write("def calculate_sum(a, b):\n    return a + b\n")
 
-    def tearDown(self):
+    async def asyncTearDown(self):
         if hasattr(self, "project") and self.project:
-            self.pm.delete_project(self.project["id"])
+            await self.pm.delete_project(self.project["id"])
+        # Clean up files
+        if hasattr(self, "workspace") and os.path.exists(self.workspace):
+            shutil.rmtree(self.workspace, ignore_errors=True)
 
-    def test_search_by_filename(self):
+    async def test_search_by_filename(self):
         """Search matches filenames case-insensitively."""
-        results = self._run_search("hello", self.pid)
+        results = await self._run_search("hello", self.pid)
         filenames = [r["file_name"] for r in results]
         self.assertIn("hello.py", filenames)
 
-    def test_search_by_content(self):
+    async def test_search_by_content(self):
         """Search matches file content."""
-        results = self._run_search("calculate_sum", self.pid)
+        results = await self._run_search("calculate_sum", self.pid)
         matches = [r for r in results if r["match_type"] == "content"]
         self.assertTrue(len(matches) > 0)
         self.assertEqual(matches[0]["file_name"], "utils.py")
 
-    def test_search_returns_required_fields(self):
+    async def test_search_returns_required_fields(self):
         """Each result contains project_id, project_name, file_path, snippet, match_type."""
-        results = self._run_search("hello", self.pid)
+        results = await self._run_search("hello", self.pid)
         self.assertTrue(len(results) > 0)
         for r in results:
             self.assertIn("project_id", r)
@@ -159,34 +166,34 @@ class TestSearchEndpoint(unittest.TestCase):
             self.assertIn("snippet", r)
             self.assertIn("match_type", r)
 
-    def test_search_empty_query_returns_empty(self):
+    async def test_search_empty_query_returns_empty(self):
         """Empty query returns no results."""
-        results = self._run_search("", self.pid)
+        results = await self._run_search("", self.pid)
         self.assertEqual(len(results), 0)
 
-    def test_search_no_match_returns_empty(self):
+    async def test_search_no_match_returns_empty(self):
         """Query with no matches returns empty results."""
-        results = self._run_search("zzz_nonexistent_zzz", self.pid)
+        results = await self._run_search("zzz_nonexistent_zzz", self.pid)
         self.assertEqual(len(results), 0)
 
-    def test_search_across_subdirectories(self):
+    async def test_search_across_subdirectories(self):
         """Search finds files in subdirectories."""
-        results = self._run_search("utils", self.pid)
+        results = await self._run_search("utils", self.pid)
         file_paths = [r["file_path"] for r in results]
         matching = [p for p in file_paths if "utils" in p]
         self.assertTrue(len(matching) > 0)
 
-    def test_search_skips_hidden_files(self):
+    async def test_search_skips_hidden_files(self):
         """Hidden files (starting with .) are not searched."""
         hidden_path = os.path.join(self.workspace, ".hidden_file.txt")
         with open(hidden_path, "w") as f:
             f.write("secret content\n")
 
-        results = self._run_search(".hidden_file", self.pid)
+        results = await self._run_search(".hidden_file", self.pid)
         filenames = [r["file_name"] for r in results]
         self.assertNotIn(".hidden_file.txt", filenames)
 
-    def _run_search(self, query: str, project_id: str = "") -> list:
+    async def _run_search(self, query: str, project_id: str = "") -> list:
         """Helper that mimics the search endpoint logic."""
         from src.config.settings import get_project_workspace, normalize_project_id
 
@@ -199,10 +206,11 @@ class TestSearchEndpoint(unittest.TestCase):
 
         if project_id:
             pid = normalize_project_id(project_id)
-            project = self.pm.get_project(pid)
+            project = await self.pm.get_project(pid)
             projects_to_search = [(pid, project)] if project else []
         else:
-            projects_to_search = [(p["id"], p) for p in self.pm.list_projects()]
+            projects = await self.pm.list_projects()
+            projects_to_search = [(p["id"], p) for p in projects]
 
         for pid, project in projects_to_search:
             project_name = project.get("name", pid) if project else pid

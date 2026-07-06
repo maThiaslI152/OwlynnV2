@@ -114,19 +114,19 @@ async def api_update_interests(body: dict):
 @router.get("/api/projects")
 async def api_list_projects(response: Response):
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
-    return project_manager.list_projects()
+    return await project_manager.list_projects()
 
 
 @router.post("/api/projects")
 async def api_create_project(body: dict):
     name = body.get("name", "New Project")
     instructions = body.get("instructions")
-    return project_manager.create_project(name, instructions)
+    return await project_manager.create_project(name, instructions)
 
 
 @router.get("/api/projects/{project_id}")
 async def api_get_project(project_id: str):
-    project = project_manager.get_project(project_id)
+    project = await project_manager.get_project(project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     return project
@@ -147,7 +147,7 @@ async def api_add_project_chat(project_id: str, body: dict):
                 name = title
         except Exception as e:
             logger.warning("[chat_title] generation failed: %s", e)
-    project_manager.add_chat_to_project(
+    await project_manager.add_chat_to_project(
         project_id,
         {
             "id": chat_id,
@@ -158,10 +158,53 @@ async def api_add_project_chat(project_id: str, body: dict):
     return {"status": "ok", "chat": {"id": chat_id, "name": name or "New Chat"}}
 
 
+@router.get("/api/projects/{project_id}/chats/search")
+async def api_search_project_chats(project_id: str, q: str):
+    from src.api.server import app
+    from src.api.shared import logger
+
+    project = await project_manager.get_project(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    if not q:
+        return {"status": "ok", "results": project.get("chats", [])}
+
+    term = q.lower()
+    results = []
+    agent = app.state.agent
+
+    for chat in project.get("chats", []):
+        chat_id = chat.get("id")
+        name = chat.get("name", "New Chat").lower()
+        if term in name:
+            results.append(chat)
+            continue
+
+        if agent:
+            try:
+                config = {"configurable": {"thread_id": chat_id}}
+                state = await agent.aget_state(config)
+                if state and state.values:
+                    messages = state.values.get("messages", [])
+                    for m in messages:
+                        if (
+                            hasattr(m, "content")
+                            and isinstance(m.content, str)
+                            and term in m.content.lower()
+                        ):
+                            results.append(chat)
+                            break
+            except Exception as e:
+                logger.warning("Failed to search history for chat %s: %s", chat_id, e)
+
+    return {"status": "ok", "results": results}
+
+
 @router.delete("/api/projects/{project_id}/chats/{chat_id}")
 async def api_delete_project_chat(project_id: str, chat_id: str):
     try:
-        project_manager.delete_chat_from_project(project_id, chat_id)
+        await project_manager.delete_chat_from_project(project_id, chat_id)
         return {"status": "ok"}
     except Exception as e:
         logger.error("Error: %s", e)
@@ -170,7 +213,7 @@ async def api_delete_project_chat(project_id: str, chat_id: str):
 
 @router.put("/api/projects/{project_id}/chats/{chat_id}")
 async def api_update_project_chat(project_id: str, chat_id: str, body: dict):
-    project_manager.update_chat_in_project(project_id, chat_id, **body)
+    await project_manager.update_chat_in_project(project_id, chat_id, **body)
     return {"status": "ok"}
 
 
@@ -180,7 +223,7 @@ async def api_delete_project(project_id: str):
     try:
         from src.memory.vector_lifecycle import VectorLifecycleManager
 
-        success = VectorLifecycleManager.delete_project_cascade(project_id)
+        success = await VectorLifecycleManager.delete_project_cascade(project_id)
         if success:
             return {"status": "ok"}
         else:
@@ -227,7 +270,7 @@ async def api_remove_project_knowledge(project_id: str, filename: str):
     import urllib.parse
 
     filename = urllib.parse.unquote(filename)
-    project_manager.remove_knowledge(project_id, filename)
+    await project_manager.remove_knowledge(project_id, filename)
     return {"status": "ok"}
 
 
@@ -362,7 +405,7 @@ async def api_get_history(thread_id: str):
 
 @router.put("/api/projects/{project_id}")
 async def api_update_project(project_id: str, body: dict):
-    project = project_manager.update_project(project_id, **body)
+    project = await project_manager.update_project(project_id, **body)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     return project

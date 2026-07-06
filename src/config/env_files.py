@@ -20,6 +20,10 @@ def load_project_env_files(project_root: Path | None = None) -> None:
         _load_env_files_manual(root)
         return
 
+    test_db = None
+    if os.environ.get("OWLYNN_TESTING") == "1":
+        test_db = os.environ.get("DATABASE_URL")
+
     env_path = root / ".env"
     local_path = root / ".env.local"
     if env_path.is_file():
@@ -27,9 +31,16 @@ def load_project_env_files(project_root: Path | None = None) -> None:
     if local_path.is_file():
         load_dotenv(local_path, override=True)
 
+    if test_db is not None:
+        os.environ["DATABASE_URL"] = test_db
+
 
 def _load_env_files_manual(root: Path) -> None:
     """Fallback when python-dotenv is unavailable."""
+    test_db = None
+    if os.environ.get("OWLYNN_TESTING") == "1":
+        test_db = os.environ.get("DATABASE_URL")
+
     for name in (".env", ".env.local"):
         path = root / name
         if not path.is_file():
@@ -43,3 +54,6 @@ def _load_env_files_manual(root: Path) -> None:
             val = val.strip().strip('"').strip("'")
             if key:
                 os.environ[key] = val
+
+    if test_db is not None:
+        os.environ["DATABASE_URL"] = test_db

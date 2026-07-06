@@ -330,7 +330,7 @@ Baseline system prompt: `"You are a helpful assistant."` (minimal, like a chat U
 
 ### Rubric (judge JSON, 1–5 per dimension)
 
-`correctness`, `completeness`, `instruction_following`, `reasoning_depth`, `clarity_formatting` (penalize DSML / `<tool_call>` leaks), `usefulness`, plus `task_success` for capability prompts.
+`correctness`, `completeness`, `instruction_following`, `reasoning_depth`, `clarity_formatting` (penalize DSML / `<tool_call>` leaks), `usefulness`, `conciseness` (optimal length), `tone_style` (natural tone), plus `task_success` for capability prompts.
 
 ### Commands
 

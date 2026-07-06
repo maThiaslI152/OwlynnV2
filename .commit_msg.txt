@@ -1,0 +1,46 @@
+feat: production-readiness milestones 1-4
+
+Milestone 1 — Local-Only Containerization
+- Add multi-stage Dockerfile for lean backend image
+- Add backend + postgres services to docker-compose.yml
+- Update src/config/defaults.yaml Docker service names / host.docker.internal
+- Update src/api/local_auth.py to allow Docker bridge IPs (172.16-17.x.x)
+
+Milestone 2 — Database Migration (JSON → PostgreSQL)
+- Add postgres:15-alpine to docker-compose.yml (127.0.0.1:5432)
+- Add src/models/ with SQLAlchemy ORM (ProjectModel, ChatModel, db.py)
+- Init Alembic (alembic.ini, alembic/) with first migration for projects/chats
+- Rewrite src/memory/project.py to use PostgreSQL via SessionLocal
+
+Milestone 3 — Backend Resilience & Observability
+- Add src/config/trace_pruner.py background task (30-day trace pruning)
+- Hook trace pruner into FastAPI lifespan in src/api/server.py
+- Add X-Correlation-ID injection to AuditLogMiddleware (log_middleware.py)
+- Add tenacity @retry (exponential backoff, 3 attempts) to:
+    searxng_search (web_search_enhanced.py)
+    fetch_webpage (web_tools.py)
+- Mount host log volume in docker-compose.yml → /root/.owlynn/logs/
+
+Milestone 4 — Frontend Maintainability & Error Handling
+- Add frontend-v2/src/components/ErrorBoundary.tsx (React class component)
+- Wrap <App /> in <ErrorBoundary> in main.tsx
+- Install @tanstack/react-query; wrap app in <QueryClientProvider>
+- Migrate loadProjects, fetchExamCountdown, loadExecutionPolicy, token fetch
+  from raw useEffect to declarative useQuery hooks
+- Refactor monolithic useAppStore.ts into modular Zustand slices:
+    frontend-v2/src/state/slices/chatSlice.ts
+    frontend-v2/src/state/slices/cloudSlice.ts
+    frontend-v2/src/state/slices/toolsSlice.ts
+    frontend-v2/src/state/slices/modesSlice.ts
+    frontend-v2/src/state/types.ts (shared type definitions)
+- Re-export all types from useAppStore.ts for backwards compatibility
+
+Docs Audit
+- AGENTS.md: projects.json → PostgreSQL; mode routing → modesSlice.ts
+- docs/development/PROJECT_GUIDE.md: add src/models/, slices, Docker
+- docs/features/MODES.md: projects.json → PostgreSQL; frontend table updated
+- docs/architecture/AGENT_FLOW.md: InlineSecurityPrompt → toolsSlice.ts
+- docs/debugging/frontend.md: slices breakdown + React Query cache debug table
+- docs/guides/dev-startup.md: add PostgreSQL to Step 2; updated arch diagram
+- docs/guides/quickstart.md: add PostgreSQL section
+- docs/changes/production-readiness-2026-07-02.md: detailed changelog

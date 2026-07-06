@@ -183,5 +183,21 @@ app.whenReady().then(() => {
     throw new Error('main window not found')
   })
 
+  ipcMain.handle('launch_browser', async () => {
+    return new Promise((resolve, reject) => {
+      if (process.platform === 'darwin') {
+        execFile('open', ['-a', 'Brave Browser'], (error) => {
+          if (error) {
+            reject(new Error(`Failed to launch Brave Browser: ${error.message}`))
+          } else {
+            resolve('Brave Browser launched successfully')
+          }
+        })
+      } else {
+        reject(new Error('Browser auto-launch is only supported on macOS'))
+      }
+    })
+  })
+
   createWindow()
 })

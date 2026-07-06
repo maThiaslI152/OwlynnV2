@@ -45,23 +45,41 @@
     structuredData.push("\n== Moodle Quiz Questions (Interactive) ==");
     structuredData.push(`Total Questions: ${questions.length}`);
     questions.forEach((q, index) => {
-      const qtext = q.querySelector('.qtext') ? q.querySelector('.qtext').innerText.trim() : `Question ${index+1}`;
+      let qtext = `Question ${index+1}`;
+      const qtextNode = q.querySelector('.qtext');
+      if (qtextNode) {
+        qtext = qtextNode.innerText.trim();
+        const imgs = qtextNode.querySelectorAll('img');
+        if (imgs.length > 0) {
+          qtext += "\n[Images included: " + Array.from(imgs).map(img => img.alt || 'No alt text').join(', ') + "]";
+        }
+      }
       structuredData.push(`\n[Q${index+1}] ${qtext}`);
       
-      const answers = q.querySelectorAll('.answer input[type="radio"], .answer input[type="checkbox"]');
+      const answers = q.querySelectorAll('.answer input[type="radio"], .answer input[type="checkbox"], .control select, select.select');
       answers.forEach(input => {
-        let labelText = "";
-        if (input.id) {
-          const safeId = CSS.escape ? CSS.escape(input.id) : input.id.replace(/"/g, '\\"');
-          const label = q.querySelector(`label[for="${safeId}"]`);
-          if (label) labelText = label.innerText.trim();
+        if (input.tagName.toLowerCase() === 'select') {
+          const safeName = CSS.escape ? CSS.escape(input.name || '') : (input.name || '').replace(/"/g, '\\"');
+          structuredData.push(`  - Dropdown (Selector: select[name="${safeName}"]):`);
+          Array.from(input.options).forEach(opt => {
+            if (opt.value && opt.value !== "-1") {
+              structuredData.push(`    * Option: ${opt.innerText.trim()} (Value: ${opt.value})`);
+            }
+          });
+        } else {
+          let labelText = "";
+          if (input.id) {
+            const safeId = CSS.escape ? CSS.escape(input.id) : input.id.replace(/"/g, '\\"');
+            const label = q.querySelector(`label[for="${safeId}"]`);
+            if (label) labelText = label.innerText.trim();
+          }
+          if (!labelText && input.parentElement) {
+            labelText = input.parentElement.innerText.replace(input.value, '').trim();
+          }
+          const safeName = CSS.escape ? CSS.escape(input.name || '') : (input.name || '').replace(/"/g, '\\"');
+          const safeValue = CSS.escape ? CSS.escape(input.value || '') : (input.value || '').replace(/"/g, '\\"');
+          structuredData.push(`  - Choice: ${labelText} (Selector: input[name="${safeName}"][value="${safeValue}"])`);
         }
-        if (!labelText && input.parentElement) {
-          labelText = input.parentElement.innerText.replace(input.value, '').trim();
-        }
-        const safeName = CSS.escape ? CSS.escape(input.name || '') : (input.name || '').replace(/"/g, '\\"');
-        const safeValue = CSS.escape ? CSS.escape(input.value || '') : (input.value || '').replace(/"/g, '\\"');
-        structuredData.push(`  - Choice: ${labelText} (Selector: input[name="${safeName}"][value="${safeValue}"])`);
       });
     });
     

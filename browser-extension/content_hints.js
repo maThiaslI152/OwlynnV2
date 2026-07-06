@@ -1,6 +1,17 @@
-(function injectHints() {
+(async function injectHints() {
   // Remove existing hints if any
   document.querySelectorAll('.owlynn-hint').forEach(e => e.remove());
+  
+  // Get config
+  const config = await new Promise(resolve => {
+    chrome.storage.local.get(['owlynnHintConfig'], (res) => {
+      resolve(res.owlynnHintConfig || {
+        background: '#ffef00',
+        color: '#000',
+        opacity: '1'
+      });
+    });
+  });
   
   const interactables = document.querySelectorAll('a, button, input, select, textarea, [role="button"], [role="link"], [tabindex]:not([tabindex="-1"])');
   let counter = 1;
@@ -17,12 +28,13 @@
         position: 'absolute',
         left: (rect.left + window.scrollX) + 'px',
         top: (rect.top + window.scrollY) + 'px',
-        background: '#ffef00',
-        color: '#000',
+        background: config.background || '#ffef00',
+        color: config.color || '#000',
+        opacity: config.opacity || '1',
         padding: '2px 4px',
         fontSize: '12px',
         fontWeight: 'bold',
-        border: '1px solid #000',
+        border: `1px solid ${config.color || '#000'}`,
         zIndex: '2147483647',
         pointerEvents: 'none',
         borderRadius: '3px'

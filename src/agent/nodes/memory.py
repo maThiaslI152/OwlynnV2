@@ -227,7 +227,7 @@ async def _build_memory_context_async(
         try:
             from src.memory.project import project_manager
 
-            project = project_manager.get_project(project_id)
+            project = await project_manager.get_project(project_id)
             if project:
                 parts = []
                 if project.get("instructions"):

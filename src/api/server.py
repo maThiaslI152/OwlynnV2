@@ -169,6 +169,10 @@ async def lifespan(app: FastAPI):
         logger.warning("Failed to start file watcher: %s", e)
         app.state.file_watcher = None
 
+    from src.config.trace_pruner import start_trace_pruner
+
+    app.state.trace_pruner = await start_trace_pruner()
+
     yield
     if getattr(app.state, "memory_extraction_worker", False):
         await stop_extraction_worker()
@@ -182,6 +186,9 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning("Error suppressed: %s", e)
             pass
+
+    if getattr(app.state, "trace_pruner", None):
+        app.state.trace_pruner.cancel()
 
     for session in app.state.sessions.values():
         if session.task:

@@ -4,6 +4,7 @@ export type InteractiveBlockLang =
   | 'owlynn-callout'
   | 'owlynn-embed'
   | 'owlynn-cell'
+  | 'owlynn-template'
   | 'mermaid'
 
 export interface ParsedMarkdownSegment {

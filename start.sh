@@ -38,16 +38,57 @@ echo "════════════════════════�
 echo ""
 
 # ═══════════════════════════════════════════════════════════════════
-# [1/3] Podman containers — Qdrant, Redis (StirlingPDF: on-demand)
+# [1/3] Qdrant + Redis (containers preferred, binary fallback)
 # ═══════════════════════════════════════════════════════════════════
-_CORE_SERVICES="qdrant redis"
-echo "[1/3] Containers (Qdrant, Redis)..."
-podman machine start 2>/dev/null || true
-podman compose up -d $_CORE_SERVICES 2>/dev/null || podman-compose up -d $_CORE_SERVICES 2>/dev/null || docker compose up -d $_CORE_SERVICES 2>/dev/null || {
-    echo "      ERROR: Could not start containers. Is Podman/Docker installed?"
-    exit 1
-}
-sleep 3
+echo "[1/3] Qdrant + Redis..."
+
+_qdrant_started_local=0
+
+# Try containers first
+if podman machine start 2>/dev/null || true; then
+    podman compose up -d qdrant redis 2>/dev/null || \
+    podman-compose up -d qdrant redis 2>/dev/null || \
+    docker compose up -d qdrant redis 2>/dev/null || true
+fi
+
+# Check if Qdrant is already up (either from containers or previous native run)
+if curl -sf http://127.0.0.1:6333/healthz >/dev/null 2>&1; then
+    echo "      Qdrant ready."
+else
+    # Try native Qdrant binary (installed via GitHub releases to ~/bin or /usr/local/bin)
+    _QDRANT_BIN=""
+    if command -v qdrant &>/dev/null; then
+        _QDRANT_BIN="qdrant"
+    elif [ -x "${HOME}/bin/qdrant" ]; then
+        _QDRANT_BIN="${HOME}/bin/qdrant"
+    fi
+    if [ -n "$_QDRANT_BIN" ]; then
+        echo "      Starting native Qdrant binary..."
+        mkdir -p "${HOME}/.owlynn/storage"
+        (cd "${HOME}/.owlynn" && "$_QDRANT_BIN" >/dev/null 2>&1) &
+        _PIDS+=("$!")
+        _qdrant_started_local=1
+        # Wait up to 10s for Qdrant to be ready
+        for _i in $(seq 1 10); do
+            sleep 1
+            if curl -sf http://127.0.0.1:6333/healthz >/dev/null 2>&1; then
+                echo "      Qdrant ready (native binary)."
+                break
+            fi
+        done
+    else
+        echo "      WARNING: Qdrant not available. Long-term memory (mem0) will be disabled."
+        echo "      Install: curl -L https://github.com/qdrant/qdrant/releases/latest/download/qdrant-aarch64-apple-darwin.tar.gz | tar xz -C ~/bin"
+    fi
+fi
+
+# Redis (best-effort — only needed for session cache)
+if ! curl -sf http://127.0.0.1:6379 >/dev/null 2>&1; then
+    if command -v redis-server &>/dev/null; then
+        redis-server --daemonize yes --logfile /dev/null 2>/dev/null || true
+    fi
+fi
+
 echo "      Ready."
 
 # ═══════════════════════════════════════════════════════════════════
@@ -78,6 +119,13 @@ fi
 # Local secrets override (e.g. DEEPSEEK_API_KEY) — see .env.local.example
 if [ -f .env.local ]; then
     set -a; source .env.local; set +a
+fi
+# DeepSeek key written by the UI (fallback for terminal sessions where Keychain may be locked)
+if [ -f "${HOME}/.owlynn/secrets.env" ]; then
+    set -a; source "${HOME}/.owlynn/secrets.env"; set +a
+    if [ -n "$DEEPSEEK_API_KEY" ]; then
+        echo "      Loaded DeepSeek API key from ~/.owlynn/secrets.env"
+    fi
 fi
 
 # Docling model path (default to project-local cache)

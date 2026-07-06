@@ -6,6 +6,7 @@ const INTERACTIVE_LANGS = new Set<InteractiveBlockLang>([
   'owlynn-callout',
   'owlynn-embed',
   'owlynn-cell',
+  'owlynn-template',
   'mermaid',
 ])
 
@@ -34,8 +35,20 @@ export function parseInteractiveBlocks(content: string): ContentSegment[] {
       }
       if (nextFence > 0) {
         segments.push({ type: 'markdown', content: rest.slice(0, nextFence) })
+        cursor += nextFence
+        continue
       }
-      cursor += nextFence === -1 ? rest.length : nextFence
+
+      // We are exactly at ``` but it didn't match FENCE_OPEN (e.g. no language, or streaming).
+      const endFence = rest.indexOf('```', 3)
+      if (endFence === -1) {
+        segments.push({ type: 'markdown', content: rest })
+        break
+      }
+      
+      const consumeLen = endFence + 3
+      segments.push({ type: 'markdown', content: rest.slice(0, consumeLen) })
+      cursor += consumeLen
       continue
     }
 
@@ -75,5 +88,16 @@ export function parseInteractiveBlocks(content: string): ContentSegment[] {
     cursor += openLen + closeIdx + 4
   }
 
-  return segments
+  // Merge adjacent markdown segments to avoid breaking react-markdown contexts
+  const merged: ContentSegment[] = []
+  for (const seg of segments) {
+    const last = merged[merged.length - 1]
+    if (last && last.type === 'markdown' && seg.type === 'markdown') {
+      last.content += seg.content
+    } else {
+      merged.push(seg)
+    }
+  }
+
+  return merged
 }

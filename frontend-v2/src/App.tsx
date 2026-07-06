@@ -1,6 +1,7 @@
 /** App shell and WebSocket lifecycle. Event contract: docs/CHAT_PROTOCOL.md */
 /** App shell — WebSocket lifecycle and HITL resume. See docs/CHAT_PROTOCOL.md */
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { listen } from './lib/electronBridge'
 import { AppShell } from './components/AppShell'
 import { WsClient } from './lib/wsClient'
@@ -49,26 +50,32 @@ interface ProjectCreateResponse {
 type TauriEventPayload = ServerEvent
 
 function App() {
-  const wsBaseUrl = import.meta.env.VITE_WS_BASE_URL ?? 'ws://127.0.0.1:8000/ws/chat'
+  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  // If running via Vite dev server, fallback to the backend default. Otherwise use current host.
+  const wsHost = (window.location.port === '5173' || window.location.port === '3000' || window.location.port === '1420') 
+    ? '127.0.0.1:8000' 
+    : window.location.host
+  const defaultWs = `${wsProtocol}//${wsHost}/ws/chat`
+  const wsBaseUrl = import.meta.env.VITE_WS_BASE_URL ?? defaultWs
   const [localRunToken, setLocalRunToken] = useState<string>('')
 
   // Fetch the local run token for WS authentication
+  const { data: runTokenData } = useQuery({
+    queryKey: ['local-run-token'],
+    queryFn: async () => {
+      const resp = await fetch('/api/health')
+      if (!resp.ok) return null
+      const tokenResp = await fetch('/api/local-run-token')
+      if (!tokenResp.ok) return null
+      return await tokenResp.json()
+    },
+  })
+
   useEffect(() => {
-    const fetchToken = async () => {
-      try {
-        const resp = await fetch('/api/health')
-        if (!resp.ok) return
-        // Token is validated server-side; we just need to fetch it once
-        // The token is set via a separate endpoint
-        const tokenResp = await fetch('/api/local-run-token')
-        if (tokenResp.ok) {
-          const data = await tokenResp.json()
-          if (data?.token) setLocalRunToken(data.token)
-        }
-      } catch { /* non-critical */ }
+    if (runTokenData?.token) {
+      setLocalRunToken(runTokenData.token)
     }
-    void fetchToken()
-  }, [])
+  }, [runTokenData])
   const setConnection = useAppStore((s) => s.setConnectionState)
   const addMessage = useAppStore((s) => s.addMessage)
   const setPendingCorrelationId = useAppStore((s) => s.setPendingCorrelationId)
@@ -124,22 +131,13 @@ function App() {
   const apiBase = isTauriRuntime ? 'http://127.0.0.1:8000' : ''
   const apiUrl = (path: string) => apiBase + path
 
-  const loadProjectsAbortRef = useRef<AbortController | null>(null)
-
-  const loadProjects = useCallback(async () => {
-    if (loadProjectsAbortRef.current) {
-      loadProjectsAbortRef.current.abort()
-    }
-    const controller = new AbortController()
-    loadProjectsAbortRef.current = controller
-
-    try {
-      const response = await fetchWithAuth('/api/projects' + '?_t=' + Date.now(), {
-        signal: controller.signal
-      })
-      if (!response.ok) return
+  const { data: projectsData, refetch: refetchProjects } = useQuery({
+    queryKey: ['projects'],
+    queryFn: async ({ signal }) => {
+      const response = await fetchWithAuth('/api/projects' + '?_t=' + Date.now(), { signal })
+      if (!response.ok) throw new Error('Failed to load workspaces')
       const payload = (await response.json()) as ProjectSummary[]
-      const mapped = payload.map((project) => ({
+      return payload.map((project) => ({
         id: project.id,
         name: project.name ?? project.id,
         mode: (project.mode as 'normal' | 'study' | 'pentest') || 'normal',
@@ -149,41 +147,44 @@ function App() {
           created_at: c.created_at ?? 0,
         })),
       }))
-      if (mapped.length === 0) {
-        setProjects([{ id: 'default', name: 'General Workspace', chats: [] }])
-        return
-      }
-      setProjects(mapped)
-      const pid = activeProjectIdRef.current
-      const tid = currentThreadIdRef.current
-      const activeExists = mapped.some((project) => project.id === pid)
-      if (!activeExists) {
-        const first = mapped[0]
-        const existingThread = projectThreadsRef.current[first.id] ?? makeThreadId()
-        projectThreadsRef.current[first.id] = existingThread
-        setActiveProjectId(first.id)
-        setCurrentThreadId(existingThread)
-        setActiveChatId(existingThread)
-      } else {
-        const activeProject = mapped.find((p) => p.id === pid)
-        if (activeProject && activeProject.chats.length > 0) {
-          const currentExists = tid && activeProject.chats.some((c) => c.id === tid)
-          if (!currentExists) {
-            projectThreadsRef.current[pid] = tid
-          } else {
-            projectThreadsRef.current[pid] = tid
-          }
-        } else {
-          setActiveChatId(tid)
-        }
-      }
-    } catch (e: any) {
-      if (e.name === 'AbortError') return
-      console.warn('[loadProjects]', e)
-      toast.error('Failed to load workspaces')
+    },
+  })
+
+  useEffect(() => {
+    if (!projectsData) return
+    if (projectsData.length === 0) {
       setProjects([{ id: 'default', name: 'General Workspace', chats: [] }])
+      return
     }
-  }, [])
+    setProjects(projectsData)
+    const pid = activeProjectIdRef.current
+    const tid = currentThreadIdRef.current
+    const activeExists = projectsData.some((project) => project.id === pid)
+    if (!activeExists) {
+      const first = projectsData[0]
+      const existingThread = projectThreadsRef.current[first.id] ?? makeThreadId()
+      projectThreadsRef.current[first.id] = existingThread
+      setActiveProjectId(first.id)
+      setCurrentThreadId(existingThread)
+      setActiveChatId(existingThread)
+    } else {
+      const activeProject = projectsData.find((p) => p.id === pid)
+      if (activeProject && activeProject.chats.length > 0) {
+        const currentExists = tid && activeProject.chats.some((c) => c.id === tid)
+        if (!currentExists) {
+          projectThreadsRef.current[pid] = tid
+        } else {
+          projectThreadsRef.current[pid] = tid
+        }
+      } else {
+        setActiveChatId(tid)
+      }
+    }
+  }, [projectsData])
+
+  const loadProjects = useCallback(async () => {
+    void refetchProjects()
+  }, [refetchProjects])
 
   const handleInterrupt = useCallback((interrupts: unknown[] | undefined) => {
     // ask_user interrupts always need UI interaction, regardless of execution policy
@@ -260,47 +261,39 @@ function App() {
     currentThreadIdRef.current = currentThreadId
   }, [currentThreadId])
 
+  const { data: unifiedSettings } = useQuery({
+    queryKey: ['unified-settings'],
+    queryFn: async () => {
+      const resp = await fetchWithAuth('/api/unified-settings')
+      if (!resp.ok) throw new Error('Failed to load execution policy')
+      return (await resp.json()) as { execution_policy?: string }
+    },
+  })
+
   useEffect(() => {
-    let disposed = false
-    const loadExecutionPolicy = async () => {
-      try {
-        const response = await fetchWithAuth('/api/unified-settings')
-        if (!response.ok) return
-        const payload = (await response.json()) as { execution_policy?: string }
-        if (disposed) return
-        if (payload.execution_policy === 'hitl' || payload.execution_policy === 'auto_approve') {
-          setExecutionPolicy(payload.execution_policy)
-        }
-      } catch (e) {
-        console.warn('[execPolicy]', e)
-        toast.error('Failed to load execution policy')
-        // Keep local default if settings are unavailable.
-      }
+    if (unifiedSettings?.execution_policy === 'hitl' || unifiedSettings?.execution_policy === 'auto_approve') {
+      setExecutionPolicy(unifiedSettings.execution_policy)
     }
-    void loadExecutionPolicy()
-    return () => {
-      disposed = true
-    }
-  }, [setExecutionPolicy])
+  }, [unifiedSettings, setExecutionPolicy])
 
   useEffect(() => {
     void loadProjects()
   }, [loadProjects])
 
-  // Fetch exam countdown data
+  const { data: examsData } = useQuery({
+    queryKey: ['exam-countdown'],
+    queryFn: async () => {
+      const resp = await fetch('/api/study/exam-countdown')
+      if (!resp.ok) throw new Error('Failed to load exam countdown')
+      return await resp.json()
+    },
+  })
+
   useEffect(() => {
-    const fetchExamCountdown = async () => {
-      try {
-        const resp = await fetch('/api/study/exam-countdown')
-        if (!resp.ok) return
-        const data = await resp.json()
-        if (data?.status === 'ok' && Array.isArray(data.exams)) {
-          setExamCountdown(data.exams)
-        }
-      } catch { /* non-critical */ }
+    if (examsData?.status === 'ok' && Array.isArray(examsData.exams)) {
+      setExamCountdown(examsData.exams)
     }
-    void fetchExamCountdown()
-  }, [])
+  }, [examsData])
 
   const effectiveThreadId = activeMode === 'pentest' && activeEngagementId ? activeEngagementId : currentThreadId
 
@@ -345,6 +338,21 @@ function App() {
     const wsUrl = `${wsBaseUrl}/${encodeURIComponent(effectiveThreadId)}${localRunToken ? `?token=${encodeURIComponent(localRunToken)}` : ''}`
     const wsClient = new WsClient(wsUrl)
     wsClientRef.current = wsClient
+
+    let chunkBuffer = ''
+    let chunkThrottleTimer: ReturnType<typeof setTimeout> | null = null
+
+    const flushChunks = () => {
+      if (chunkBuffer) {
+        appendStreamChunk(chunkBuffer)
+        chunkBuffer = ''
+      }
+      if (chunkThrottleTimer) {
+        clearTimeout(chunkThrottleTimer)
+        chunkThrottleTimer = null
+      }
+    }
+
     const disconnect = wsClient.connect({
       onOpen: () => {
         if (disposed) return
@@ -355,7 +363,7 @@ function App() {
         })
       },
       onClose: () => {
-        toast.error('Disconnected from backend. Please refresh the page.')
+        flushChunks()
         setConnection('disconnected')
         setLatestToolExecution(null)
         setPendingCorrelationId(null)
@@ -385,6 +393,11 @@ function App() {
       onError: () => setConnection('error'),
       onEvent: (event: ServerEvent) => {
         if (disposed) return
+        
+        if (event.type !== 'chunk') {
+          flushChunks()
+        }
+
         const storeState = useAppStore.getState()
         const pendingId = storeState.pendingCorrelationId
         const eventId = (event as any).correlation_id
@@ -597,7 +610,10 @@ function App() {
         } else if (event.type === 'chunk') {
           const chunkContent = (event as any).content || ''
           if (chunkContent && !isToolPreambleText(chunkContent)) {
-            appendStreamChunk(chunkContent)
+            chunkBuffer += chunkContent
+            if (!chunkThrottleTimer) {
+              chunkThrottleTimer = setTimeout(flushChunks, 100)
+            }
           }
         } else if (event.type === 'context_summarized') {
           setContextCompression({
@@ -639,6 +655,9 @@ function App() {
               can_retry: (event as any).can_retry !== false,
             })
           }
+        } else if (event.type === 'browser_launch_requested') {
+          toast('Extension disconnected. Launching Brave Browser...', { icon: '🌐' })
+          void tauriBridge.launchBrowser()
         }
       },
     })

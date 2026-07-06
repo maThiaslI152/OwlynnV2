@@ -116,7 +116,7 @@ class TestCompactToolCallArgs:
         assert huge not in tc_args["content"]
         assert "dashboard.css" in tc_args["content"]
 
-    def test_pending_write_keeps_content(self):
+    def test_uncompleted_tool_call_is_filtered(self):
         from src.agent.cloud.cloud_payload import (
             message_to_deepseek_dict,
         )
@@ -133,8 +133,7 @@ class TestCompactToolCallArgs:
             ],
         )
         out = message_to_deepseek_dict(msg, completed_tool_call_ids=set())
-        tc_args = json.loads(out["tool_calls"][0]["function"]["arguments"])
-        assert huge in tc_args["content"]
+        assert "tool_calls" not in out
 
 
 class TestReasoningContentReplay:
@@ -146,7 +145,7 @@ class TestReasoningContentReplay:
             additional_kwargs={"reasoning_content": "step by step"},
             tool_calls=[{"id": "tc1", "name": "web_search", "args": {"q": "x"}}],
         )
-        out = message_to_deepseek_dict(msg)
+        out = message_to_deepseek_dict(msg, completed_tool_call_ids={"tc1"})
         assert out["reasoning_content"] == "step by step"
         assert out["tool_calls"]
 

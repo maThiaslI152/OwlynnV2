@@ -100,7 +100,8 @@ Do **not** add new `.py` test or patch scripts at repo root.
 | `frontend-v2/src/lib/electronBridge.ts` | Electron IPC (Safe Mode, screen assist) |
 | `frontend-v2/src/lib/wsClient.ts` | WebSocket client |
 | `frontend-v2/src/lib/toolPreamble.ts` | Filter tool-only placeholder text from chat stream |
-| `frontend-v2/src/state/useAppStore.ts` | Zustand store |
+| `frontend-v2/src/state/useAppStore.ts` | Main Zustand store assembler (combines slices) |
+| `frontend-v2/src/state/slices/*.ts` | Modular Zustand state slices (chat, cloud, tools, modes) |
 | `frontend-v2/electron/main.ts` | Electron main process |
 | `frontend-v2/src/components/AppShell.tsx` | Layout shell |
 
@@ -109,7 +110,8 @@ Do **not** add new `.py` test or patch scripts at repo root.
 | File | Role |
 |------|------|
 | `src/agent/nodes/memory.py` | `memory_inject_lite`, `memory_retrieve`, `memory_write` |
-| `src/memory/` | STM/LTM/personal managers, Mem0/Qdrant |
+| `src/models/` | PostgreSQL SQLAlchemy models (Project, Chat) |
+| `src/memory/` | STM/LTM/personal managers, Mem0/Qdrant, PostgreSQL managers |
 | `data/topics.json` | Personal topic decay (runtime data) |
 | `docs/MEMORY.md` | Memory tier contract |
 | `tests/test_memory_nodes.py` | Memory node tests |

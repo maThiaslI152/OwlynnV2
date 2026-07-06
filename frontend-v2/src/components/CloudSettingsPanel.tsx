@@ -14,6 +14,8 @@ export function CloudSettingsPanel() {
   const [thinkingMode, setThinkingMode] = useState<CloudThinkingMode>('auto')
   const [reasoningEffort, setReasoningEffort] = useState<CloudReasoningEffort>('high')
   const [escalationEnabled, setEscalationEnabled] = useState(true)
+  const [apiKey, setApiKey] = useState('')
+  const [verifyingKey, setVerifyingKey] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -32,6 +34,7 @@ export function CloudSettingsPanel() {
         const re = String(payload.cloud_reasoning_effort || 'high').toLowerCase()
         setReasoningEffort(re === 'max' ? 'max' : 'high')
         setEscalationEnabled(payload.cloud_escalation_enabled !== false)
+        setApiKey(String(payload.deepseek_api_key || ''))
       } catch (e) {
         console.warn('[CloudSettingsPanel]', e)
         toast.error('Failed to load cloud settings')
@@ -75,6 +78,58 @@ export function CloudSettingsPanel() {
       <p className="safe-mode-info">
         <strong>DeepSeek cloud</strong> — routes complex tasks to DeepSeek when a key is set.
       </p>
+
+      <div className="settings-group api-key-group" style={{ marginBottom: '1.5rem', padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
+          DeepSeek API Key
+          <input
+            type="password"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder="sk-..."
+            style={{ padding: '0.5rem', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.2)', color: 'white' }}
+          />
+        </label>
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <button 
+            onClick={() => void saveField({ deepseek_api_key: apiKey })}
+            style={{ padding: '0.4rem 1rem', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+          >
+            Save Key
+          </button>
+          <button 
+            onClick={async () => {
+              if (!apiKey || apiKey === '••••••••') {
+                toast.error('Enter a valid key to verify')
+                return
+              }
+              setVerifyingKey(true)
+              try {
+                const res = await fetch('/api/cloud-verify-key', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ api_key: apiKey })
+                })
+                const data = await res.json()
+                if (data.valid) {
+                  toast.success(data.message || 'Key is valid')
+                } else {
+                  toast.error(data.message || 'Invalid key')
+                }
+              } catch (e) {
+                toast.error('Failed to verify key')
+              } finally {
+                setVerifyingKey(false)
+              }
+            }}
+            disabled={verifyingKey}
+            style={{ padding: '0.4rem 1rem', background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '4px', cursor: verifyingKey ? 'not-allowed' : 'pointer' }}
+          >
+            {verifyingKey ? 'Verifying...' : 'Verify Key'}
+          </button>
+        </div>
+      </div>
+
       <label>
         Cloud escalation
         <select

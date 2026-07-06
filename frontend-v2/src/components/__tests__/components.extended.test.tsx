@@ -21,12 +21,21 @@ vi.mock('../../lib/electronBridge', () => ({
 
 vi.mock('../../lib/localRunToken', () => ({
   getLocalRunToken: vi.fn().mockResolvedValue('test-token'),
-  fetchWithAuth: vi.fn().mockImplementation((url: string, init?: RequestInit) => fetch(url, init)),
+  fetchWithAuth: vi.fn().mockImplementation((url: string, init?: RequestInit) => globalThis.fetch(url, init)),
 }))
 
 
 beforeEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true)
+  vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+    ok: true,
+    json: async () => ({})
+  } as Response)
+  const originalError = console.error
+  vi.spyOn(console, 'error').mockImplementation((...args) => {
+    if (typeof args[0] === 'string' && args[0].includes('was not wrapped in act')) return
+    originalError(...args)
+  })
 })
 
 afterEach(() => {
@@ -173,6 +182,7 @@ describe('SafeModePanel', () => {
 
   it('sets operator note on tauri bridge failure', async () => {
     mockSetSafeMode.mockResolvedValueOnce({ ok: false, error: 'Bridge not available' })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({ ok: false } as Response)
 
     render(<SafeModePanel />)
 

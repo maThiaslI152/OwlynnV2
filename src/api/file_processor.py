@@ -82,7 +82,22 @@ class FileWatcherHandler(FileSystemEventHandler):
         from src.memory.vector_lifecycle import VectorLifecycleManager
 
         filename = os.path.basename(event.src_path)
-        VectorLifecycleManager.on_file_deleted(self.workspace_dir, filename)
+        import asyncio
+
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.create_task(
+                    VectorLifecycleManager.on_file_deleted(self.workspace_dir, filename)
+                )
+            else:
+                loop.run_until_complete(
+                    VectorLifecycleManager.on_file_deleted(self.workspace_dir, filename)
+                )
+        except RuntimeError:
+            asyncio.run(
+                VectorLifecycleManager.on_file_deleted(self.workspace_dir, filename)
+            )
 
     def on_moved(self, event):
         if event.is_directory:
@@ -97,9 +112,28 @@ class FileWatcherHandler(FileSystemEventHandler):
 
         old_filename = os.path.basename(event.src_path)
         new_filename = os.path.basename(event.dest_path)
-        VectorLifecycleManager.on_file_renamed(
-            self.workspace_dir, old_filename, new_filename
-        )
+        import asyncio
+
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.create_task(
+                    VectorLifecycleManager.on_file_renamed(
+                        self.workspace_dir, old_filename, new_filename
+                    )
+                )
+            else:
+                loop.run_until_complete(
+                    VectorLifecycleManager.on_file_renamed(
+                        self.workspace_dir, old_filename, new_filename
+                    )
+                )
+        except RuntimeError:
+            asyncio.run(
+                VectorLifecycleManager.on_file_renamed(
+                    self.workspace_dir, old_filename, new_filename
+                )
+            )
 
     def _trigger_processing(self, filepath):
         # Skip hidden files and already processed files to prevent loops
@@ -260,61 +294,80 @@ class FileWatcherHandler(FileSystemEventHandler):
     def _process_table(self, filepath, output_path, ext):
         import pandas as pd
 
+        def _clean_df(df: "pd.DataFrame") -> "pd.DataFrame":
+            """Strip all-NaN rows/cols and fix Unnamed column headers."""
+            df = (
+                df.dropna(axis=0, how="all")
+                .dropna(axis=1, how="all")
+                .reset_index(drop=True)
+            )
+            if df.empty:
+                return df
+
+            # If column names are "Unnamed: N", infer from first data row
+            if any(str(c).startswith("Unnamed:") for c in df.columns):
+                first_row_non_empty = df.iloc[0].notna().any() if len(df) > 0 else False
+                if first_row_non_empty and df.shape[0] > 1:
+                    new_cols = []
+                    for i, col in enumerate(df.columns):
+                        cell_val = str(df.iloc[0, i]).strip() if i < df.shape[1] else ""
+                        if cell_val and cell_val.lower() != "nan":
+                            new_cols.append(cell_val)
+                        else:
+                            new_cols.append(df.columns[i])
+                    df.columns = new_cols
+                    df = df.iloc[1:].reset_index(drop=True)
+
+                # Second pass: fix any remaining Unnamed: columns
+                if any(str(c).startswith("Unnamed:") for c in df.columns):
+                    for i, col in enumerate(df.columns):
+                        if str(col).startswith("Unnamed:"):
+                            found = False
+                            for row_idx in range(min(5, len(df))):
+                                cell_val = str(df.iloc[row_idx, i]).strip()
+                                if (
+                                    cell_val
+                                    and cell_val.lower() != "nan"
+                                    and not cell_val.startswith("Unnamed:")
+                                ):
+                                    df.rename(columns={col: cell_val}, inplace=True)
+                                    found = True
+                                    break
+                            if not found:
+                                df.rename(columns={col: f"Column_{i}"}, inplace=True)
+                else:
+                    df.columns = [f"Column_{i + 1}" for i in range(len(df.columns))]
+
+            # Trim float noise: round floats to 4 significant digits
+            for col in df.columns:
+                if df[col].dtype == float:
+                    df[col] = df[col].apply(lambda x: round(x, 4) if pd.notna(x) else x)
+            return df
+
+        output_path_md = output_path.replace(".txt", ".md")
+
         if ext == ".csv":
             df = pd.read_csv(filepath)
-        else:  # .xlsx
-            df = pd.read_excel(filepath)
-
-        # Clean merged-cell artifacts: strip entirely-NaN rows and columns
-        df = (
-            df.dropna(axis=0, how="all")
-            .dropna(axis=1, how="all")
-            .reset_index(drop=True)
-        )
-
-        # If column names are "Unnamed: N", infer from first data row
-        if any(str(c).startswith("Unnamed:") for c in df.columns):
-            # Use first row as header if it looks like a header row
-            first_row_non_empty = df.iloc[0].notna().any()
-            if first_row_non_empty and df.shape[0] > 1:
-                # Check if old header names give better labels
-                new_cols = []
-                for i, col in enumerate(df.columns):
-                    cell_val = str(df.iloc[0, i]).strip() if i < df.shape[1] else ""
-                    if cell_val and cell_val.lower() != "nan":
-                        new_cols.append(cell_val)
-                    else:
-                        new_cols.append(df.columns[i])
-                df.columns = new_cols
-                df = df.iloc[1:].reset_index(drop=True)
-
-            # Second pass: fix any remaining Unnamed: columns by scanning all rows
-            if any(str(c).startswith("Unnamed:") for c in df.columns):
-                for i, col in enumerate(df.columns):
-                    if str(col).startswith("Unnamed:"):
-                        found = False
-                        for row_idx in range(min(5, len(df))):
-                            cell_val = str(df.iloc[row_idx, i]).strip()
-                            if (
-                                cell_val
-                                and cell_val.lower() != "nan"
-                                and not cell_val.startswith("Unnamed:")
-                            ):
-                                df.rename(columns={col: cell_val}, inplace=True)
-                                found = True
-                                break
-                        if not found:
-                            df.rename(columns={col: f"Column_{i}"}, inplace=True)
-            else:
-                # Just rename to generic column labels
-                df.columns = [f"Column_{i + 1}" for i in range(len(df.columns))]
-
-        # Convert to Markdown for LLM readability
-        markdown_text = df.to_markdown(index=False)
-        # Using .md extension is better for tables
-        output_path_md = output_path.replace(".txt", ".md")
-        with open(output_path_md, "w", encoding="utf-8") as f:
-            f.write(markdown_text)
+            df = _clean_df(df)
+            with open(output_path_md, "w", encoding="utf-8") as f:
+                f.write(df.to_markdown(index=False) if not df.empty else "(empty CSV)")
+        else:
+            # XLSX: read ALL sheets so context is not lost
+            sheets: dict = pd.read_excel(filepath, sheet_name=None)
+            parts: list[str] = []
+            for sheet_name, df in sheets.items():
+                df = _clean_df(df)
+                if df.empty:
+                    parts.append(f"## Sheet: {sheet_name}\n\n(empty sheet)")
+                else:
+                    rows, cols = df.shape
+                    parts.append(
+                        f"## Sheet: {sheet_name} ({rows} rows × {cols} columns)\n\n"
+                        + df.to_markdown(index=False)
+                    )
+            combined = "\n\n---\n\n".join(parts) if parts else "(empty workbook)"
+            with open(output_path_md, "w", encoding="utf-8") as f:
+                f.write(combined)
 
     def _process_word(self, filepath, output_path, ext):
         """Extract DOC/DOCX text (using Docling/python-docx for DOCX, binary extractor for DOC)."""

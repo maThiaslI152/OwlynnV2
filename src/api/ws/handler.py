@@ -191,6 +191,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                     elif kind == "on_chat_model_stream" and node in [
                         "simple",
                         "complex_llm",
+                        "coherence_retry",
                     ]:
                         if pending_tool_calls or running_tool_calls:
                             continue
@@ -391,7 +392,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                         }
                                     )
 
-                        if node in ["simple", "complex_llm"]:
+                        if node in ["simple", "complex_llm", "coherence_retry"]:
                             if isinstance(output, dict) and "messages" in output:
                                 messages = output.get("messages") or []
                                 msg = _last_ai_message(messages)
@@ -968,7 +969,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                 # Register chat in project manager (idempotent — dedups by chat_id)
                 import time as time_module
 
-                project_manager.add_chat_to_project(
+                await project_manager.add_chat_to_project(
                     project_id,
                     {
                         "id": chat_id,

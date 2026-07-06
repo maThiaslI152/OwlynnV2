@@ -163,19 +163,52 @@ def _anonymize_message_for_cloud(
         content = _content_to_str(msg.content)
         if getattr(msg, "name", "") == "active_browser_action":
             try:
-                data = json.loads(content)
-                if isinstance(data, dict):
-                    stripped = False
-                    for key in ["html", "dom_tree", "result"]:
-                        if (
-                            key in data
-                            and isinstance(data[key], str)
-                            and len(data[key]) > 1000
-                        ):
-                            data[key] = "[DOM omitted for cloud efficiency]"
-                            stripped = True
-                    if stripped:
-                        content = json.dumps(data)
+                stripped = False
+                if "\nDOM Tree:\n" in content:
+                    parts = content.split("\nDOM Tree:\n", 1)
+                    if len(parts) == 2 and len(parts[1]) > 1000:
+                        parts[1] = "[DOM omitted for cloud efficiency]"
+                        content = "\nDOM Tree:\n".join(parts)
+                        stripped = True
+                elif "\nResult:\n" in content:
+                    parts = content.split("\nResult:\n", 1)
+                    if len(parts) == 2:
+                        json_str = parts[1].strip()
+                        try:
+                            data = json.loads(json_str)
+                            if isinstance(data, dict):
+                                json_stripped = False
+                                for key in ["html", "dom_tree", "result"]:
+                                    if (
+                                        key in data
+                                        and isinstance(data[key], str)
+                                        and len(data[key]) > 1000
+                                    ):
+                                        data[key] = "[DOM omitted for cloud efficiency]"
+                                        json_stripped = True
+                                if json_stripped:
+                                    parts[1] = json.dumps(data, indent=2)
+                                    content = "\nResult:\n".join(parts)
+                                    stripped = True
+                        except Exception:
+                            pass
+                else:
+                    # Try raw JSON fallback
+                    try:
+                        data = json.loads(content)
+                        if isinstance(data, dict):
+                            for key in ["html", "dom_tree", "result"]:
+                                if (
+                                    key in data
+                                    and isinstance(data[key], str)
+                                    and len(data[key]) > 1000
+                                ):
+                                    data[key] = "[DOM omitted for cloud efficiency]"
+                                    stripped = True
+                            if stripped:
+                                content = json.dumps(data)
+                    except Exception:
+                        pass
             except Exception:
                 logger.warning(
                     "Failed to strip DOM data from cloud payload", exc_info=True
@@ -410,16 +443,20 @@ def message_to_deepseek_dict(
         if reasoning:
             out["reasoning_content"] = reasoning
         if msg.tool_calls:
-            out["tool_calls"] = []
+            tool_calls_list = []
             for tc in msg.tool_calls:
                 tc_id = str(tc.get("id") or "")
+                if tc_id not in completed:
+                    logger.info(
+                        "Filtering out uncompleted/cancelled tool call ID: %s", tc_id
+                    )
+                    continue
                 tool_name = str(tc.get("name") or "")
                 raw_args = tc.get("args", {})
-                completed = bool(tc_id and tc_id in completed)
                 args = compact_tool_call_args_for_api(
-                    tool_name, raw_args, completed=completed
+                    tool_name, raw_args, completed=True
                 )
-                out["tool_calls"].append(
+                tool_calls_list.append(
                     {
                         "id": tc.get("id"),
                         "type": "function",
@@ -431,6 +468,10 @@ def message_to_deepseek_dict(
                         },
                     }
                 )
+            if tool_calls_list:
+                out["tool_calls"] = tool_calls_list
+                if "reasoning_content" not in out:
+                    out["reasoning_content"] = "Executing tools."
         return out
     return {"role": "user", "content": _content_to_str(getattr(msg, "content", ""))}
 

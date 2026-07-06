@@ -6,7 +6,7 @@ logger = logging.getLogger(__name__)
 
 class VectorLifecycleManager:
     @staticmethod
-    def on_file_deleted(workspace_dir: str, filename: str):
+    async def on_file_deleted(workspace_dir: str, filename: str):
         """Handle physical file deletion from a workspace."""
         from src.config.settings import WORKSPACE_DIR
 
@@ -30,7 +30,7 @@ class VectorLifecycleManager:
         # 1. Delete from Qdrant and project_manager knowledge
         from src.memory.project import project_manager
 
-        project_manager.remove_knowledge(project_id, filename)
+        await project_manager.remove_knowledge(project_id, filename)
 
         # 2. Delete from .processed cache
         processed_dir = os.path.join(workspace_dir, ".processed")
@@ -43,12 +43,12 @@ class VectorLifecycleManager:
                     logger.warning(f"Could not remove cache {cache_path}: {e}")
 
     @staticmethod
-    def on_file_renamed(workspace_dir: str, old_filename: str, new_filename: str):
+    async def on_file_renamed(workspace_dir: str, old_filename: str, new_filename: str):
         """Handle physical file renaming/moving."""
         logger.info(f"VectorLifecycle: File renamed {old_filename} -> {new_filename}")
 
         # 1. Delete old metadata
-        VectorLifecycleManager.on_file_deleted(workspace_dir, old_filename)
+        await VectorLifecycleManager.on_file_deleted(workspace_dir, old_filename)
 
         # 2. Re-index new file (FileWatcher on_modified will handle this if the new file is written to,
         # but on_moved needs explicit trigger if the file content wasn't modified)
@@ -108,7 +108,7 @@ class VectorLifecycleManager:
         from src.memory.project import project_manager
 
         # 2. Delete old vectors for this file to prevent duplicates (H1)
-        project_manager.remove_knowledge(project_id, filename)
+        await project_manager.remove_knowledge(project_id, filename)
 
         # 3. Index new chunks using Langchain Text Splitter
         from src.config.config_loader import config
@@ -142,7 +142,7 @@ class VectorLifecycleManager:
         return len(chunks_to_index)
 
     @staticmethod
-    def delete_project_cascade(project_id: str):
+    async def delete_project_cascade(project_id: str):
         """Handle complete project deletion including vectors and checkpoints (H2)"""
         logger.info(f"VectorLifecycle: Deleting project cascade {project_id}")
 
@@ -164,4 +164,4 @@ class VectorLifecycleManager:
         # If checkpointer uses the main sqlite DB, we might want to delete by thread_id.
         from src.memory.project import project_manager
 
-        return project_manager.delete_project(project_id)
+        return await project_manager.delete_project(project_id)

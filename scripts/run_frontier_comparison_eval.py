@@ -54,6 +54,8 @@ JUDGE_DIMENSIONS = (
     "reasoning_depth",
     "clarity_formatting",
     "usefulness",
+    "conciseness",
+    "tone_style",
 )
 
 # category: chat = equal-footing quality head-to-head; capability = needs tools/memory/files/vision
@@ -277,6 +279,8 @@ Score EACH response on these dimensions (integers 1-5):
 - reasoning_depth: quality of analysis (where applicable)
 - clarity_formatting: readable; penalize leaked markup like DSML, <tool_call>, or raw tool syntax
 - usefulness: practical value to the user
+- conciseness: response is appropriately sized (not too long and rambling, nor too short and terse)
+- tone_style: conversational, helpful, and natural (avoiding AI cliches and robotic phrasing)
 {"- task_success: did the response accomplish the capability task (1-5)" if category == "capability" else ""}
 
 Also set winner to "A", "B", or "tie" for overall quality on this prompt.
@@ -284,7 +288,7 @@ Provide a concise rationale (2-4 sentences).
 
 Return ONLY valid JSON:
 {{
-  "response_a": {{ "correctness": 1, "completeness": 1, "instruction_following": 1, "reasoning_depth": 1, "clarity_formatting": 1, "usefulness": 1{', "task_success": 1' if category == "capability" else ""} }},
+  "response_a": {{ "correctness": 1, "completeness": 1, "instruction_following": 1, "reasoning_depth": 1, "clarity_formatting": 1, "usefulness": 1, "conciseness": 1, "tone_style": 1{', "task_success": 1' if category == "capability" else ""} }},
   "response_b": {{ ... same keys ... }},
   "winner": "A"|"B"|"tie",
   "rationale": "..."

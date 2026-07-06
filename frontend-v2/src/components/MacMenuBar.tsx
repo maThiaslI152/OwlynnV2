@@ -113,7 +113,10 @@ export function MacMenuBar({ isCompact, onToggleMode }: MacMenuBarProps) {
           </button>
           {activeMenu === 'cloud' && (
             <div className="menu-dropdown large-dropdown">
-              <CloudSettingsPanel />
+              <div className="menu-dropdown-content">
+                <h4>Cloud Settings</h4>
+                <CloudSettingsPanel />
+              </div>
             </div>
           )}
         </div>

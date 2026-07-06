@@ -111,8 +111,8 @@ export type TokenUsage1 = {
 export type FallbackChain = FallbackChainItem[] | null;
 export type Model1 = string;
 export type Status3 = string;
-export type Reason = string;
-export type DurationMs = number;
+export type Reason = string | null;
+export type DurationMs = number | null;
 export type Type19 = "cloud_usage";
 export type Turn = {
   [k: string]: unknown;
@@ -343,8 +343,8 @@ export interface ModelInfoEvent {
 export interface FallbackChainItem {
   model: Model1;
   status: Status3;
-  reason: Reason;
-  duration_ms: DurationMs;
+  reason?: Reason;
+  duration_ms?: DurationMs;
   [k: string]: unknown;
 }
 export interface CloudUsageEvent {

@@ -146,7 +146,7 @@ Key files:
 
 | File | Role |
 |------|------|
-| `frontend-v2/src/state/useAppStore.ts` | `InlineSecurityPrompt` type, Zustand state |
+| `frontend-v2/src/state/slices/toolsSlice.ts` | `InlineSecurityPrompt` type, Zustand state (`inlineSecurityPrompt`) |
 | `frontend-v2/src/App.tsx` | `handleInterrupt`, `handleAutoApprove` logic |
 | `frontend-v2/src/components/AppShell.tsx` | Renders inline card |
 | `frontend-v2/src/index.css` | `.security-inline-*` styles |
@@ -224,6 +224,6 @@ To prevent infinite execution loops and silent crashes in multi-turn tool-callin
 
 ## Last updated
 
-2026-06-11 — documented recursion limit and graph run limits settings
+2026-07-02 — Updated Frontend Inline Security Prompt table: `InlineSecurityPrompt` now lives in `frontend-v2/src/state/slices/toolsSlice.ts` (state store was split into modular slices)
 
 

@@ -19,6 +19,7 @@ import os
 import sys
 import shutil
 import tempfile
+import asyncio
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -62,7 +63,7 @@ project_name_st = st.text(
 # ── Search helper (mirrors src/api/server.py api_search logic) ───────────
 
 
-def run_search(pm: ProjectManager, query: str, project_id: str = "") -> list:
+async def run_search(pm: ProjectManager, query: str, project_id: str = "") -> list:
     """Replicates the search endpoint logic for testing without HTTP."""
     query = query.strip()
     if not query:
@@ -73,10 +74,11 @@ def run_search(pm: ProjectManager, query: str, project_id: str = "") -> list:
 
     if project_id:
         pid = normalize_project_id(project_id)
-        project = pm.get_project(pid)
+        project = await pm.get_project(pid)
         projects_to_search = [(pid, project)] if project else []
     else:
-        projects_to_search = [(p["id"], p) for p in pm.list_projects()]
+        projects = await pm.list_projects()
+        projects_to_search = [(p["id"], p) for p in projects]
 
     for pid, project in projects_to_search:
         project_name = project.get("name", pid) if project else pid
@@ -145,11 +147,11 @@ class SearchTestFixture:
         self.pm = ProjectManager()
         self.created_projects: list[str] = []
 
-    def create_project_with_file(
+    async def create_project_with_file(
         self, project_name: str, filename: str, content: str
     ) -> tuple[str, str]:
         """Create a project, write a file into its workspace, return (pid, workspace)."""
-        project = self.pm.create_project(project_name)
+        project = await self.pm.create_project(project_name)
         pid = project["id"]
         self.created_projects.append(pid)
 
@@ -161,10 +163,10 @@ class SearchTestFixture:
 
         return pid, workspace
 
-    def cleanup(self):
+    async def cleanup(self):
         for pid in self.created_projects:
             try:
-                self.pm.delete_project(pid)
+                await self.pm.delete_project(pid)
             except Exception:
                 pass
             # Also clean up workspace dir if delete_project didn't
@@ -199,16 +201,21 @@ class TestCrossProjectSearchCoverage:
         query = stem[: max(2, len(stem) // 2)]
         assume(query.strip())
 
-        fixture = SearchTestFixture()
-        try:
-            pid, _ = fixture.create_project_with_file(project_name, filename, content)
-            results = run_search(fixture.pm, query, project_id=pid)
-            matching = [r for r in results if r["match_type"] == "filename"]
-            assert len(matching) >= 1, (
-                f"Filename query '{query}' did not match file '{filename}'"
-            )
-        finally:
-            fixture.cleanup()
+        async def run():
+            fixture = SearchTestFixture()
+            try:
+                pid, _ = await fixture.create_project_with_file(
+                    project_name, filename, content
+                )
+                results = await run_search(fixture.pm, query, project_id=pid)
+                matching = [r for r in results if r["match_type"] == "filename"]
+                assert len(matching) >= 1, (
+                    f"Filename query '{query}' did not match file '{filename}'"
+                )
+            finally:
+                await fixture.cleanup()
+
+        asyncio.run(run())
 
     @given(
         filename=safe_filename_st,
@@ -225,15 +232,20 @@ class TestCrossProjectSearchCoverage:
         query = content[start:end].strip()
         assume(len(query) >= 2)
 
-        fixture = SearchTestFixture()
-        try:
-            pid, _ = fixture.create_project_with_file(project_name, filename, content)
-            results = run_search(fixture.pm, query, project_id=pid)
-            assert len(results) >= 1, (
-                f"Content query '{query}' did not match content '{content}' in file '{filename}'"
-            )
-        finally:
-            fixture.cleanup()
+        async def run():
+            fixture = SearchTestFixture()
+            try:
+                pid, _ = await fixture.create_project_with_file(
+                    project_name, filename, content
+                )
+                results = await run_search(fixture.pm, query, project_id=pid)
+                assert len(results) >= 1, (
+                    f"Content query '{query}' did not match content '{content}' in file '{filename}'"
+                )
+            finally:
+                await fixture.cleanup()
+
+        asyncio.run(run())
 
     @given(
         filename=safe_filename_st,
@@ -249,17 +261,20 @@ class TestCrossProjectSearchCoverage:
         assume(len(stem) >= 2)
         query = stem
 
-        fixture = SearchTestFixture()
-        try:
-            fixture.create_project_with_file(project_name, filename, content)
-            # Search without project_id — should find across all projects
-            results = run_search(fixture.pm, query)
-            matching = [r for r in results if r["file_name"] == filename]
-            assert len(matching) >= 1, (
-                f"Cross-project search for '{query}' did not find file '{filename}'"
-            )
-        finally:
-            fixture.cleanup()
+        async def run():
+            fixture = SearchTestFixture()
+            try:
+                await fixture.create_project_with_file(project_name, filename, content)
+                # Search without project_id — should find across all projects
+                results = await run_search(fixture.pm, query)
+                matching = [r for r in results if r["file_name"] == filename]
+                assert len(matching) >= 1, (
+                    f"Cross-project search for '{query}' did not find file '{filename}'"
+                )
+            finally:
+                await fixture.cleanup()
+
+        asyncio.run(run())
 
     @given(
         filename=safe_filename_st,
@@ -274,26 +289,31 @@ class TestCrossProjectSearchCoverage:
         stem = filename.rsplit(".", 1)[0]
         assume(len(stem) >= 2)
 
-        fixture = SearchTestFixture()
-        try:
-            pid, _ = fixture.create_project_with_file(project_name, filename, content)
-            results = run_search(fixture.pm, stem, project_id=pid)
-            assert len(results) >= 1
+        async def run():
+            fixture = SearchTestFixture()
+            try:
+                pid, _ = await fixture.create_project_with_file(
+                    project_name, filename, content
+                )
+                results = await run_search(fixture.pm, stem, project_id=pid)
+                assert len(results) >= 1
 
-            required_fields = {
-                "project_id",
-                "project_name",
-                "file_path",
-                "file_name",
-                "snippet",
-                "match_type",
-                "line_number",
-            }
-            for r in results:
-                missing = required_fields - set(r.keys())
-                assert not missing, f"Result missing fields: {missing}"
-        finally:
-            fixture.cleanup()
+                required_fields = {
+                    "project_id",
+                    "project_name",
+                    "file_path",
+                    "file_name",
+                    "snippet",
+                    "match_type",
+                    "line_number",
+                }
+                for r in results:
+                    missing = required_fields - set(r.keys())
+                    assert not missing, f"Result missing fields: {missing}"
+            finally:
+                await fixture.cleanup()
+
+        asyncio.run(run())
 
     @given(
         filename=safe_filename_st,
@@ -303,11 +323,19 @@ class TestCrossProjectSearchCoverage:
     @settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow])
     def test_empty_query_returns_no_results(self, filename, content, project_name):
         """An empty or whitespace-only query always returns zero results."""
-        fixture = SearchTestFixture()
-        try:
-            pid, _ = fixture.create_project_with_file(project_name, filename, content)
-            for q in ["", "   ", "\t"]:
-                results = run_search(fixture.pm, q, project_id=pid)
-                assert len(results) == 0, f"Empty query '{repr(q)}' returned results"
-        finally:
-            fixture.cleanup()
+
+        async def run():
+            fixture = SearchTestFixture()
+            try:
+                pid, _ = await fixture.create_project_with_file(
+                    project_name, filename, content
+                )
+                for q in ["", "   ", "\t"]:
+                    results = await run_search(fixture.pm, q, project_id=pid)
+                    assert len(results) == 0, (
+                        f"Empty query '{repr(q)}' returned results"
+                    )
+            finally:
+                await fixture.cleanup()
+
+        asyncio.run(run())

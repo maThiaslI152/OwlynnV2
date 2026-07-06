@@ -33,10 +33,18 @@ export DEEPSEEK_API_KEY=sk-...
 
 Or: Settings → Profile → Cloud section (masked field). Cloud escalation is optional — all local models work without it.
 
+### PostgreSQL (Project & Chat Persistence)
+
+```bash
+docker compose up -d postgres
+```
+
+PostgreSQL (`postgres:15-alpine`, `127.0.0.1:5432`) stores project and chat metadata via SQLAlchemy ORM (`src/models/`). Alembic migrations run automatically on backend start.
+
 ### Redis (Short-Term Memory Backend)
 
 ```bash
-docker-compose up -d
+docker compose up -d redis
 redis-cli ping
 ```
 
@@ -142,4 +150,4 @@ Expected output: `PONG`. Falls back to in-memory `MemorySaver` if Redis unavaila
 
 ## Last updated
 
-2026-06-27 — Updated model references to Qwen3-VL-4B
+2026-07-02 — Added PostgreSQL container section; updated stack references to include Zustand slices and `@tanstack/react-query`

@@ -38,8 +38,8 @@ import httpx
 from playwright.async_api import Page, async_playwright
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-BASE_URL = "http://127.0.0.1:5173"
-API_URL = "http://127.0.0.1:8000"
+BASE_URL = os.getenv("OWLYNN_EVAL_BASE_URL", "http://127.0.0.1:5173")
+API_URL = os.getenv("OWLYNN_EVAL_API_URL", "http://127.0.0.1:8000")
 FIXTURE_DIR = REPO_ROOT / "assets" / "eval_fixtures"
 SCREENSHOT_DIR = REPO_ROOT / "assets" / "frontier_eval_screenshots"
 OUTPUT_DATA_FILE = REPO_ROOT / "data" / "frontier_eval_run_data.json"
@@ -748,11 +748,11 @@ async def resolve_hitl(page: Page, expected_tools: list[str] | None = None) -> i
     skip = pending_card.locator(".hitl-btn-skip")
     try:
         if await skip.count() > 0:
-            await skip.first.click(timeout=5000)
+            await skip.first.click(force=True, timeout=5000)
             await page.wait_for_timeout(2000)
             return hitl_count
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[EVAL-DEBUG] skip.click error: {e}")
     try:
         if await pending_card.locator(".hitl-scope-question").count() > 0:
             await page.evaluate(
@@ -784,10 +784,10 @@ async def resolve_hitl(page: Page, expected_tools: list[str] | None = None) -> i
                 ):
                     await pending_card.locator(
                         '.hitl-choice-btn:has-text("Read terminal or screen context")'
-                    ).first.click(timeout=3000)
+                    ).first.click(force=True, timeout=3000)
                 else:
                     await pending_card.locator(".hitl-choice-btn").first.click(
-                        timeout=3000
+                        force=True, timeout=3000
                     )
             elif expected_tools and "browser_background_fetch" in expected_tools:
                 if (
@@ -798,10 +798,10 @@ async def resolve_hitl(page: Page, expected_tools: list[str] | None = None) -> i
                 ):
                     await pending_card.locator(
                         '.hitl-choice-btn:has-text("Search the web")'
-                    ).first.click(timeout=3000)
+                    ).first.click(force=True, timeout=3000)
                 else:
                     await pending_card.locator(".hitl-choice-btn").first.click(
-                        timeout=3000
+                        force=True, timeout=3000
                     )
             elif expected_tools and "get_active_browser_context" in expected_tools:
                 if (
@@ -812,23 +812,25 @@ async def resolve_hitl(page: Page, expected_tools: list[str] | None = None) -> i
                 ):
                     await pending_card.locator(
                         '.hitl-choice-btn:has-text("Just answer directly")'
-                    ).first.click(timeout=3000)
+                    ).first.click(force=True, timeout=3000)
                 else:
                     await pending_card.locator(".hitl-choice-btn").first.click(
-                        timeout=3000
+                        force=True, timeout=3000
                     )
             else:
-                await pending_card.locator(".hitl-choice-btn").first.click(timeout=3000)
+                await pending_card.locator(".hitl-choice-btn").first.click(
+                    force=True, timeout=3000
+                )
             await page.wait_for_timeout(1000)
-    except Exception:
-        pass
-    approve = page.locator(".hitl-btn-approve")
+    except Exception as e:
+        print(f"[EVAL-DEBUG] choice.click error: {e}")
+    approve = pending_card.locator(".hitl-btn-approve")
     try:
         if await approve.count() > 0:
-            await approve.first.click(timeout=5000)
+            await approve.first.click(force=True, timeout=5000)
             await page.wait_for_timeout(2000)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[EVAL-DEBUG] approve.click error: {e}")
     return hitl_count
 
 
@@ -856,9 +858,18 @@ async def wait_for_turn_complete(
 
     while time.monotonic() - start_time < timeout_s:
         elapsed = time.monotonic() - start_time
+
+        # Deadlock detector
+        try:
+            await asyncio.wait_for(page.evaluate("1"), timeout=2.0)
+        except asyncio.TimeoutError:
+            print(
+                f"\n[EVAL] FAIL: Page deadlocked! Main thread is frozen (elapsed: {elapsed:.0f}s). Aborting test case."
+            )
+            return False, 0
         try:
             hitl_resolves += await asyncio.wait_for(
-                resolve_hitl(page, expected_tools=expected_tools), timeout=12.0
+                resolve_hitl(page, expected_tools=expected_tools), timeout=25.0
             )
         except asyncio.TimeoutError:
             print("\n[EVAL] HITL resolve timed out; continuing poll...")
@@ -911,76 +922,11 @@ async def wait_for_turn_complete(
                 continue
         if ws_log and since_ts:
             busy = not ws_idle
-            # Fallback: if WS idle hasn't arrived but DOM shows not busy
-            # or response is ready, treat as complete. Handles lost WS events.
-            if busy and elapsed > 30:
-                try:
-                    # Check if frontend is disconnected — if so, not busy
-                    conn_state = await asyncio.wait_for(
-                        page.evaluate(
-                            "() => {"
-                            "  const el = document.querySelector('[data-connection-state]');"
-                            "  return el ? el.dataset.connectionState : 'unknown';"
-                            "}"
-                        ),
-                        timeout=3.0,
-                    )
-                    if conn_state == "disconnected":
-                        print("\n[EVAL] Frontend disconnected — treating as complete")
-                        busy = False
-                    else:
-                        dom_busy = await asyncio.wait_for(
-                            is_graph_busy(page), timeout=5.0
-                        )
-                        if not dom_busy:
-                            print(
-                                "\n[EVAL] WS idle not received but DOM shows "
-                                "not busy — treating as complete"
-                            )
-                            busy = False
-                        else:
-                            dom_response = await asyncio.wait_for(
-                                scrape_final_response(page), timeout=5.0
-                            )
-                            dom_normalized = _normalize_response(dom_response)
-                            if len(dom_normalized) >= min_chars:
-                                print(
-                                    f"\n[EVAL] WS idle not received but response "
-                                    f"ready ({len(dom_normalized)} chars) — "
-                                    f"treating as complete"
-                                )
-                                busy = False
-                except Exception:
-                    pass
-            # Force-complete: if still busy after 120s, inject JS to clear state
-            if busy and elapsed > 120:
-                try:
-                    print(
-                        "\n[EVAL] Force-clearing frontend state after 120s timeout..."
-                    )
-                    await asyncio.wait_for(
-                        page.evaluate(
-                            "() => {"
-                            "  if (window.__owlynnEval && "
-                            "      window.__owlynnEval.clearStreamingState) {"
-                            "    window.__owlynnEval.clearStreamingState();"
-                            "    return true;"
-                            "  }"
-                            "  return false;"
-                            "}"
-                        ),
-                        timeout=5.0,
-                    )
-                    # Wait for React to re-render
-                    await asyncio.sleep(2)
-                    dom_busy = await asyncio.wait_for(is_graph_busy(page), timeout=5.0)
-                    if not dom_busy:
-                        print("[EVAL] Force-clear succeeded — DOM not busy")
-                        busy = False
-                except Exception as e:
-                    print(f"\n[EVAL-DEBUG] Force-clear error: {e}")
         else:
-            busy = await is_graph_busy(page)
+            print(
+                "\n[EVAL] WARNING: ws_log or since_ts missing, assuming busy=False to avoid DOM polling."
+            )
+            busy = False
         if not busy:
             ws_text = (
                 ws_log.assistant_text_since(since_ts) if ws_log and since_ts else ""
@@ -1045,20 +991,21 @@ async def wait_for_turn_complete(
                 await asyncio.sleep(2)
                 continue
             tool_stall_polls = 0
-            if len(normalized) >= min_chars:
-                print(
-                    f"\n[EVAL] Idle with partial quality ({len(normalized)} chars, dsml={dsml})"
-                )
-                return {
-                    "response_text": response_text,
-                    "completed": len(normalized) >= min_chars,
-                    "graph_idle": True,
-                    "premature_complete": dsml or not tools_ok,
-                    "hitl_resolves": hitl_resolves,
-                    "busy_wait_seconds": round(elapsed, 2),
-                    "executed_tools": tools,
-                    "executed_tools_ws": ws_tools,
-                }
+            print(
+                f"\n[EVAL] Idle turn complete ({len(normalized)} chars, dsml={dsml}, tools_ok={tools_ok})"
+            )
+            return {
+                "response_text": response_text,
+                "completed": len(normalized) >= min_chars and not dsml and tools_ok,
+                "graph_idle": True,
+                "premature_complete": dsml
+                or not tools_ok
+                or len(normalized) < min_chars,
+                "hitl_resolves": hitl_resolves,
+                "busy_wait_seconds": round(elapsed, 2),
+                "executed_tools": tools,
+                "executed_tools_ws": ws_tools,
+            }
 
         await asyncio.sleep(1)
 
@@ -1072,7 +1019,7 @@ async def wait_for_turn_complete(
     return {
         "response_text": response_text,
         "completed": False,
-        "graph_idle": not await is_graph_busy(page),
+        "graph_idle": bool(ws_log and since_ts and ws_log.idle_since(since_ts)),
         "premature_complete": _is_premature_dsml(response_text),
         "hitl_resolves": hitl_resolves,
         "busy_wait_seconds": round(time.monotonic() - start_time, 2),
@@ -1629,6 +1576,37 @@ async def run_turn(
 
 
 async def main() -> None:
+    # Wait for backend to be fully started and responsive
+    print(f"[EVAL] Waiting for backend at {API_URL} to start...")
+    backend_ready = False
+    for _ in range(15):
+        try:
+            async with httpx.AsyncClient(timeout=1.0) as client:
+                resp = await client.get(f"{API_URL}/api/health")
+                if resp.status_code == 200:
+                    backend_ready = True
+                    break
+        except Exception:
+            pass
+        await asyncio.sleep(1.0)
+
+    if not backend_ready:
+        print(
+            f"[EVAL] Warning: Backend at {API_URL} not fully responsive. Proceeding anyway."
+        )
+
+    if not os.environ.get("OWLYNN_LOCAL_RUN_TOKEN"):
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                resp = await client.get(f"{API_URL}/api/local-run-token")
+                if resp.status_code == 200:
+                    token = resp.json().get("token")
+                    if token:
+                        os.environ["OWLYNN_LOCAL_RUN_TOKEN"] = token
+                        print("[EVAL] Auto-loaded OWLYNN_LOCAL_RUN_TOKEN from backend")
+        except Exception as e:
+            print(f"[EVAL] Warning: Could not auto-load local run token: {e}")
+
     parser = argparse.ArgumentParser(description="Owlynn frontier evaluation")
     parser.add_argument(
         "--profile",

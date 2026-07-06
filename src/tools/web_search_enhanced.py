@@ -24,6 +24,18 @@ from src.config.settings import SEARXNG_URL
 logger = logging.getLogger(__name__)
 
 
+from tenacity import retry, stop_after_attempt, wait_exponential
+import httpx
+
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=lambda retry_state: isinstance(
+        retry_state.outcome.exception(), httpx.RequestError
+    ),
+    reraise=False,
+)
 async def searxng_search(
     query: str,
     categories: str = "general",

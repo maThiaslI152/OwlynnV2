@@ -66,7 +66,7 @@ audience: agent
 
 ### Cloud Architecture
 - DeepSeek V4 flash/pro, 1M token context, circuit breaker, jittered retries
-- macOS Keychain key storage; PII scrub before any cloud call
+- Local env-based key storage (chmod 600); PII scrub before any cloud call
 - Vision proxy: Gemma 4 → text + UI → DeepSeek text-only path
 - Session cost tracker + cloud usage chip in UI
 

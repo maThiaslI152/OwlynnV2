@@ -9,6 +9,7 @@ const ALLOWED_INVOKE_CHANNELS = [
   'approve_action_proposal',
   'reject_action_proposal',
   'set_window_size',
+  'launch_browser',
 ]
 
 const ALLOWED_SEND_CHANNELS: string[] = []

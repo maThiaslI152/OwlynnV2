@@ -50,6 +50,49 @@ services:
     restart: unless-stopped
     mem_limit: 2g
 
+  postgres:
+    image: postgres:15-alpine
+    container_name: owlynn_postgres
+    environment:
+      POSTGRES_USER: owlynn
+      POSTGRES_PASSWORD: owlynn_password
+      POSTGRES_DB: owlynn
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  backend:
+    build: .
+    container_name: owlynn_backend
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      - QDRANT_HOST=owlynn_qdrant
+      - QDRANT_PORT=6333
+      - REDIS_URL=redis://owlynn_redis:6379
+      - SEARXNG_URL=http://owlynn_searxng:8080
+      - STIRLING_PDF_URL=http://owlynn_stirling_pdf:8080
+      - DATABASE_URL=postgresql+asyncpg://owlynn:owlynn_password@owlynn_postgres:5432/owlynn
+      - SMALL_LLM_BASE_URL=http://host.docker.internal:1234/v1
+      - CLOUD_LLM_BASE_URL=http://host.docker.internal:1234/v1
+      - OWLYNN_DATA_DIR=/app/data
+      - OWLYNN_WORKSPACE_DIR=/app/workspace
+      - OWLYNN_AUDIT_LOG_DIR=/root/.owlynn/logs
+      - OWLYNN_TRACE_DIR=/root/.owlynn/traces
+      - OWLYNN_NO_PRELOAD=1
+    volumes:
+      - owlynn_data:/app/data
+      - owlynn_workspace:/app/workspace
+      - ~/.owlynn/logs:/root/.owlynn/logs
+      - ~/.owlynn/traces:/root/.owlynn/traces
+    depends_on:
+      - qdrant
+      - redis
+      - postgres
+    restart: unless-stopped
+
 volumes:
   qdrant_data:
   searxng_data:
@@ -57,3 +100,6 @@ volumes:
   stirling_tessdata:
   stirling_configs:
   stirling_logs:
+  owlynn_data:
+  owlynn_workspace:
+  postgres_data:

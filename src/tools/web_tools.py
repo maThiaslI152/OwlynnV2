@@ -760,6 +760,24 @@ async def web_search(
                 dispatch_extension_search,
             )
 
+            if not is_extension_connected():
+                from src.api.shared import connected_websockets
+                import asyncio
+
+                if connected_websockets:
+                    logger.info(
+                        "Extension disconnected. Requesting frontend to launch browser..."
+                    )
+                    payload = json.dumps({"type": "browser_launch_requested"})
+                    for ws in list(connected_websockets):
+                        try:
+                            await ws.send_text(payload)
+                        except Exception:
+                            pass
+                    await asyncio.sleep(
+                        6
+                    )  # Wait for Brave to boot and extension to reconnect
+
             if is_extension_connected():
                 try:
                     if backend == "bing":
@@ -995,7 +1013,19 @@ def _html_to_plain_text(html: str) -> str:
     return "\n".join(lines)
 
 
+from tenacity import retry, stop_after_attempt, wait_exponential
+import httpx
+
+
 @tool
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=lambda retry_state: isinstance(
+        retry_state.outcome.exception(), httpx.RequestError
+    ),
+    reraise=False,
+)
 async def fetch_webpage(url: str, focus_query: str = "") -> str:
     """
     Fetches a webpage and returns readable text, or ranked excerpts when focus_query is set.

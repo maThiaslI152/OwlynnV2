@@ -16,7 +16,7 @@ Owlynn has three operational modes that change the UI, tools, and system prompt 
 
 | File | Role |
 |------|------|
-| `frontend-v2/src/state/useAppStore.ts` | `activeMode` state + `setActiveMode` setter |
+| `frontend-v2/src/state/slices/modesSlice.ts` | `activeMode` state + `setActiveMode` setter |
 | `frontend-v2/src/components/ModeSwitcher.tsx` | Segmented toggle (Normal / Study / Pentest) |
 | `frontend-v2/src/components/AppShell.tsx` | Conditional sidebar sections per mode |
 | `frontend-v2/src/components/MacMenuBar.tsx` | Conditional right panel content per mode |
@@ -28,19 +28,19 @@ Owlynn has three operational modes that change the UI, tools, and system prompt 
 |------|------|
 | `src/api/ws/handler.py` | Accepts `scenario_id` from WS payload, maps to response_style |
 | `src/agent/routing/router.py` | Detects scenario from keywords or forced `scenario_id` |
-| `src/memory/project.py` | Stores `mode` field per project in `projects.json` |
+| `src/memory/project.py` | Stores `mode` field per project in PostgreSQL `ProjectModel` |
 
 ### Mode Persistence
 
-Mode is persisted per-project in `projects.json`:
+Mode is persisted per-project in the PostgreSQL database via `ProjectModel`:
 
-```json
-{
-  "id": "default",
-  "name": "General Workspace",
-  "mode": "study",
-  ...
-}
+```python
+class ProjectModel(Base):
+    __tablename__ = "projects"
+    id = Column(String, primary_key=True)
+    name = Column(String)
+    mode = Column(String, default="normal")
+    # ...
 ```
 
 When switching projects, the mode auto-switches. When changing mode, it's persisted via `PUT /api/projects/{id}`.
@@ -127,7 +127,7 @@ The mode switcher is in the left sidebar top, rendered by `AppShell.tsx`:
 
 ## Adding a New Mode
 
-1. Add mode type to `useAppStore.ts` `activeMode` union
+1. Add mode type to `frontend-v2/src/state/types.ts` `activeMode` union
 2. Add mode to `ModeSwitcher.tsx` `modes` array
 3. Add sidebar section in `AppShell.tsx`
 4. Add right panel section in `MacMenuBar.tsx`

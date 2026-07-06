@@ -13,6 +13,7 @@
     "generate:types": "cd .. && python scripts/generate_ws_types.py"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.101.2",
     "dompurify": "^3.4.11",
     "framer-motion": "^12.42.0",
     "mermaid": "^11.15.0",
@@ -23,6 +24,7 @@
     "recharts": "^3.9.0",
     "rehype-raw": "^7.0.0",
     "rehype-sanitize": "^6.0.0",
+    "remark-directive": "^4.0.0",
     "remark-gfm": "^4.0.1",
     "zustand": "^5.0.12"
   },

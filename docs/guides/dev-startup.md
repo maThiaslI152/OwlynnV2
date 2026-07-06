@@ -126,19 +126,23 @@ python3 -c "from src.config.config_loader import validate_config; print(validate
 | `REDIS_URL` | Default `redis://localhost:6379` — no change needed |
 | `DOCLING_ARTIFACTS_PATH` | `.models/docling/` — auto-set, no change needed |
 
-## Step 2: Containers (Qdrant, Redis, StirlingPDF)
+## Step 2: Containers (Qdrant, Redis, PostgreSQL, StirlingPDF)
 
 The launcher script (`start.sh`) tries three backends in order: `podman compose` → `podman-compose` → `docker compose`. Any of these work. `start.sh` starts **core services only** (`qdrant`, `redis`, `stirling-pdf`). SearXNG is **not** started by default.
 
+> **New as of 2026-07-02:** The backend now also requires a **PostgreSQL** container for project/chat persistence. Start it alongside the other services:
+
 ```bash
-# Start core containers (choose one)
-podman compose up -d qdrant redis stirling-pdf     # preferred (Podman users)
-docker compose up -d qdrant redis stirling-pdf     # Docker users
+# Start all required containers (choose one)
+podman compose up -d qdrant redis stirling-pdf postgres     # preferred (Podman users)
+docker compose up -d qdrant redis stirling-pdf postgres     # Docker users
 
 # Verify they're running
 podman ps --format '{{.Names}}' | grep owlynn
-# Expected: owlynn_qdrant, owlynn_redis, owlynn_stirling_pdf
+# Expected: owlynn_qdrant, owlynn_redis, owlynn_stirling_pdf, owlynn_postgres
 ```
+
+PostgreSQL runs strictly on `127.0.0.1:5432`. Project and chat data that was formerly stored in a flat `projects.json` file is now persisted here via SQLAlchemy (`src/models/`). Alembic migrations run automatically on backend startup.
 
 **StirlingPDF** (~1GB image pull; **allocate 2GB container RAM** — 1GB causes Metaspace OOM crash loops on Java 25): PDF text extraction + OCR for scanned documents. Swagger UI: `http://127.0.0.1:8090/swagger-ui/index.html`. If Stirling is down, Owlynn falls back to PyMuPDF automatically.
 
@@ -255,7 +259,7 @@ uv run python src/cli.py stream "Hello, what can you do?"
 Browser (http://127.0.0.1:5173)
   │
   ├─► Vite Dev Server (port 5173)
-  │     └─► React 19 + Zustand + WebSocket client
+  │     └─► React 19 + Zustand (slices) + React Query + WebSocket client
   │
   ├─► FastAPI Backend (port 8000)
   │     ├─► LangGraph Agent (router → simple/complex nodes)
@@ -264,6 +268,9 @@ Browser (http://127.0.0.1:5173)
   │
   ├─► LM Studio (port 1234)
   │     └─► Local LLM inference (router + extraction models)
+  │
+  ├─► PostgreSQL (port 5432)
+  │     └─► Project/chat persistence (SQLAlchemy + Alembic)
   │
   ├─► Qdrant (port 6333)
   │     └─► Long-term memory (mem0 embeddings)

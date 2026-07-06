@@ -18,12 +18,12 @@ Routes: **`simple | complex-cloud`** only. Legacy `complex-default` / `complex-v
 ### Key Resolution Chain
 
 ```
-macOS Keychain → DEEPSEEK_API_KEY env var → .env.local (dev) → deepseek_api_key in user_profile.json (deprecated)
+DEEPSEEK_API_KEY env var → ~/.owlynn/secrets.env → deepseek_api_key in user_profile.json (deprecated)
 ```
 
 Load order for dev/CLI: `.env` then `.env.local` (see [`start.sh`](../start.sh), [`.env.local.example`](../.env.local.example)).
 
-See [`src/config/secret_store.py`](src/config/secret_store.py) for Keychain implementation.
+See [`src/config/secret_store.py`](src/config/secret_store.py) for secret store implementation.
 
 ### Cloud Payload Path (complex-cloud)
 
@@ -62,7 +62,7 @@ Prefix cache proof: [`tests/test_deepseek_cache_network.py`](../tests/test_deeps
 
 | Concern | Implementation |
 |---------|----------------|
-| API key storage | macOS Keychain via `keyring` (not plaintext profile) |
+| API key storage | local environment file `~/.owlynn/secrets.env` (chmod 600) |
 | Request timeout | 180s `request_timeout` on cloud calls |
 | Retry | Exponential backoff (1s/2s/4s) for 429 + 5xx |
 | Circuit breaker | `CloudCircuitBreaker` — disables cloud 60s after 3 consecutive failures |

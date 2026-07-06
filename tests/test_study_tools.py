@@ -35,10 +35,10 @@ def test_filter_memories_by_tags():
     assert len(filtered) == 1
 
 
-def test_course_register_and_list(tmp_path, monkeypatch):
+async def test_course_register_and_list(tmp_path, monkeypatch):
     courses_path = tmp_path / "courses.json"
     monkeypatch.setattr("src.tools.study_tools._COURSES_PATH", courses_path)
-    out = course_register.invoke(
+    out = await course_register.ainvoke(
         {
             "course_id": "UID10667",
             "name": "Digital Literacy",

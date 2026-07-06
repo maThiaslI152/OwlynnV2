@@ -47,7 +47,7 @@
 | Change cloud / anonymization | [`docs/architecture/CLOUD-LLM-ARCHITECTURE.md`](docs/architecture/CLOUD-LLM-ARCHITECTURE.md) | `src/agent/nodes/complex.py`, `src/agent/nodes/complex_utils/` |
 | Run or configure the app | [`docs/guides/dev-startup.md`](docs/guides/dev-startup.md) | `start.sh`, `setup.sh`, `.env` |
 | Run CI / tests / evaluation | [`docs/standards/EVALUATION.md`](docs/standards/EVALUATION.md) | `scripts/ci.sh`, `scripts/run_*_eval.py` |
-| Change mode system (Normal/Study/Pentest) | — | `frontend-v2/src/components/ModeSwitcher.tsx`, `frontend-v2/src/state/useAppStore.ts`, `src/api/ws/handler.py` |
+| Change mode system (Normal/Study/Pentest) | — | `frontend-v2/src/components/ModeSwitcher.tsx`, `frontend-v2/src/state/slices/modesSlice.ts`, `src/api/ws/handler.py` |
 | Change study tools / courses | — | `src/tools/study_tools.py`, `src/api/routes/study.py`, `skills/` |
 | Change pentest scenario | — | `scenarios/pentest/`, `src/memory/scenarios.py`, `frontend-v2/src/components/PentestScopePanel.tsx` |
 | Change browser extension | [`docs/features/BROWSER_EXTENSION.md`](docs/features/BROWSER_EXTENSION.md) | `browser-extension/`, `src/api/routes/browser_extension.py` |
@@ -62,7 +62,7 @@ Owlynn has three modes that change the UI, tools, and system prompt:
 | **Study** | `learning` (forced) | `study` (forced) | Courses, exam countdown, study progress | Study progress, weak areas |
 | **Pentest** | `concise` (forced) | `pentest` (forced) | Scope & constraints panel | (MVP: sidebar only) |
 
-- Mode is persisted per-project in `projects.json` (`mode` field)
+- Mode is persisted per-project in PostgreSQL (`ProjectModel.mode` field)
 - Mode switcher is in the left sidebar top
 - Mode → WS payload: frontend sends `scenario_id` to backend
 - Backend maps `scenario_id` to forced response_style and scenario injection
@@ -152,4 +152,5 @@ When generating cache keys for chat histories or context gatekeepers (e.g., in `
 
 ## Last updated
 
-2026-06-29 — Deep browser extension security audit (v1.3.0→v1.4.0): 12 critical/high fixes (fetch_urls broken, selector injection, get_html leaks, password masking, submit_form, constant-time token comparison), 8 medium fixes (WS message limits, message type allowlist, isSecureUrl exact match, reconnect backoff, configurable URL, cookieConsentCache persistence, screenshot consolidation, fetch_urls parallel), 3 low fixes (wait_for_navigation readyState check, innerHTML dead code removed, Moodle selector escaping). Memory multimodal content fix (BUG-41), base64 image display fix (BUG-42), WS error schema fix (BUG-43). Total BUG-41..52 fixed.
+2026-07-04 — Frontend UI overhaul (glassmorphic dropdowns, accessible memory management) and critical bug fixes for WebSocket chunk streaming overhead / infinite loop in markdown parser. Frontier eval passes at 96.32%.
+2026-07-02 — Production-readiness audit: PostgreSQL replaces `projects.json` for mode persistence; mode routing table updated to `modesSlice.ts`; task routing table updated to reference sliced store.
