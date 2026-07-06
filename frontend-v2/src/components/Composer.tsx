@@ -56,8 +56,6 @@ export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitl
   // Persona selection states
   const activePersonaId = useAppStore((s) => s.activePersonaId)
   const setActivePersonaId = useAppStore((s) => s.setActivePersonaId)
-  const responseStyle = useAppStore((s) => s.responseStyle)
-  const setResponseStyle = useAppStore((s) => s.setResponseStyle)
   const browserPageContext = useAppStore((s) => s.browserPageContext)
   const browserPageContextNonce = useAppStore((s) => s.browserPageContextNonce)
   const screenAssistEnabled = useAppStore((s) => s.screenAssistEnabled)
@@ -303,18 +301,6 @@ export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitl
     >
       {/* Dynamic Persona Selection Pill & Dropdown */}
       <div className="persona-selector-container" ref={dropdownRef}>
-        <button
-          type="button"
-          className={`persona-pill learning-mode-pill${responseStyle === 'learning' ? ' learning-mode-pill-active' : ''}`}
-          title="Learning mode — teaching tone and study memory"
-          onClick={() =>
-            setResponseStyle(responseStyle === 'learning' ? null : 'learning')
-          }
-          disabled={disabled || hitlBlocked}
-        >
-          <span className="persona-pill-icon">📖</span>
-          <span className="persona-pill-name">Learning</span>
-        </button>
         <button
           type="button"
           className={`persona-pill ${dropdownOpen ? 'persona-pill-open' : ''}`}
