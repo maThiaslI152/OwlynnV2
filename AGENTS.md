@@ -142,6 +142,13 @@ When modifying or extending `scripts/run_local_frontier_eval.py` or any UI-drive
 ### Frontend Error Handling
 Do not allow API fetches or WebSocket unhandled promise rejections to fail silently with console warnings. Always surface operational and network failures visibly to the user using the project's toast notification library (e.g., `react-hot-toast`).
 
+### Frontend UI Layouts & Imports
+- **Flexible SVG Containers:** When building UI components with `lucide-react` or other SVG icons, use flexible properties (like `flex: 1` and `justifyContent`) rather than rigid paddings to prevent text clipping and overflow in constrained containers.
+- **Strict Imports:** The TypeScript build strictly enforces `noUnusedLocals`. Always clean up unused imports immediately after refactoring components.
+
+### Architecture & Containerization
+Owlynn's Python FastAPI backend is strictly designed to run natively on the host OS (macOS) and should **never** be containerized. It requires direct host access for Screen Assist tools (tmux capture, Accessibility APIs). Only supporting services (Qdrant, Redis, StirlingPDF) are containerized via `start.sh`.
+
 ### Cache Key Generation for Chat Contexts
 When generating cache keys for chat histories or context gatekeepers (e.g., in `cloud_payload.py`), ensure the key is resilient to follow-up messages. Always include the total message count (`len(messages)`) and a slice of the final message's content to guarantee cache invalidation on new turns.
 
