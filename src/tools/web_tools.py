@@ -1086,7 +1086,7 @@ async def fetch_webpage(url: str, focus_query: str = "") -> str:
             if fb.strip():
                 note = (
                     "[Note: Page body is mostly empty in static HTML — typical of JavaScript apps. "
-                    "Below is metadata only; use fetch_webpage_dynamic for full rendered text.]\n\n"
+                    "Below is metadata only; use browser_background_fetch for full rendered text.]\n\n"
                 )
                 clean = (
                     (clean.strip() + "\n\n" + note + fb).strip()
@@ -1103,7 +1103,7 @@ async def fetch_webpage(url: str, focus_query: str = "") -> str:
             return (
                 f"📄 Content from {url}:\n\n"
                 "[fetch_webpage] No extractable text in static HTML (likely a JavaScript SPA or "
-                "blocking page). Retry with **fetch_webpage_dynamic** using the same URL, or pick "
+                "blocking page). Retry with **browser_background_fetch** using the same URL, or pick "
                 "another URL from **web_search** results."
             )
         if len(out) > 4000:
@@ -1118,68 +1118,6 @@ async def fetch_webpage(url: str, focus_query: str = "") -> str:
     except Exception as e:
         logger.warning("Error suppressed: %s", e)
         return f"[fetch_webpage] Error: {str(e)}"
-
-
-@tool
-async def fetch_webpage_dynamic(url: str, focus_query: str = "") -> str:
-    """
-    Fetches a dynamic (JavaScript-rendered) webpage and returns its text content.
-
-    Use when fetch_webpage returns little text (SPA). Same ``focus_query`` behavior as fetch_webpage.
-
-    WARNING: This opens a headless (incognito-style) browser in the background. It does NOT have the user's cookies or login sessions.
-    Do NOT use this tool for authenticated sites (like Moodle, LMS, Banking, or internal dashboards). For authenticated sites, ALWAYS rely on the browser extension tools and `download_to_workspace`.
-
-    DO NOT use this tool if the user explicitly asks to fetch 'via browser' or if they want to fetch multiple URLs simultaneously. Use `browser_background_fetch` instead.
-    """
-    from src.tools.url_policy import url_fetch_blocked_reason
-    from src.tools.web_retrieval import rank_chunks_to_source_pack
-
-    url = unwrap_redirect_search_url(url.strip())
-    blocked = url_fetch_blocked_reason(url)
-    if blocked:
-        return f"[fetch_webpage_dynamic] Blocked: {blocked}"
-
-    try:
-        from playwright.async_api import async_playwright
-
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            page = await browser.new_page()
-
-            await page.goto(url, wait_until="networkidle", timeout=30000)
-            content = await page.content()
-            await browser.close()
-
-        clean = _html_to_plain_text(content)
-        if len(clean.strip()) < _FETCH_MIN_MEANINGFUL_TEXT:
-            fb = _html_static_fallback_text(content)
-            if fb.strip():
-                note = "[Note: Little visible text after render — metadata fallback follows.]\n\n"
-                clean = (
-                    (clean.strip() + "\n\n" + note + fb).strip()
-                    if clean.strip()
-                    else (note + fb).strip()
-                )
-
-        pack = await rank_chunks_to_source_pack((focus_query or "").strip(), url, clean)
-        if pack:
-            return f"📄 [Dynamic] {pack}"
-
-        out = clean
-        if not out.strip():
-            return (
-                f"📄 [Dynamic] Content from {url}:\n\n"
-                "[fetch_webpage_dynamic] No visible text after load (empty app shell or blocked)."
-            )
-        if len(out) > 4000:
-            out = out[:4000] + "\n\n... [content truncated for brevity]"
-
-        return f"📄 [Dynamic] Content from {url}:\n\n{out}"
-
-    except Exception as e:
-        logger.warning("Error suppressed: %s", e)
-        return f"[fetch_webpage_dynamic] Error: {str(e)}"
 
 
 async def _crawl_urls(urls: list[str]) -> str:

@@ -110,7 +110,7 @@ def _extract_correction_focus(human: str) -> str:
     return ""
 
 
-def build_misconception_atom(human: str, ai: str) -> str:
+def build_misconception_atom(human: str, _ai: str) -> str:
     """Build a dense LTM atom capturing a study struggle/correction."""
     topic = _extract_correction_topic(human)
     focus = _extract_correction_focus(human)

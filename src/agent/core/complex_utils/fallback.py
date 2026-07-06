@@ -3,7 +3,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from .formatter import _synthetic_answer_from_web_search_tool, latest_user_text
 from .helpers import _web_search_tool_output_has_results
 
-_FETCH_TOOLS = frozenset({"fetch_webpage", "fetch_webpage_dynamic", "deep_research"})
+_FETCH_TOOLS = frozenset({"fetch_webpage", "deep_research"})
 _GAME_CONTEXT_KEYWORDS = (
     "stalker",
     "anomaly",

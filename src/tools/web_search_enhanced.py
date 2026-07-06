@@ -12,7 +12,7 @@ SearXNG advantages when enabled:
 
 Functions:
 - ``searxng_search(query, categories, max_results)``: Search via local SearXNG.
-- ``searxng_available()``: Health check for the SearXNG instance.
+
 
 Falls back gracefully (returns ``None``) if SearXNG is not configured or unreachable.
 """
@@ -83,21 +83,3 @@ async def searxng_search(
             }
         )
     return hits if hits else None
-
-
-async def searxng_available() -> bool:
-    """Check if SearXNG is reachable."""
-    if not SEARXNG_URL:
-        return False
-    import httpx
-
-    try:
-        async with httpx.AsyncClient(
-            timeout=5.0,
-            headers={"User-Agent": "Owlynn/1.0", "Accept": "application/json"},
-        ) as client:
-            resp = await client.get(f"{SEARXNG_URL}/healthz")
-            return resp.status_code == 200
-    except Exception as e:
-        logger.warning("Error suppressed: %s", e)
-        return False

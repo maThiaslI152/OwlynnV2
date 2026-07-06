@@ -149,7 +149,6 @@ _TOOL_ONLY_PLACEHOLDERS: dict[str, str] = {
     "notebook_run": "Generating chart with **notebook_run** — this may take a moment…",
     "web_search": "Searching the web…",
     "fetch_webpage": "Fetching page content…",
-    "fetch_webpage_dynamic": "Loading rendered page content…",
     "deep_research": "Running deep research…",
     "read_workspace_file": "Reading workspace file…",
     "write_workspace_file": "Writing to workspace…",

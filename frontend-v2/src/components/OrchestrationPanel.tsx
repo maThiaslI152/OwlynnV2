@@ -1,4 +1,5 @@
 import { useAppStore } from '../state/useAppStore'
+import { ScreenAssistLivePanel } from './ScreenAssistLivePanel'
 
 export function OrchestrationPanel() {
   const routerMetadata = useAppStore((s) => s.routerMetadata)
@@ -95,6 +96,8 @@ export function OrchestrationPanel() {
           <span className="orchestration-value orchestration-memory-ok">Saved</span>
         </div>
       )}
+      
+      <ScreenAssistLivePanel />
     </div>
   )
 }

@@ -78,6 +78,7 @@ def test_screen_assist_toolbox_registered():
         "capture_kali_terminal",
         "run_kali_command",
         "host_browser_action",
+        "capture_desktop_screenshot",
         "upload_from_workspace",
         "kali_tmux_list_windows",
         "kali_reset_vm",

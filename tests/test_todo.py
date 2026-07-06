@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 sys.modules["mem0"] = MagicMock()
 
 import pytest
-from src.tools.todo import todo_add, todo_list, todo_complete, todo_remove, _TODO_PATH
+from src.tools.todo import todo_add, todo_list, todo_complete, _TODO_PATH
 
 
 @pytest.fixture(autouse=True)

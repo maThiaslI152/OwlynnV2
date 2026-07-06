@@ -112,23 +112,6 @@ def todo_complete(task_id: int) -> str:
 
 
 @tool
-def todo_remove(task_id: int) -> str:
-    """
-    Removes a task from the todo list.
-
-    Args:
-        task_id: The ID number of the task to remove.
-    """
-    todos = _load_todos()
-    before = len(todos)
-    todos = [t for t in todos if t["id"] != task_id]
-    if len(todos) < before:
-        _save_todos(todos)
-        return f"🗑️ Task #{task_id} removed."
-    return f"Task #{task_id} not found."
-
-
-@tool
 def todo_update(
     task_id: int,
     task: str = "",

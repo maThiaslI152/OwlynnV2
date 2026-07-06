@@ -111,33 +111,6 @@ MEDIUM_LONGCTX_CONTEXT = CLOUD_CONTEXT
 
 M4_MAC_OPTIMIZATION = get_m4_optimization()
 
-# ── Model Timeouts & Tokens (M4 vs standard) ─────────────────────────────────
-
-if (
-    os.getenv("MACHINE_TYPE") == "M4_MAC"
-    or os.getenv("OPTIMIZE_FOR_M4", "").lower() == "true"
-):
-    MODEL_TIMEOUT_SMALL = M4_MAC_OPTIMIZATION["small_model"]["timeout"]
-    MODEL_TIMEOUT_EXTRACTION = M4_MAC_OPTIMIZATION["extraction_model"]["timeout"]
-    MAX_TOKENS_SMALL = M4_MAC_OPTIMIZATION["small_model"]["max_tokens"]
-    MAX_TOKENS_EXTRACTION = M4_MAC_OPTIMIZATION["extraction_model"]["max_tokens"]
-    MAX_MEMORIES = M4_MAC_OPTIMIZATION["memory"]["max_facts"]
-    MEMORY_SEARCH_WINDOW = M4_MAC_OPTIMIZATION["memory"]["search_window"]
-else:
-    MODEL_TIMEOUT_SMALL = int(
-        config.get("models.small.timeout")
-        or config.get("models.standard.small.timeout")
-        or 15
-    )
-    MODEL_TIMEOUT_EXTRACTION = int(config.get("models.small.timeout") or 120)
-    MAX_TOKENS_SMALL = int(
-        config.get("models.small.max_tokens")
-        or config.get("models.standard.small.max_tokens")
-        or 2048
-    )
-    MAX_TOKENS_EXTRACTION = int(config.get("models.small.max_tokens") or 8192)
-    MAX_MEMORIES = int(config.get("memory.max_facts") or 200)
-    MEMORY_SEARCH_WINDOW = int(config.get("memory.search_window") or 50)
 
 # ── Ensure directories exist ─────────────────────────────────────────────────
 

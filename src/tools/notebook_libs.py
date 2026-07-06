@@ -43,13 +43,6 @@ def format_available_libraries() -> str:
     return ", ".join(libs) if libs else "none detected"
 
 
-def has_viz_libraries() -> bool:
-    return any(
-        importlib.util.find_spec(mod) is not None
-        for mod in ("matplotlib", "seaborn", "plotly")
-    )
-
-
 def notebook_module_missing_nudge(module_name: str) -> str:
     """Build an accurate recovery nudge after ModuleNotFoundError in notebook_run."""
     available = format_available_libraries()
@@ -169,29 +162,6 @@ def turn_ends_with_chart_completion(
     )
 
 
-def notebook_chart_embed_nudge(content: str, project_id: str = "default") -> str | None:
-    """Return a reply-style reminder when notebook_run saved a chart artifact."""
-    artifact = parse_chart_artifact(content, project_id=project_id)
-    if not artifact:
-        return None
-
-    filename = artifact["filename"]
-    if artifact["kind"] == "interactive":
-        return (
-            f"[Internal reminder] Interactive chart `{filename}` was saved. Your **final reply** must "
-            "include an inline embed fence:\n"
-            f'```owlynn-embed\n{{"type":"chart","url":"/api/files/{filename}?project_id={project_id}"}}\n```\n'
-            "Plus 1–2 sentences of insight — no markdown image links or raw file paths."
-        )
-
-    return (
-        f"[Internal reminder] Chart `{filename}` was saved. Include inline embed:\n"
-        f'```owlynn-embed\n{{"type":"image","url":"/api/files/{filename}?project_id={project_id}"}}\n```\n'
-        "Plus 1–2 sentences of insight. For interactivity next time, prefer Plotly HTML:\n"
-        f"  {PLOTLY_SAVE_SNIPPET}"
-    )
-
-
 def notebook_cell_fence_guidance() -> str:
     """Guidance for inline runnable Python cells in chat."""
     return (
@@ -199,8 +169,3 @@ def notebook_cell_fence_guidance() -> str:
         '```owlynn-cell\n{"language":"python","code":"print(1+1)","runnable":true}\n```\n'
         "After notebook_run, you may pre-fill the output field and set runnable:false for replay."
     )
-
-
-def clear_notebook_libs_cache() -> None:
-    """Test helper — invalidate cached probe results."""
-    available_notebook_libraries.cache_clear()

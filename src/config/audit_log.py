@@ -402,8 +402,3 @@ def audit_info(channel: str, event: str, **data: Any) -> None:
 def audit_warn(channel: str, event: str, **data: Any) -> None:
     """Shorthand for ``audit_event(..., level=logging.WARNING)``."""
     audit_event(channel, event, level=logging.WARNING, **data)
-
-
-def audit_error(channel: str, event: str, **data: Any) -> None:
-    """Shorthand for ``audit_event(..., level=logging.ERROR)``."""
-    audit_event(channel, event, level=logging.ERROR, **data)

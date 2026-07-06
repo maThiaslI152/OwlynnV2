@@ -161,20 +161,6 @@ def verify_deepseek_api_key(api_key: str) -> tuple[bool, str]:
         return False, str(e)
 
 
-def rotate_deepseek_api_key(new_api_key: str) -> None:
-    """Replace the existing DeepSeek API key with a new one.
-
-    Logs the rotation event.
-
-    Parameters
-    ----------
-    new_api_key : str
-        The new API key.
-    """
-    store_deepseek_api_key(new_api_key)
-    logger.info("DeepSeek API key rotated successfully")
-
-
 # ── private helpers ──────────────────────────────────────────────
 
 

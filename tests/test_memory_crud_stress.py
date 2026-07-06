@@ -10,7 +10,6 @@ from concurrent.futures import ThreadPoolExecutor
 from src.memory.memory_manager import (
     save_memory,
     search_memories,
-    clear_all_memories,
     load_memories,
 )
 from src.memory.personal_assistant import (
@@ -24,7 +23,7 @@ from src.memory.personal_assistant import (
 class TestMemoryCRUDStress(unittest.TestCase):
     def setUp(self):
         # Clear out memories to start fresh
-        clear_all_memories()
+
         # Note: We do not clear topics/interests strictly here to avoid wiping local dev data,
         # but we use unique keys to isolate test data.
         self.test_id = str(time.time())

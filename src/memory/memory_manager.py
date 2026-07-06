@@ -154,25 +154,3 @@ def delete_memory(fact: str) -> bool:
 
     audit_debug("memory.stm", "delete_not_found", total_count=before)
     return False
-
-
-def clear_all_memories() -> int:
-    """Delete every memory. Returns count removed."""
-    with get_file_lock(_MEMORIES_PATH):
-        count = len(_read_file())
-        _write_file([])
-    audit_info("memory.stm", "cleared", removed_count=count)
-    return count
-
-
-def memories_to_context(query: str = "") -> str:
-    """Format top memories as a system prompt context block."""
-    with get_file_lock(_MEMORIES_PATH):
-        memories = search_memories(query, top_k=8) if query else _read_file()[-8:]
-    if not memories:
-        return ""
-    lines = ["LONG-TERM MEMORY (facts remembered from previous sessions):"]
-    for m in memories:
-        lines.append(f"  • {m.get('fact', '')}")
-    lines.append("Use these facts to personalize your responses.")
-    return "\n".join(lines)

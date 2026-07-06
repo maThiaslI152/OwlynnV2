@@ -42,13 +42,18 @@ _PATTERNS: list[tuple[str, re.Pattern]] = [
     ),
     # 2. Email addresses
     ("EMAIL", re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")),
-    # 3. Localhost URLs with ports
-    ("URL", re.compile(r"https?://(?:localhost|127\.0\.0\.1):\d+")),
+    # 3. Localhost, internal, or generic non-TLD URLs
+    (
+        "URL",
+        re.compile(
+            r"https?://(?:localhost|127\.0\.0\.1|[a-zA-Z0-9\-]+(?:\.(?:internal|local))?)(?::\d+)?"
+        ),
+    ),
     # 4. File system paths (exclude trailing punctuation like commas or quotes)
     (
         "PATH",
         re.compile(
-            r"(?:/(?:Users|home|etc|var|opt|tmp)/\S+|~/\S+|[A-Z]:\\\\?\S+)(?<![.,!?;'\"])"
+            r"(?:/(?:Users|home|etc|var|opt|tmp)/\S+|~/\S+|[A-Z]:\\\\?\S+)(?<![.,!?;'\"\]})>])"
         ),
     ),
     # 5. IP addresses (IPv4 and IPv6)
@@ -112,14 +117,16 @@ def anonymize(text: str, context: Optional[dict] = None) -> tuple[str, dict]:
     # 1. Known names from context
     name = context.get("name", "").strip()
     if name and len(name) > 1:
-        for m in re.finditer(re.escape(name), text, re.IGNORECASE):
+        pattern = r"(?<!\w)" + re.escape(name) + r"(?!\w)"
+        for m in re.finditer(pattern, text, re.IGNORECASE):
             matches.append((m.start(), m.end(), "NAME", m.group()))
 
     # 2. Custom sensitive terms
     for term in context.get("custom_sensitive_terms", []):
         term = str(term).strip()
         if term and len(term) > 1:
-            for m in re.finditer(re.escape(term), text, re.IGNORECASE):
+            pattern = r"(?<!\w)" + re.escape(term) + r"(?!\w)"
+            for m in re.finditer(pattern, text, re.IGNORECASE):
                 matches.append((m.start(), m.end(), "CUSTOM", m.group()))
 
     # 3. Regex patterns
@@ -159,8 +166,11 @@ def deanonymize(text: str, mapping: dict) -> str:
     """
     if not text or not mapping:
         return text
-    result = text
-    # Sort by placeholder length descending to avoid partial replacements
-    for placeholder in sorted(mapping.keys(), key=len, reverse=True):
-        result = result.replace(placeholder, mapping[placeholder])
-    return result
+
+    sorted_keys = sorted(mapping.keys(), key=len, reverse=True)
+    pattern = re.compile("|".join(map(re.escape, sorted_keys)))
+
+    def _repl(match):
+        return mapping.get(match.group(0), match.group(0))
+
+    return pattern.sub(_repl, text)

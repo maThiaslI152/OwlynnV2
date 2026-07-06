@@ -162,7 +162,7 @@ class TopicExtractor:
 
 class ConversationSummary:
     @staticmethod
-    def create_summary(messages: List[Dict], user_name: str = "User") -> Dict:
+    def create_summary(messages: List[Dict], _user_name: str = "User") -> Dict:
         if not messages:
             return {}
         user_msgs = [m["content"] for m in messages if m.get("role") == "user"]

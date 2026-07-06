@@ -626,7 +626,7 @@ def build_web_search_answer_nudge_messages(
 def build_fetch_retry_nudge_messages(tool_messages: list) -> list[HumanMessage]:
     """
     If fetch_webpage clearly failed or only returned SPA metadata, append a one-shot user-role
-    reminder so the next LLM turn retries fetch_webpage_dynamic or another search hit.
+    reminder so the next LLM turn retries browser_background_fetch or another search hit.
     """
     if not tool_messages:
         return []
@@ -651,7 +651,7 @@ def build_fetch_retry_nudge_messages(tool_messages: list) -> list[HumanMessage]:
             HumanMessage(
                 content=(
                     "[Internal reminder for assistant] Static **fetch_webpage** returned no usable article body "
-                    "(empty HTML or SPA shell). Before answering the user, call **fetch_webpage_dynamic** with the "
+                    "(empty HTML or SPA shell). Before answering the user, call **browser_background_fetch** with the "
                     "same URL, or **fetch_webpage** a different URL from **web_search** results."
                 )
             )

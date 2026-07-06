@@ -284,6 +284,9 @@ Full reference: [`docs/development/API_REFERENCE.md`](docs/development/API_REFER
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md). Run `./scripts/ci.sh --quick` before pushing.
 
+## Recent Updates
+- **2026-07-06**: Cleaned up stale configuration, unused memory vectors, deprecated web tools, and redundant test dependencies to optimize system latency and maintainability.
+
 ## License
 
 [MIT](LICENSE)

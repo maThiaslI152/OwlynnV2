@@ -29,7 +29,6 @@ from src.config.audit_log import (
     audit_debug,
     audit_info,
     audit_warn,
-    audit_error,
     audit_context,
     set_thread_id,
     set_node,
@@ -200,11 +199,6 @@ class TestConvenienceFunctions:
         audit_warn("agent.model", "swap_load_failed", error="timeout")
         entries = captured_audit()
         assert entries[0]["event"] == "swap_load_failed"
-
-    def test_audit_error(self, captured_audit):
-        audit_error("system", "crash", reason="OOM")
-        entries = captured_audit()
-        assert entries[0]["event"] == "crash"
 
 
 # ── Tests: value sanitization ───────────────────────────────────────────────

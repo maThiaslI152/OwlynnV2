@@ -16,7 +16,7 @@ owner: human
 ## Entry Points
 
 ```text
-src/tools/web_tools.py              # web_search, fetch_webpage, fetch_webpage_dynamic
+src/tools/web_tools.py              # web_search, fetch_webpage
 src/tools/web_search_enhanced.py    # SearXNG integration
 src/config/settings.py              # WEB_RAG_* env vars
 docker-compose.yml                  # SearXNG container opt-in (compose profile searxng, port 8888)
@@ -128,11 +128,7 @@ Pipeline:
 
 Requirements: `pip install httpx beautifulsoup4 lxml` (all in `requirements.txt`)
 
-### `fetch_webpage_dynamic` Tool
 
-Same as `fetch_webpage`, but uses Playwright for JavaScript rendering. 30s page load timeout. Defined but not exposed to agent via any toolbox — exists for manual/testing use.
-
-Requirements: `playwright install chromium`
 
 ### Web RAG (Focus-Query Ranking)
 

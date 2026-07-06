@@ -61,6 +61,25 @@ class MacScreenAssistGateway:
                 pass
         return None
 
+    async def capture_desktop_screenshot(self) -> str | None:
+        import subprocess
+        import tempfile
+        import os
+        import base64
+
+        fd, path = tempfile.mkstemp(suffix=".jpg")
+        os.close(fd)
+        try:
+            # -x: disable sound, -t jpg: jpeg format
+            subprocess.run(["screencapture", "-x", "-t", "jpg", path], check=True)
+            with open(path, "rb") as f:
+                return base64.b64encode(f.read()).decode("utf-8")
+        except Exception:
+            return None
+        finally:
+            if os.path.exists(path):
+                os.remove(path)
+
     async def capture_kali_pane(self, session: str | None = None) -> str:
         kali = config.get("screen_assist.kali") or {}
         return await capture_remote_tmux_pane(

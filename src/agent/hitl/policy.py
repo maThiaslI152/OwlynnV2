@@ -7,7 +7,6 @@ import re
 SAFE_TOOLS = {
     "web_search",
     "fetch_webpage",
-    "fetch_webpage_dynamic",
     "capture_local_terminal",
     "read_screen_element",
     "get_active_browser_context",

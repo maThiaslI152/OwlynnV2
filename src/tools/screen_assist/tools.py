@@ -79,6 +79,25 @@ async def get_active_browser_screenshot() -> str:
 
 
 @tool
+async def capture_desktop_screenshot() -> str:
+    """
+    Return a base64 encoded jpeg screenshot of the user's entire macOS desktop.
+
+    Use this when you need visual context of the user's entire screen, or when the user explicitly asks "do you see my screen", mentions the "desktop", or requests visual confirmation of an app other than the browser.
+    """
+    if not _enabled():
+        return "Error: screen assist is disabled in configuration."
+    gw = get_screen_assist_gateway()
+    b64 = await gw.capture_desktop_screenshot()
+    if not b64:
+        return "Error: Could not capture desktop screenshot (screencapture command failed)."
+
+    import json
+
+    return json.dumps({"vision_interception_required": True, "image_url": b64})
+
+
+@tool
 async def active_browser_action(
     action: str,
     selector: str = "",
@@ -478,6 +497,7 @@ SCREEN_ASSIST_TOOLS = [
     read_screen_element,
     get_active_browser_context,
     get_active_browser_screenshot,
+    capture_desktop_screenshot,
     active_browser_action,
     capture_kali_terminal,
     run_kali_command,

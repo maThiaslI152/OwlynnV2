@@ -126,7 +126,7 @@ def _safe_import(name, *args, **kwargs):
 _SAFE_BUILTINS["__import__"] = _safe_import
 
 
-def _timeout_handler(signum, frame):
+def _timeout_handler(_signum, _frame):
     raise TimeoutError("Code execution timed out (30 second limit)")
 
 

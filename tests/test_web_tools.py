@@ -4,7 +4,6 @@ from src.tools.web_tools import (
     SearchAttempt,
     detect_bot_block,
     fetch_webpage,
-    fetch_webpage_dynamic,
     unwrap_redirect_search_url,
     web_search,
     _html_static_fallback_text,
@@ -80,12 +79,4 @@ async def test_web_search_google():
 async def test_fetch_webpage():
     results = await fetch_webpage.ainvoke({"url": "https://example.com"})
     assert "📄 Content from" in results
-    assert "Example Domain" in results
-
-
-@pytest.mark.network
-@pytest.mark.asyncio
-async def test_fetch_webpage_dynamic():
-    results = await fetch_webpage_dynamic.ainvoke({"url": "https://example.com"})
-    assert "📄 [Dynamic] Content from" in results
     assert "Example Domain" in results

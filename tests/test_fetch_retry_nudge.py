@@ -19,7 +19,7 @@ def test_nudge_when_no_extractable_text():
     )
     out = build_fetch_retry_nudge_messages([m])
     assert len(out) == 1
-    assert "fetch_webpage_dynamic" in out[0].content
+    assert "browser_background_fetch" in out[0].content
 
 
 def test_nudge_when_spa_metadata_note():
@@ -43,7 +43,7 @@ def test_dynamic_takes_precedence_over_http_when_both_in_batch():
     m2 = _fetch_tool("[fetch_webpage] No extractable text")
     out = build_fetch_retry_nudge_messages([m1, m2])
     assert len(out) == 1
-    assert "fetch_webpage_dynamic" in out[0].content
+    assert "browser_background_fetch" in out[0].content
 
 
 def test_no_nudge_for_unrelated_tool():

@@ -8,10 +8,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from src.tools.notebook_libs import (
     available_notebook_libraries,
     chart_completion_message,
-    clear_notebook_libs_cache,
     format_available_libraries,
-    has_viz_libraries,
-    notebook_chart_embed_nudge,
     notebook_interactive_viz_guidance,
     notebook_module_missing_nudge,
     parse_chart_artifact,
@@ -20,14 +17,14 @@ from src.tools.notebook_libs import (
 
 
 def test_format_available_libraries_lists_detected_modules():
-    clear_notebook_libs_cache()
+    available_notebook_libraries.cache_clear()
     text = format_available_libraries()
     assert "pandas" in text
     assert "numpy" in text
 
 
 def test_notebook_module_missing_nudge_viz_steers_to_html():
-    clear_notebook_libs_cache()
+    available_notebook_libraries.cache_clear()
     nudge = notebook_module_missing_nudge("matplotlib")
     assert "matplotlib" in nudge
     assert "Actually available" in nudge
@@ -40,40 +37,6 @@ def test_notebook_module_missing_nudge_non_viz():
     assert "foobar" in nudge
     assert "Retry using only" in nudge
     assert "inline HTML" not in nudge
-
-
-def test_has_viz_libraries_reflects_import_spec():
-    clear_notebook_libs_cache()
-    with patch(
-        "src.tools.notebook_libs.importlib.util.find_spec",
-        side_effect=lambda name: object() if name == "matplotlib" else None,
-    ):
-        clear_notebook_libs_cache()
-        assert has_viz_libraries() is True
-        libs = available_notebook_libraries()
-        assert "matplotlib" in libs
-
-
-def test_notebook_chart_embed_nudge_builds_api_markdown():
-    nudge = notebook_chart_embed_nudge(
-        "[Cell 1]\nChart saved to ukraine_war_sitrep_2026.png",
-        project_id="default",
-    )
-    assert nudge is not None
-    assert "owlynn-embed" in nudge
-    assert "ukraine_war_sitrep_2026.png" in nudge
-    assert "1–2 sentences" in nudge
-
-
-def test_notebook_chart_embed_nudge_prefers_interactive_html():
-    nudge = notebook_chart_embed_nudge(
-        "[Cell 1]\nInteractive chart saved to ukraine_sitrep.html",
-        project_id="default",
-    )
-    assert nudge is not None
-    assert "owlynn-embed" in nudge
-    assert "ukraine_sitrep.html" in nudge
-    assert "project_id=default" in nudge
 
 
 def test_parse_chart_artifact_interactive_html():
@@ -114,13 +77,6 @@ def test_notebook_interactive_viz_guidance_mentions_plotly():
     assert "plotly" in guidance.lower()
     assert "chart.html" in guidance
     assert "project_id=proj-1" in guidance
-
-
-def test_notebook_chart_embed_nudge_skips_errors():
-    assert (
-        notebook_chart_embed_nudge("[Cell 1] Error:\nTraceback", project_id="default")
-        is None
-    )
 
 
 def test_chart_completion_message_interactive():
