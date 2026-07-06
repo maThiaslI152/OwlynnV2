@@ -21,7 +21,9 @@ def pytest_configure(config):
 
     # Sandbox data and workspace dirs globally for all tests
     worker_id = os.environ.get("PYTEST_XDIST_WORKER", "master")
-    pytest.test_data_dir = tempfile.TemporaryDirectory(prefix=f"owlynn_test_data_{worker_id}_")
+    pytest.test_data_dir = tempfile.TemporaryDirectory(
+        prefix=f"owlynn_test_data_{worker_id}_"
+    )
     pytest.test_workspace_dir = tempfile.TemporaryDirectory(
         prefix=f"owlynn_test_workspace_{worker_id}_"
     )
@@ -86,4 +88,3 @@ def setup_database_schema():
         loop.run_until_complete(_create_tables())
     else:
         loop.run_until_complete(_create_tables())
-

@@ -100,6 +100,7 @@ class ProjectManager:
         if project_id == _DEFAULT_PROJECT_ID:
             return False
         from sqlalchemy import delete
+
         async with AsyncSessionLocal() as session:
             stmt = select(Project).filter_by(id=project_id)
             result = await session.execute(stmt)
@@ -107,7 +108,9 @@ class ProjectManager:
             if not proj:
                 return False
             await session.execute(delete(Chat).filter_by(project_id=project_id))
-            await session.execute(delete(KnowledgeFile).filter_by(project_id=project_id))
+            await session.execute(
+                delete(KnowledgeFile).filter_by(project_id=project_id)
+            )
             await session.execute(delete(Project).filter_by(id=project_id))
             await session.commit()
 
