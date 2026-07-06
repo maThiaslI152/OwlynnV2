@@ -154,6 +154,14 @@ Owlynn's Python FastAPI backend is strictly designed to run natively on the host
 ### Cache Key Generation for Chat Contexts
 When generating cache keys for chat histories or context gatekeepers (e.g., in `cloud_payload.py`), ensure the key is resilient to follow-up messages. Always include the total message count (`len(messages)`) and a slice of the final message's content to guarantee cache invalidation on new turns.
 
+### Security Hardening (2026-07-07)
+- **Execution policy default is `require_approval`** — all sensitive tools (write, edit, delete, notebook) trigger HITL interrupt by default. Users can opt into `auto_approve` via profile setting.
+- **`/v1/chat/completions` requires auth** — the OpenAI-compatible endpoint is outside `/api/*` middleware, so it has its own `_verify_openai_token()` check. `auto_approve_sensitive` is hardcoded to `False` (client cannot override).
+- **Notebook sandbox is hardened** — `requests` and `httpx` removed from import whitelist. Only safe stdlib + data science modules allowed.
+- **SSRF protection on downloads** — `download_to_workspace` uses `url_policy.py` to block private IPs, localhost, cloud metadata.
+- **Prompt injection boundaries** — `fetch_webpage` output wrapped in `<web_context>` tags. Memory writes sanitized for injection patterns via `pii_scrubber.scrub_for_memory_write()`.
+- **Destructive command blocking** — `scope_guard.py` blocks `rm -rf /`, `mkfs`, `dd` to device, fork bombs, etc. regardless of engagement state.
+
 ## Related
 
 - [`docs/README.md`](docs/README.md) — full documentation map
@@ -161,6 +169,6 @@ When generating cache keys for chat histories or context gatekeepers (e.g., in `
 
 ## Last updated
 
-2026-07-07 — Semantic Cache + Redis checkpoint eviction implemented. Task routing table updated with semantic cache and Redis lifecycle rows. Docs: `docs/features/SEMANTIC_CACHE.md`, `docs/architecture/REDIS_LIFECYCLE.md`.
+2026-07-07 — Security hardening: execution policy default changed to require_approval; /v1/chat/completions auth enforced; notebook sandbox hardened; SSRF protection on downloads; prompt injection boundaries on web fetches and memory writes; destructive command blocking in scope guard. Task routing table updated with semantic cache and Redis lifecycle rows.
 2026-07-04 — Frontend UI overhaul (glassmorphic dropdowns, accessible memory management) and critical bug fixes for WebSocket chunk streaming overhead / infinite loop in markdown parser. Frontier eval passes at 96.32%.
 2026-07-02 — Production-readiness audit: PostgreSQL replaces `projects.json` for mode persistence; mode routing table updated to `modesSlice.ts`; task routing table updated to reference sliced store.

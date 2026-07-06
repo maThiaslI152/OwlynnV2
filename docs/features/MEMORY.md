@@ -40,10 +40,11 @@ See [memory-vision-screen-roadmap.md](guides/memory-vision-screen-roadmap.md) fo
 
 After the agent responds, `memory_write_node`:
 1. PII-scrubs content before persistence
-2. Enqueues custom extraction (Redis stream → worker → L1 atoms in Qdrant)
-3. Extracts topics and updates topic/interests tracking
-4. Records the conversation in `conversations.json`
-5. Invalidates the memory cache for the next turn
+2. Neutralizes prompt injection patterns (e.g., "ignore previous instructions") via `pii_scrubber.scrub_for_memory_write()`
+3. Enqueues custom extraction (Redis stream → worker → L1 atoms in Qdrant)
+4. Extracts topics and updates topic/interests tracking
+5. Records the conversation in `conversations.json`
+6. Invalidates the memory cache for the next turn
 
 ### Background extraction (Qwen3-VL-4B) — resource deferral
 

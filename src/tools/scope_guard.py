@@ -21,6 +21,19 @@ _DOMAIN_RE = re.compile(
 )
 _URL_RE = re.compile(r"https?://([^\s/:]+)")
 
+# Destructive commands that should always require HITL, even without an active engagement
+_DESTRUCTIVE_CMD_RE = re.compile(
+    r"\brm\s+-rf\s+/\b"
+    r"|\bmkfs\b"
+    r"|\bdd\s+if=.*of=/dev/"
+    r"|\b:\(\)\{.*\|.*&\s*\};\s*:"  # fork bomb
+    r"|\bchmod\s+-R\s+777\s+/"
+    r"|\bshutdown\b"
+    r"|\breboot\b"
+    r"|\binit\s+0\b",
+    re.IGNORECASE,
+)
+
 
 def extract_targets_from_args(tool_name: str, args: dict) -> list[str]:
     """Extract target IPs/hostnames from tool call arguments.
@@ -90,7 +103,16 @@ def guard_tool_call(tool_name: str, args: dict) -> tuple[bool, str]:
 
     Returns (allowed, reason).
     Only checks when an active engagement exists. Non-pentest calls pass through.
+    Always blocks obviously destructive commands regardless of engagement state.
     """
+    # Always block catastrophic commands, even without an active engagement
+    command = args.get("command", "") or args.get("text", "") or ""
+    if isinstance(command, str) and _DESTRUCTIVE_CMD_RE.search(command):
+        return False, (
+            f"Destructive command detected: '{command[:80]}'. "
+            "This command can cause irreversible damage and is blocked by policy."
+        )
+
     eng = get_active_engagement()
     if not eng:
         return True, "No active engagement (non-pentest mode)"

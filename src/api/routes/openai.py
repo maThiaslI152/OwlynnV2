@@ -1,4 +1,6 @@
-from fastapi import APIRouter
+import secrets as _secrets
+
+from fastapi import APIRouter, HTTPException, Request
 import logging
 from src.api.shared import _stringify_lc_message_content
 
@@ -9,9 +11,30 @@ import time
 import uuid
 
 
+def _verify_openai_token(request: Request) -> None:
+    """Verify local run token for the /v1/ endpoint (outside /api/* middleware)."""
+    from src.api.local_auth import get_local_run_token, is_loopback_client
+
+    if not is_loopback_client(request):
+        raise HTTPException(
+            status_code=403, detail="API only accessible from localhost"
+        )
+
+    token = request.headers.get("X-Owlynn-Run-Token") or request.query_params.get(
+        "token"
+    )
+    expected = get_local_run_token(request.app)
+    if not token or not _secrets.compare_digest(token, expected):
+        raise HTTPException(
+            status_code=401, detail="Missing or invalid local run token"
+        )
+
+
 @router.post("/v1/chat/completions")
-async def api_openai_chat_completions(body: dict):
+async def api_openai_chat_completions(body: dict, request: Request):
     """OpenAI-compatible local API completions endpoint."""
+    _verify_openai_token(request)
+
     from langchain_core.messages import SystemMessage
     from fastapi.responses import StreamingResponse
     from src.api.server import openai_stream_generator
@@ -24,7 +47,8 @@ async def api_openai_chat_completions(body: dict):
     stream = bool(body.get("stream", False))
     project_id = body.get("project_id", "default")
     persona_id = body.get("persona_id", "default")
-    auto_approve_sensitive = bool(body.get("auto_approve_sensitive", False))
+    # Security: never accept auto_approve from the client — always require HITL
+    auto_approve_sensitive = False
 
     # Map messages to LangChain types
     lc_messages = []
@@ -58,7 +82,7 @@ async def api_openai_chat_completions(body: dict):
         "project_id": project_id,
         "persona_id": persona_id,
         "mode": "api",
-        "auto_approve_sensitive": auto_approve_sensitive,
+        "auto_approve_sensitive": False,
     }
 
     try:
@@ -96,4 +120,4 @@ async def api_openai_chat_completions(body: dict):
         return response_payload
     except Exception as e:
         logger.error("Error in non-streaming completions API: %s", e)
-        return {"error": str(e)}
+        return {"error": "Internal server error"}

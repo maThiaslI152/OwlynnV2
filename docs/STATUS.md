@@ -1,7 +1,7 @@
 ---
 status: active
 category: standards
-last_updated: 2026-06-28
+last_updated: 2026-07-07
 owner: ai-agent
 audience: agent
 ---
@@ -12,7 +12,20 @@ audience: agent
 
 ## Overview
 
-Project status tracker. Last updated: 2026-06-28 — Browser extension hardening complete; security, navigation, batch selection, Moodle.
+Project status tracker. Last updated: 2026-07-07 — Security hardening pass; HITL, auth, sandbox, SSRF, injection boundaries.
+
+## Recent Changes (2026-07-07 — Security Hardening)
+
+| Change | Impact | Doc |
+|--------|--------|-----|
+| **`/v1/chat/completions` auth** | OpenAI-compatible endpoint now requires local run token. `_verify_openai_token()` added. | [`HITL.md`](HITL.md) |
+| **`auto_approve_sensitive` removed from API** | Client can no longer override HITL policy via request body. Hardcoded to `False`. | [`HITL.md`](HITL.md) |
+| **Execution policy default** | Default changed from `auto_approve` to `require_approval` in security_proxy and plan_review. | [`HITL.md`](HITL.md) |
+| **Notebook sandbox hardened** | `requests` and `httpx` removed from import whitelist. Only safe stdlib + data science modules. | [`features/TOOLS.md`](features/TOOLS.md) |
+| **SSRF on downloads** | `download_to_workspace` now uses `url_policy.py` to block private IPs, localhost, cloud metadata. | [`features/TOOLS.md`](features/TOOLS.md) |
+| **Web fetch injection boundary** | `fetch_webpage` output wrapped in `<web_context>` tags to prevent prompt injection. | [`features/TOOLS.md`](features/TOOLS.md) |
+| **Memory write injection sanitizer** | `pii_scrubber.scrub_for_memory_write()` neutralizes prompt injection patterns before LTM storage. | [`features/MEMORY.md`](features/MEMORY.md) |
+| **Destructive command blocking** | `scope_guard.py` blocks `rm -rf /`, `mkfs`, `dd`, fork bombs regardless of engagement state. | [`HITL.md`](HITL.md) |
 
 ## Recent Changes (2026-06-28 — Browser Extension)
 

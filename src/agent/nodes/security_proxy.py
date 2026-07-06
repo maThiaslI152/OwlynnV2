@@ -286,12 +286,13 @@ async def security_proxy_node(state: AgentState) -> AgentState:
 
     # ── API Mode Bypass / Auto-Approval ────────────────────────────────────
     profile = get_profile()
-    execution_policy = profile.get("execution_policy", "auto_approve")
+    execution_policy = profile.get("execution_policy", "require_approval")
 
-    if state.get("mode") == "api":
-        approved = bool(state.get("auto_approve_sensitive", False))
-        logger.info("[security_proxy] API mode detected — auto_approve=%s", approved)
-        log_hitl_event("hitl_skipped", decision="api_mode_auto", approved=approved)
+    if state.get("mode") == "api" and bool(state.get("auto_approve_sensitive", False)):
+        # API mode auto-approve only when explicitly opted in (disabled by default)
+        logger.info("[security_proxy] API mode auto-approve enabled")
+        log_hitl_event("hitl_skipped", decision="api_mode_auto", approved=True)
+        approved = True
     else:
         # Check if we should auto-approve based on Execution Policy and risk
         # "Red lines": destructive, network, or privilege escalation always require HITL

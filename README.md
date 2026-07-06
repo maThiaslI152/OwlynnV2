@@ -27,7 +27,7 @@ Owlynn is a **desktop AI coworker** that keeps your data local. It reasons throu
 | **Memory orchestration** | Split inject (`memory_inject_lite` → router → gated `memory_retrieve`), async 8B extraction, PII scrub, pentest/research scenarios |
 | **Vision proxy** | Local Gemma-4-E2B VLM → JSON OCR → text-only DeepSeek path; lazy load + idle unload |
 | **Screen assist** | macOS tmux capture, Accessibility API, browser tab, Kali SSH tmux (Python tools) |
-| **HITL** | Security proxy + plan review for sensitive tool calls |
+| **HITL** | Security proxy + plan review for sensitive tool calls; `require_approval` default; destructive command blocking |
 | **Search** | Browser extension (tier 0.2) → curl_cffi → DDGS → Playwright; SearXNG opt-in |
 | **Pentest mode** | Kali Linux via Lima VM; always uses local Gemma model — never cloud |
 | **Study mode** | 16 study tools, SM-2 flashcard review, quiz sessions, exam countdown |
@@ -222,7 +222,7 @@ Pentest mode **never** uses cloud APIs — enforced at the router level.
 
 **Inject path:** `memory_inject_lite` → router decides `needs_memory_retrieval` → `memory_retrieve`.
 
-**Write path:** PII scrub → enqueue Redis stream → 8B worker → Qdrant → `store_semantic_cache()`.
+**Write path:** PII scrub + injection neutralization → enqueue Redis stream → 8B worker → Qdrant → `store_semantic_cache()`.
 
 Details: [`docs/features/MEMORY.md`](docs/features/MEMORY.md) · [`docs/features/SEMANTIC_CACHE.md`](docs/features/SEMANTIC_CACHE.md)
 
@@ -363,6 +363,7 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for workflow details.
 
 ## Recent Updates
 
+- **2026-07-07**: **Security Hardening** — `/v1/chat/completions` auth enforced; execution policy default changed to `require_approval`; notebook sandbox hardened (HTTP clients removed); SSRF protection on `download_to_workspace`; prompt injection boundaries on web fetches and memory writes; destructive command blocking in scope guard. See [`docs/HITL.md`](docs/HITL.md).
 - **2026-07-07**: **Semantic Cache** — repeated questions answered in < 100ms via Redis vector similarity (`redisvl`). **Redis checkpoint eviction** — daily background task evicts threads idle > 30 days. Full documentation in [`docs/features/SEMANTIC_CACHE.md`](docs/features/SEMANTIC_CACHE.md) and [`docs/architecture/REDIS_LIFECYCLE.md`](docs/architecture/REDIS_LIFECYCLE.md).
 - **2026-07-07**: Complete UI/UX overhaul — glassmorphic Composer, pulsating Thinking indicator, modern tool activity cards, unified `lucide-react` icon system.
 - **2026-07-06**: Dependency audit and safe update pass. Cleaned up stale configuration, unused memory vectors, deprecated web tools.

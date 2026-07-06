@@ -651,7 +651,7 @@ async def openai_stream_generator(
         "project_id": project_id,
         "persona_id": persona_id,
         "mode": "api",
-        "auto_approve_sensitive": auto_approve_sensitive,
+        "auto_approve_sensitive": False,
     }
 
     try:

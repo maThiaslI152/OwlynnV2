@@ -478,10 +478,15 @@ async def download_to_workspace(url: str, filename: str) -> str:
         is_extension_connected,
         dispatch_extension_get_cookies,
     )
+    from src.tools.url_policy import url_fetch_blocked_reason
 
     filepath, err = get_safe_workspace_path(filename)
     if err:
         return err
+
+    ssrf_reason = url_fetch_blocked_reason(url)
+    if ssrf_reason:
+        return f"Download blocked: {ssrf_reason}"
 
     headers = {"User-Agent": "Mozilla/5.0"}
 

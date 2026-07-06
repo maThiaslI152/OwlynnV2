@@ -1,7 +1,7 @@
 ---
 status: active
 category: architecture
-last_updated: 2026-06-10
+last_updated: 2026-07-07
 owner: ai-agent
 audience: agent
 ---
@@ -44,10 +44,36 @@ routing:
 
 ## API Mode Behavior
 
-When `mode == "api"`, interrupts are disabled. This prevents `GraphInterrupt` exceptions from producing empty responses. Instead:
-- Ambiguous skill matches → auto-select top skill or "all" toolbox
-- Low router confidence → use `complex-cloud` route (best-effort, HITL gating by security proxy)
-- Sensitive tool calls → **denied by default** unless the client sets `auto_approve_sensitive: true` on the OpenAI-compat request (see `security_proxy.py`)
+When `mode == "api"`, the `/v1/chat/completions` endpoint requires authentication (same token as `/api/*` routes) and defaults to HITL-enabled behavior:
+
+- **Authentication:** `_verify_openai_token()` enforces loopback + timing-safe token check (same as `LocalAuthMiddleware`)
+- **Sensitive tool calls** → HITL interrupt (user must approve via WebSocket)
+- **`auto_approve_sensitive` is hardcoded to `False`** — the client cannot override security policy via the request body
+- To opt into auto-approve for automated runs, set `auto_approve_sensitive: true` in the agent state server-side (not exposed to the API caller)
+
+## Execution Policy
+
+The `execution_policy` profile setting controls whether sensitive tools require HITL approval:
+
+| Policy | Behavior |
+|--------|----------|
+| `require_approval` (default) | All sensitive tools trigger HITL interrupt |
+| `auto_approve` | Sensitive tools auto-approve unless they hit a "redline" risk category |
+
+**Redline risks** (always require HITL even with `auto_approve`):
+- `destructive_action` — file deletion, drop, truncate
+- `network_exfiltration` — curl, wget, scp, HTTP URLs
+- `privilege_escalation` — sudo, chmod, chown
+
+The plan review gate respects the same policy: when `execution_policy == "auto_approve"`, plan review is skipped.
+
+### Scope Guard: Destructive Command Blocking
+
+The scope guard (`src/tools/scope_guard.py`) blocks catastrophic commands regardless of engagement state:
+
+- `rm -rf /`, `mkfs`, `dd if=... of=/dev/`, fork bombs, `chmod -R 777 /`, `shutdown`, `reboot`
+- These are blocked even without an active pentest engagement
+- Extracted network targets are still validated against engagement scope when one exists
 
 ## Known Issues
 
@@ -60,6 +86,8 @@ When `mode == "api"`, interrupts are disabled. This prevents `GraphInterrupt` ex
 - `src/agent/nodes/router.py` — Router HITL decisions
 - `src/agent/nodes/scope_clarify.py` — Scope clarification node
 - `src/agent/nodes/plan_review.py` — Plan review before sensitive execution
-- `src/agent/nodes/security_proxy.py` — Security policy enforcement
+- `src/agent/nodes/security_proxy.py` — Security policy enforcement, execution policy evaluation
 - `src/agent/hitl/scope_heuristics.py` — Build/create detection heuristics
+- `src/tools/scope_guard.py` — Pentest scope enforcement, destructive command blocking
+- `src/agent/pii_scrubber.py` — PII scrubbing + prompt injection neutralization for memory writes
 - `src/config/defaults.yaml` — HITL thresholds and feature flags

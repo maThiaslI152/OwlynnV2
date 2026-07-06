@@ -980,10 +980,16 @@ async def memory_write_node(state: AgentState) -> AgentState:
                 fact_text = f"User asked: {last_human}. AI answered: {last_ai} [generated_by:{model_generated_by}]"
             else:
                 fact_text = f"User asked: {last_human}. AI answered: {last_ai}"
-            from src.agent.pii_scrubber import scrub_for_storage
+            from src.agent.pii_scrubber import scrub_for_memory_write
             from src.memory.extraction import queue as extraction_queue
 
-            scrubbed, redactions = scrub_for_storage(fact_text)
+            scrubbed, redactions, injection_neutralized = scrub_for_memory_write(
+                fact_text
+            )
+            if injection_neutralized:
+                logger.warning(
+                    "[memory] Prompt injection patterns neutralized in memory write"
+                )
             queued = await extraction_queue.enqueue_extraction(
                 {
                     "turn_text": scrubbed,

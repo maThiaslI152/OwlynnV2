@@ -1,7 +1,7 @@
 ---
 status: active
 category: reference
-last_updated: 2026-06-28
+last_updated: 2026-07-07
 owner: ai-agent
 audience: agent
 ---
@@ -59,7 +59,7 @@ src/api/routes/files.py            # Tool discovery (GET /api/tools)
 | `edit_workspace_file` | Search-and-replace in a file. Exact pattern match required |
 | `list_workspace_files` | List directory contents with file sizes |
 | `delete_workspace_file` | Delete a file |
-| `download_to_workspace` | Download a file from a URL directly into the isolated workspace directory |
+| `download_to_workspace` | Download a file from a URL directly into the isolated workspace directory. SSRF-protected via `url_policy.py` (blocks private IPs, localhost, cloud metadata) |
 | `upload_from_workspace` | Force an `<input type="file">` upload to a browser tab using Playwright CDP bypass (registered via `SCREEN_ASSIST_TOOLS`) |
 
 ### Toolbox: `data_viz`
@@ -70,7 +70,7 @@ src/api/routes/files.py            # Tool discovery (GET /api/tools)
 | `create_xlsx` | Excel spreadsheet from CSV-like text. First row = headers |
 | `create_pptx` | PowerPoint with slides separated by `---` |
 | `create_pdf` | PDF from text content via PyMuPDF |
-| `notebook_run` | Stateful Python REPL (HITL-gated). Variables persist between calls. **Not a security sandbox** — runs as your user with filesystem access. Inline chat Run uses `POST /api/notebook/run` (loopback token required). |
+| `notebook_run` | Stateful Python REPL (HITL-gated). Variables persist between calls. **Sandboxed** — `requests`, `httpx` removed from import whitelist; only safe stdlib + data science modules allowed. Inline chat Run uses `POST /api/notebook/run` (loopback token required). |
 | `notebook_reset` | Clear all notebook variables |
 | `notebook_vars` | List variables in the notebook session |
 | `read_ipynb` | Read workspace `.ipynb` and summarize cells |
@@ -144,21 +144,22 @@ Pentest MCP tools (`pentest_*`) require HITL approval. Guide: [mcp-pentest-kali.
 |----------|-----------|-----------|
 | Dynamic toolbox selection | Reduces token overhead by ~2000/turn | Router must correctly classify toolbox needs |
 | Security proxy gates destructive tools | Safety for file write/edit/delete, notebook execution | HITL latency for approved sensitive calls |
+| SSRF protection on downloads | `url_policy.py` blocks private IPs, localhost, cloud metadata on `download_to_workspace` | Only applies to download tool, not all HTTP |
 | Always-include `ask_user` | HITL escape hatch on every turn | Minor token overhead |
-| Notebook isolation and timeout | Prevents cross-chat variable leakage and avoids server deadlocks from infinite loops | Notebook variable state is lost on timeout reset |
+| Notebook sandbox and timeout | HTTP clients removed from whitelist; prevents exfiltration. 30s timeout prevents infinite loops. | Notebook variable state is lost on timeout reset |
 
 ## Testing
 
-Security policy — sensitive tools require approval via `security_proxy`:
+Security policy — sensitive tools require approval via `security_proxy` (default: `require_approval`):
 
 | Tool | Risk |
 |------|------|
 | `write_workspace_file` | File system modification |
 | `edit_workspace_file` | File system modification |
 | `delete_workspace_file` | Destructive file removal |
-| `notebook_run` | Arbitrary code execution |
+| `notebook_run` | Sandboxed code execution (no HTTP clients) |
 
-All other tools auto-approve. Dangerous shell patterns (`rm -rf`, `sudo`, etc.) are blocked.
+All other tools auto-approve. Dangerous shell patterns (`rm -rf`, `sudo`, etc.) are blocked by the scope guard regardless of engagement state. `fetch_webpage` output is wrapped in `<web_context>` injection boundary tags.
 
 ## Configuration
 
@@ -178,4 +179,4 @@ All other tools auto-approve. Dangerous shell patterns (`rm -rf`, `sudo`, etc.) 
 
 ## Last updated
 
-2026-06-11 — documented Word doc parsing support, notebook thread-isolation, and execution timeouts
+2026-07-07 — Security hardening: notebook sandbox hardened (HTTP clients removed), SSRF protection on download_to_workspace, fetch_webpage injection boundary, scope guard destructive command blocking, execution policy default changed to require_approval

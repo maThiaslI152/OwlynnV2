@@ -2,7 +2,7 @@
 status: active
 category: reference
 audience: agent
-last_updated: 2026-06-10
+last_updated: 2026-07-07
 owner: ai-agent
 ---
 
@@ -65,4 +65,4 @@ docs/
 
 ## Last updated
 
-2026-06-10 — agent-first documentation overhaul
+2026-07-07 — Security hardening documentation updates

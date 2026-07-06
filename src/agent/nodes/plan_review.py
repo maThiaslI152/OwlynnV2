@@ -60,7 +60,7 @@ async def plan_review_node(state: AgentState) -> AgentState:
         logger.debug("[plan_review] Skipped — disabled in profile")
         return {"plan_review_approved": None}
 
-    execution_policy = profile.get("execution_policy", "auto_approve")
+    execution_policy = profile.get("execution_policy", "require_approval")
     if execution_policy == "auto_approve":
         logger.debug("[plan_review] Skipped — execution_policy is auto_approve")
         return {"plan_review_approved": None}

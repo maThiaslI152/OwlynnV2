@@ -110,8 +110,6 @@ _ALLOWED_MODULES = {
     "scipy",
     "sklearn",
     "PIL",
-    "requests",
-    "httpx",
 }
 
 

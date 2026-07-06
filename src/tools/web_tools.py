@@ -1109,7 +1109,7 @@ async def fetch_webpage(url: str, focus_query: str = "") -> str:
         if len(out) > 4000:
             out = out[:4000] + "\n\n... [content truncated for brevity]"
 
-        return f"📄 Content from {url}:\n\n{out}"
+        return f"📄 Content from {url}:\n\n<web_context>\n{out}\n</web_context>"
 
     except httpx.HTTPStatusError as e:
         return f"[fetch_webpage] HTTP error {e.response.status_code} for {url}"

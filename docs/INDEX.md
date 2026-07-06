@@ -1,7 +1,7 @@
 ---
 status: active
 category: reference
-last_updated: 2026-06-28
+last_updated: 2026-07-07
 owner: ai-agent
 audience: agent
 ---
@@ -12,14 +12,14 @@ audience: agent
 
 ```yaml
 manifest:
-  version: 11
-  generated: "2026-06-29T01:30:00Z"
+  version: 12
+  generated: "2026-07-07T12:00:00Z"
   files:
     - path: AGENTS.md
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-06-18
+      last_updated: 2026-07-07
     - path: docs/ADR.md
       status: active
       category: architecture
@@ -99,7 +99,7 @@ manifest:
       status: active
       category: architecture
       audience: agent
-      last_updated: 2026-06-10
+      last_updated: 2026-07-07
     - path: docs/INDEX.md
       status: active
       category: reference
@@ -185,7 +185,7 @@ manifest:
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-06-28
+      last_updated: 2026-07-07
     - path: docs/architecture/DEEPSEEK_V4_INTEGRATION.md
       status: active
       category: architecture
