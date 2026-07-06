@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, systemPreferences, desktopCapturer } from 'electron'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -97,6 +97,24 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('start_screen_preview', async (event, source: string) => {
+    if (process.platform === 'darwin') {
+      const status = systemPreferences.getMediaAccessStatus('screen')
+      if (status !== 'granted') {
+        try {
+          // Attempting to get sources will trigger the macOS permission dialog if not yet determined
+          await desktopCapturer.getSources({ types: ['screen'] })
+        } catch (e) {
+          // ignore
+        }
+        
+        // Check again after prompt
+        const newStatus = systemPreferences.getMediaAccessStatus('screen')
+        if (newStatus !== 'granted') {
+          throw new Error(`Screen capture permission is ${newStatus}. Please grant screen recording permission in System Settings -> Privacy & Security -> Screen Recording.`)
+        }
+      }
+    }
+
     return new Promise((resolve, reject) => {
       const millis = Date.now()
       const previewPath = path.join(app.getPath('temp'), `owlynn-preview-${source}-${millis}.jpg`)
