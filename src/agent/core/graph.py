@@ -466,11 +466,54 @@ async def init_agent(checkpointer=None):
             checkpointer = AsyncRedisSaver(redis_url=REDIS_URL)
             await checkpointer.setup()
             logger.info("Using Redis checkpointer at %s", REDIS_URL)
+            # Start background eviction of stale checkpoint keys (runs every 24h)
+            _asyncio.ensure_future(_evict_stale_checkpoints(REDIS_URL))
         except Exception as e:
             logger.warning("Redis unavailable (%s), falling back to MemorySaver", e)
             checkpointer = MemorySaver()
 
+    # Initialize the semantic cache (non-blocking, degrades gracefully on error)
+    try:
+        from src.memory.semantic_cache import init_semantic_cache
+        _asyncio.ensure_future(init_semantic_cache())
+    except Exception as e:
+        logger.warning("Semantic cache init failed: %s", e)
+
     return builder.compile(checkpointer=checkpointer)
+
+
+async def _evict_stale_checkpoints(redis_url: str, max_age_days: int = 30):
+    """
+    Background task that scans Redis for LangGraph checkpoint keys older than
+    `max_age_days` and deletes them to prevent unbounded memory growth.
+    Runs once on startup then repeats every 24 hours.
+    """
+    import asyncio
+    import redis.asyncio as aioredis
+
+    max_age_secs = max_age_days * 86_400
+    while True:
+        try:
+            client = aioredis.from_url(redis_url)
+            cursor = 0
+            evicted = 0
+            async for key in client.scan_iter(match="checkpoint:*", count=500):
+                ttl = await client.ttl(key)
+                if ttl == -1:  # No TTL set — check creation time via OBJECT IDLETIME
+                    idle = await client.object("IDLETIME", key)
+                    if idle is not None and idle > max_age_secs:
+                        await client.delete(key)
+                        evicted += 1
+            await client.aclose()
+            if evicted:
+                logger.info(
+                    "[checkpoint-evict] Evicted %d stale checkpoint keys (> %d days idle)",
+                    evicted,
+                    max_age_days,
+                )
+        except Exception as e:
+            logger.warning("[checkpoint-evict] Error during eviction scan: %s", e)
+        await asyncio.sleep(86_400)  # Sleep 24 hours
 
 
 async def _log_cloud_connectivity():

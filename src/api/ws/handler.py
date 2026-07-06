@@ -44,6 +44,7 @@ from src.agent.core.complex_utils.formatter import (
     _TOOL_ONLY_PLACEHOLDERS,
 )
 from src.memory.project import project_manager
+from src.memory.semantic_cache import check_semantic_cache, store_semantic_cache
 
 
 from src.api.controllers.ws_helpers import (
@@ -96,6 +97,10 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
         sessions[thread_id] = GraphSession(thread_id, agent, sessions)
     session = sessions[thread_id]
 
+    # Mutable container shared between the message-receive loop and forward_events
+    # closure so that the forwarder can populate the semantic cache on 'idle'.
+    _pending_cache: dict = {"prompt": None, "project_id": "default"}
+
     # Task to listen to the session events and send them to the websocket
     async def forward_events():
         q = await session.add_listener()
@@ -111,6 +116,9 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
         last_anonymization = None
         last_vision_intake = None
         last_vision_proxy = None
+        _last_ai_text_for_cache: str | None = None  # Tracks last AI reply text for cache storage
+
+
         try:
             while True:
                 item = await q.get()
@@ -610,6 +618,8 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                             "message": final_msg,
                                         }
                                     )
+                                    # Track for semantic cache population on idle
+                                    _last_ai_text_for_cache = text_for_ui
                                 elif not tc_list:
                                     # text_for_ui is empty (e.g. _clean_response stripped system echo leaving nothing).
                                     # Fallback: extract raw content after system markers from the uncut message.
@@ -771,6 +781,23 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                 else:
                     # Our custom events (status, error, etc)
                     logger.debug("Custom Event: %s", event)
+                    # On idle: populate the semantic cache with the last AI answer
+                    if (
+                        isinstance(event, dict)
+                        and event.get("type") == "status"
+                        and event.get("content") == "idle"
+                        and _last_ai_text_for_cache
+                        and _pending_cache.get("prompt")
+                    ):
+                        asyncio.create_task(
+                            store_semantic_cache(
+                                _pending_cache["prompt"],
+                                _last_ai_text_for_cache,
+                                project_id=_pending_cache["project_id"],
+                            )
+                        )
+                        _last_ai_text_for_cache = None
+                        _pending_cache["prompt"] = None
                     await _send_ws(event)
         except WebSocketDisconnect:
             logger.debug("Forwarder disconnected")
@@ -990,6 +1017,39 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
             if not message_content:
                 continue
 
+            # ── Semantic Cache Check ───────────────────────────────────────
+            # Skip cache for pentest mode (always local, no caching), multi-modal
+            # payloads (images), or when files are attached.
+            _skip_cache = (
+                scenario_id == "pentest"
+                or bool(files)
+                or not isinstance(message_content, str)
+            )
+            if not _skip_cache:
+                cached_answer = await check_semantic_cache(user_input, project_id=project_id)
+                if cached_answer:
+                    logger.info("[semantic-cache] Cache HIT for thread=%s", thread_id)
+                    corr_id = payload.get("correlation_id")
+
+                    def _cache_payload(p: dict) -> dict:
+                        return {**p, "correlation_id": corr_id} if corr_id else p
+
+                    await websocket.send_json(_cache_payload({"type": "status", "status": "working"}))
+                    # Stream cached text in one shot so UI shows it as a normal reply
+                    await websocket.send_json(_cache_payload({
+                        "type": "stream",
+                        "content": cached_answer,
+                        "model": "cache",
+                    }))
+                    await websocket.send_json(_cache_payload({
+                        "type": "message",
+                        "role": "assistant",
+                        "content": cached_answer,
+                        "model": "cache",
+                    }))
+                    await websocket.send_json(_cache_payload({"type": "status", "status": "idle"}))
+                    continue
+
             # Write user message to trace (before graph run starts)
             if cfg_trace_enabled:
                 try:
@@ -1005,6 +1065,11 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                 except Exception:
                     pass
 
+            # Update shared cache context so forward_events can store the answer
+            if not _skip_cache:
+                _pending_cache["prompt"] = user_input
+                _pending_cache["project_id"] = project_id
+
             # Start the graph run in the session (background)
             await session.start_run(
                 {
@@ -1015,6 +1080,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                     "project_id": project_id,
                     "persona_id": persona_id,
                     "thread_id": thread_id,
+                    "_cache_user_input": user_input if not _skip_cache else None,
                     **({"scenario_id": scenario_id} if scenario_id else {}),
                 },
                 config=config,
