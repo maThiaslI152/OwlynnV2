@@ -3,10 +3,8 @@ import { useAppStore } from '../state/useAppStore'
 import { electronBridge as tauriBridge } from '../lib/electronBridge'
 
 export function ScreenAssistLivePanel() {
-  const { screenAssist, screenAssistEnabled } = useAppStore((s) => ({
-    screenAssist: s.screenAssist,
-    screenAssistEnabled: s.screenAssistEnabled,
-  }))
+  const screenAssist = useAppStore((s) => s.screenAssist)
+  const screenAssistEnabled = useAppStore((s) => s.screenAssistEnabled)
 
   const pollingRef = useRef<NodeJS.Timeout | null>(null)
 
