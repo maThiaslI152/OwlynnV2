@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
+import { BarChart2 } from 'lucide-react'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
@@ -55,7 +56,7 @@ export function StudyAnalytics() {
 
   return (
     <div style={{ padding: '8px 10px', fontSize: 12 }}>
-      <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 12 }}>📊 Study Analytics</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 13, marginBottom: 12 }}><BarChart2 size={16} /> Study Analytics</div>
 
       {/* Summary stats */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>

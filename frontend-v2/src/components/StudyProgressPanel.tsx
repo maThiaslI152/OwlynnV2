@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import toast from 'react-hot-toast'
+import { Flame, Layers, BarChart2, Circle, Calendar } from 'lucide-react'
 
 interface StudyDashboard {
   study_streak?: { current: number; longest: number; last_active: string | null }
@@ -46,7 +47,9 @@ export function StudyProgressPanel() {
             border: '1px solid rgba(255,165,0,0.15)',
           }}
         >
-          <div style={{ fontSize: 18, fontWeight: 700 }}>🔥 {streak.current} day streak</div>
+          <div style={{ fontSize: 18, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Flame size={20} color="#fb923c" /> {streak.current} day streak
+          </div>
           <div style={{ fontSize: 11, opacity: 0.5, marginTop: 2 }}>Best: {streak.longest} days</div>
         </div>
       )}
@@ -74,13 +77,13 @@ export function StudyProgressPanel() {
               fontSize: 11,
             }}
           >
-            {cp.current_streak > 0 && <span>🔥 {cp.current_streak}d</span>}
+            {cp.current_streak > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Flame size={12} color="#fb923c" /> {cp.current_streak}d</span>}
             {cp.total_cards > 0 && (
-              <span>
-                📇 {cp.due_cards}/{cp.total_cards}
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <Layers size={12} /> {cp.due_cards}/{cp.total_cards}
               </span>
             )}
-            {cp.avg_score > 0 && <span>📊 {Math.round(cp.avg_score * 100)}%</span>}
+            {cp.avg_score > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><BarChart2 size={12} /> {Math.round(cp.avg_score * 100)}%</span>}
           </div>
         </div>
       ))}
@@ -100,8 +103,8 @@ export function StudyProgressPanel() {
             Upcoming Exams
           </div>
           {data.upcoming_exams!.map((e) => (
-            <div key={e.course_id} style={{ fontSize: 11, marginBottom: 4 }}>
-              {e.days_until <= 0 ? '🔴' : '📅'} {e.name} — {e.days_until}d
+            <div key={e.course_id} style={{ fontSize: 11, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+              {e.days_until <= 0 ? <Circle fill="currentColor" size={12} color="#ef4444" /> : <Calendar size={12} />} {e.name} — {e.days_until}d
             </div>
           ))}
         </div>

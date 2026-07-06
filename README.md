@@ -285,6 +285,7 @@ Full reference: [`docs/development/API_REFERENCE.md`](docs/development/API_REFER
 See [`CONTRIBUTING.md`](CONTRIBUTING.md). Run `./scripts/ci.sh --quick` before pushing.
 
 ## Recent Updates
+- **2026-07-07**: Complete UI/UX overhaul introducing a minimal glassmorphic Composer with integrated send/stop toggle, modern pulsating Thinking indicator for both local and cloud modes, sleek tool activity cards, and a unified `lucide-react` icon system replacing all standard emojis.
 - **2026-07-06**: Cleaned up stale configuration, unused memory vectors, deprecated web tools, and redundant test dependencies to optimize system latency and maintainability.
 
 ## License

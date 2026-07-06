@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { Monitor, PenTool, Search, Bot, Paperclip } from 'lucide-react'
 import { useAppStore } from '../state/useAppStore'
 import {
   type AttachedFile,
@@ -282,13 +283,13 @@ export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitl
   const getPersonaIcon = (id: string) => {
     switch (id) {
       case 'coder':
-        return '💻'
+        return <Monitor size={14} />
       case 'writer':
-        return '✍️'
+        return <PenTool size={14} />
       case 'researcher':
-        return '🔍'
+        return <Search size={14} />
       default:
-        return '🤖'
+        return <Bot size={14} />
     }
   }
 
@@ -352,7 +353,7 @@ export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitl
               >
                 {isWorkspaceRef(file) ? (
                   <span className="attachment-workspace-icon" title="Workspace reference">
-                    📎
+                    <Paperclip size={14} />
                   </span>
                 ) : isImageAttachment(file) ? (
                   <img
@@ -412,10 +413,9 @@ export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitl
           {isGenerating ? (
             <button
               type="button"
-              className="composer-send composer-stop"
+              className="composer-send is-stop"
               onClick={onStop}
               title="Stop generation"
-              style={{ backgroundColor: 'var(--red-500)', color: 'white', opacity: 1, cursor: 'pointer' }}
             >
               ■
             </button>

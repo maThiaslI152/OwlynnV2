@@ -196,7 +196,7 @@ export function MemoryPanel() {
 
   const hasTopicsOrInterests = topics.length > 0 || interestsStr || memoryUpdatedAt
   const [contextOpen, setContextOpen] = useState(false)
-  const [mem0Open, setMem0Open] = useState(true)
+  const [mem0Open] = useState(true)
 
   const loadContext = async () => {
     setContextLoading(true)

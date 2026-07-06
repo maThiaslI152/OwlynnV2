@@ -1,6 +1,7 @@
 /** App shell and WebSocket lifecycle. Event contract: docs/CHAT_PROTOCOL.md */
 /** App shell — WebSocket lifecycle and HITL resume. See docs/CHAT_PROTOCOL.md */
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { Globe } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { listen } from './lib/electronBridge'
 import { AppShell } from './components/AppShell'
@@ -655,8 +656,8 @@ function App() {
               can_retry: (event as any).can_retry !== false,
             })
           }
-        } else if (event.type === 'browser_launch_requested') {
-          toast('Extension disconnected. Launching Brave Browser...', { icon: '🌐' })
+        } else if ((event as any).type === 'browser_launch_requested') {
+          toast('Extension disconnected. Launching Brave Browser...', { icon: <Globe size={16} /> })
           void tauriBridge.launchBrowser()
         }
       },

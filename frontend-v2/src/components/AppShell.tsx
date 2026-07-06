@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback, type ReactNode } from 'react'
+import { MessageSquare, Settings, Circle, Calendar, NotebookPen, Flame, Layers } from 'lucide-react'
 import toast from 'react-hot-toast'
 // @ts-expect-error - vitest requires the default import to resolve named exports correctly
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -943,14 +944,14 @@ export function AppShell({
                     <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>
                       {exam.name}
                     </div>
-                    <div style={{ fontSize: 12, opacity: 0.7, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      <span>{exam.days_until <= 0 ? '🔴 Today!' : `📅 ${exam.days_until} day${exam.days_until !== 1 ? 's' : ''}`}</span>
-                      {exam.pending_todos > 0 && <span>📝 {exam.pending_todos} todo{exam.pending_todos !== 1 ? 's' : ''}</span>}
-                      {exam.current_streak > 0 && <span>🔥 {exam.current_streak}d streak</span>}
+                    <div style={{ fontSize: 12, opacity: 0.7, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>{exam.days_until <= 0 ? <><Circle fill="currentColor" size={12} color="#ef4444" /> Today!</> : <><Calendar size={12} /> {exam.days_until} day{exam.days_until !== 1 ? 's' : ''}</>}</span>
+                      {exam.pending_todos > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><NotebookPen size={12} /> {exam.pending_todos} todo{exam.pending_todos !== 1 ? 's' : ''}</span>}
+                      {exam.current_streak > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Flame size={12} color="#fb923c" /> {exam.current_streak}d streak</span>}
                     </div>
                     {exam.total_cards > 0 && (
-                      <div style={{ fontSize: 11, opacity: 0.5, marginTop: 3 }}>
-                        📇 {exam.due_cards}/{exam.total_cards} cards due
+                      <div style={{ fontSize: 11, opacity: 0.5, marginTop: 3, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <Layers size={12} /> {exam.due_cards}/{exam.total_cards} cards due
                       </div>
                     )}
                   </div>
@@ -1072,7 +1073,7 @@ export function AppShell({
               if (entries.length === 0) {
                 return (
                   <div className="messages-empty">
-                    <div className="messages-empty-icon">💬</div>
+                    <div className="messages-empty-icon"><MessageSquare size={48} color="#888" /></div>
                     <p className="messages-empty-text">
                       {isCompact ? 'Quick ask, quick answer' : 'Start a conversation with Owlynn'}
                     </p>
@@ -1141,7 +1142,7 @@ export function AppShell({
                   return (
                     <details key={`tool-group-${groupIdx}`} className="tool-group-pill">
                       <summary>
-                        <span className="tool-group-icon">⚙️</span>
+                        <span className="tool-group-icon" style={{ display: 'inline-flex', alignItems: 'center' }}><Settings size={14} /></span>
                         <span>Working... ({entry.items.length} tools used)</span>
                       </summary>
                       <div className="tool-group-content">
@@ -1234,7 +1235,7 @@ export function AppShell({
             <div ref={messagesEndRef} />
           </div>
         </div>
-        {streamActive && (
+        {(streamActive || !!pendingCorrelationId) && (
           <div className="streaming-indicator">
             <span className="streaming-badge">
               <span className="streaming-dots">
@@ -1242,7 +1243,7 @@ export function AppShell({
                 <span className="streaming-dot" />
                 <span className="streaming-dot" />
               </span>
-              Thinking
+              Thinking...
             </span>
           </div>
         )}

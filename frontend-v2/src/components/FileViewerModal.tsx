@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { FileText } from 'lucide-react'
 
 interface FileViewerModalProps {
   filename: string
@@ -129,7 +130,7 @@ export function FileViewerModal({ filename, projectId, onClose }: FileViewerModa
                 color: '#888',
               }}
             >
-              <span style={{ fontSize: 48 }}>📄</span>
+              <FileText size={48} color="#888" />
               <p>Preview not available for this file type</p>
               <a
                 href={fileUrl}

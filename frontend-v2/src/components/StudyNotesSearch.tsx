@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import toast from 'react-hot-toast'
+import { NotebookPen } from 'lucide-react'
 
 interface Note {
   id: string
@@ -41,7 +42,7 @@ export function StudyNotesSearch() {
 
   return (
     <div style={{ padding: '8px 10px', fontSize: 12 }}>
-      <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8 }}>📝 Study Notes</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 13, marginBottom: 8 }}><NotebookPen size={16} /> Study Notes</div>
 
       {/* Search input */}
       <input

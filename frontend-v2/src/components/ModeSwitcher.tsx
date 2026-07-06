@@ -1,12 +1,14 @@
+import { MessageSquare, BookOpen, ShieldAlert } from 'lucide-react'
+
 interface ModeSwitcherProps {
   activeMode: 'normal' | 'study' | 'pentest'
   onModeChange: (mode: 'normal' | 'study' | 'pentest') => void
 }
 
 const modes = [
-  { id: 'normal' as const, label: 'Normal', icon: '💬' },
-  { id: 'study' as const, label: 'Study', icon: '📚' },
-  { id: 'pentest' as const, label: 'Pentest', icon: '🔒' },
+  { id: 'normal' as const, label: 'Normal', icon: <MessageSquare size={14} /> },
+  { id: 'study' as const, label: 'Study', icon: <BookOpen size={14} /> },
+  { id: 'pentest' as const, label: 'Pentest', icon: <ShieldAlert size={14} /> },
 ]
 
 export function ModeSwitcher({ activeMode, onModeChange }: ModeSwitcherProps) {
@@ -19,6 +21,8 @@ export function ModeSwitcher({ activeMode, onModeChange }: ModeSwitcherProps) {
         borderRadius: 8,
         padding: 3,
         border: '1px solid rgba(255,255,255,0.06)',
+        width: '100%',
+        boxSizing: 'border-box',
       }}
     >
       {modes.map((m) => (
@@ -27,7 +31,10 @@ export function ModeSwitcher({ activeMode, onModeChange }: ModeSwitcherProps) {
           type="button"
           onClick={() => onModeChange(m.id)}
           style={{
-            padding: '4px 12px',
+            flex: 1,
+            display: 'flex',
+            justifyContent: 'center',
+            padding: '4px 0',
             borderRadius: 6,
             fontSize: 12,
             fontWeight: 500,
@@ -38,7 +45,9 @@ export function ModeSwitcher({ activeMode, onModeChange }: ModeSwitcherProps) {
             color: activeMode === m.id ? '#e94560' : 'rgba(255,255,255,0.5)',
           }}
         >
-          {m.icon} {m.label}
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            {m.icon} <span style={{ paddingBottom: 1 }}>{m.label}</span>
+          </span>
         </button>
       ))}
     </div>

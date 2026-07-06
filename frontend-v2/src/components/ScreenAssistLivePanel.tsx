@@ -6,7 +6,7 @@ export function ScreenAssistLivePanel() {
   const screenAssist = useAppStore((s) => s.screenAssist)
   const screenAssistEnabled = useAppStore((s) => s.screenAssistEnabled)
 
-  const pollingRef = useRef<NodeJS.Timeout | null>(null)
+  const pollingRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Polling logic when enabled
   useEffect(() => {
