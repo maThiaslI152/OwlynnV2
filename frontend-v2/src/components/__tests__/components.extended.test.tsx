@@ -15,6 +15,9 @@ const mockSetSafeMode = vi.hoisted(() =>
 vi.mock('../../lib/electronBridge', () => ({
   electronBridge: {
     setSafeMode: mockSetSafeMode,
+    startScreenPreview: vi.fn().mockResolvedValue({ ok: true }),
+    stopScreenPreview: vi.fn().mockResolvedValue({ ok: true }),
+    convertFileSrc: vi.fn().mockImplementation((path) => path),
   },
   electronAvailable: vi.fn().mockReturnValue(true)
 }))
