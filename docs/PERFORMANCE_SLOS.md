@@ -1,7 +1,7 @@
 ---
 status: active
 category: standards
-last_updated: 2026-05-31
+last_updated: 2026-07-07
 owner: human
 ---
 
@@ -40,6 +40,7 @@ tests/test_frontend_cutover_serving.py
 
 | Metric | Target | Degraded | Unacceptable |
 |--------|--------|----------|--------------|
+| **Semantic cache hit (repeated question)** | **< 100ms** | **100-500ms** | **> 500ms** |
 | Simple query (keyword-matched) | < 2s | 2-5s | > 5s |
 | Complex query (cloud DeepSeek V4) | < 15s | 15-30s | > 30s |
 | Streaming first token | < 3s | 3-8s | > 8s |
@@ -152,7 +153,10 @@ No specific env vars for SLOs. Enforced via policy rules:
 
 - [`docs/standards/documentation.md`](standards/documentation.md) — doc structure rules
 - [`docs/standards/coding-style.md`](standards/coding-style.md) — coding conventions
+- [`docs/features/SEMANTIC_CACHE.md`](features/SEMANTIC_CACHE.md) — semantic cache (< 100ms TTFT for cache hits)
+- [`docs/architecture/REDIS_LIFECYCLE.md`](architecture/REDIS_LIFECYCLE.md) — Redis memory management
 
 ## Last updated
 
+2026-07-07 — Added semantic cache hit SLO (< 100ms). Redis budget note updated.
 2026-05-31 — `docs-standards-timeline` added frontmatter, purpose blockquote

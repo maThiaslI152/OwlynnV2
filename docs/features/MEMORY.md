@@ -1,7 +1,7 @@
 ---
 status: active
 category: architecture
-last_updated: 2026-06-11
+last_updated: 2026-07-07
 owner: ai-agent
 audience: agent
 ---
@@ -20,6 +20,7 @@ Owlynn uses layered memory (STM, LTM, personal context, scenarios) with a **spli
 | **Long-Term (LTM)** | Qdrant via Mem0 | Embedding-indexed facts + L1 atoms | Semantic search (gated) |
 | **Personal** | `data/topics.json`, `data/interests.json`, `data/conversations.json` | User topics, interests, conversation history | Time-decay-weighted relevance |
 | **L2/L3 scenarios** | `scenarios/*/playbook.md`, `constraints.md` | Pentest / research workflows | Router `scenario_id` + markdown loader |
+| **Semantic Cache** | Redis (`redisvl`) | Previous AI answers keyed by prompt embedding | Vector similarity (`>= 0.92`) — bypasses graph entirely |
 
 ## Memory Injection Flow (Phase 1)
 
@@ -118,6 +119,9 @@ The `VectorLifecycleManager` orchestrates the insertion and deletion of vector d
 - `src/agent/pii_scrubber.py` — PII scrub before LTM writes
 - `src/memory/memory_manager.py` — STM (memories.json)
 - `src/memory/long_term.py` — LTM (Mem0 + Qdrant)
+- `src/memory/semantic_cache.py` — Semantic response cache (redisvl)
 - `src/memory/personal_assistant.py` — Topic/interest tracking
 - `src/agent/nodes/summarize.py` — Auto-summarization
 - `src/config/defaults.yaml` — Memory configuration
+- `docs/features/SEMANTIC_CACHE.md` — Semantic cache feature documentation
+- `docs/architecture/REDIS_LIFECYCLE.md` — Redis checkpoint eviction and memory management

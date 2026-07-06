@@ -42,6 +42,8 @@
 | Add or change a tool | [`docs/features/TOOLS.md`](docs/features/TOOLS.md) | `src/tools/`, `src/agent/tool_sets.py` |
 | Change WebSocket events | [`docs/development/CHAT_PROTOCOL.md`](docs/development/CHAT_PROTOCOL.md) | `src/api/ws/handler.py`, `frontend-v2/src/` |
 | Fix memory / context injection | [`docs/features/MEMORY.md`](docs/features/MEMORY.md) | `src/agent/nodes/memory.py`, `src/memory/` |
+| Tune semantic cache (threshold, TTL) | [`docs/features/SEMANTIC_CACHE.md`](docs/features/SEMANTIC_CACHE.md) | `src/memory/semantic_cache.py`, `src/api/ws/handler.py` |
+| Change Redis lifecycle / checkpoint eviction | [`docs/architecture/REDIS_LIFECYCLE.md`](docs/architecture/REDIS_LIFECYCLE.md) | `src/agent/core/graph.py` (`_evict_stale_checkpoints`) |
 | Change HITL / approvals | [`docs/HITL.md`](docs/HITL.md) | `src/agent/hitl/`, `src/agent/nodes/{scope_clarify,plan_review,security_proxy}.py` |
 | Debug a symptom | [`docs/debugging/README.md`](docs/debugging/README.md) | Follow symptom → file table |
 | Change cloud / anonymization | [`docs/architecture/CLOUD-LLM-ARCHITECTURE.md`](docs/architecture/CLOUD-LLM-ARCHITECTURE.md) | `src/agent/nodes/complex.py`, `src/agent/nodes/complex_utils/` |
@@ -159,5 +161,6 @@ When generating cache keys for chat histories or context gatekeepers (e.g., in `
 
 ## Last updated
 
+2026-07-07 — Semantic Cache + Redis checkpoint eviction implemented. Task routing table updated with semantic cache and Redis lifecycle rows. Docs: `docs/features/SEMANTIC_CACHE.md`, `docs/architecture/REDIS_LIFECYCLE.md`.
 2026-07-04 — Frontend UI overhaul (glassmorphic dropdowns, accessible memory management) and critical bug fixes for WebSocket chunk streaming overhead / infinite loop in markdown parser. Frontier eval passes at 96.32%.
 2026-07-02 — Production-readiness audit: PostgreSQL replaces `projects.json` for mode persistence; mode routing table updated to `modesSlice.ts`; task routing table updated to reference sliced store.

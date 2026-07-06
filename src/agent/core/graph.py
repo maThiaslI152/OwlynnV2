@@ -475,6 +475,7 @@ async def init_agent(checkpointer=None):
     # Initialize the semantic cache (non-blocking, degrades gracefully on error)
     try:
         from src.memory.semantic_cache import init_semantic_cache
+
         _asyncio.ensure_future(init_semantic_cache())
     except Exception as e:
         logger.warning("Semantic cache init failed: %s", e)

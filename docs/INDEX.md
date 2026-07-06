@@ -29,7 +29,12 @@ manifest:
       status: active
       category: architecture
       audience: agent
-      last_updated: 2026-06-10
+      last_updated: 2026-07-07
+    - path: docs/architecture/REDIS_LIFECYCLE.md
+      status: active
+      category: architecture
+      audience: agent
+      last_updated: 2026-07-07
     - path: docs/API_REFERENCE.md
       status: active
       category: reference
@@ -104,12 +109,18 @@ manifest:
       status: active
       category: architecture
       audience: agent
-      last_updated: 2026-06-11
+      last_updated: 2026-07-07
+    - path: docs/features/SEMANTIC_CACHE.md
+      status: active
+      category: performance
+      audience: agent
+      last_updated: 2026-07-07
+
     - path: docs/PERFORMANCE_SLOS.md
       status: active
       category: standards
       audience: agent
-      last_updated: 2026-05-31
+      last_updated: 2026-07-07
     - path: docs/PROJECT_GUIDE.md
       status: active
       category: reference

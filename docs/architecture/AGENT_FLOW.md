@@ -1,7 +1,7 @@
 ---
 status: active
 category: architecture
-last_updated: 2026-06-27
+last_updated: 2026-07-07
 owner: ai-agent
 audience: agent
 ---
@@ -35,22 +35,31 @@ src/agent/state.py                 # AgentState TypedDict
 
 ## Architecture
 
-### Graph Topology
+### Full Graph Topology (with Semantic Cache)
 
 ```
-START → memory_inject_lite → router → memory_retrieve → auto_summarize? → simple → memory_write → END
-                                                                              → scope_clarify ─────┐
-                                                   ↓                          │
-                                              complex_llm ←───────────────────┐│
-                                                   ↓                         ││
-                                              plan_review ─────┐             ││
-                                                   ↓            │(denied)     ││
-                                              security_proxy    │             ││
-                                                   ↓            │             ││
-                                              tool_action ──────┘             ││
-                                                   ↓                          ││
-                                              memory_write ←──────────────────┘│
-                                                                     ←─────────┘
+WebSocket intake
+     │
+     ▼
+check_semantic_cache(prompt, project_id)  ← pre-graph bypass
+     │
+     ├─ HIT  → stream cached answer → idle event                  (graph never runs)
+     │
+     └─ MISS ─────────────────────────────────────────────────────────────────┐
+                                                                               ▼
+START → memory_inject_lite → router → memory_retrieve → auto_summarize? → simple → memory_write → END + store_semantic_cache()
+                                                                        → scope_clarify ─────┐
+                                          ↓                               │
+                                     complex_llm ←────────────────────────┐│
+                                          ↓                              ││
+                                     plan_review ─────┐                  ││
+                                          ↓            │(denied)          ││
+                                     security_proxy    │                  ││
+                                          ↓            │                  ││
+                                     tool_action ──────┘                  ││
+                                          ↓                               ││
+                                     memory_write + store_semantic_cache() ←┘│
+                                                                  ←──────────┘
 ```
 
 HITL interrupt nodes (highlighted):
@@ -219,11 +228,12 @@ To prevent infinite execution loops and silent crashes in multi-turn tool-callin
 
 ## Related
 
-- [`docs/architecture/overview.md`](architecture/overview.md) — system architecture
-- [`docs/README.md`](README.md) — project documentation map
+- [`docs/architecture/overview.md`](overview.md) — system architecture
+- [`docs/features/SEMANTIC_CACHE.md`](../features/SEMANTIC_CACHE.md) — semantic cache bypass layer
+- [`docs/architecture/REDIS_LIFECYCLE.md`](REDIS_LIFECYCLE.md) — Redis checkpoint eviction
+- [`docs/README.md`](../README.md) — project documentation map
 
 ## Last updated
 
-2026-07-02 — Updated Frontend Inline Security Prompt table: `InlineSecurityPrompt` now lives in `frontend-v2/src/state/slices/toolsSlice.ts` (state store was split into modular slices)
-
-
+2026-07-07 — Semantic cache pre-graph bypass documented; full topology diagram updated.
+2026-07-02 — Updated Frontend Inline Security Prompt table: `InlineSecurityPrompt` now lives in `frontend-v2/src/state/slices/toolsSlice.ts`

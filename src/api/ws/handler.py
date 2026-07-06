@@ -116,8 +116,9 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
         last_anonymization = None
         last_vision_intake = None
         last_vision_proxy = None
-        _last_ai_text_for_cache: str | None = None  # Tracks last AI reply text for cache storage
-
+        _last_ai_text_for_cache: str | None = (
+            None  # Tracks last AI reply text for cache storage
+        )
 
         try:
             while True:
@@ -1026,7 +1027,9 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                 or not isinstance(message_content, str)
             )
             if not _skip_cache:
-                cached_answer = await check_semantic_cache(user_input, project_id=project_id)
+                cached_answer = await check_semantic_cache(
+                    user_input, project_id=project_id
+                )
                 if cached_answer:
                     logger.info("[semantic-cache] Cache HIT for thread=%s", thread_id)
                     corr_id = payload.get("correlation_id")
@@ -1034,20 +1037,32 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                     def _cache_payload(p: dict) -> dict:
                         return {**p, "correlation_id": corr_id} if corr_id else p
 
-                    await websocket.send_json(_cache_payload({"type": "status", "status": "working"}))
+                    await websocket.send_json(
+                        _cache_payload({"type": "status", "status": "working"})
+                    )
                     # Stream cached text in one shot so UI shows it as a normal reply
-                    await websocket.send_json(_cache_payload({
-                        "type": "stream",
-                        "content": cached_answer,
-                        "model": "cache",
-                    }))
-                    await websocket.send_json(_cache_payload({
-                        "type": "message",
-                        "role": "assistant",
-                        "content": cached_answer,
-                        "model": "cache",
-                    }))
-                    await websocket.send_json(_cache_payload({"type": "status", "status": "idle"}))
+                    await websocket.send_json(
+                        _cache_payload(
+                            {
+                                "type": "stream",
+                                "content": cached_answer,
+                                "model": "cache",
+                            }
+                        )
+                    )
+                    await websocket.send_json(
+                        _cache_payload(
+                            {
+                                "type": "message",
+                                "role": "assistant",
+                                "content": cached_answer,
+                                "model": "cache",
+                            }
+                        )
+                    )
+                    await websocket.send_json(
+                        _cache_payload({"type": "status", "status": "idle"})
+                    )
                     continue
 
             # Write user message to trace (before graph run starts)
