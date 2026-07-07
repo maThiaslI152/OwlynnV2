@@ -598,7 +598,7 @@ app.on('window-all-closed', () => {
 app.on('activate', () => {
   if (win) {
     win.show()
-  } else {
+  } else if (!splashWin) {
     createMainWindow()
   }
 })

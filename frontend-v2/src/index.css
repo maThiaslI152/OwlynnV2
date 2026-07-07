@@ -372,6 +372,9 @@ body {
 
 .tool-group-icon {
   font-size: 1rem;
+}
+
+.tool-group-icon.spinning {
   animation: spin 4s linear infinite;
 }
 
@@ -384,6 +387,10 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.hover-brighten:hover {
+  filter: brightness(1.1);
 }
 
 /* ── Left Panel ────────────────────────────────────────── */

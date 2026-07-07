@@ -146,7 +146,7 @@
       document.getElementById('hint').textContent = text
     }
 
-    ipcRenderer.on('splash-status', (data) => {
+    ipcRenderer.on('splash-status', (_event, data) => {
       const { step, status, message } = data
       updateStep(step, status, message)
       if (step === 'lmstudio' && status === 'active') {

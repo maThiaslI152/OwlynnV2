@@ -12,8 +12,8 @@ audience: agent
 
 ```yaml
 manifest:
-  version: 12
-  generated: "2026-07-07T12:00:00Z"
+  version: 13
+  generated: "2026-07-07T22:08:00Z"
   files:
     - path: AGENTS.md
       status: active
@@ -536,6 +536,11 @@ manifest:
       category: changelog
       audience: agent
       last_updated: 2026-06-28
+    - path: docs/changes/study-mode-revamp.md
+      status: active
+      category: changelog
+      audience: human
+      last_updated: 2026-07-07
     - path: docs/debugging/2026-05-27_session_summary.md
       status: active
       category: debugging

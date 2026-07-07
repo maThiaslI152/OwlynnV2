@@ -163,6 +163,17 @@ When generating cache keys for chat histories or context gatekeepers (e.g., in `
 - **Prompt injection boundaries** — `fetch_webpage` output wrapped in `<web_context>` tags. Memory writes sanitized for injection patterns via `pii_scrubber.scrub_for_memory_write()`.
 - **Destructive command blocking** — `scope_guard.py` blocks `rm -rf /`, `mkfs`, `dd` to device, fork bombs, etc. regardless of engagement state.
 
+### Browser Extension (Manifest V3) Strictness
+- **Explicit API Permissions:** Always explicitly add APIs (e.g., `"alarms"`) to the `permissions` array in `manifest.json`.
+- **CSP Compliance:** Do not use `frame-src` within the `extension_pages` Content Security Policy, and avoid port wildcards (`:*`) in `connect-src`.
+
+### LLM Text Streaming Parsing
+- **Whitespace Preservation:** Never call `.strip()` (or similar whitespace-trimming functions) on intermediate text chunks during streaming (e.g., in `_strip_thinking_tags`), as it swallows spaces between words in the UI.
+
+### Electron Build Workflow
+- **Clean Build Directories:** Before running `npm run build` or `vite build` for the frontend, manually delete the `dist` directory (`rm -rf dist`) to prevent `ENOTEMPTY` errors.
+- **Applying Changes:** Backend Python changes require an app restart. Frontend or manifest changes require a full `npm run build` to be packaged into the `.app` bundle.
+
 ## Related
 
 - [`docs/README.md`](docs/README.md) — full documentation map
@@ -170,6 +181,7 @@ When generating cache keys for chat histories or context gatekeepers (e.g., in `
 
 ## Last updated
 
+2026-07-07 — Browser extension bugfixes: fixed extension crashing by adding `alarms` to permissions; improved MV3 CSP strictness; fixed frontend streaming whitespace bug by removing `.strip()` in `formatter.py`; added UI animation tracking for tool execution state.
 2026-07-07 — Electron app packaging: .app with splash screen, backend spawning, tray, close-to-background, version display (v0.1.0). Atomic writes for user_profile.json and secrets.env. Browser extension bundled in .app Resources. Release guide at docs/guides/app-release.md. Task routing table updated with "Package Electron app" row.
 2026-07-07 — Security hardening: execution policy default changed to require_approval; /v1/chat/completions auth enforced; notebook sandbox hardened; SSRF protection on downloads; prompt injection boundaries on web fetches and memory writes; destructive command blocking in scope guard. Task routing table updated with semantic cache and Redis lifecycle rows.
 2026-07-04 — Frontend UI overhaul (glassmorphic dropdowns, accessible memory management) and critical bug fixes for WebSocket chunk streaming overhead / infinite loop in markdown parser. Frontier eval passes at 96.32%.

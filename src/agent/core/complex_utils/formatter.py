@@ -87,11 +87,11 @@ def _strip_thinking_tags(text: str) -> str:
     """Remove thinking blocks — handles Gemma (<think>), Qwen (<thinking>), and plaintext formats."""
     if not text:
         return text
-    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
-    cleaned = re.sub(r"<thinking>.*?</thinking>", "", cleaned, flags=re.DOTALL).strip()
+    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+    cleaned = re.sub(r"<thinking>.*?</thinking>", "", cleaned, flags=re.DOTALL)
     cleaned = re.sub(
         r"Thinking Process:.*?(?=\n\n[^\d]|\Z)", "", cleaned, flags=re.DOTALL
-    ).strip()
+    )
     return cleaned if cleaned else text
 
 

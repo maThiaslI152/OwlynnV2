@@ -214,6 +214,7 @@ from src.api.local_auth import cors_allowed_origins
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_allowed_origins(),
+    allow_origin_regex=r"^(chrome-extension|moz-extension)://.*$",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization", "X-Owlynn-Run-Token", "Accept"],

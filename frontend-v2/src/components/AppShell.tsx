@@ -703,7 +703,10 @@ export function AppShell({
                     />
                   </div>
                 )}
-                {projects.map((project) => (
+                {projects.filter(p => {
+                  if (activeMode === 'study') return p.mode === 'study'
+                  return !p.mode || p.mode === 'normal'
+                }).map((project) => (
                   <div
                     key={project.id}
                     className={`workspace-project-item${
@@ -1152,11 +1155,15 @@ export function AppShell({
                 }
 
                 if (entry.kind === 'tool_group') {
+                  const isWorking = entry.items.some((ta: any) => ta.status === 'running' || ta.status === 'pending')
+                  const requiresApproval = entry.items.some((ta: any) => ta.status === 'requires_approval')
+                  const statusText = isWorking ? 'Working...' : requiresApproval ? 'Waiting for Approval...' : 'Finished'
+                  
                   return (
                     <details key={`tool-group-${groupIdx}`} className="tool-group-pill">
                       <summary>
-                        <span className="tool-group-icon" style={{ display: 'inline-flex', alignItems: 'center' }}><Settings size={14} /></span>
-                        <span>Working... ({entry.items.length} tools used)</span>
+                        <span className={`tool-group-icon ${isWorking ? 'spinning' : ''}`} style={{ display: 'inline-flex', alignItems: 'center' }}><Settings size={14} /></span>
+                        <span>{statusText} ({entry.items.length} tools used)</span>
                       </summary>
                       <div className="tool-group-content">
                         {entry.items.map((item: any) => {

@@ -43,16 +43,17 @@ class ProjectManager:
                 await session.commit()
 
     async def create_project(
-        self, name: str, instructions: Optional[str] = None
-    ) -> dict:
+        self, name: str, instructions: str = "", category: str = "general", mode: str = "normal"
+    ) -> Dict[str, Any]:
+        """Create a new workspace project."""
         pid = str(uuid.uuid4())[:8]
         async with AsyncSessionLocal() as session:
             proj = Project(
                 id=pid,
                 name=name,
                 instructions=instructions or "You are a helpful AI assistant.",
-                category="general",
-                mode="normal",
+                category=category,
+                mode=mode,
             )
             session.add(proj)
             await session.commit()

@@ -1002,7 +1002,7 @@ function App() {
       const response = await fetchWithAuth(apiUrl('/api/projects'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: trimmedName }),
+        body: JSON.stringify({ name: trimmedName, mode: activeMode }),
       })
       if (!response.ok) throw new Error('create failed')
       const created = (await response.json()) as ProjectCreateResponse

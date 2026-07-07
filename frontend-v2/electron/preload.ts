@@ -60,12 +60,12 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
 
 // Specifically expose electronAPI to match the new electronBridge expectations
 contextBridge.exposeInMainWorld('electronAPI', {
-  invoke: (channel: string, args: any) => {
+  invoke: (channel: string, ...args: any[]) => {
     if (!ALLOWED_INVOKE_CHANNELS.includes(channel)) {
       console.warn(`[preload] Blocked invoke on unauthorized channel: ${channel}`)
       return Promise.reject(new Error(`Unauthorized IPC channel: ${channel}`))
     }
-    return ipcRenderer.invoke(channel, args)
+    return ipcRenderer.invoke(channel, ...args)
   },
   on: (channel: string, listener: (...args: any[]) => void) => {
     if (!ALLOWED_LISTEN_CHANNELS.includes(channel)) {
