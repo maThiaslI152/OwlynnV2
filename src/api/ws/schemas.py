@@ -41,6 +41,14 @@ class PlanReviewResponseClientEvent(BaseModel):
     correlation_id: Optional[str] = None
 
 
+class PentestTerminalStartClientEvent(BaseModel):
+    type: Literal["pentest.terminal_start"] = "pentest.terminal_start"
+
+
+class PentestTerminalStopClientEvent(BaseModel):
+    type: Literal["pentest.terminal_stop"] = "pentest.terminal_stop"
+
+
 ClientEvent = Annotated[
     Union[
         UserMessageEvent,
@@ -48,6 +56,8 @@ ClientEvent = Annotated[
         SecurityApprovalClientEvent,
         AskUserResponseClientEvent,
         PlanReviewResponseClientEvent,
+        PentestTerminalStartClientEvent,
+        PentestTerminalStopClientEvent,
     ],
     Field(discriminator="type"),
 ]
@@ -299,6 +309,20 @@ class ErrorEvent(BaseModel):
     correlation_id: Optional[str] = None
 
 
+class PentestTerminalChunkEvent(BaseModel):
+    type: Literal["pentest.terminal"] = "pentest.terminal"
+    data: str
+    snapshot: Optional[str] = None
+    window: str = "main"
+
+
+class PentestTerminalStatusEvent(BaseModel):
+    type: Literal["pentest.terminal_status"] = "pentest.terminal_status"
+    connected: bool
+    host: str = ""
+    session: str = ""
+
+
 ServerEvent = Annotated[
     Union[
         AssistantMessageEvent,
@@ -329,6 +353,8 @@ ServerEvent = Annotated[
         ResponseCoherenceEvent,
         CloudFallbackEvent,
         ErrorEvent,
+        PentestTerminalChunkEvent,
+        PentestTerminalStatusEvent,
     ],
     Field(discriminator="type"),
 ]

@@ -70,7 +70,13 @@ provision:
       sslscan \
       whatweb \
       seclists \
-      wordlists
+      wordlists \
+      aircrack-ng \
+      kismet \
+      reaver \
+      pixiewps \
+      hcxdumptool \
+      hcxtools
 
     # Enable and start SSH
     systemctl enable ssh

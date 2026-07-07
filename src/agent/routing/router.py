@@ -1433,12 +1433,33 @@ async def router_node(state: AgentState) -> AgentState:
 
     # ── Deterministic pentest-mode bypass ──────────────────────────────
     if state.get("scenario_id") == "pentest":
-        logger.info(
-            "[router] Complex path — pentest mode detected, bypassing LLM router"
+        from src.config.config_loader import config as _cfg
+        from src.agent.routing.pentest_classifier import (
+            classify_pentest_query, should_route_to_cloud,
         )
-        route, toolbox = _resolve_complex_route(
-            user_text, state, ["pentest"], cloud_available=cloud_available
+
+        cloud_proxy_enabled = _cfg.get("models.pentest.cloud_proxy.enabled", False)
+        pentest_category = classify_pentest_query(user_text)
+        use_cloud = (
+            cloud_proxy_enabled
+            and should_route_to_cloud(pentest_category)
+            and cloud_available
         )
+
+        if use_cloud:
+            route = "complex-cloud"
+            toolbox = ["pentest"]
+            logger.info(
+                "[router] Pentest cloud proxy: category=%s → cloud",
+                pentest_category.value,
+            )
+        else:
+            logger.info(
+                "[router] Complex path — pentest mode detected, bypassing LLM router"
+            )
+            route, toolbox = _resolve_complex_route(
+                user_text, state, ["pentest"], cloud_available=cloud_available
+            )
         budget = estimate_token_budget(user_text, route)
         metadata = _build_router_metadata(
             route,
@@ -1451,6 +1472,9 @@ async def router_node(state: AgentState) -> AgentState:
             estimated_tokens=budget,
             web_on=web_on,
         )
+        if use_cloud:
+            metadata["pentest_cloud_proxy"] = True
+            metadata["pentest_query_category"] = pentest_category.value
         audit_info(
             "agent.lifecycle",
             "router_decision",

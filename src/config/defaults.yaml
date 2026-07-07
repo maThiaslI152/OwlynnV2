@@ -103,6 +103,12 @@ models:
       flash_attention: true
       top_p: 0.95
     note: "Cloud APIs refuse security content. Pentest mode always uses this local model."
+    cloud_proxy:
+      enabled: true
+      allowed_categories:
+        - "public_knowledge"
+      max_cloud_tokens: 4096
+      sanitize_targets: true
 
   embedding:
     base_url: "http://127.0.0.1:1234/v1"

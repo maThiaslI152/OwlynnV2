@@ -32,7 +32,9 @@ export type Server =
   | CoherenceRetryCompletedEvent
   | ResponseCoherenceEvent
   | CloudFallbackEvent
-  | ErrorEvent;
+  | ErrorEvent
+  | PentestTerminalChunkEvent
+  | PentestTerminalStatusEvent;
 export type Type = "assistant.message";
 export type Id = string | null;
 export type Content = string | null;
@@ -171,7 +173,9 @@ export type Client =
   | StopClientEvent
   | SecurityApprovalClientEvent
   | AskUserResponseClientEvent
-  | PlanReviewResponseClientEvent;
+  | PlanReviewResponseClientEvent
+  | PentestTerminalStartClientEvent
+  | PentestTerminalStopClientEvent;
 export type Type30 = "user.message";
 export type CorrelationId3 = string | null;
 export type Id4 = string;
@@ -463,6 +467,28 @@ export interface PlanReviewResponseClientEvent {
   approved: Approved1;
   feedback?: Feedback;
   correlation_id?: CorrelationId6;
+  [k: string]: unknown;
+}
+export interface PentestTerminalChunkEvent {
+  type?: "pentest.terminal";
+  data: string;
+  snapshot?: string | null;
+  window?: string;
+  [k: string]: unknown;
+}
+export interface PentestTerminalStatusEvent {
+  type?: "pentest.terminal_status";
+  connected: boolean;
+  host?: string;
+  session?: string;
+  [k: string]: unknown;
+}
+export interface PentestTerminalStartClientEvent {
+  type?: "pentest.terminal_start";
+  [k: string]: unknown;
+}
+export interface PentestTerminalStopClientEvent {
+  type?: "pentest.terminal_stop";
   [k: string]: unknown;
 }
 

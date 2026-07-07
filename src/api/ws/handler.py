@@ -1106,15 +1106,102 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
         logger.info("Client disconnected from thread: %s", thread_id)
         audit_info("api.ws", "ws_disconnected", thread_id=thread_id)
     finally:
-        # We don't cancel the session task here! It continues in background.
-        connected_websockets.discard(websocket)  # Remove from active list
-        # Stop the forwarder and trace listener.
+        connected_websockets.discard(websocket)
         forwarder_task.cancel()
         if trace_task is not None:
             trace_task.cancel()
         if _trace_queue is not None:
             session.remove_listener(_trace_queue)
-        # The forwarder cleanup will check if it should delete the session.
+        try:
+            await websocket.close(code=1000)
+        except (RuntimeError, AttributeError):
+            pass
+
+
+@router.websocket("/ws/pentest/terminal")
+async def pentest_terminal_ws(websocket: WebSocket):
+    from src.api.local_auth import get_local_run_token
+    import secrets as _secrets
+
+    token = websocket.query_params.get("token")
+    expected = get_local_run_token(websocket.app)
+    if not token or not _secrets.compare_digest(token, expected):
+        await websocket.close(code=4001, reason="Authentication failed")
+        return
+
+    await websocket.accept()
+    connected_websockets.add(websocket)
+
+    from src.config.config_loader import config as app_config
+    from src.tools.screen_assist.kali_stream import get_terminal_streamer
+
+    kali_cfg = app_config.get("screen_assist.kali", {})
+    streamer = get_terminal_streamer(
+        host=kali_cfg.get("host", "127.0.0.1"),
+        user=kali_cfg.get("user", "kali"),
+        port=int(kali_cfg.get("port", 60022)),
+        session=kali_cfg.get("tmux_session", "main"),
+        window="main",
+        identity_file=kali_cfg.get("identity_file", "~/.lima/_config/user"),
+    )
+
+    async def on_terminal_diff(diff: str, snapshot: str):
+        try:
+            await websocket.send_json({
+                "type": "pentest.terminal",
+                "data": diff,
+                "window": "main",
+            })
+        except Exception:
+            pass
+
+    unsubscribe = await streamer.subscribe(on_terminal_diff)
+
+    snapshot = await streamer.get_snapshot()
+    if snapshot:
+        await websocket.send_json({
+            "type": "pentest.terminal",
+            "data": snapshot,
+            "snapshot": snapshot,
+            "window": "main",
+        })
+
+    await websocket.send_json({
+        "type": "pentest.terminal_status",
+        "connected": True,
+        "host": kali_cfg.get("host", "127.0.0.1"),
+        "session": kali_cfg.get("tmux_session", "main"),
+    })
+
+    try:
+        while True:
+            data = await websocket.receive_text()
+            try:
+                payload = json.loads(data)
+                event_type = payload.get("type")
+                if event_type == "pentest.terminal_stop":
+                    break
+                elif event_type == "pentest.terminal_input":
+                    from src.tools.screen_assist.kali_ssh import send_remote_kali_input
+                    text = payload.get("text", "")
+                    window = payload.get("window", "main")
+                    if text:
+                        await send_remote_kali_input(
+                            host=kali_cfg.get("host", "127.0.0.1"),
+                            user=kali_cfg.get("user", "kali"),
+                            session=kali_cfg.get("tmux_session", "main"),
+                            window=window,
+                            text=text,
+                            port=int(kali_cfg.get("port", 60022)),
+                            identity_file=kali_cfg.get("identity_file", "~/.lima/_config/user"),
+                        )
+            except json.JSONDecodeError:
+                continue
+    except WebSocketDisconnect:
+        pass
+    finally:
+        await unsubscribe()
+        connected_websockets.discard(websocket)
         try:
             await websocket.close(code=1000)
         except (RuntimeError, AttributeError):

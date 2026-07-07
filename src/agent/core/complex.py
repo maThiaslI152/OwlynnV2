@@ -1105,8 +1105,8 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     loop_start_time: float | None = None
     scenario_id = state.get("scenario_id")
     if mode == "tools_off":
-        # Pentest mode: always use dedicated pentest model (local-only, no cloud)
-        if scenario_id == "pentest":
+        # Pentest mode: use dedicated pentest model unless router chose cloud proxy
+        if scenario_id == "pentest" and route != "complex-cloud":
             try:
                 from src.agent.llm import get_pentest_llm
 
@@ -1216,8 +1216,8 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         )
 
     # ── 9.4: Cloud model acquisition ─────────────────────────────────────
-    # Pentest mode: always use dedicated pentest model (local-only, no cloud)
-    if scenario_id == "pentest":
+    # Pentest mode: use dedicated pentest model unless router chose cloud proxy
+    if scenario_id == "pentest" and route != "complex-cloud":
         try:
             from src.agent.llm import get_pentest_llm
 

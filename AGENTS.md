@@ -52,6 +52,11 @@
 | Change mode system (Normal/Study/Pentest) | — | `frontend-v2/src/components/ModeSwitcher.tsx`, `frontend-v2/src/state/slices/modesSlice.ts`, `src/api/ws/handler.py` |
 | Change study tools / courses | — | `src/tools/study_tools.py`, `src/api/routes/study.py`, `skills/` |
 | Change pentest scenario | — | `scenarios/pentest/`, `src/memory/scenarios.py`, `frontend-v2/src/components/PentestScopePanel.tsx` |
+| Change pentest tools | — | `src/tools/pentest_tools.py`, `src/agent/pentest/`, `src/agent/tool_sets.py` |
+| Change pentest live terminal | — | `src/tools/screen_assist/kali_stream.py`, `frontend-v2/src/components/LiveTerminal.tsx` |
+| Change pentest cloud proxy | — | `src/agent/routing/pentest_classifier.py`, `src/agent/routing/router.py`, `src/config/defaults.yaml` |
+| Change pentest wireless tools | — | `src/tools/pentest_tools.py` (wifi_*), `lima/kali.yaml`, `src/agent/hitl/policy.py` |
+| Change pentest attack chain | — | `src/agent/pentest/attack_chain.py`, `src/tools/pentest_tools.py` (auto_recon, suggest_next_steps) |
 | Change browser extension | [`docs/features/BROWSER_EXTENSION.md`](docs/features/BROWSER_EXTENSION.md) | `browser-extension/`, `src/api/routes/browser_extension.py` |
 | Package Electron app | [`docs/guides/app-release.md`](docs/guides/app-release.md) | `frontend-v2/electron/`, `frontend-v2/electron-builder.yml` |
 
@@ -71,19 +76,34 @@ Owlynn has three modes that change the UI, tools, and system prompt:
 - Backend maps `scenario_id` to forced response_style and scenario injection
 - `src/memory/project.py`: `_PROJECT_WRITABLE_FIELDS` includes `mode`
 
-## Pentest Mode — Local-Only (Hard Enforcement)
+## Pentest Mode — Local-Only with Cloud Proxy
 
-Cloud APIs (DeepSeek, OpenAI, etc.) refuse security/pentest content. Pentest mode **always** uses the local model. No override.
+Cloud APIs (DeepSeek, OpenAI, etc.) refuse security/pentest content. Pentest mode uses the local model by default. **Non-sensitive queries** (CVE lookups, methodology) can be routed to cloud via the proxy.
 
 - Config: `models.pentest` in `defaults.yaml` — set `model_name` to a dedicated pentest model
 - Falls back to `models.small` (Qwen3 VL 4B) if no pentest model configured
 - Accessor: `ConfigLoader.get_pentest_model_name()`
 - Pentest mode forces `scenario_id="pentest"` and `response_style="concise"`
 - Router returns `complex-default` (not `complex-cloud`) for pentest
+- **Cloud proxy**: `models.pentest.cloud_proxy.enabled` routes public knowledge queries to cloud
 - **Pentest model**: Gemma 4 12B Coder Q4 (`gemma-4-12b-coder-fable5-composer2.5-v1@q4_k_m`)
   - Winner of pentest benchmark (84.1% overall, 41 tok/s)
   - Benchmark: `scripts/bench_pentest_models.py`
   - Results: `docs/evaluations/pentest-model-benchmark-2026-06-28.md`
+
+### Pentest Tools (38 total)
+
+| Category | Tools | Count |
+|----------|-------|-------|
+| Engagement | engagement_create, engagement_set_phase, engagement_data_set/get, engagement_notes, engagement_report, engagement_compare | 7 |
+| Findings | finding_add, finding_list, finding_update | 3 |
+| Targets | target_add, target_list | 2 |
+| Credentials | credential_store, credential_list | 2 |
+| Evidence | evidence_store, evidence_list, read_evidence | 3 |
+| Wireless | wifi_scan, wifi_deauth, wifi_handshake_capture, wifi_crack_handshake, wifi_analyze_pcap, wifi_wps_scan | 6 |
+| Attack Chain | suggest_next_steps, auto_recon, analyze_attack_surface | 3 |
+| Screen Assist | capture_kali_terminal, run_kali_command, send_kali_input, kali_tmux_new_window, kali_tmux_list_windows | 5 |
+| File/Report | read/write/edit/list/delete workspace, create_pdf, create_docx, notebook | 8 |
 
 ### Pentest Infrastructure (Kali VM)
 
@@ -92,15 +112,18 @@ Owlynn uses **Lima** (Apple Virtualization Framework) to run Kali Linux locally 
 | Component | Setup | RAM |
 |-----------|-------|-----|
 | Lima VM | `./scripts/setup-kali-lima.sh` | ~2GB |
-| Kali tools | Auto-installed on first boot (kali-linux-headless + tool suites) | — |
+| Kali tools | nmap, sqlmap, hydra, john, nikto, gobuster, aircrack-ng, etc. | — |
 | SSH | Key auth, port 60022, user `kali` | — |
 | tmux | Session `main` for Owlynn screen assist | — |
+| Live Terminal | WS streaming at `/ws/pentest/terminal` | — |
 
 - Lima config: `lima/kali.yaml`
 - VM name: `owlynn-kali`
 - Auto-detected by pentest status API (`/api/pentest/status`)
 - Bridged networking for raw socket access (nmap SYN scan, masscan)
 - Falls back to remote Kali via SSH if Lima not available
+- **Live terminal**: Real-time tmux output via WebSocket (`kali_stream.py`)
+- **Multi-engagement**: Engagement tabs with switching, per-engagement isolation
 
 ## Study System
 
@@ -181,6 +204,7 @@ When generating cache keys for chat histories or context gatekeepers (e.g., in `
 
 ## Last updated
 
+2026-07-08 — Pentest V2 features: live terminal streaming (WS-based, replaces 3s polling); cloud pentest proxy (CVE/methodology queries to cloud, target data stays local); wireless pentest tools (6 wifi_* tools, aircrack-ng suite, HITL gating); multi-engagement support (tabs, switching, cross-engagement compare); attack chain automation (auto_recon, suggest_next_steps, analyze_attack_surface). 38 total pentest tools. Changelog at docs/changes/pentest-v2-features/CHANGELOG.md.
 2026-07-07 — Browser extension bugfixes: fixed extension crashing by adding `alarms` to permissions; improved MV3 CSP strictness; fixed frontend streaming whitespace bug by removing `.strip()` in `formatter.py`; added UI animation tracking for tool execution state.
 2026-07-07 — Electron app packaging: .app with splash screen, backend spawning, tray, close-to-background, version display (v0.1.0). Atomic writes for user_profile.json and secrets.env. Browser extension bundled in .app Resources. Release guide at docs/guides/app-release.md. Task routing table updated with "Package Electron app" row.
 2026-07-07 — Security hardening: execution policy default changed to require_approval; /v1/chat/completions auth enforced; notebook sandbox hardened; SSRF protection on downloads; prompt injection boundaries on web fetches and memory writes; destructive command blocking in scope guard. Task routing table updated with semantic cache and Redis lifecycle rows.

@@ -11,6 +11,9 @@ SAFE_TOOLS = {
     "read_screen_element",
     "get_active_browser_context",
     "capture_kali_terminal",
+    "wifi_analyze_pcap",
+    "wifi_wps_scan",
+    "wifi_scan",
 }
 
 # Tools that always require security review
@@ -21,6 +24,8 @@ SENSITIVE_TOOLS = {
     "notebook_run",
     "study_note_save",
     "flashcard_deck_create",
+    "wifi_deauth",
+    "wifi_handshake_capture",
 }
 
 SENSITIVE_PATTERN_RE = re.compile(
