@@ -13,7 +13,7 @@ class _DummyWatcher:
     def stop(self):
         return None
 
-    def join(self):
+    def join(self, *args, **kwargs):
         return None
 
 
@@ -45,10 +45,13 @@ def client(tmp_path):
     fake_agent = _FakeAgent()
     tmp_profile = tmp_path / "user_profile.json"
     tmp_profile.write_text(json.dumps(_DEFAULTS), encoding="utf-8")
+    from unittest.mock import AsyncMock
+
     with (
         patch("src.memory.user_profile._PROFILE_PATH", tmp_profile),
         patch("src.api.server.init_agent", autospec=True) as init_agent_mock,
         patch("src.api.server.start_watcher", autospec=True) as watcher_mock,
+        patch("src.api.ws.handler.check_semantic_cache", AsyncMock(return_value=None)),
     ):
         init_agent_mock.return_value = fake_agent
         watcher_mock.return_value = _DummyWatcher()
