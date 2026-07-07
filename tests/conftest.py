@@ -75,6 +75,7 @@ def pytest_configure(config):
             return "Mocked Chat Title"
         return fallback[:60]
 
+    fake_title._original = router_mod.generate_chat_title_router_llm
     router_mod.generate_chat_title_router_llm = fake_title
 
 

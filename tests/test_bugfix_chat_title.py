@@ -64,7 +64,10 @@ class TestChatTitleLogLevel:
         import inspect
         from src.agent.routing.router import generate_chat_title_router_llm
 
-        source = inspect.getsource(generate_chat_title_router_llm)
+        func = getattr(
+            generate_chat_title_router_llm, "_original", generate_chat_title_router_llm
+        )
+        source = inspect.getsource(func)
         assert "logger.warning" in source, (
             "Expected logger.warning (was upgraded from logger.debug for visibility)"
         )

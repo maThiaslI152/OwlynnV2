@@ -27,19 +27,23 @@ async def test_openai_thread_id_in_config():
     mock_app.state.agent = mock_agent
 
     tid = "test-thread-persist-001"
+    dummy_req = MagicMock()
     with patch("src.api.server.app", mock_app):
-        await openai_routes.api_openai_chat_completions(
-            {
-                "messages": [{"role": "user", "content": "hello"}],
-                "thread_id": tid,
-            }
-        )
-        await openai_routes.api_openai_chat_completions(
-            {
-                "messages": [{"role": "user", "content": "follow up"}],
-                "thread_id": tid,
-            }
-        )
+        with patch("src.api.routes.openai._verify_openai_token", lambda r: None):
+            await openai_routes.api_openai_chat_completions(
+                {
+                    "messages": [{"role": "user", "content": "hello"}],
+                    "thread_id": tid,
+                },
+                dummy_req,
+            )
+            await openai_routes.api_openai_chat_completions(
+                {
+                    "messages": [{"role": "user", "content": "follow up"}],
+                    "thread_id": tid,
+                },
+                dummy_req,
+            )
 
     assert len(captured) == 2
     assert captured[0]["configurable"]["thread_id"] == tid
