@@ -178,6 +178,13 @@ async def lifespan(app: FastAPI):
         await stop_extraction_worker()
     if getattr(app.state, "vision_manager", False):
         await stop_vision_manager()
+    watcher = getattr(app.state, "file_watcher", None)
+    if watcher:
+        try:
+            watcher.stop()
+            watcher.join(timeout=2.0)
+        except Exception as e:
+            logger.warning("Failed to stop file watcher: %s", e)
     # Cleanup: cancel all background tasks
     if getattr(app.state, "file_watcher", None):
         try:

@@ -90,12 +90,26 @@ async def test_memory_pipeline_lite_router_retrieve_write(
 
     state = {**pentest_state, **lite}
 
+    async def fake_small_llm():
+        class LLM:
+            def bind(self, **_kwargs):
+                return self
+
+            async def ainvoke(self, _messages):
+                class R:
+                    content = '{"routing":"complex","confidence":0.9,"toolbox":"all"}'
+
+                return R()
+
+        return LLM()
+
     with patch("src.agent.routing.router._check_cloud_available", return_value=False):
-        with patch(
-            "src.agent.routing.router._memory_gate_fields",
-            return_value={"needs_memory_retrieval": True, "scenario_id": "pentest"},
-        ):
-            routed = await router_node(state)
+        with patch("src.agent.routing.router.get_small_llm", fake_small_llm):
+            with patch(
+                "src.agent.routing.router._memory_gate_fields",
+                return_value={"needs_memory_retrieval": True, "scenario_id": "pentest"},
+            ):
+                routed = await router_node(state)
 
     assert routed["route"] in ("complex-cloud", "complex-default")
     assert routed.get("needs_memory_retrieval") is True

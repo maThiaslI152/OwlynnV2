@@ -122,7 +122,9 @@ async def api_create_project(body: dict):
     name = body.get("name", "New Project")
     instructions = body.get("instructions")
     mode = body.get("mode", "normal")
-    return await project_manager.create_project(name, instructions=instructions, mode=mode)
+    return await project_manager.create_project(
+        name, instructions=instructions, mode=mode
+    )
 
 
 @router.get("/api/projects/{project_id}")

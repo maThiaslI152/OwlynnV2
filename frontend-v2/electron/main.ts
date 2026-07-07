@@ -61,7 +61,7 @@ function getProjectRoot(): string {
         return config.project_root
       }
     }
-  } catch {}
+  } catch { /* ignore */ }
   // Dev mode: fallback to repo root (two levels up from electron/)
   return path.join(__dirname, '..', '..')
 }
@@ -86,7 +86,7 @@ function readEnvFile(filePath: string): Record<string, string> {
         env[trimmed.slice(0, eqIdx)] = trimmed.slice(eqIdx + 1)
       }
     }
-  } catch {}
+  } catch { /* ignore */ }
   return env
 }
 
@@ -137,7 +137,7 @@ async function startContainers(projectRoot: string): Promise<void> {
         console.log('[startup] Containers already running:', running.join(', '))
         return
       }
-    } catch {}
+    } catch { /* ignore */ }
   }
 
   const cmds = [
@@ -149,7 +149,7 @@ async function startContainers(projectRoot: string): Promise<void> {
     try {
       await execFileAsync(cmd as string, args as string[])
       return
-    } catch {}
+    } catch { /* ignore */ }
   }
   console.warn('[startup] Could not start containers (podman/docker not found). Qdrant/Redis may be unavailable.')
 }
@@ -163,7 +163,7 @@ async function waitForLMStudio(): Promise<void> {
     try {
       await fetchJson('http://127.0.0.1:1234/v1/models', 2000)
       return
-    } catch {}
+    } catch { /* ignore */ }
     if (Date.now() - startTime > hintDelay) {
       sendSplash('lmstudio', 'active', 'Waiting for LM Studio — please open it...')
     }
@@ -178,11 +178,11 @@ async function killStaleBackend(): Promise<void> {
     if (fs.existsSync(PID_PATH)) {
       const pid = parseInt(fs.readFileSync(PID_PATH, 'utf-8').trim(), 10)
       if (pid > 0) {
-        try { process.kill(pid, 'SIGKILL') } catch {}
+        try { process.kill(pid, 'SIGKILL') } catch { /* ignore */ }
       }
       fs.unlinkSync(PID_PATH)
     }
-  } catch {}
+  } catch { /* ignore */ }
 
   // Kill anything on port 8000
   try {
@@ -190,10 +190,10 @@ async function killStaleBackend(): Promise<void> {
     for (const pidStr of stdout.trim().split('\n')) {
       const pid = parseInt(pidStr.trim(), 10)
       if (pid > 0) {
-        try { process.kill(pid, 'SIGKILL') } catch {}
+        try { process.kill(pid, 'SIGKILL') } catch { /* ignore */ }
       }
     }
-  } catch {}
+  } catch { /* ignore */ }
 
   // Wait for port 8000 to be free (up to 5 seconds)
   for (let i = 0; i < 10; i++) {
@@ -244,7 +244,7 @@ async function spawnBackend(projectRoot: string): Promise<void> {
     try {
       fs.mkdirSync(path.dirname(PID_PATH), { recursive: true })
       fs.writeFileSync(PID_PATH, String(child.pid), 'utf-8')
-    } catch {}
+    } catch { /* ignore */ }
 
     child.stdout?.on('data', (data: Buffer) => {
       console.log('[backend]', data.toString().trim())
@@ -305,7 +305,7 @@ async function waitForHealth(): Promise<void> {
         consecutiveReady = 0
         sendSplash('health', 'active', `Initializing AI — ${data.agent || 'loading'}...`)
       }
-    } catch {}
+    } catch { /* ignore */ }
     await new Promise(r => setTimeout(r, 1000))
   }
   throw new Error('Backend health check timed out after 180 seconds')
@@ -423,7 +423,7 @@ function registerIpcHandlers() {
     if (process.platform === 'darwin') {
       const status = systemPreferences.getMediaAccessStatus('screen')
       if (status !== 'granted') {
-        try { await desktopCapturer.getSources({ types: ['screen'] }) } catch {}
+        try { await desktopCapturer.getSources({ types: ['screen'] }) } catch { /* ignore */ }
         const newStatus = systemPreferences.getMediaAccessStatus('screen')
         if (newStatus !== 'granted') {
           throw new Error(`Screen capture permission is ${newStatus}. Please grant screen recording permission in System Settings -> Privacy & Security -> Screen Recording.`)
@@ -584,7 +584,7 @@ app.on('before-quit', () => {
     }, 5000)
     backendProcess.on('exit', () => clearTimeout(killTimer))
   }
-  try { fs.unlinkSync(PID_PATH) } catch {}
+  try { fs.unlinkSync(PID_PATH) } catch { /* ignore */ }
 })
 
 app.on('window-all-closed', () => {

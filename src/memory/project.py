@@ -4,7 +4,7 @@ Project Manager for the Local Cowork Agent, backed by PostgreSQL / SQLAlchemy.
 
 import logging
 import time
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 import uuid
 
 from sqlalchemy import select
@@ -43,7 +43,11 @@ class ProjectManager:
                 await session.commit()
 
     async def create_project(
-        self, name: str, instructions: str = "", category: str = "general", mode: str = "normal"
+        self,
+        name: str,
+        instructions: str = "",
+        category: str = "general",
+        mode: str = "normal",
     ) -> Dict[str, Any]:
         """Create a new workspace project."""
         pid = str(uuid.uuid4())[:8]

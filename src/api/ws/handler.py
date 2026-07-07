@@ -1038,7 +1038,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                         return {**p, "correlation_id": corr_id} if corr_id else p
 
                     await websocket.send_json(
-                        _cache_payload({"type": "status", "status": "working"})
+                        _cache_payload({"type": "status", "content": "working"})
                     )
                     # Stream cached text in one shot so UI shows it as a normal reply
                     await websocket.send_json(
@@ -1061,7 +1061,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                         )
                     )
                     await websocket.send_json(
-                        _cache_payload({"type": "status", "status": "idle"})
+                        _cache_payload({"type": "status", "content": "idle"})
                     )
                     continue
 
