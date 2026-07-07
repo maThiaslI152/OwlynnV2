@@ -58,6 +58,22 @@ def pytest_configure(config):
     except ImportError:
         pass
 
+    # Globally patch generate_chat_title_router_llm to avoid LM Studio calls in tests
+    import src.agent.routing.router as router_mod
+    async def fake_title(user_text: str, *args, **kwargs):
+        import re
+        fallback = user_text.split("\n")[0].strip()
+        fallback = re.sub(
+            r"^(hi|hey|hello|ok|okay|yes|no|thanks|please)[,.\s]*",
+            "",
+            fallback,
+            flags=re.IGNORECASE,
+        ).strip()
+        if not fallback:
+            return "Mocked Chat Title"
+        return fallback[:60]
+    router_mod.generate_chat_title_router_llm = fake_title
+
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_database_schema():
