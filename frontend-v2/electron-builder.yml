@@ -1,0 +1,23 @@
+appId: com.owlynn.app
+productName: Owlynn
+mac:
+  category: public.app-category.productivity
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: electron/entitlements.mac.plist
+  entitlementsInherit: electron/entitlements.mac.plist
+  extendInfo:
+    NSAppleEventsUsageDescription: "Owlynn needs access to control other apps for screen reading and browser context features."
+    NSScreenCaptureUsageDescription: "Owlynn needs screen access for its AI vision assistant feature."
+  target:
+    - dmg
+    - zip
+extraResources:
+  - from: "../browser-extension"
+    to: "browser-extension"
+    filter:
+      - "**/*"
+      - "!*.md"
+      - "!*.test.*"
+  - from: "electron/splash.html"
+    to: "splash.html"

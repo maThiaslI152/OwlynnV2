@@ -75,5 +75,9 @@ export const electronBridge = {
   rejectActionProposal: (id: string) => invokeOrResult<string>('reject_action_proposal', id),
   setWindowSize: (width: number, height: number) => invokeOrResult<string>('set_window_size', width, height),
   launchBrowser: () => invokeOrResult<string>('launch_browser'),
+  getAppVersion: () => invokeOrResult<string>('get_app_version'),
+  hideToTray: () => invokeOrResult<string>('hide_to_tray'),
+  getBrowserExtensionPath: () => invokeOrResult<string>('get_extension_path'),
+  openExtensionFolder: () => invokeOrResult<string>('open_extension_folder'),
   convertFileSrc,
 }

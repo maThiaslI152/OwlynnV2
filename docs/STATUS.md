@@ -26,6 +26,10 @@ Project status tracker. Last updated: 2026-07-07 — Security hardening pass; HI
 | **Web fetch injection boundary** | `fetch_webpage` output wrapped in `<web_context>` tags to prevent prompt injection. | [`features/TOOLS.md`](features/TOOLS.md) |
 | **Memory write injection sanitizer** | `pii_scrubber.scrub_for_memory_write()` neutralizes prompt injection patterns before LTM storage. | [`features/MEMORY.md`](features/MEMORY.md) |
 | **Destructive command blocking** | `scope_guard.py` blocks `rm -rf /`, `mkfs`, `dd`, fork bombs regardless of engagement state. | [`HITL.md`](HITL.md) |
+| **Electron app packaging** | `.app` with splash screen, backend spawning, tray, close-to-background, version display. | [`guides/app-release.md`](guides/app-release.md) |
+| **Atomic writes** | `user_profile.json` and `secrets.env` use temp+rename to prevent corruption on crash. | — |
+| **Browser extension bundling** | Extension bundled in `.app` Resources, install guide in release docs. | [`guides/app-release.md`](guides/app-release.md) |
+| **v0.1.1 hotfix** | Resolve `uv` binary path for packaged app (ENOENT fix). Bundle splash.html via extraResources. | [`guides/app-release.md`](guides/app-release.md) |
 
 ## Recent Changes (2026-06-28 — Browser Extension)
 

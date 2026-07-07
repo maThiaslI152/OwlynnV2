@@ -135,8 +135,10 @@ def update_profile(field: str, value) -> dict:
 
 def _save_profile(profile: dict):
     _PROFILE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(_PROFILE_PATH, "w", encoding="utf-8") as f:
+    tmp = _PROFILE_PATH.with_suffix(".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump(profile, f, ensure_ascii=False, indent=2)
+    tmp.replace(_PROFILE_PATH)
 
 
 def profile_to_context(profile: dict) -> str:

@@ -53,6 +53,7 @@
 | Change study tools / courses | — | `src/tools/study_tools.py`, `src/api/routes/study.py`, `skills/` |
 | Change pentest scenario | — | `scenarios/pentest/`, `src/memory/scenarios.py`, `frontend-v2/src/components/PentestScopePanel.tsx` |
 | Change browser extension | [`docs/features/BROWSER_EXTENSION.md`](docs/features/BROWSER_EXTENSION.md) | `browser-extension/`, `src/api/routes/browser_extension.py` |
+| Package Electron app | [`docs/guides/app-release.md`](docs/guides/app-release.md) | `frontend-v2/electron/`, `frontend-v2/electron-builder.yml` |
 
 ## Mode System
 
@@ -169,6 +170,7 @@ When generating cache keys for chat histories or context gatekeepers (e.g., in `
 
 ## Last updated
 
+2026-07-07 — Electron app packaging: .app with splash screen, backend spawning, tray, close-to-background, version display (v0.1.0). Atomic writes for user_profile.json and secrets.env. Browser extension bundled in .app Resources. Release guide at docs/guides/app-release.md. Task routing table updated with "Package Electron app" row.
 2026-07-07 — Security hardening: execution policy default changed to require_approval; /v1/chat/completions auth enforced; notebook sandbox hardened; SSRF protection on downloads; prompt injection boundaries on web fetches and memory writes; destructive command blocking in scope guard. Task routing table updated with semantic cache and Redis lifecycle rows.
 2026-07-04 — Frontend UI overhaul (glassmorphic dropdowns, accessible memory management) and critical bug fixes for WebSocket chunk streaming overhead / infinite loop in markdown parser. Frontier eval passes at 96.32%.
 2026-07-02 — Production-readiness audit: PostgreSQL replaces `projects.json` for mode persistence; mode routing table updated to `modesSlice.ts`; task routing table updated to reference sliced store.

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Starting Owlynn...</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0a0f;
+      color: rgba(255, 255, 255, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      overflow: hidden;
+      -webkit-app-region: drag;
+      user-select: none;
+    }
+    .splash {
+      text-align: center;
+      width: 320px;
+    }
+    .logo {
+      width: 64px;
+      height: 64px;
+      margin-bottom: 16px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    h1 {
+      font-size: 22px;
+      font-weight: 600;
+      margin-bottom: 24px;
+      color: rgba(255, 255, 255, 0.95);
+      letter-spacing: -0.3px;
+    }
+    .steps {
+      text-align: left;
+      padding: 0 12px;
+    }
+    .step {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 0;
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.4);
+      transition: color 0.3s;
+    }
+    .step.active {
+      color: rgba(255, 255, 255, 0.9);
+    }
+    .step.done {
+      color: rgba(134, 59, 255, 0.9);
+    }
+    .step.error {
+      color: #ff4444;
+    }
+    .icon {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+    }
+    .step .icon.pending::before { content: '○'; }
+    .step.active .icon::before {
+      content: '●';
+      animation: spin 1s linear infinite;
+    }
+    .step.done .icon::before { content: '✓'; }
+    .step.error .icon::before { content: '!'; }
+    .hint {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.3);
+      margin-top: 16px;
+      min-height: 16px;
+      transition: opacity 0.3s;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.7; transform: scale(0.97); }
+    }
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="splash">
+    <svg class="logo" viewBox="0 0 48 46" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path fill="#863bff" d="M25.946 44.938c-.664.845-2.021.375-2.021-.698V33.937a2.26 2.26 0 0 0-2.262-2.262H10.287c-.92 0-1.456-1.04-.92-1.788l7.48-10.471c1.07-1.497 0-3.578-1.842-3.578H1.237c-.92 0-1.456-1.04-.92-1.788L10.013.474c.214-.297.556-.474.92-.474h28.894c.92 0 1.456 1.04.92 1.788l-7.48 10.471c-1.07 1.498 0 3.579 1.842 3.579h11.377c.943 0 1.473 1.088.89 1.83L25.947 44.94z"/>
+    </svg>
+    <h1>Owlynn</h1>
+    <div class="steps">
+      <div class="step" id="step-containers">
+        <span class="icon pending"></span>
+        <span>Starting containers...</span>
+      </div>
+      <div class="step" id="step-lmstudio">
+        <span class="icon pending"></span>
+        <span>Connecting to LM Studio...</span>
+      </div>
+      <div class="step" id="step-backend">
+        <span class="icon pending"></span>
+        <span>Starting backend...</span>
+      </div>
+      <div class="step" id="step-health">
+        <span class="icon pending"></span>
+        <span>Initializing AI...</span>
+      </div>
+    </div>
+    <div class="hint" id="hint"></div>
+  </div>
+  <script>
+    // Preload exposes ipcRenderer on window via contextBridge
+    const ipcRenderer = window.ipcRenderer
+
+    const stepNames = ['containers', 'lmstudio', 'backend', 'health']
+    const stepLabels = {
+      containers: 'Containers',
+      lmstudio: 'LM Studio',
+      backend: 'Backend',
+      health: 'AI Engine'
+    }
+
+    function updateStep(name, status, message) {
+      const el = document.getElementById(`step-${name}`)
+      if (!el) return
+      el.className = `step ${status}`
+      const label = stepLabels[name] || name
+      if (status === 'done') {
+        el.querySelector('span:last-child').textContent = `${label} ready`
+      } else if (status === 'error') {
+        el.querySelector('span:last-child').textContent = message || `${label} failed`
+      } else if (message) {
+        el.querySelector('span:last-child').textContent = message
+      }
+    }
+
+    function setHint(text) {
+      document.getElementById('hint').textContent = text
+    }
+
+    ipcRenderer.on('splash-status', (data) => {
+      const { step, status, message } = data
+      updateStep(step, status, message)
+      if (step === 'lmstudio' && status === 'active') {
+        setHint('Please open LM Studio and start the server.')
+      }
+      if (step === 'health' && status === 'active') {
+        setHint('Loading LLMs — this may take up to 3 minutes...')
+      }
+      if (status === 'done') {
+        setHint('')
+      }
+    })
+  </script>
+</body>
+</html>

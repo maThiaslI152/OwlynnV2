@@ -1003,6 +1003,19 @@ export function AppShell({
               </details>
             </>
           )}
+
+          {/* Version footer */}
+          <div style={{
+            marginTop: 'auto',
+            padding: '12px 14px',
+            borderTop: '1px solid rgba(255,255,255,0.06)',
+            fontSize: 11,
+            color: 'rgba(255,255,255,0.3)',
+            textAlign: 'center',
+            flexShrink: 0,
+          }}>
+            Owlynn v{__APP_VERSION__}
+          </div>
         </motion.aside>
       )}
 

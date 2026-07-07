@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import toast from 'react-hot-toast'
 import { SafeModePanel } from './SafeModePanel'
 import { CloudSettingsPanel } from './CloudSettingsPanel'
 import { CloudUsagePanel } from './CloudUsagePanel'
@@ -7,6 +8,7 @@ import { MemoryPanel } from './MemoryPanel'
 import { PentestToolsPanel } from './PentestToolsPanel'
 import { StudyProgressPanel } from './StudyProgressPanel'
 import { useAppStore } from '../state/useAppStore'
+import { electronBridge } from '../lib/electronBridge'
 
 const IconFolder = () => <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
 const IconDatabase = () => <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></svg>
@@ -63,9 +65,22 @@ export function MacMenuBar({ isCompact, onToggleMode }: MacMenuBarProps) {
           </button>
           {activeMenu === 'owlynn' && (
             <div className="menu-dropdown">
+              <div className="menu-dropdown-item" onClick={() => {
+                toast(`Owlynn v${__APP_VERSION__}`, { icon: '🦉', duration: 3000 })
+                setActiveMenu(null)
+              }}>About Owlynn</div>
+              <div className="menu-dropdown-divider" />
               <div className="menu-dropdown-item" onClick={() => setActiveMenu('system')}>Settings...</div>
               <div className="menu-dropdown-divider" />
-              <div className="menu-dropdown-item">Quit Owlynn</div>
+              <div className="menu-dropdown-item" onClick={() => {
+                electronBridge.hideToTray()
+                setActiveMenu(null)
+              }}>Hide Owlynn</div>
+              <div className="menu-dropdown-item" onClick={() => {
+                // In Electron, close all windows triggers app quit behavior
+                // For packaged app, this triggers before-quit which stops backend
+                window.close()
+              }}>Quit Owlynn</div>
             </div>
           )}
         </div>

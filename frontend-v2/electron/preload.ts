@@ -10,6 +10,10 @@ const ALLOWED_INVOKE_CHANNELS = [
   'reject_action_proposal',
   'set_window_size',
   'launch_browser',
+  'get_app_version',
+  'hide_to_tray',
+  'get_extension_path',
+  'open_extension_folder',
 ]
 
 const ALLOWED_SEND_CHANNELS: string[] = []
@@ -22,6 +26,7 @@ const ALLOWED_LISTEN_CHANNELS = [
   'action.proposal.result',
   'safe_mode.changed',
   'voice.tts_state',
+  'splash-status',
 ]
 
 // --------- Expose some API to the Renderer process ---------

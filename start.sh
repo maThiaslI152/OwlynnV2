@@ -4,6 +4,13 @@
 # Lima Kali VM is auto-started by the frontend when Pentest mode is activated.
 set -o pipefail
 cd "$(dirname "$0")"
+
+# Write project root for packaged Electron app
+mkdir -p "${HOME}/.owlynn"
+cat > "${HOME}/.owlynn/config.json" << EOF
+{"project_root": "$(pwd)", "written_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
+EOF
+
 # Parse arguments
 DEBUG_MODE=0
 for arg in "$@"; do

@@ -169,6 +169,7 @@ def _write_secrets_env(api_key: str) -> None:
 
     The file is shell-sourceable: ``source ~/.owlynn/secrets.env``.
     An empty ``api_key`` removes the line from the file.
+    Uses atomic write (temp + rename) to prevent corruption on crash.
     """
     try:
         _SECRETS_ENV_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -181,9 +182,11 @@ def _write_secrets_env(api_key: str) -> None:
         ]
         if api_key:
             filtered.append(f"DEEPSEEK_API_KEY={api_key}")
-        _SECRETS_ENV_PATH.write_text(
+        tmp = _SECRETS_ENV_PATH.with_suffix(".tmp")
+        tmp.write_text(
             "\n".join(filtered) + ("\n" if filtered else ""), encoding="utf-8"
         )
+        tmp.replace(_SECRETS_ENV_PATH)
         _SECRETS_ENV_PATH.chmod(0o600)  # owner read/write only
         logger.info(
             "DeepSeek API key %s in %s",
