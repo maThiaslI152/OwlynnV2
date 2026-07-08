@@ -2,18 +2,18 @@
     "mcpServers": {
         "sequential-thinking": {
             "command": "npx",
-            "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
+            "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
         },
         "playwright": {"command": "npx", "args": ["-y", "@playwright/mcp"]},
         "burp": {
             "command": "python",
             "args": ["-m", "src.integrations.burp_mcp_server"],
-            "env": {"BURP_API_URL": "http://127.0.0.1:1337", "BURP_API_KEY": ""},
+            "env": {"BURP_API_URL": "http://127.0.0.1:1337", "BURP_API_KEY": ""}
         },
         "browser-extension": {
             "command": "python",
             "args": ["-m", "src.integrations.browser_extension_mcp_server"],
-            "env": {"OWLYNN_API_URL": "http://127.0.0.1:8000"},
-        },
+            "env": {"OWLYNN_API_URL": "http://127.0.0.1:8000"}
+        }
     }
 }
