@@ -20,6 +20,7 @@ from src.agent.nodes.memory import (
 from src.agent.nodes.summarize import auto_summarize_node
 from src.agent.nodes.coherence import coherence_check_node
 from src.agent.nodes.coherence_retry import coherence_retry_node
+from src.agent.pentest.executor import pentest_executor_node
 
 
 import logging
@@ -258,6 +259,7 @@ def build_graph():
     builder.add_node("tool_action", complex_tool_action_node)
     builder.add_node("coherence_check", coherence_check_node)
     builder.add_node("coherence_retry", coherence_retry_node)
+    builder.add_node("pentest_executor", pentest_executor_node)
     builder.add_node("memory_write", memory_write_node)
 
     builder.set_entry_point("memory_inject_lite")
@@ -345,13 +347,21 @@ def build_graph():
     def after_tool_action(state: AgentState) -> str:
         if state.get("route") == "browser_local":
             return "browser_local"
+        if state.get("pentest_subtask"):
+            return "pentest_executor"
         return "complex_llm"
 
     builder.add_conditional_edges(
         "tool_action",
         after_tool_action,
-        {"browser_local": "browser_local", "complex_llm": "complex_llm"},
+        {
+            "browser_local": "browser_local",
+            "pentest_executor": "pentest_executor",
+            "complex_llm": "complex_llm",
+        },
     )
+
+    builder.add_edge("pentest_executor", "complex_llm")
     builder.add_edge("simple", "coherence_check")
 
     # coherence_check → coherence_retry (low confidence + budget left) | memory_write

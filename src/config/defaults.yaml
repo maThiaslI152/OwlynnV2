@@ -206,6 +206,18 @@ mcp:
   auto_toolbox_on_pentest: true            # Append toolbox "mcp" on pentest scenario_id
   sensitive_name_prefixes:                 # HITL approval required (server_key + "_" + tool)
     - "pentest_"
+    - "burp_"
+
+# ── External Integrations ────────────────────────────────────────────────────
+integrations:
+  shodan:
+    api_key: ""                              # SHODAN_API_KEY env
+  censys:
+    api_id: ""                               # CENSYS_API_ID env
+    api_secret: ""                           # CENSYS_API_SECRET env
+  hackerone:
+    username: ""                             # HACKERONE_USERNAME env
+    api_key: ""                              # HACKERONE_API_KEY env
 
 # ── Screen assist (Phase 3) ──────────────────────────────────────────────────
 screen_assist:

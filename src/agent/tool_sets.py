@@ -50,6 +50,16 @@ from src.tools.study_tools import (
 from src.tools.rag_tools import search_workspace_docs
 from src.tools.screen_assist.tools import SCREEN_ASSIST_TOOLS
 from src.tools.pentest_tools import PENTEST_TOOLS
+from src.tools.pentest_network import PENTEST_NETWORK_TOOLS
+from src.tools.pentest_web import PENTEST_WEB_TOOLS
+from src.tools.pentest_vuln import PENTEST_VULN_TOOLS
+from src.tools.pentest_exploit import PENTEST_EXPLOIT_TOOLS
+from src.tools.pentest_post import PENTEST_POST_TOOLS
+from src.tools.pentest_osint import PENTEST_OSINT_TOOLS
+from src.tools.pentest_ad import PENTEST_AD_TOOLS
+from src.tools.pentest_password import PENTEST_PASSWORD_TOOLS
+from src.tools.pentest_cloud import PENTEST_CLOUD_TOOLS
+from src.tools.pentest_reporting import PENTEST_REPORTING_TOOLS
 
 # Full tool set with web search enabled
 COMPLEX_TOOLS_WITH_WEB: list = [
@@ -240,6 +250,16 @@ TOOLBOX_REGISTRY: dict[str, list] = {
     "screen_assist": list(SCREEN_ASSIST_TOOLS),
     "pentest": [
         *PENTEST_TOOLS,
+        *PENTEST_NETWORK_TOOLS,
+        *PENTEST_WEB_TOOLS,
+        *PENTEST_VULN_TOOLS,
+        *PENTEST_EXPLOIT_TOOLS,
+        *PENTEST_POST_TOOLS,
+        *PENTEST_OSINT_TOOLS,
+        *PENTEST_AD_TOOLS,
+        *PENTEST_PASSWORD_TOOLS,
+        *PENTEST_CLOUD_TOOLS,
+        *PENTEST_REPORTING_TOOLS,
         # File ops
         read_workspace_file,
         write_workspace_file,

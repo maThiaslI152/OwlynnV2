@@ -10,6 +10,14 @@
     "playwright": {
       "command": "npx",
       "args": ["-y", "@playwright/mcp"]
+    },
+    "burp": {
+      "command": "python",
+      "args": ["-m", "src.integrations.burp_mcp_server"],
+      "env": {
+        "BURP_API_URL": "http://127.0.0.1:1337",
+        "BURP_API_KEY": ""
+      }
     }
   }
 }

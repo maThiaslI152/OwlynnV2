@@ -76,7 +76,16 @@ provision:
       reaver \
       pixiewps \
       hcxdumptool \
-      hcxtools
+      hcxtools \
+      masscan \
+      nuclei \
+      bloodhound \
+      neo4j \
+      ldap-utils \
+      subfinder \
+      impacket-scripts \
+      python3-ldap \
+      responder
 
     # Enable and start SSH
     systemctl enable ssh

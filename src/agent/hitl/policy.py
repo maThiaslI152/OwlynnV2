@@ -14,6 +14,15 @@ SAFE_TOOLS = {
     "wifi_analyze_pcap",
     "wifi_wps_scan",
     "wifi_scan",
+    "searchsploit",
+    "cve_lookup",
+    "subfinder",
+    "shodan_search",
+    "censys_search",
+    "burp_get_issues",
+    "poc_generator",
+    "cvss_calculator",
+    "compliance_mapper",
 }
 
 # Tools that always require security review
@@ -26,6 +35,26 @@ SENSITIVE_TOOLS = {
     "flashcard_deck_create",
     "wifi_deauth",
     "wifi_handshake_capture",
+    "nmap_scan",
+    "masscan_scan",
+    "service_enum",
+    "nikto_scan",
+    "gobuster_scan",
+    "sqlmap_scan",
+    "header_check",
+    "nuclei_scan",
+    "metasploit_run",
+    "poc_validate",
+    "privesc_check",
+    "credential_harvest",
+    "bloodhound_run",
+    "kerberoast",
+    "ldap_enum",
+    "hydra_attack",
+    "john_crack",
+    "s3_enum",
+    "burp_scan_target",
+    "hackerone_submit",
 }
 
 SENSITIVE_PATTERN_RE = re.compile(
