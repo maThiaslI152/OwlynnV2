@@ -57,6 +57,16 @@
 | Change pentest cloud proxy | — | `src/agent/routing/pentest_classifier.py`, `src/agent/routing/router.py`, `src/config/defaults.yaml` |
 | Change pentest wireless tools | — | `src/tools/pentest_tools.py` (wifi_*), `lima/kali.yaml`, `src/agent/hitl/policy.py` |
 | Change pentest attack chain | — | `src/agent/pentest/attack_chain.py`, `src/tools/pentest_tools.py` (auto_recon, suggest_next_steps) |
+| Change pentest multi-agent executor | — | `src/agent/pentest/executor.py`, `src/agent/pentest/domain_prompts.py`, `src/agent/core/graph.py` |
+| Change pentest task graph | — | `src/agent/pentest/task_graph.py`, `src/memory/pentest_engagement.py` |
+| Change pentest integrations | — | `src/integrations/`, `src/config/defaults.yaml` (integrations.*), `mcp_config.json` |
+| Change Burp Suite integration | — | `src/integrations/burp_mcp_server.py`, `mcp_config.json` |
+| Change pentest reporting | — | `src/tools/pentest_reporting.py`, `src/tools/pentest_report.py` |
+| Change pentest tools | — | `src/tools/pentest_tools.py`, `src/agent/pentest/`, `src/agent/tool_sets.py` |
+| Change pentest live terminal | — | `src/tools/screen_assist/kali_stream.py`, `frontend-v2/src/components/LiveTerminal.tsx` |
+| Change pentest cloud proxy | — | `src/agent/routing/pentest_classifier.py`, `src/agent/routing/router.py`, `src/config/defaults.yaml` |
+| Change pentest wireless tools | — | `src/tools/pentest_tools.py` (wifi_*), `lima/kali.yaml`, `src/agent/hitl/policy.py` |
+| Change pentest attack chain | — | `src/agent/pentest/attack_chain.py`, `src/tools/pentest_tools.py` (auto_recon, suggest_next_steps) |
 | Change browser extension | [`docs/features/BROWSER_EXTENSION.md`](docs/features/BROWSER_EXTENSION.md) | `browser-extension/`, `src/api/routes/browser_extension.py` |
 | Package Electron app | [`docs/guides/app-release.md`](docs/guides/app-release.md) | `frontend-v2/electron/`, `frontend-v2/electron-builder.yml` |
 
@@ -91,7 +101,7 @@ Cloud APIs (DeepSeek, OpenAI, etc.) refuse security/pentest content. Pentest mod
   - Benchmark: `scripts/bench_pentest_models.py`
   - Results: `docs/evaluations/pentest-model-benchmark-2026-06-28.md`
 
-### Pentest Tools (38 total)
+### Pentest Tools (67 total)
 
 | Category | Tools | Count |
 |----------|-------|-------|
@@ -104,6 +114,36 @@ Cloud APIs (DeepSeek, OpenAI, etc.) refuse security/pentest content. Pentest mod
 | Attack Chain | suggest_next_steps, auto_recon, analyze_attack_surface | 3 |
 | Screen Assist | capture_kali_terminal, run_kali_command, send_kali_input, kali_tmux_new_window, kali_tmux_list_windows | 5 |
 | File/Report | read/write/edit/list/delete workspace, create_pdf, create_docx, notebook | 8 |
+| Network | nmap_scan, masscan_scan, service_enum | 3 |
+| Web App | nikto_scan, gobuster_scan, sqlmap_scan, header_check | 4 |
+| Vuln Scanning | nuclei_scan, searchsploit, cve_lookup | 3 |
+| Exploitation | metasploit_run, poc_validate | 2 |
+| Post-Exploitation | privesc_check, credential_harvest | 2 |
+| OSINT | subfinder, shodan_search, censys_search | 3 |
+| Active Directory | bloodhound_run, kerberoast, ldap_enum | 3 |
+| Password | hydra_attack, john_crack | 2 |
+| Cloud | s3_enum | 1 |
+| Reporting | poc_generator, cvss_calculator, compliance_mapper | 3 |
+| Burp Suite MCP | burp_scan_target, burp_get_issues, burp_get_scan_status | 3 |
+
+### Pentest Multi-Agent Architecture
+
+Owlynn uses a **coordinator + executor** pattern for pentest automation:
+
+- **Coordinator** (`complex_llm_node`): Analyzes engagement state, decides which subtask to run, processes results
+- **Executor** (`pentest_executor` node): Runs focused subtasks with domain-specific prompts and tool subsets
+- **Task Graph** (`PentestTaskGraph`): DAG tracking attack dependencies and task status per engagement
+
+Domain prompts in `src/agent/pentest/domain_prompts.py` provide specialized methodology for each category (PTES, OWASP, MITRE ATT&CK).
+
+### Pentest Integrations
+
+| Service | Client | Tools |
+|---------|--------|-------|
+| Shodan | `src/integrations/shodan_client.py` | shodan_search (read-only) |
+| Censys | `src/integrations/censys_client.py` | censys_search (read-only) |
+| HackerOne | `src/integrations/hackerone_client.py` | hackerone_submit (HITL) |
+| Burp Suite | `src/integrations/burp_mcp_server.py` | MCP server (stdio transport) |
 
 ### Pentest Infrastructure (Kali VM)
 
@@ -112,7 +152,7 @@ Owlynn uses **Lima** (Apple Virtualization Framework) to run Kali Linux locally 
 | Component | Setup | RAM |
 |-----------|-------|-----|
 | Lima VM | `./scripts/setup-kali-lima.sh` | ~2GB |
-| Kali tools | nmap, sqlmap, hydra, john, nikto, gobuster, aircrack-ng, etc. | — |
+| Kali tools | nmap, sqlmap, hydra, john, nikto, gobuster, aircrack-ng, masscan, nuclei, bloodhound, etc. | — |
 | SSH | Key auth, port 60022, user `kali` | — |
 | tmux | Session `main` for Owlynn screen assist | — |
 | Live Terminal | WS streaming at `/ws/pentest/terminal` | — |
@@ -204,6 +244,7 @@ When generating cache keys for chat histories or context gatekeepers (e.g., in `
 
 ## Last updated
 
+2026-07-08 — Pentest V3 features: multi-agent architecture (coordinator + executor pattern, PentestExecutor node, domain-specific prompts); 29 new tools across 9 categories (network, web, vuln, exploit, post-exploit, OSINT, AD, password, cloud); task graph (PentestTaskGraph DAG for attack dependency tracking); integrations (Shodan, Censys, HackerOne, Burp Suite MCP); enhanced reporting (PoC generator, CVSS calculator, compliance mapper). 67 total pentest tools. Changelog at docs/changes/pentest-v3-multi-agent/CHANGELOG.md.
 2026-07-08 — Pentest V2 features: live terminal streaming (WS-based, replaces 3s polling); cloud pentest proxy (CVE/methodology queries to cloud, target data stays local); wireless pentest tools (6 wifi_* tools, aircrack-ng suite, HITL gating); multi-engagement support (tabs, switching, cross-engagement compare); attack chain automation (auto_recon, suggest_next_steps, analyze_attack_surface). 38 total pentest tools. Changelog at docs/changes/pentest-v2-features/CHANGELOG.md.
 2026-07-07 — Browser extension bugfixes: fixed extension crashing by adding `alarms` to permissions; improved MV3 CSP strictness; fixed frontend streaming whitespace bug by removing `.strip()` in `formatter.py`; added UI animation tracking for tool execution state.
 2026-07-07 — Electron app packaging: .app with splash screen, backend spawning, tray, close-to-background, version display (v0.1.0). Atomic writes for user_profile.json and secrets.env. Browser extension bundled in .app Resources. Release guide at docs/guides/app-release.md. Task routing table updated with "Package Electron app" row.
