@@ -42,7 +42,10 @@ try:
                 resp = await client.post(
                     f"{BURP_API_URL}/v0.1/scan",
                     headers=_headers(),
-                    json={"urls": [url], "scan_configuration": "crawl-and-audit-passive"},
+                    json={
+                        "urls": [url],
+                        "scan_configuration": "crawl-and-audit-passive",
+                    },
                 )
             elif scan_type == "crawl":
                 resp = await client.post(
@@ -58,7 +61,14 @@ try:
                 )
             resp.raise_for_status()
             data = resp.json()
-            return json.dumps({"status": "scan_launched", "scan_id": data.get("scan_id", data.get("crawl_id", "")), "target": url, "type": scan_type})
+            return json.dumps(
+                {
+                    "status": "scan_launched",
+                    "scan_id": data.get("scan_id", data.get("crawl_id", "")),
+                    "target": url,
+                    "type": scan_type,
+                }
+            )
 
     @mcp.tool()
     async def burp_get_issues(scan_id: str = "", severity: str = "") -> str:

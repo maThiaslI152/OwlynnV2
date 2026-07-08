@@ -1,7 +1,7 @@
 ---
 status: active
 category: reference
-last_updated: 2026-07-07
+last_updated: 2026-07-08
 owner: ai-agent
 audience: agent
 ---
@@ -12,8 +12,8 @@ audience: agent
 
 ```yaml
 manifest:
-  version: 13
-  generated: "2026-07-07T22:08:00Z"
+  version: 14
+  generated: "2026-07-08T01:15:00Z"
   files:
     - path: AGENTS.md
       status: active
@@ -175,7 +175,7 @@ manifest:
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-06-28
+      last_updated: 2026-07-08
     - path: docs/features/STUDY.md
       status: active
       category: reference
@@ -541,6 +541,11 @@ manifest:
       category: changelog
       audience: human
       last_updated: 2026-07-07
+    - path: docs/changes/pentest-scope-and-manual-targets.md
+      status: active
+      category: changelog
+      audience: human
+      last_updated: 2026-07-08
     - path: docs/debugging/2026-05-27_session_summary.md
       status: active
       category: debugging

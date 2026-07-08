@@ -28,7 +28,14 @@ class HackerOneClient:
             resp.raise_for_status()
             return resp.json()
 
-    async def submit_report(self, program_handle: str, title: str, vulnerability_info: str, severity_rating: str = "medium", impact: str = "") -> dict:
+    async def submit_report(
+        self,
+        program_handle: str,
+        title: str,
+        vulnerability_info: str,
+        severity_rating: str = "medium",
+        impact: str = "",
+    ) -> dict:
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(
                 f"{H1_BASE}/hackers/reports",

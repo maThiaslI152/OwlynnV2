@@ -168,6 +168,14 @@ export type CorrelationId1 = string | null;
 export type Type29 = "error";
 export type Content4 = string;
 export type CorrelationId2 = string | null;
+export type Type30 = "pentest.terminal";
+export type Data = string;
+export type Snapshot = string | null;
+export type Window = string;
+export type Type31 = "pentest.terminal_status";
+export type Connected = boolean;
+export type Host = string;
+export type Session1 = string;
 export type Client =
   | UserMessageEvent
   | StopClientEvent
@@ -176,7 +184,7 @@ export type Client =
   | PlanReviewResponseClientEvent
   | PentestTerminalStartClientEvent
   | PentestTerminalStopClientEvent;
-export type Type30 = "user.message";
+export type Type32 = "user.message";
 export type CorrelationId3 = string | null;
 export type Id4 = string;
 export type Content5 = string;
@@ -189,16 +197,18 @@ export type Files =
 export type ProjectId = string | null;
 export type PersonaId = string | null;
 export type Source2 = ("text" | "voice") | null;
-export type Type31 = "stop";
-export type Type32 = "security_approval";
+export type Type33 = "stop";
+export type Type34 = "security_approval";
 export type Approved = boolean;
 export type CorrelationId4 = string | null;
-export type Type33 = "ask_user_response";
+export type Type35 = "ask_user_response";
 export type CorrelationId5 = string | null;
-export type Type34 = "plan_review_response";
+export type Type36 = "plan_review_response";
 export type Approved1 = boolean;
 export type Feedback = string | null;
 export type CorrelationId6 = string | null;
+export type Type37 = "pentest.terminal_start";
+export type Type38 = "pentest.terminal_stop";
 
 export interface ProtocolEvents {
   server: Server;
@@ -431,8 +441,22 @@ export interface ErrorEvent {
   correlation_id?: CorrelationId2;
   [k: string]: unknown;
 }
-export interface UserMessageEvent {
+export interface PentestTerminalChunkEvent {
   type?: Type30;
+  data: Data;
+  snapshot?: Snapshot;
+  window?: Window;
+  [k: string]: unknown;
+}
+export interface PentestTerminalStatusEvent {
+  type?: Type31;
+  connected: Connected;
+  host?: Host;
+  session?: Session1;
+  [k: string]: unknown;
+}
+export interface UserMessageEvent {
+  type?: Type32;
   correlation_id?: CorrelationId3;
   id: Id4;
   content: Content5;
@@ -444,17 +468,17 @@ export interface UserMessageEvent {
   [k: string]: unknown;
 }
 export interface StopClientEvent {
-  type?: Type31;
+  type?: Type33;
   [k: string]: unknown;
 }
 export interface SecurityApprovalClientEvent {
-  type?: Type32;
+  type?: Type34;
   approved: Approved;
   correlation_id?: CorrelationId4;
   [k: string]: unknown;
 }
 export interface AskUserResponseClientEvent {
-  type?: Type33;
+  type?: Type35;
   answer: Answer;
   correlation_id?: CorrelationId5;
   [k: string]: unknown;
@@ -463,32 +487,18 @@ export interface Answer {
   [k: string]: unknown;
 }
 export interface PlanReviewResponseClientEvent {
-  type?: Type34;
+  type?: Type36;
   approved: Approved1;
   feedback?: Feedback;
   correlation_id?: CorrelationId6;
   [k: string]: unknown;
 }
-export interface PentestTerminalChunkEvent {
-  type?: "pentest.terminal";
-  data: string;
-  snapshot?: string | null;
-  window?: string;
-  [k: string]: unknown;
-}
-export interface PentestTerminalStatusEvent {
-  type?: "pentest.terminal_status";
-  connected: boolean;
-  host?: string;
-  session?: string;
-  [k: string]: unknown;
-}
 export interface PentestTerminalStartClientEvent {
-  type?: "pentest.terminal_start";
+  type?: Type37;
   [k: string]: unknown;
 }
 export interface PentestTerminalStopClientEvent {
-  type?: "pentest.terminal_stop";
+  type?: Type38;
   [k: string]: unknown;
 }
 
