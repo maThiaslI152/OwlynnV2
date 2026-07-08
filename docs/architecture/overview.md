@@ -1,11 +1,18 @@
+---
+status: active
+category: architecture
+last_updated: 2026-07-09
+owner: ai-agent
+audience: agent
+---
+
 # Architecture Overview — OwlynnV2
 
 > **System context, modules, data flow, and key entrypoints.**
-> Last updated: 2026-06-27
 
 ## System Context
 
-Owlynn is a **privacy-first hybrid** coworker for Apple Silicon (Mac M4 Air 24GB). **Local:** workspace files, Qdrant/Redis memory, routing, embeddings, and unified model routing, embedding, and memory extraction stay on-device. **Cloud (opt-in):** complex reasoning uses **DeepSeek V4** when a key is configured; prompts are **best-effort anonymized** before send (see `src/agent/anonymization.py`). Startup preloads **Qwen3-VL-4B unified model + nomic embedding**.
+Owlynn is a **privacy-first hybrid** coworker for Apple Silicon (Mac M4 Air 24GB). **Local:** workspace files, Qdrant/Redis memory, routing, embeddings, and unified model routing, embedding, and memory extraction stay on-device. **Cloud (opt-in):** complex reasoning uses **DeepSeek V4** when a key is configured; prompts are **best-effort anonymized** before send (see `src/agent/anonymization.py`). Startup preloads **Gemma 4 E2B unified model + nomic embedding**.
 
 ```
 Browser (http://127.0.0.1:5173)
@@ -19,7 +26,7 @@ Browser (http://127.0.0.1:5173)
   │     └─► Tool execution (web search, file ops, REPL, MCP)
   │
   ├─► LM Studio (port 1234)
-  │     ├─► Qwen3-VL-4B unified local model (startup preload)
+  │     ├─► Gemma 4 E2B unified local model (startup preload)
   │     └─► nomic embedding (startup preload)
   │
   ├─► Qdrant (port 6333)
@@ -37,7 +44,7 @@ Browser (http://127.0.0.1:5173)
 | **Config Loader** | `src/config/config_loader.py` | Layered config with typed accessors, env var mapping, validation |
 | **Agent Graph** | `src/agent/graph.py` | LangGraph orchestration: memory→router→simple/complex→tools→memory |
 | **Router** | `src/agent/routing/router.py` | Cloud-primary routing: `simple`, `complex-cloud` — keyword bypass, LLM classifier, HITL |
-| **Simple Node** | `src/agent/core/simple.py` | Fast answers via local unified model (Qwen3-VL-4B), retry-once on failure |
+| **Simple Node** | `src/agent/core/simple.py` | Fast answers via local unified model (Gemma 4 E2B), retry-once on failure |
 | **Complex Node** | `src/agent/core/complex.py` | Tool-augmented reasoning — Cloud DeepSeek V4 |
 | **Cloud payload** | `src/agent/nodes/complex_utils/cloud_payload.py` | Anonymization, brief gate, stable/volatile prompt layers, cache metrics |
 | **Cloud invoke** | `src/agent/nodes/complex_utils/cloud_invoke.py` | Raw DeepSeek client, tool strict mode, reasoning replay |
@@ -71,7 +78,7 @@ after_memory_retrieve ──► If tokens >85% context: auto_summarize → compr
   ▼
 simple | scope_clarify → complex_llm
   │
-  ├── simple ──► simple_node (Qwen3-VL-4B, fast)
+  ├── simple ──► simple_node (Gemma 4 E2B, fast)
   │
   └── complex ──► scope_clarify ──► complex_llm
                         │              │

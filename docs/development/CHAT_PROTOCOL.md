@@ -129,13 +129,13 @@ Frontend should send `type` (MIME) on each file; Composer infers from `file.type
 
 | MIME/Type | Behavior |
 |-----------|----------|
-| `image/png`, `image/jpeg`, `image/webp`, `image/gif` | **Cloud route (`complex-cloud`):** transcribed via `vision_proxy` (Qwen3-VL-4B) before DeepSeek (text-only API). UI shows thumbnail in composer + message bubble. **Not** indexed into Qdrant/RAG. |
+| `image/png`, `image/jpeg`, `image/webp`, `image/gif` | **Cloud route (`complex-cloud`):** transcribed via `vision_proxy` (Gemma 4 E2B) before DeepSeek (text-only API). UI shows thumbnail in composer + message bubble. **Not** indexed into Qdrant/RAG. |
 | `application/pdf` / `.pdf` | Text extracted inline when possible; otherwise agent calls `read_workspace_file` |
 | `application/vnd.openxmlformats-officedocument.wordprocessingml.document` / `.docx`, `.doc` | Text and table contents extracted inline on upload; otherwise agent calls `read_workspace_file` |
 | Other UTF-8 text/code | Inlined in prompt as fenced block |
 | Other binary | Saved to workspace; agent instructed to call `read_workspace_file` |
 
-Cloud route (`complex-cloud`) with images: lazy-loaded Qwen3-VL-4B (`models.vision_proxy`) via `vision_proxy` → formatted text block for DeepSeek; on proxy failure, retries `complex-cloud` with text-only prompt.
+Cloud route (`complex-cloud`) with images: lazy-loaded Gemma 4 E2B (`models.vision_proxy`) via `vision_proxy` → formatted text block for DeepSeek; on proxy failure, retries `complex-cloud` with text-only prompt.
 
 ### Server → Client: Event Types
 
@@ -500,9 +500,9 @@ Returns all user-facing settings merged from `GET /api/profile` and `GET /api/ad
   "preferred_language": "en",
   "response_style": "concise",
   "small_llm_base_url": "http://127.0.0.1:1234/v1",
-  "small_llm_model_name": "qwen3-vl-4b-instruct-c_abliterated-v2-mlx",
+  "small_llm_model_name": "gemma-4-e2b-heretic-uncensored-mlx",
   "llm_base_url": "http://127.0.0.1:1234/v1",
-  "llm_model_name": "qwen3-vl-4b-instruct-c_abliterated-v2-mlx",
+  "llm_model_name": "gemma-4-e2b-heretic-uncensored-mlx",
   "cloud_llm_base_url": "https://api.deepseek.com/v1",
   "cloud_llm_model_name": "deepseek-v4-flash",
   "deepseek_api_key": "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022",
@@ -569,4 +569,4 @@ cd frontend-v2 && npx vitest run
 
 ## Last updated
 
-2026-06-19 — Qwen3-VL-4B vision proxy replaces Florence-2; `complex-cloud` → `large-cloud` in `model_info`
+2026-06-19 — Gemma 4 E2B vision proxy replaces Florence-2; `complex-cloud` → `large-cloud` in `model_info`

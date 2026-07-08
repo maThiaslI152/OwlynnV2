@@ -8,6 +8,7 @@ Extracted from src/agent/nodes/router.py and enhanced to guarantee:
   - Budget never exceeds available context window after input tokens
 """
 
+from src.config.config_loader import config
 from src.config.settings import (
     MEDIUM_DEFAULT_CONTEXT,
     MEDIUM_LONGCTX_CONTEXT,
@@ -18,7 +19,7 @@ from src.config.settings import (
 _MEDIUM_DEFAULT_CONTEXT = MEDIUM_DEFAULT_CONTEXT  # 100_000
 _MEDIUM_LONGCTX_CONTEXT = MEDIUM_LONGCTX_CONTEXT  # 131_072
 _CLOUD_CONTEXT = CLOUD_CONTEXT  # 131_072
-_SMALL_MODEL_CONTEXT = 4096
+_SMALL_MODEL_CONTEXT = int(config.get("models.small.context_window", 65536))
 
 # Tier definitions: (max_input_chars, tier_budget)
 _BUDGET_TIERS = [

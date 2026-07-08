@@ -39,7 +39,7 @@ Before comparing, here is what Owlynn already has (see [`architecture/overview.m
 |---|---|
 | Desktop shell | **Electron** (macOS `.app` / `.dmg` via `frontend-v2`); legacy Tauri CSS classes remain in stylesheet only |
 | Agent orchestration | LangGraph graph: `memory_inject → router → complex_llm ↔ security_proxy ↔ tool_action → memory_write` |
-| Model routing | **Cloud-primary:** `simple` (MiniCPM5-1B) or `complex-cloud` (DeepSeek V4). Extraction: Qwen3-VL-4B (local, background, shares models.small). Legacy `complex-default`/`complex-vision`/`complex-longctx` and **SwapManager** removed (2026-06) |
+| Model routing | **Cloud-primary:** `simple` (MiniCPM5-1B) or `complex-cloud` (DeepSeek V4). Extraction: Gemma 4 E2B (local, background, shares models.small). Legacy `complex-default`/`complex-vision`/`complex-longctx` and **SwapManager** removed (2026-06) |
 | Cloud path | `prepare_cloud_payload()` — PII anonymization, brief gate, stable/volatile prompt layers, vision proxy, prefix cache metrics. Phase 5 **output** cache deferred |
 | Tools | 20+ built-in tools + skill chains (`.md` in `skills/`) + MCP STDIO |
 | Security | `security_proxy` HITL on sensitive tools, HMAC audit trail, cloud anonymization |
@@ -256,7 +256,7 @@ Before comparing, here is what Owlynn already has (see [`architecture/overview.m
 | | |
 |---|---|
 | **Who has it** | AnythingLLM |
-| **Owlynn status** | **Implemented (images).** Composer drag-and-drop + attachment chips ([`Composer.tsx`](../frontend-v2/src/components/Composer.tsx)). Router sends images to `complex-cloud` (Qwen3-VL-4B vision proxy → DeepSeek text). No audio file ingestion. |
+| **Owlynn status** | **Implemented (images).** Composer drag-and-drop + attachment chips ([`Composer.tsx`](../frontend-v2/src/components/Composer.tsx)). Router sends images to `complex-cloud` (Gemma 4 E2B vision proxy → DeepSeek text). No audio file ingestion. |
 | **Effort** | Done for images; Medium for audio (1–2 days) |
 | **Impact** | **Medium.** Image support exists but upload UX could be polished. Audio file analysis (e.g., "summarize this meeting recording") is a differentiator. |
 | **Technical approach** | 1. **Image upload:** ✅ Drag-and-drop in composer; base64 `image_url` to backend. |

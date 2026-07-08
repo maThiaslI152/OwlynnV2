@@ -1,4 +1,4 @@
-"""Lazy-loaded vision VLM client for vision proxy (Qwen3-VL-4B)."""
+"""Lazy-loaded vision VLM client for vision proxy (Gemma 4 E2B)."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 class VisionModelManager:
-    """Dedicated vision VLM client (Qwen3-VL-4B); never falls back to other models."""
+    """Dedicated vision VLM client (Gemma 4 E2B); never falls back to other models."""
 
     def __init__(self) -> None:
         self._client: Optional[ChatOpenAI] = None

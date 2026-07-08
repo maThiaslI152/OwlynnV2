@@ -110,6 +110,7 @@ The semantic cache is **skipped** when:
 ## Observability
 
 - **Cache HIT**: `INFO [semantic-cache] Cache HIT for thread=<thread_id>` in application logs
+- **Init success**: `INFO Semantic cache initialized (name=owlynn_semantic_cache)` on startup
 - **Init failure**: `WARNING Failed to initialize Semantic Cache: ...` (degraded gracefully)
 - **Store failure**: `WARNING Semantic Cache store failed: ...` (non-fatal, answer still delivered)
 - **WS event on hit**: `model: "cache"` appears in `stream` and `message` events sent to frontend
@@ -134,4 +135,4 @@ The semantic cache is **skipped** when:
 
 ## Last updated
 
-2026-07-07 — Feature implemented and documented.
+2026-07-08 — Fixed `aindex()` bug: `redisvl` v0.20+ changed `aindex` from async method to property. Removed vestigial call; index is auto-created on init, async index is lazy-initialized on first use.

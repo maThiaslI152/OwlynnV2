@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.agent.routing.router import (
-    _augment_toolbox_for_scenario,
+from src.agent.routing.modes import (
+    augment_toolbox_for_scenario,
     _user_wants_screen_assist,
 )
 from src.agent.tool_sets import TOOLBOX_REGISTRY, resolve_tools
@@ -101,6 +101,6 @@ def test_user_wants_screen_assist_keywords():
 
 def test_augment_toolbox_pentest_adds_screen_assist():
     # Pentest now replaces the toolbox entirely with ["pentest"]
-    out = _augment_toolbox_for_scenario(["web_search"], "pentest", "nmap scan")
+    out = augment_toolbox_for_scenario(["web_search"], "pentest", "nmap scan")
     assert out == ["pentest"]
-    assert _augment_toolbox_for_scenario(["all"], "pentest", "nmap") == ["all"]
+    assert augment_toolbox_for_scenario(["all"], "pentest", "nmap") == ["all"]

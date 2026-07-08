@@ -288,9 +288,7 @@ class ConfigLoader:
     @classmethod
     def get_small_model_name(cls) -> str:
         """Return the configured local model name (router, fallback, vision, extraction)."""
-        return cls.get(
-            "models.small.model_name", "qwen3-vl-4b-instruct-c_abliterated-v2-mlx"
-        )
+        return cls.get("models.small.model_name", "gemma-4-e2b-heretic-uncensored-mlx")
 
     @classmethod
     def get_cloud_model_name(cls) -> str:
@@ -354,7 +352,7 @@ def get_m4_optimization() -> dict[str, Any]:
         "extraction_model": {
             "model_name": cfg.get("models", {})
             .get("small", {})
-            .get("model_name", "qwen3-vl-4b-instruct-c_abliterated-v2-mlx"),
+            .get("model_name", "gemma-4-e2b-heretic-uncensored-mlx"),
             "max_tokens": cfg.get("models", {})
             .get("small", {})
             .get("max_tokens", 1024),

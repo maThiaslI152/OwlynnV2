@@ -76,12 +76,9 @@ async def init_semantic_cache():
         )
         # Use the async client
         semantic_cache._async_redis_client = redis_client
-
-        try:
-            await semantic_cache.aindex()
-        except Exception as e:
-            if "Index already exists" not in str(e):
-                logger.warning("Error creating semantic cache index: %s", e)
+        # Index is auto-created by SemanticCache.__init__(); async index is
+        # lazy-initialised on first acheck()/astore() call in redisvl >=0.20.
+        logger.info("Semantic cache initialized (name=owlynn_semantic_cache)")
     except Exception as e:
         logger.warning("Failed to initialize Semantic Cache: %s", e)
         semantic_cache = None

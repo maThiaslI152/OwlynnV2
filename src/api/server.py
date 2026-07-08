@@ -173,6 +173,47 @@ async def lifespan(app: FastAPI):
 
     app.state.trace_pruner = await start_trace_pruner()
 
+    # Check which existing chats have checkpoint data (non-blocking)
+    async def _check_legacy_chats():
+        try:
+            import asyncio as _asyncio
+            import redis.asyncio as aioredis
+            from src.memory.project import project_manager
+            from src.config.settings import REDIS_URL
+
+            await _asyncio.sleep(5)  # let the system stabilize
+            client = aioredis.from_url(REDIS_URL)
+            legacy_count = 0
+            total_count = 0
+            for proj in await project_manager.list_projects():
+                for chat in proj.get("chats", []):
+                    chat_id = chat.get("id")
+                    if not chat_id:
+                        continue
+                    total_count += 1
+                    has_checkpoint = False
+                    async for _ in client.scan_iter(
+                        match=f"checkpoint:{chat_id}:*", count=5
+                    ):
+                        has_checkpoint = True
+                        break
+                    if not has_checkpoint:
+                        legacy_count += 1
+            await client.aclose()
+            if legacy_count > 0:
+                logger.warning(
+                    "[startup] %d/%d chats have no checkpoint data (created before Redis checkpointer). "
+                    "These chats will show 'history unavailable' when opened.",
+                    legacy_count,
+                    total_count,
+                )
+        except Exception as e:
+            logger.debug("[startup] Legacy chat check skipped: %s", e)
+
+    import asyncio as _asyncio
+
+    _asyncio.ensure_future(_check_legacy_chats())
+
     yield
     if getattr(app.state, "memory_extraction_worker", False):
         await stop_extraction_worker()

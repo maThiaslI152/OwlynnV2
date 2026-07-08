@@ -21,6 +21,7 @@ from src.agent.nodes.summarize import auto_summarize_node
 from src.agent.nodes.coherence import coherence_check_node
 from src.agent.nodes.coherence_retry import coherence_retry_node
 from src.agent.pentest.executor import pentest_executor_node
+from src.agent.nodes.pentest_memory import pentest_memory_node
 
 
 import logging
@@ -32,9 +33,7 @@ from src.config.config_loader import config
 
 # ── Summarize gate: conditional edge after memory_retrieve ───────────
 
-_DEFAULT_CONTEXT_WINDOW = int(
-    config.get("models.medium.variants.default.context_window", 16384)
-)
+_DEFAULT_CONTEXT_WINDOW = int(config.get("models.small.context_window", 65536))
 _SUMMARIZE_THRESHOLD = float(config.get("summarization.threshold_ratio", 0.85))
 
 _COHERENCE_THRESHOLD = float(config.get("coherence.retry_threshold", 0.4))
@@ -260,6 +259,7 @@ def build_graph():
     builder.add_node("coherence_check", coherence_check_node)
     builder.add_node("coherence_retry", coherence_retry_node)
     builder.add_node("pentest_executor", pentest_executor_node)
+    builder.add_node("pentest_memory", pentest_memory_node)
     builder.add_node("memory_write", memory_write_node)
 
     builder.set_entry_point("memory_inject_lite")
@@ -349,6 +349,8 @@ def build_graph():
             return "browser_local"
         if state.get("pentest_subtask"):
             return "pentest_executor"
+        if state.get("scenario_id") == "pentest":
+            return "pentest_memory"
         return "complex_llm"
 
     builder.add_conditional_edges(
@@ -357,11 +359,13 @@ def build_graph():
         {
             "browser_local": "browser_local",
             "pentest_executor": "pentest_executor",
+            "pentest_memory": "pentest_memory",
             "complex_llm": "complex_llm",
         },
     )
 
     builder.add_edge("pentest_executor", "complex_llm")
+    builder.add_edge("pentest_memory", "complex_llm")
     builder.add_edge("simple", "coherence_check")
 
     # coherence_check → coherence_retry (low confidence + budget left) | memory_write
@@ -450,6 +454,57 @@ async def _check_cloud_connectivity() -> dict:
     return result
 
 
+async def _verify_checkpointer_write(checkpointer) -> bool:
+    """Round-trip test: write a dummy checkpoint, read it back, then clean up."""
+    import uuid
+
+    test_thread = f"_healthcheck_{uuid.uuid4().hex[:8]}"
+    test_checkpoint_id = f"_test_{uuid.uuid4().hex[:8]}"
+    try:
+        from langchain_core.messages import HumanMessage
+
+        config = {
+            "configurable": {
+                "thread_id": test_thread,
+                "checkpoint_ns": "",
+            }
+        }
+        checkpoint = {
+            "v": 1,
+            "id": test_checkpoint_id,
+            "ts": "2026-01-01T00:00:00",
+            "channel_values": {"messages": [HumanMessage(content="__healthcheck__")]},
+            "channel_versions": {"messages": 1},
+            "versions_seen": {},
+        }
+        await checkpointer.aput(
+            config, checkpoint, {"source": "healthcheck"}, {"messages": 1}
+        )
+        result = await checkpointer.aget_tuple(config)
+        if result is None:
+            return False
+        # Clean up test data
+        try:
+            import redis.asyncio as aioredis
+
+            client = aioredis.from_url(REDIS_URL)
+            async for key in client.scan_iter(
+                match=f"checkpoint:{test_thread}:*", count=10
+            ):
+                await client.delete(key)
+            async for key in client.scan_iter(
+                match=f"checkpoint_latest:{test_thread}:*", count=10
+            ):
+                await client.delete(key)
+            await client.aclose()
+        except Exception:
+            pass  # cleanup is best-effort
+        return True
+    except Exception as e:
+        logger.warning("Checkpointer write-test failed: %s", e)
+        return False
+
+
 async def init_agent(checkpointer=None):
     """Initializes the agent with Redis checkpointer (falls back to MemorySaver)."""
     try:
@@ -475,9 +530,19 @@ async def init_agent(checkpointer=None):
 
             checkpointer = AsyncRedisSaver(redis_url=REDIS_URL)
             await checkpointer.setup()
-            logger.info("Using Redis checkpointer at %s", REDIS_URL)
-            # Start background eviction of stale checkpoint keys (runs every 24h)
-            _asyncio.ensure_future(_evict_stale_checkpoints(REDIS_URL))
+
+            # Verify the checkpointer can actually write (round-trip test)
+            _test_passed = await _verify_checkpointer_write(checkpointer)
+            if _test_passed:
+                logger.info("Using Redis checkpointer at %s", REDIS_URL)
+                # Start background eviction of stale checkpoint keys (runs every 24h)
+                _asyncio.ensure_future(_evict_stale_checkpoints(REDIS_URL))
+            else:
+                logger.warning(
+                    "Redis checkpointer write-test failed — falling back to MemorySaver. "
+                    "Conversations will NOT persist across restarts."
+                )
+                checkpointer = MemorySaver()
         except Exception as e:
             logger.warning("Redis unavailable (%s), falling back to MemorySaver", e)
             checkpointer = MemorySaver()

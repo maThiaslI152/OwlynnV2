@@ -306,10 +306,21 @@ function App() {
         const response = await fetchWithAuth(`/api/history/${encodeURIComponent(effectiveThreadId)}`, {
           signal: controller.signal
         })
-        if (!response.ok) return
-        const history = (await response.json()) as Array<{ type: string; content: string; tool_calls?: unknown[]; attachments?: Array<{ name: string; type: string; previewUrl: string }> }>
+        if (!response.ok) {
+          toast.error('Failed to load chat history')
+          return
+        }
+        const data = await response.json()
         if (disposed) return
-        if (!Array.isArray(history)) return
+
+        // Handle structured response (new format) or legacy array format
+        const history: Array<{ type: string; content: string; tool_calls?: unknown[]; attachments?: Array<{ name: string; type: string; previewUrl: string }> }> = Array.isArray(data) ? data : (data.messages ?? [])
+        const status: string = Array.isArray(data) ? 'ok' : (data.status ?? 'ok')
+
+        if (status === 'no_checkpoint_data') {
+          toast('Chat history unavailable — this conversation may have been created before persistent storage was enabled', { icon: '⚠️', duration: 5000 })
+        }
+
         for (const msg of history) {
           if (msg.type === 'ai' || msg.type === 'AIMessage') {
             addMessage({

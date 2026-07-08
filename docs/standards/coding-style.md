@@ -1,3 +1,11 @@
+---
+status: active
+category: standards
+last_updated: 2026-07-09
+owner: ai-agent
+audience: agent
+---
+
 # Coding Style
 
 > **Language-agnostic coding conventions for this project.** Agents **MUST** match existing code in touched files first; if creating new files, apply these conventions.

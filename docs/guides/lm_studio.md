@@ -12,11 +12,11 @@ owner: human
 
 ## Models to Download
 
-Owlynn uses a single **local unified model** (`qwen3-vl-4b-instruct-c_abliterated-v2-mlx`) which acts as the router, simple path executor, vision proxy VLM, background memory extraction tool, and cloud fallback for complex reasoning when DeepSeek V4 is unavailable.
+Owlynn uses a single **local unified model** (`gemma-4-e2b-heretic-uncensored-mlx`) which acts as the router, simple path executor, vision proxy VLM, background memory extraction tool, and cloud fallback for complex reasoning when DeepSeek V4 is unavailable.
 
 ### Local Unified Model (Always Loaded)
 
-- `qwen3-vl-4b-instruct-c_abliterated-v2-mlx` — handles routing, simple answers, chat titles, vision proxy (image transcription), background memory extraction, and cloud fallback. 4B params, 4-bit quantization, ~5 GB VRAM.
+- `gemma-4-e2b-heretic-uncensored-mlx` — handles routing, simple answers, chat titles, vision proxy (image transcription), background memory extraction, and cloud fallback. 4B params, 4-bit quantization, ~5 GB VRAM.
 - Config: `models.small` in [`defaults.yaml`](../../src/config/defaults.yaml)
 - **Important:** Set LM Studio `n_ctx` to 65536 or higher for this model.
 
@@ -27,7 +27,7 @@ Owlynn uses a single **local unified model** (`qwen3-vl-4b-instruct-c_abliterate
 
 ### Legacy note
 
-Older docs referenced separate vision/longctx model slots, Qwen 9B medium models, Florence-2/Qwen3-VL-4B vision proxies, and Gemma variants. Current architecture is cloud-primary with a single unified local model (`qwen3-vl-4b-instruct-c_abliterated-v2-mlx`) and nomic embedding. Complex reasoning goes to DeepSeek V4 cloud, with local fallback when cloud is unavailable.
+Older docs referenced separate vision/longctx model slots, Qwen 9B medium models, Florence-2/Gemma 4 E2B vision proxies, and Gemma variants. Current architecture is cloud-primary with a single unified local model (`gemma-4-e2b-heretic-uncensored-mlx`) and nomic embedding. Complex reasoning goes to DeepSeek V4 cloud, with local fallback when cloud is unavailable.
 
 ## Jinja Template Issues — `No user query found in messages`
 
@@ -52,4 +52,4 @@ LM Studio applies the model's **Jinja chat template** to the `/v1/chat/completio
 
 ## Last updated
 
-2026-06-27 — Updated unified local model to Qwen3-VL-4B; nomic embed scope clarified
+2026-06-27 — Updated unified local model to Gemma 4 E2B; nomic embed scope clarified

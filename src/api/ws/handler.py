@@ -1147,11 +1147,13 @@ async def pentest_terminal_ws(websocket: WebSocket):
 
     async def on_terminal_diff(diff: str, snapshot: str):
         try:
-            await websocket.send_json({
-                "type": "pentest.terminal",
-                "data": diff,
-                "window": "main",
-            })
+            await websocket.send_json(
+                {
+                    "type": "pentest.terminal",
+                    "data": diff,
+                    "window": "main",
+                }
+            )
         except Exception:
             pass
 
@@ -1159,19 +1161,23 @@ async def pentest_terminal_ws(websocket: WebSocket):
 
     snapshot = await streamer.get_snapshot()
     if snapshot:
-        await websocket.send_json({
-            "type": "pentest.terminal",
-            "data": snapshot,
-            "snapshot": snapshot,
-            "window": "main",
-        })
+        await websocket.send_json(
+            {
+                "type": "pentest.terminal",
+                "data": snapshot,
+                "snapshot": snapshot,
+                "window": "main",
+            }
+        )
 
-    await websocket.send_json({
-        "type": "pentest.terminal_status",
-        "connected": True,
-        "host": kali_cfg.get("host", "127.0.0.1"),
-        "session": kali_cfg.get("tmux_session", "main"),
-    })
+    await websocket.send_json(
+        {
+            "type": "pentest.terminal_status",
+            "connected": True,
+            "host": kali_cfg.get("host", "127.0.0.1"),
+            "session": kali_cfg.get("tmux_session", "main"),
+        }
+    )
 
     try:
         while True:
@@ -1183,6 +1189,7 @@ async def pentest_terminal_ws(websocket: WebSocket):
                     break
                 elif event_type == "pentest.terminal_input":
                     from src.tools.screen_assist.kali_ssh import send_remote_kali_input
+
                     text = payload.get("text", "")
                     window = payload.get("window", "main")
                     if text:
@@ -1193,7 +1200,9 @@ async def pentest_terminal_ws(websocket: WebSocket):
                             window=window,
                             text=text,
                             port=int(kali_cfg.get("port", 60022)),
-                            identity_file=kali_cfg.get("identity_file", "~/.lima/_config/user"),
+                            identity_file=kali_cfg.get(
+                                "identity_file", "~/.lima/_config/user"
+                            ),
                         )
             except json.JSONDecodeError:
                 continue

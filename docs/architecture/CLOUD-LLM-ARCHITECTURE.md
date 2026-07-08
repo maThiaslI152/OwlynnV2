@@ -40,7 +40,7 @@ complex_llm_node
 | [`cloud_payload.py`](src/agent/nodes/complex_utils/cloud_payload.py) | Stable/volatile prompt layers, brief cache (300s TTL), thinking config, cache metrics extraction |
 | [`cloud_invoke.py`](src/agent/nodes/complex_utils/cloud_invoke.py) | Raw OpenAI client, `/v1` + `/beta` fallback, `reasoning_content` on tool loops |
 | [`complex.py`](src/agent/nodes/complex.py) | `api_tokens_used` populated on all cloud paths including `tools_off` (BUG-12) |
-| [`vision_proxy.py`](src/agent/nodes/complex_utils/vision_proxy.py) | Lazy Qwen3-VL-4B VLM (`models.vision_proxy`) → text/UI transcription for DeepSeek; hash cache + idle unload |
+| [`vision_proxy.py`](src/agent/nodes/complex_utils/vision_proxy.py) | Lazy Gemma 4 E2B VLM (`models.vision_proxy`) → text/UI transcription for DeepSeek; hash cache + idle unload |
 | [`vision_qwen3vl.py`](src/agent/nodes/complex_utils/vision_qwen3vl.py) | Parse Qwen3-VL natural-language output into structured blocks |
 | [`vision_schema.py`](src/agent/nodes/complex_utils/vision_schema.py) | OCR/layout JSON parse + cloud formatting |
 | [`vision_model_manager.py`](src/agent/nodes/complex_utils/vision_model_manager.py) | Lazy load / idle unload of local VLM client |

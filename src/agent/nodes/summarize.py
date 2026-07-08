@@ -37,10 +37,8 @@ from src.config.audit_log import audit_info, audit_debug, audit_warn
 from src.config.log_middleware import log_node
 from src.config.config_loader import config
 
-# Default context window for Medium_Default (sourced from centralized config)
-_DEFAULT_CONTEXT_WINDOW = int(
-    config.get("models.medium.variants.default.context_window", 16384)
-)
+# Default context window for the local model (sourced from centralized config)
+_DEFAULT_CONTEXT_WINDOW = int(config.get("models.small.context_window", 65536))
 
 # Threshold ratio — trigger summarization when active_tokens exceed this fraction
 _SUMMARIZE_THRESHOLD = float(config.get("summarization.threshold_ratio", 0.85))

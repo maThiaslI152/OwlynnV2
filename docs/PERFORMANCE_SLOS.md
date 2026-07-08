@@ -1,7 +1,7 @@
 ---
 status: active
 category: standards
-last_updated: 2026-07-07
+last_updated: 2026-07-09
 owner: human
 ---
 
@@ -28,8 +28,8 @@ tests/test_frontend_cutover_serving.py
 
 ### Degradation Ladder (Memory Approaches Limit at 14/16 GB)
 
-1. Unload vision VLM from LM Studio (Qwen3-VL-4B, ~3 GB — largest model)
-2. Unload extraction model from LM Studio (Qwen3-VL-4B, ~5 GB)
+1. Unload vision VLM from LM Studio (Gemma 4 E2B, ~3 GB — largest model)
+2. Unload extraction model from LM Studio (Gemma 4 E2B, ~5 GB)
 3. Reduce context window to 50K tokens
 4. Disable auto-summarize (keep full context at reduced window)
 5. If below 1 GB free, optionally stop SearXNG manually (`podman stop owlynn_searxng`) — not automated in application code
@@ -54,12 +54,12 @@ Measured from: user sends message → assistant first token received (streaming)
 | Component | Budget | Notes |
 |-----------|--------|-------|
 | Python agent (langgraph + LLM pool) | 2 GB | Peak during complex reasoning + tool execution |
-| Local Unified LLM (`qwen3-vl-4b-instruct-c_abliterated-v2-mlx`, LM Studio) | 5 GB | Router, vision proxy, memory extraction |
+| Local Unified LLM (`gemma-4-e2b-heretic-uncensored-mlx`, LM Studio) | 5 GB | Router, vision proxy, memory extraction |
 | nomic embedding (LM Studio) | 140 MB | Memory/RAG/web-rank embeddings |
 | Qdrant (Docker) | 512 MB | Vector store for memory |
 | Redis (Docker) | 128 MB | Session state + LangGraph checkpoints |
 | SearxNG (Docker) | 256 MB | Local web search |
-| Frontend (Tauri + React) | 256 MB | Desktop shell + rendered UI |
+| Frontend (Electron + React) | 256 MB | Desktop shell + rendered UI |
 | **Total sustained** | **~8.3 GB** | All models loaded, all services running |
 | **Total peak** | **~9.3 GB** | During complex reasoning + web search + memory save |
 

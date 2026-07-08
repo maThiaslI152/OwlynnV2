@@ -64,7 +64,7 @@ Applied 14 config changes to make Owlynn Qwen3-optimized:
 
 | # | File | Change |
 |---|------|--------|
-| 1 | `src/config/defaults.yaml:56` | model_name → qwen3-vl-4b-instruct-c_abliterated-v2-mlx |
+| 1 | `src/config/defaults.yaml:56` | model_name → gemma-4-e2b-heretic-uncensored-mlx |
 | 2 | `src/config/defaults.yaml:63-65` | Removed `chat_template_kwargs: enable_thinking: false` (Gemma-specific) |
 | 3 | `src/agent/llm.py:68,103,151,180` | Updated hardcoded fallback defaults |
 | 4 | `src/config/config_loader.py:326` | Updated extraction model default |
@@ -76,7 +76,7 @@ Applied 14 config changes to make Owlynn Qwen3-optimized:
 | 10 | `src/api/server.py:116` | Updated comment |
 | 11 | `src/api/routes/openai.py:21` | Updated default model name |
 | 12 | `src/cli.py:42,92` | Updated default model name |
-| 13 | `.env` | Added `SMALL_LLM_MODEL_NAME=qwen3-vl-4b-instruct-c_abliterated-v2-mlx` |
+| 13 | `.env` | Added `SMALL_LLM_MODEL_NAME=gemma-4-e2b-heretic-uncensored-mlx` |
 | 14 | `scripts/eval_local_models.py:673` | Updated cleanup default |
 
 Also fixed: `data/user_profile.json` — removed stale `cloud_llm_base_url` and `cloud_llm_model_name` overrides that were pointing cloud to local E2B.

@@ -208,7 +208,7 @@ Owlynn tracks hits in [`SessionCostTracker`](../../src/agent/cloud_cost_tracker.
 ## What is not sent to DeepSeek
 
 - Raw workspace file bytes (unless inlined into a user message locally)
-- Images as multimodal input (Qwen3-VL-4B vision proxy → text first)
+- Images as multimodal input (Gemma 4 E2B vision proxy → text first)
 - Unanonymized PII when `cloud_anonymization_enabled` is on
 - Local tool execution logic — only schemas + past `ToolMessage` text
 

@@ -93,7 +93,7 @@ python3 -c "from src.config.config_loader import validate_config; print(validate
 | `PORT` | `server.port` | `8000` |
 | `SMALL_LLM_BASE_URL` | `models.small.base_url` | `http://127.0.0.1:1234/v1` |
 | `CLOUD_LLM_BASE_URL` | `models.cloud.base_url` | `https://api.deepseek.com/v1` |
-| `SMALL_LLM_MODEL_NAME` | `models.small.model_name` | `qwen3-vl-4b-instruct-c_abliterated-v2-mlx` |
+| `SMALL_LLM_MODEL_NAME` | `models.small.model_name` | `gemma-4-e2b-heretic-uncensored-mlx` |
 | `CLOUD_LLM_MODEL_NAME` | `models.cloud.model_name` | `deepseek-v4-flash` |
 | `DEEPSEEK_API_KEY` | env (or `.env.local`) | — |
 | `QDRANT_HOST` / `QDRANT_PORT` | `external_services.qdrant.*` | `localhost:6333` |
@@ -164,7 +164,7 @@ See [`docs/guides/lm_studio.md`](lm_studio.md) for full model setup instructions
 
 1. Open LM Studio
 2. Download and load models:
-   - Local Unified Model: `qwen3-vl-4b-instruct-c_abliterated-v2-mlx` (small slot, used for routing, vision proxy, and memory extraction)
+   - Local Unified Model: `gemma-4-e2b-heretic-uncensored-mlx` (small slot, used for routing, vision proxy, and memory extraction)
    - **Complex reasoning**: no local model needed — DeepSeek V4 cloud handles all complex tasks
    - **RAG only:** `text-embedding-nomic-embed-text-v1.5-embedding` (for long-term memory)
 3. Start the local server (button in the top bar) — listens on port `1234`

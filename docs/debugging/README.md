@@ -63,7 +63,7 @@ Expected: `owlynn_qdrant`, `owlynn_redis` up. Fix: `podman compose up -d` or `./
 curl -s http://127.0.0.1:1234/v1/models | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d.get('data',[])))"
 ```
 
-Expected: ≥1 model. Unified local model: `qwen3-vl-4b-instruct-c_abliterated-v2-mlx`. See [llm-pool.md](llm-pool.md).
+Expected: ≥1 model. Unified local model: `gemma-4-e2b-heretic-uncensored-mlx`. See [llm-pool.md](llm-pool.md).
 
 ### 3. Backend
 

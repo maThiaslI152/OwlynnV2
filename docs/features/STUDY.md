@@ -1,3 +1,11 @@
+---
+status: active
+category: reference
+last_updated: 2026-07-09
+owner: ai-agent
+audience: agent
+---
+
 # Study System
 
 Owlynn's study system provides course tracking, flashcards with spaced repetition, quizzes, study notes, and progress analytics.

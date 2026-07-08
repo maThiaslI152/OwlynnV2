@@ -297,7 +297,6 @@ class LLMPool:
         """Clear cached instances (call when profile or config updates)."""
         cls._small_llm = None
         cls._fallback_llm = None
-        cls._extraction_llm = None
         cls._cloud_llm_flash = None
         cls._cloud_llm_pro = None
         cls._test_overrides = {}

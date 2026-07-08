@@ -119,6 +119,35 @@ class GraphSession:
             reset_active_project(token)
             reset_active_scenario(scenario_token)
             self.is_running = False
+
+            # Verify checkpoint was persisted (non-blocking)
+            try:
+                from src.config.settings import REDIS_URL
+                import redis.asyncio as aioredis
+
+                async def _check_checkpoint():
+                    client = aioredis.from_url(REDIS_URL)
+                    count = 0
+                    async for _ in client.scan_iter(
+                        match=f"checkpoint:{self.thread_id}:*", count=10
+                    ):
+                        count += 1
+                        if count > 0:
+                            break
+                    await client.aclose()
+                    if count == 0:
+                        logger.warning(
+                            "No checkpoint found for thread %s after graph run — "
+                            "history may not persist across restarts",
+                            self.thread_id,
+                        )
+
+                import asyncio as _asyncio
+
+                _asyncio.ensure_future(_check_checkpoint())
+            except Exception:
+                pass  # best-effort, non-critical
+
             # Final status update
             done_msg = {"type": "status", "content": "idle"}
             logger.debug(

@@ -1,7 +1,7 @@
 ---
 status: active
 category: architecture
-last_updated: 2026-07-07
+last_updated: 2026-07-08
 owner: ai-agent
 audience: agent
 ---
@@ -46,9 +46,9 @@ After the agent responds, `memory_write_node`:
 5. Records the conversation in `conversations.json`
 6. Invalidates the memory cache for the next turn
 
-### Background extraction (Qwen3-VL-4B) — resource deferral
+### Background extraction (Gemma 4 E2B) — resource deferral
 
-LTM atom extraction uses the unified local model (`models.small`, `qwen3-vl-4b-instruct-c_abliterated-v2-mlx`) in a background worker. To avoid GPU/CPU contention with active chat or local fallback:
+LTM atom extraction uses the unified local model (`models.small`, `gemma-4-e2b-heretic-uncensored-mlx`) in a background worker. To avoid GPU/CPU contention with active chat or local fallback:
 
 ```text
 memory_write → Redis queue → worker waits for idle window → invoke_medium_background() → Mem0
@@ -109,6 +109,48 @@ The `VectorLifecycleManager` orchestrates the insertion and deletion of vector d
 1. **Mem0 requires `mem0ai[nlp]`** — install with `pip install mem0ai[nlp]` for spaCy/fastembed support
 2. **Memory context cap may cut important facts** — injected memory text is capped at **12000 characters** in `format_memory_context` (see `memory.py`); enhanced blocks use a separate 6000-char budget
 3. **No STM→LTM promotion** — frequently recalled facts aren't auto-promoted to LTM with higher priority
+4. **Legacy chats without checkpoints** — chats created before the Redis checkpointer was enabled show "History unavailable" in the UI. The sidebar displays a ⚠️ icon on affected chats. These conversations cannot be recovered.
+
+## Checkpoint Persistence
+
+Conversation history is stored in Redis via LangGraph's `AsyncRedisSaver`. Each graph run automatically saves checkpoints after every step.
+
+### Startup Verification
+
+On startup, `init_agent()` performs a round-trip write test (`aput` → `aget_tuple` → cleanup) to verify the Redis checkpointer can actually persist data. If the test fails, the system falls back to `MemorySaver` with a warning — conversations will NOT persist across restarts.
+
+### Legacy Chat Detection
+
+On startup, a background task scans all PostgreSQL chat records and checks for corresponding checkpoint keys in Redis. Chats without checkpoint data are logged:
+
+```
+[startup] 5/20 chats have no checkpoint data (created before Redis checkpointer).
+These chats will show 'history unavailable' when opened.
+```
+
+The `/api/projects/{project_id}` endpoint enriches each chat object with a `has_checkpoint` boolean. The frontend uses this to display a ⚠️ icon in the sidebar.
+
+### Post-Run Verification
+
+After each graph run completes, `GraphSession._execute` fires a background check to verify the checkpoint was persisted. If no checkpoint key is found for the thread, a warning is logged:
+
+```
+No checkpoint found for thread <thread_id> after graph run —
+history may not persist across restarts
+```
+
+### History API Response Format
+
+`GET /api/history/{thread_id}` returns a structured response:
+
+```json
+{
+  "messages": [...],
+  "status": "ok" | "no_checkpoint_data" | "error" | "agent_unavailable"
+}
+```
+
+The frontend handles both the new structured format and the legacy array format for backward compatibility.
 
 ## Related Files
 

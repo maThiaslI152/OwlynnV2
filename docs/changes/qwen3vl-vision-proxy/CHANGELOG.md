@@ -1,8 +1,8 @@
-# Qwen3-VL-4B Vision Proxy Upgrade (2026-06-19)
+# Gemma 4 E2B Vision Proxy Upgrade (2026-06-19)
 
 ## Summary
 
-Replaced Florence-2 with **Qwen3-VL-4B** (`qwen3-vl-4b-instruct-c_abliterated-v2-mlx`) as the vision proxy VLM. Florence-2 was incompatible with the current LM Studio version (MLX-format load rejected via API). Qwen3-VL-4B is a full multimodal VLM that loads correctly and provides better image understanding.
+Replaced Florence-2 with **Gemma 4 E2B** (`gemma-4-e2b-heretic-uncensored-mlx`) as the vision proxy VLM. Florence-2 was incompatible with the current LM Studio version (MLX-format load rejected via API). Gemma 4 E2B is a full multimodal VLM that loads correctly and provides better image understanding.
 
 ## Why
 
@@ -77,8 +77,8 @@ Legacy kept: `vision_florence.py` for `vision_prompt_mode: florence` backward co
 ```yaml
 models:
   vision_proxy:
-    model_name: "qwen3-vl-4b-instruct-c_abliterated-v2-mlx"
-    lm_studio_model_key: "qwen3-vl-4b-instruct-c_abliterated-v2-mlx"
+    model_name: "gemma-4-e2b-heretic-uncensored-mlx"
+    lm_studio_model_key: "gemma-4-e2b-heretic-uncensored-mlx"
     temperature: 0.1
     max_tokens: 2048
 
@@ -93,4 +93,4 @@ cloud:
 - [`docs/evaluations/cloud-only-pivot-eval-2026-06-19.md`](../../docs/evaluations/cloud-only-pivot-eval-2026-06-19.md)
 - [`docs/architecture/VISION_PROXY.md`](../../docs/architecture/VISION_PROXY.md)
 - [`docs/changes/cloud-only-pivot/CHANGELOG.md`](../cloud-only-pivot/CHANGELOG.md)
-- [Model: LethalDonkey/Qwen3-VL-4B-Instruct-c_abliterated-v2-MLX-4bit](https://huggingface.co/LethalDonkey/Qwen3-VL-4B-Instruct-c_abliterated-v2-MLX-4bit)
+- [Model: LethalDonkey/Gemma 4 E2B-Instruct-c_abliterated-v2-MLX-4bit](https://huggingface.co/LethalDonkey/Gemma 4 E2B-Instruct-c_abliterated-v2-MLX-4bit)

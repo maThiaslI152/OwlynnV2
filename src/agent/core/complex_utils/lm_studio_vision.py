@@ -1,4 +1,4 @@
-"""Ensure the vision VLM (Qwen3-VL-4B) is the active LM Studio model for vision_proxy."""
+"""Ensure the vision VLM (Gemma 4 E2B) is the active LM Studio model for vision_proxy."""
 
 from __future__ import annotations
 
@@ -92,7 +92,7 @@ async def ensure_vision_vlm_loaded() -> bool:
     """
     Load the vision VLM in LM Studio if auto-load is enabled and it is not active.
 
-    Only the configured vision VLM (Qwen3-VL-4B) may process images — never router/extraction.
+    Only the configured vision VLM (Gemma 4 E2B) may process images — never router/extraction.
     """
     if await is_vision_vlm_loaded():
         return True

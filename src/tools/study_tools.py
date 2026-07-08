@@ -1106,3 +1106,117 @@ def flashcard_suggest(course_id: str, chapter: str, count: int = 10) -> str:
         f'{{"front": "...", "back": "..."}} objects, then call flashcard_deck_create '
         f'with deck_name="{chapter}" and course_id="{course_id}".'
     )
+
+
+@tool
+def flashcard_list() -> str:
+    """List all flashcard decks with card counts and due counts."""
+    decks = []
+    if _FLASHCARDS_DIR.exists():
+        for f in sorted(_FLASHCARDS_DIR.glob("*.json")):
+            try:
+                deck = json.loads(f.read_text(encoding="utf-8"))
+                cards = deck.get("cards", [])
+                due_count = sum(
+                    1
+                    for c in cards
+                    if c.get("due", "") and c["due"] <= datetime.now().isoformat()
+                )
+                decks.append(
+                    {
+                        "deck_id": deck.get("deck_id", f.stem),
+                        "deck_name": deck.get("deck_name", f.stem),
+                        "card_count": len(cards),
+                        "due_cards": due_count,
+                        "course_id": deck.get("course_id", ""),
+                    }
+                )
+            except Exception:
+                continue
+    if not decks:
+        return "No flashcard decks found. Use flashcard_deck_create to create one."
+    return json.dumps(decks, indent=2)
+
+
+@tool
+def course_delete(course_id: str, delete_project: bool = False) -> str:
+    """Delete a course and optionally its associated workspace project.
+
+    Args:
+        course_id: The course code to delete.
+        delete_project: If True, also delete the associated workspace project.
+    """
+    courses = _read_json(_COURSES_PATH, [])
+    target_idx = None
+    for i, c in enumerate(courses):
+        if c.get("course_id") == course_id.strip():
+            target_idx = i
+            break
+    if target_idx is None:
+        return f"Course '{course_id}' not found."
+
+    target = courses[target_idx]
+    project_id = target.get("project_id")
+
+    # Remove course from list
+    courses.pop(target_idx)
+    _write_json(_COURSES_PATH, courses)
+
+    result = f"Deleted course '{course_id}'."
+
+    # Optionally delete associated project
+    if delete_project and project_id:
+        try:
+            from src.memory.project import project_manager
+            import asyncio
+
+            asyncio.get_event_loop().run_until_complete(
+                project_manager.delete_project(project_id)
+            )
+            result += f" Deleted associated project '{project_id}'."
+        except Exception as e:
+            result += f" Could not delete project '{project_id}': {e}"
+
+    return result
+
+
+@tool
+def study_note_update(note_id: str, content: str, tags: str = "") -> str:
+    """Update an existing study note.
+
+    Args:
+        note_id: The note ID to update.
+        content: New content for the note.
+        tags: Optional comma-separated tags (replaces existing tags).
+    """
+    note_path = _NOTES_DIR / f"{note_id}.json"
+    if not note_path.exists():
+        return f"Note '{note_id}' not found."
+
+    try:
+        note = json.loads(note_path.read_text(encoding="utf-8"))
+        note["content"] = content
+        if tags:
+            note["tags"] = [t.strip() for t in tags.split(",") if t.strip()]
+        note["updated_at"] = datetime.now().isoformat()
+        _write_json(note_path, note)
+        return f"Updated note '{note_id}'."
+    except Exception as e:
+        return f"Failed to update note: {e}"
+
+
+@tool
+def quiz_session_delete(session_id: str) -> str:
+    """Delete a quiz session.
+
+    Args:
+        session_id: The quiz session ID to delete.
+    """
+    session_path = _QUIZ_DIR / f"{session_id}.json"
+    if not session_path.exists():
+        return f"Quiz session '{session_id}' not found."
+    try:
+        session_path.unlink()
+        return f"Deleted quiz session '{session_id}'."
+    except Exception as e:
+        return f"Failed to delete quiz session: {e}"

@@ -30,7 +30,7 @@ Updated 7 call sites to use these accessors instead of hardcoded strings:
 
 | File | Line(s) | Before | After |
 |------|---------|--------|-------|
-| `src/agent/llm.py` | 68, 103 | `"qwen3-vl-4b-instruct-c_abliterated-v2-mlx"` | `config.get_small_model_name()` |
+| `src/agent/llm.py` | 68, 103 | `"gemma-4-e2b-heretic-uncensored-mlx"` | `config.get_small_model_name()` |
 | `src/agent/llm.py` | 151, 180 | `"gemma-4-e2b-heretic-uncensored-mlx"` | `config.get_small_model_name()` |
 | `src/cli.py` | 42, 92 | `"qwen3-vl-4b"` | `config.get_small_model_name()` |
 | `src/api/routes/openai.py` | 21 | `"qwen3-vl-4b"` | `config.get_small_model_name()` |

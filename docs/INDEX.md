@@ -1,7 +1,7 @@
 ---
 status: active
 category: reference
-last_updated: 2026-07-08
+last_updated: 2026-07-09
 owner: ai-agent
 audience: agent
 ---
@@ -12,8 +12,8 @@ audience: agent
 
 ```yaml
 manifest:
-  version: 14
-  generated: "2026-07-08T01:15:00Z"
+  version: 15
+  generated: "2026-07-09T00:00:00Z"
   files:
     - path: AGENTS.md
       status: active
@@ -25,7 +25,7 @@ manifest:
       category: architecture
       audience: agent
       last_updated: 2026-05-31
-    - path: docs/AGENT_FLOW.md
+    - path: docs/architecture/AGENT_FLOW.md
       status: active
       category: architecture
       audience: agent
@@ -35,21 +35,11 @@ manifest:
       category: architecture
       audience: agent
       last_updated: 2026-07-07
-    - path: docs/API_REFERENCE.md
+    - path: docs/development/API_REFERENCE.md
       status: active
       category: reference
       audience: agent
       last_updated: 2026-06-07
-    - path: docs/AUDIT_EXPORT_VERIFY_RUNBOOK.md
-      status: active
-      category: guide
-      audience: agent
-      last_updated: 2026-05-31
-    - path: docs/AUDIT_VERIFY_REPORT_SCHEMA.md
-      status: active
-      category: reference
-      audience: agent
-      last_updated: 2026-05-31
     - path: docs/BUG-ANALYSIS.md
       status: active
       category: audit
@@ -60,12 +50,12 @@ manifest:
       category: audit
       audience: human
       last_updated: 2026-05-31
-    - path: docs/CHAT_PROTOCOL.md
+    - path: docs/development/CHAT_PROTOCOL.md
       status: active
       category: reference
       audience: agent
       last_updated: 2026-06-10
-    - path: docs/CLOUD-LLM-ARCHITECTURE.md
+    - path: docs/architecture/CLOUD-LLM-ARCHITECTURE.md
       status: active
       category: reference
       audience: agent
@@ -85,7 +75,7 @@ manifest:
       category: planning
       audience: agent
       last_updated: 2026-05-31
-    - path: docs/EXTENDING_AGENT.md
+    - path: docs/development/EXTENDING_AGENT.md
       status: active
       category: guide
       audience: agent
@@ -105,7 +95,7 @@ manifest:
       category: reference
       audience: agent
       last_updated: 2026-06-11
-    - path: docs/MEMORY.md
+    - path: docs/features/MEMORY.md
       status: active
       category: architecture
       audience: agent
@@ -121,12 +111,12 @@ manifest:
       category: standards
       audience: agent
       last_updated: 2026-07-07
-    - path: docs/PROJECT_GUIDE.md
+    - path: docs/development/PROJECT_GUIDE.md
       status: active
       category: reference
       audience: agent
       last_updated: 2026-06-18
-    - path: docs/PROJECT_OVERVIEW.md
+    - path: docs/architecture/PROJECT_OVERVIEW.md
       status: active
       category: reference
       audience: human
@@ -146,7 +136,7 @@ manifest:
       category: guide
       audience: agent
       last_updated: 2026-05-31
-    - path: docs/BROWSER_EXTENSION.md
+    - path: docs/features/BROWSER_EXTENSION.md
       status: active
       category: reference
       audience: agent
@@ -156,12 +146,12 @@ manifest:
       category: standards
       audience: agent
       last_updated: 2026-06-18
-    - path: docs/TOOLS.md
+    - path: docs/features/TOOLS.md
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-06-10
-    - path: docs/WEB_SEARCH.md
+      last_updated: 2026-07-07
+    - path: docs/features/WEB_SEARCH.md
       status: active
       category: architecture
       audience: agent
@@ -175,17 +165,17 @@ manifest:
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-07-08
+      last_updated: 2026-07-09
     - path: docs/features/STUDY.md
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-06-28
-    - path: docs/features/TOOLS.md
+      last_updated: 2026-07-09
+    - path: docs/changes/router-decomposition-pentest-v3/CHANGELOG.md
       status: active
-      category: reference
+      category: changelog
       audience: agent
-      last_updated: 2026-07-07
+      last_updated: 2026-07-09
     - path: docs/architecture/DEEPSEEK_V4_INTEGRATION.md
       status: active
       category: architecture
@@ -205,7 +195,7 @@ manifest:
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-06-10
+      last_updated: 2026-07-09
     - path: docs/archive/AGENT_RESUME_PLAYBOOK.md
       status: archived
       category: archive

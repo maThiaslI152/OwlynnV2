@@ -20,7 +20,7 @@ owner: human
 | `model_not_found` in response | Model not loaded in LM Studio | `curl http://127.0.0.1:1234/v1/models \| jq '.data[].id'` | Load model in LM Studio or update profile model keys |
 | Small LLM response is garbage | Wrong model loaded or token limit | Check response content, compare with expected model | Verify `small_llm_model_name` in profile matches loaded model |
 | Swap hangs (>120s) | LM Studio native API unresponsive | `curl http://127.0.0.1:1234/api/v1/models` (native API) | Restart LM Studio; check `docker stats` for memory pressure |
-| Model not found | Name mismatch vs LM Studio | Check `defaults.yaml` `models.small` name | Load `qwen3-vl-4b-instruct-c_abliterated-v2-mlx` in LM Studio |
+| Model not found | Name mismatch vs LM Studio | Check `defaults.yaml` `models.small` name | Load `gemma-4-e2b-heretic-uncensored-mlx` in LM Studio |
 | Request timeout | M4 slow inference | Check `models.*.timeout` in defaults.yaml | Reduce context window or use AC power |
 | DeepSeek API 401 | Invalid or missing API key | `echo $DEEPSEEK_API_KEY` | Set `DEEPSEEK_API_KEY` env var or in User_Profile |
 | DeepSeek API 403 | Account quota exceeded or disabled | Check DeepSeek dashboard | Top up quota or disable cloud escalation |
@@ -100,7 +100,7 @@ ps aux | grep python | grep -v grep | awk '{printf "PID: %s, RSS: %.1f GB, CMD: 
 
 ```
 # Small LLM initialization
-INFO:src.agent.llm:Initializing Small_LLM (qwen3-vl-4b-instruct-c_abliterated-v2-mlx)
+INFO:src.agent.llm:Initializing Small_LLM (gemma-4-e2b-heretic-uncensored-mlx)
 
 # Cloud LLM usage
 INFO:src.agent.llm:Escalating to Cloud_LLM (deepseek-v4-flash)

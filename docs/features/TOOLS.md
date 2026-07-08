@@ -112,6 +112,145 @@ Study skills (`study_tutor`, `exam_prep`, `flashcard_builder`, `interactive_teac
 
 **Study mode:** See [MODES.md](MODES.md) for mode system. See [STUDY.md](STUDY.md) for full study system documentation.
 
+### Toolbox: `pentest`
+
+Pentest tools are curated — no study tools, no global memory tools. All tools that accept target IPs/hosts are decorated with `@scope_validated` for automatic scope enforcement against the active engagement.
+
+#### Engagement Management
+
+| Tool | Description |
+|------|-------------|
+| `engagement_create` | Create a new pentest engagement (name, client, description) |
+| `engagement_set_phase` | Set phase: scope/recon/exploit/report/completed. Auto-starts StirlingPDF on report phase |
+| `engagement_data_set` / `engagement_data_get` | Save/retrieve engagement data (temp passwords, hints) |
+| `engagement_notes` | Read or write engagement notes |
+| `engagement_report` | Generate MD or PDF report |
+| `engagement_compare` | Compare findings across multiple engagements |
+
+#### Findings & Targets
+
+| Tool | Description |
+|------|-------------|
+| `finding_add` | Add finding with full metadata (severity, CVSS, CWE, CVE, OWASP, remediation) |
+| `finding_list` | List findings with optional severity/status filters |
+| `finding_update` | Update finding status or remediation |
+| `target_add` | Add/update a discovered host (IP, hostname, ports, OS) |
+| `target_list` | List all discovered hosts |
+
+#### Credentials & Evidence
+
+| Tool | Description |
+|------|-------------|
+| `credential_store` | Store credential (encrypted at rest via Fernet) |
+| `credential_list` | List credentials (usernames only, no passwords) |
+| `evidence_store` | Store workspace file as evidence (SHA-256 hashed, immutable) |
+| `evidence_list` / `read_evidence` | List/read evidence files |
+
+#### Attack Chain & Intelligence
+
+| Tool | Description |
+|------|-------------|
+| `suggest_next_steps` | AI-suggested next pentest steps based on engagement state |
+| `auto_recon` | Automated recon plan generation |
+| `analyze_attack_surface` | Analyze targets for high-value targets and attack chains |
+
+#### Network Scanning
+
+| Tool | Description |
+|------|-------------|
+| `nmap_scan` | Full nmap scanning (quick/default/full/vuln/stealth) |
+| `masscan_scan` | High-speed port scanning |
+| `service_enum` | Service enumeration (auto/http/smb/ssh/ftp/dns) |
+
+#### Web Application
+
+| Tool | Description |
+|------|-------------|
+| `nikto_scan` | Web server vulnerability scanning |
+| `gobuster_scan` | Directory/DNS/vhost brute-force |
+| `sqlmap_scan` | SQL injection detection/exploitation |
+| `header_check` | HTTP security header analysis |
+
+#### Vulnerability Scanning
+
+| Tool | Description |
+|------|-------------|
+| `nuclei_scan` | Template-based vulnerability scanning |
+| `searchsploit` | Exploit-DB search (read-only) |
+| `cve_lookup` | NVD API CVE lookup with CVSS parsing (read-only) |
+
+#### Exploitation
+
+| Tool | Description |
+|------|-------------|
+| `metasploit_run` | Run Metasploit modules via tmux |
+| `poc_validate` | PoC validation (curl/python/command) with destructive pattern blocking |
+
+#### Post-Exploitation
+
+| Tool | Description |
+|------|-------------|
+| `privesc_check` | Privilege escalation enumeration (Linux/Windows) |
+| `credential_harvest` | Search for credentials/secrets on compromised host |
+
+#### OSINT
+
+| Tool | Description |
+|------|-------------|
+| `subfinder` | Subdomain enumeration |
+| `shodan_search` | Shodan device/port search |
+| `censys_search` | Censys host/certificate search |
+
+#### Active Directory
+
+| Tool | Description |
+|------|-------------|
+| `bloodhound_run` | AD attack path analysis |
+| `kerberoast` | Kerberos service ticket extraction |
+| `ldap_enum` | LDAP enumeration (users/groups/computers/OUs/trusts) |
+
+#### Password Attacks
+
+| Tool | Description |
+|------|-------------|
+| `hydra_attack` | Network login brute-force |
+| `john_crack` | Password hash cracking |
+
+#### Cloud
+
+| Tool | Description |
+|------|-------------|
+| `s3_enum` | S3 bucket enumeration and access testing |
+
+#### Reporting
+
+| Tool | Description |
+|------|-------------|
+| `poc_generator` | Generate PoC scripts (SQLi, XSS, SSRF, RCE, LFI, generic) |
+| `cvss_calculator` | CVSS v3.1 score calculation |
+| `compliance_mapper` | Map findings to OWASP Top 10, CWE, MITRE ATT&CK |
+
+#### Wireless
+
+| Tool | Description |
+|------|-------------|
+| `wifi_scan` | Scan WiFi networks (read-only) |
+| `wifi_deauth` | Deauth frames — **REQUIRES HITL** |
+| `wifi_handshake_capture` | Capture WPA handshake — **REQUIRES HITL** |
+| `wifi_crack_handshake` | Crack handshake offline (read-only) |
+| `wifi_analyze_pcap` | Analyze pcap for wireless metadata (read-only) |
+| `wifi_wps_scan` | Scan for WPS-enabled APs (read-only) |
+
+#### Burp Suite MCP
+
+| Tool | Description |
+|------|-------------|
+| `burp_scan_target` | Launch active/passive/crawl scan |
+| `burp_get_issues` | Retrieve scan findings |
+| `burp_get_scan_status` | Check scan progress |
+
+**Total: 56+ pentest tools** across 11 categories. See [PENTEST.md](PENTEST.md) for full pentest architecture documentation.
+
 ### Toolbox: `memory`
 
 | Tool | Description |
@@ -179,4 +318,4 @@ All other tools auto-approve. Dangerous shell patterns (`rm -rf`, `sudo`, etc.) 
 
 ## Last updated
 
-2026-07-07 — Security hardening: notebook sandbox hardened (HTTP clients removed), SSRF protection on download_to_workspace, fetch_webpage injection boundary, scope guard destructive command blocking, execution policy default changed to require_approval
+2026-07-09 — Router decomposition (deterministic.py, resolver.py, modes.py); pentest tools section added (56+ tools across 11 categories); @scope_validated decorator applied to pentest tools; pentest memory node added; study tools expanded (flashcard_list, course_delete, study_note_update, quiz_session_delete); model name updated to gemma-4-e2b

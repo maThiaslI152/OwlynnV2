@@ -73,7 +73,7 @@ Two-tier model system:
 
 | Tier | Model | Context | Location |
 |------|-------|---------|----------|
-| Local Unified | `qwen3-vl-4b-instruct-c_abliterated-v2-mlx` | 65536 | Always local (routing, vision proxy, memory extraction) |
+| Local Unified | `gemma-4-e2b-heretic-uncensored-mlx` | 65536 | Always local (routing, vision proxy, memory extraction) |
 | Cloud | `deepseek-v4-flash` | 1M | Primary complex |
 
 **Consequences:**
@@ -241,7 +241,7 @@ Both nodes run **locally only** (Small/Medium LLM, no cloud). When the eventual 
 
 3. **Small LLM could override the heuristic** — The Small LLM classifier's `needs_clarification` field could return `false`, silently skipping the interrupt even when the heuristic correctly identified 2+ missing dimensions. Fixed by removing the LLM's gating authority: the heuristic is the authoritative gate; the Small LLM only generates questions. Fallback generic questions are used if the LLM is unavailable or returns empty.
 
-4. **Vision proxy preload at startup** — Qwen3-VL-4B vision proxy loads lazily on first image (not at startup). Unloads after `cloud.vision_idle_unload_seconds` (300s).
+4. **Vision proxy preload at startup** — Gemma 4 E2B vision proxy loads lazily on first image (not at startup). Unloads after `cloud.vision_idle_unload_seconds` (300s).
 
 ## Related
 

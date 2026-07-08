@@ -1,3 +1,11 @@
+---
+status: active
+category: reference
+last_updated: 2026-07-09
+owner: ai-agent
+audience: agent
+---
+
 # Browser Extension Integration
 
 > **Purpose:** Describes the architecture and features of the Owlynn Browser Bridge extension.

@@ -32,14 +32,12 @@ def _clear_pool():
 
 def test_clear_resets_all_slots():
     LLMPool._small_llm = "fake"
-    LLMPool._extraction_llm = "fake"
     LLMPool._cloud_llm_flash = "fake"
     LLMPool._cloud_llm_pro = "fake"
 
     LLMPool.clear()
 
     assert LLMPool._small_llm is None
-    assert LLMPool._extraction_llm is None
     assert LLMPool._cloud_llm_flash is None
     assert LLMPool._cloud_llm_pro is None
 

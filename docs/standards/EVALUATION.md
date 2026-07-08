@@ -258,7 +258,7 @@ Set `PYTHONPATH=.` (repo root) when running eval scripts so `src` imports resolv
 When `cloud_no_local_fallback` is enabled (via `--strict-cloud` on cloud profile runs):
 
 - **Blocked:** local complex fallback routes (previously routing to local model)
-- **Allowed:** unified local model `qwen3-vl-4b-instruct-c_abliterated-v2-mlx` (routing, vision proxy, and memory extraction)
+- **Allowed:** unified local model `gemma-4-e2b-heretic-uncensored-mlx` (routing, vision proxy, and memory extraction)
 - **Failure badge:** `large-cloud-failed` or `small-local-failed` with explicit error text
 - **Scoring:** cloud-intended turns ending on fallback badges cap at grade 49 (`cloud_fallback_fail`)
 - **Preflight:** `--profile cloud` exits if `/api/cloud-status` reports `key_valid: false`

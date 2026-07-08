@@ -111,7 +111,7 @@ HITL interrupt nodes (highlighted):
 
 | Concern | Detail |
 |---------|--------|
-| Model | Router LLM (Qwen3-VL-4B) |
+| Model | Router LLM (Gemma 4 E2B) |
 | Tools | None bound |
 | Memory context | Not injected into prompt |
 | Artifact cleaning | Strips `<think>` tags and reasoning artifacts |

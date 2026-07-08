@@ -39,7 +39,7 @@ The Owlynn frontier eval (`run_local_frontier_eval.py`) measures agent pipeline 
 |---|----|-------------|--------|------|-------|-----|
 | 1 | gemma-4-e2b-heretic-uncensored-mlx | Gemma-4 E2B Heretic | 2B | gemma4 | 4bit MLX | ✅ |
 | 2 | gemma-4-e4b-it-ultra-uncensored-heretic-mlx-mixed_4_6 | Gemma-4 E4B Ultra | 4B | gemma4 | mixed MLX | ✅ |
-| 3 | qwen3-vl-4b-instruct-c_abliterated-v2-mlx | Qwen3 VL 4B | 4B | qwen3_vl | 4bit MLX | ✅ |
+| 3 | gemma-4-e2b-heretic-uncensored-mlx | Qwen3 VL 4B | 4B | qwen3_vl | 4bit MLX | ✅ |
 | 4 | qwen3.5-9b-uncensored-hauhaucs-aggressive@q4_k_m | Qwen3.5 9B Dense Q4 | 9B | qwen35 | Q4_K_M | ✅ |
 | 5 | qwen3.5-9b-uncensored-hauhaucs-aggressive@q6_k | Qwen3.5 9B Dense Q6 | 9B | qwen35 | Q6_K | ✅ |
 | 6 | gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q6_k | Gemma-4 12B Agentic | 12B | gemma4 | Q6_K | ❌ |

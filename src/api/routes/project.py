@@ -132,6 +132,26 @@ async def api_get_project(project_id: str):
     project = await project_manager.get_project(project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+
+    # Enrich chats with checkpoint status (non-blocking best-effort)
+    try:
+        import redis.asyncio as aioredis
+        from src.config.settings import REDIS_URL
+
+        client = aioredis.from_url(REDIS_URL)
+        for chat in project.get("chats", []):
+            chat_id = chat.get("id")
+            if not chat_id:
+                continue
+            has_checkpoint = False
+            async for _ in client.scan_iter(match=f"checkpoint:{chat_id}:*", count=5):
+                has_checkpoint = True
+                break
+            chat["has_checkpoint"] = has_checkpoint
+        await client.aclose()
+    except Exception:
+        pass  # best-effort, don't fail the request
+
     return project
 
 
@@ -391,19 +411,31 @@ async def api_get_history(thread_id: str):
     try:
         agent = app.state.agent
         if not agent:
-            return []
+            return {"messages": [], "status": "agent_unavailable"}
 
         config = {"configurable": {"thread_id": thread_id}}
         state = await agent.aget_state(config)
 
         if not state or not state.values:
-            return []
+            logger.info("No checkpoint state for thread %s (no prior data)", thread_id)
+            return {"messages": [], "status": "no_checkpoint_data"}
 
-        messages = state.values.get("messages", [])
-        return [serialize_message(m) for m in messages]
+        raw_messages = state.values.get("messages", [])
+        if not raw_messages:
+            return {"messages": [], "status": "no_checkpoint_data"}
+
+        serialized = []
+        for m in raw_messages:
+            try:
+                serialized.append(serialize_message(m))
+            except Exception as e:
+                logger.warning(
+                    "Skipping unserializable message in thread %s: %s", thread_id, e
+                )
+        return {"messages": serialized, "status": "ok"}
     except Exception as e:
-        logger.warning("Failed to fetch history: %s", e)
-        return []
+        logger.warning("Failed to fetch history for thread %s: %s", thread_id, e)
+        return {"messages": [], "status": "error", "detail": str(e)}
 
 
 @router.put("/api/projects/{project_id}")

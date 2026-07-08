@@ -7,11 +7,11 @@ This document details the local LLM routing stack, model-specific quirks, and th
 
 ---
 
-## 1. The Local Unified Model: Qwen3-VL-4B
+## 1. The Local Unified Model: Gemma 4 E2B
 
-The project uses `qwen3-vl-4b-instruct-c_abliterated-v2-mlx` (via LM Studio) as the local unified model slot (`models.small`). It serves as the router, simple answer engine, vision proxy, and memory extractor.
+The project uses `gemma-4-e2b-heretic-uncensored-mlx` (via LM Studio) as the local unified model slot (`models.small`). It serves as the router, simple answer engine, vision proxy, and memory extractor.
 
-### Why Qwen3-VL-4B?
+### Why Gemma 4 E2B?
 - **Multimodal native:** 4B parameter VLM with native vision support — no separate vision model needed.
 - **Strong tool calling:** Reliable `tool_use` capability for structured tool invocations.
 - **Good reading comprehension:** Outperforms previous models on context ingestion tasks (F4.1 recall).
@@ -29,7 +29,7 @@ All complex reasoning, tool calling, and vision synthesis runs on DeepSeek V4 cl
 
 - **Configuration**: `models.cloud` in `defaults.yaml` (`deepseek-v4-flash` default, `deepseek-v4-pro` available)
 - **Context**: 1M tokens
-- **Vision**: Images are first transcribed by local Qwen3-VL-4B, then DeepSeek synthesizes from transcribed text (text-only API)
+- **Vision**: Images are first transcribed by local Gemma 4 E2B, then DeepSeek synthesizes from transcribed text (text-only API)
 
 See [`DEEPSEEK_V4_INTEGRATION.md`](../architecture/DEEPSEEK_V4_INTEGRATION.md) for cloud path details.
 
@@ -49,23 +49,23 @@ Changing models = edit `defaults.yaml` only.
 
 | Route | Model path | When |
 |-------|------------|------|
-| `simple` | `models.small` (Qwen3-VL-4B) | Short Q&A, low tool need |
+| `simple` | `models.small` (Gemma 4 E2B) | Short Q&A, low tool need |
 | `complex-cloud` | `models.cloud` (DeepSeek V4) | All complex reasoning; images via `vision_proxy` → text |
-| `complex-default` | `models.small` (Qwen3-VL-4B) | Local fallback when cloud is unavailable |
+| `complex-default` | `models.small` (Gemma 4 E2B) | Local fallback when cloud is unavailable |
 
 Cloud path details: [`DEEPSEEK_V4_INTEGRATION.md`](../architecture/DEEPSEEK_V4_INTEGRATION.md).
 
 ---
 
-## 5. Vision proxy: Qwen3-VL-4B
+## 5. Vision proxy: Gemma 4 E2B
 
-Qwen3-VL-4B serves as the VLM proxy for the cloud path. It transcribes text and describes image/UI context — DeepSeek synthesizes from the transcription.
+Gemma 4 E2B serves as the VLM proxy for the cloud path. It transcribes text and describes image/UI context — DeepSeek synthesizes from the transcription.
 
 ### Role split
 
 | Layer | Model | Job |
 |-------|--------|-----|
-| `vision_proxy` | **Qwen3-VL-4B** on LM Studio | Natural-language transcription (text + UI) |
+| `vision_proxy` | **Gemma 4 E2B** on LM Studio | Natural-language transcription (text + UI) |
 | `complex-cloud` | **DeepSeek V4** | Final answer from transcribed text |
 
 On proxy failure: `complex-cloud` retries with text-only prompt (no local multimodal fallback).

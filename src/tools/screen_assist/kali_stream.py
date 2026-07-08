@@ -42,7 +42,9 @@ class KaliTerminalStreamer:
             return
         self._running = True
         self._task = asyncio.create_task(self._poll_loop())
-        logger.info("[kali_stream] Started streaming from %s:%s", self.host, self.session)
+        logger.info(
+            "[kali_stream] Started streaming from %s:%s", self.host, self.session
+        )
 
     async def stop(self) -> None:
         self._running = False
@@ -55,14 +57,16 @@ class KaliTerminalStreamer:
             self._task = None
         logger.info("[kali_stream] Stopped streaming")
 
-    async def subscribe(self, callback: Callable[[str, str], Awaitable[None]]) -> Callable[[], None]:
+    async def subscribe(
+        self, callback: Callable[[str, str], Awaitable[None]]
+    ) -> Callable[[], Awaitable[None]]:
         async with self._lock:
             self._subscribers.append(callback)
         if len(self._subscribers) == 1 and not self._running:
             await self.start()
 
-        def _remove():
-            asyncio.ensure_future(self._unsubscribe(callback))
+        async def _remove():
+            await self._unsubscribe(callback)
 
         return _remove
 
@@ -111,8 +115,15 @@ class KaliTerminalStreamer:
 
     def _build_ssh_cmd(self) -> list[str]:
         cmd = [
-            "ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10",
-            "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null",
+            "ssh",
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "ConnectTimeout=10",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
         ]
         if self.port != 22:
             cmd.extend(["-p", str(self.port)])
@@ -128,7 +139,7 @@ class KaliTerminalStreamer:
         old_lines = old.splitlines()
         new_lines = new.splitlines()
         if len(new_lines) > len(old_lines):
-            return "\n".join(new_lines[len(old_lines):]) + "\n"
+            return "\n".join(new_lines[len(old_lines) :]) + "\n"
         if new_lines != old_lines:
             return "\n".join(new_lines[-20:]) + "\n"
         return ""
@@ -157,8 +168,12 @@ def get_terminal_streamer(
     key = f"{host}:{port}:{session}:{window}"
     if key not in _streamers:
         _streamers[key] = KaliTerminalStreamer(
-            host=host, user=user, port=port,
-            session=session, window=window, identity_file=identity_file,
+            host=host,
+            user=user,
+            port=port,
+            session=session,
+            window=window,
+            identity_file=identity_file,
         )
     return _streamers[key]
 

@@ -34,7 +34,7 @@ The system operates on a stateful, cyclic **LangGraph** architecture with a clou
 - **Backend:** Python 3.12+, FastAPI, LangGraph.
 - **Frontend:** React 19, TypeScript (Vite 8), Zustand 5, wrapped in an Electron desktop shell.
 - **LLM Tiers:**
-  - **Local Unified Model:** `qwen3-vl-4b-instruct-c_abliterated-v2-mlx` for routing (quick classification), vision proxy (transcription/OCR), and background memory extraction (local).
+  - **Local Unified Model:** `gemma-4-e2b-heretic-uncensored-mlx` for routing (quick classification), vision proxy (transcription/OCR), and background memory extraction (local).
   - **Cloud (Primary):** `deepseek-v4-flash` for complex reasoning and tool calling.
 - **Memory System:** Three-tier architecture using Mem0 + Qdrant (long-term semantic), JSON files (short-term facts), and topic/interest tracking. Includes a zero-config workspace file watcher that auto-indexes documents into Qdrant for hybrid semantic search. PDF/DOCX extraction via Docling (layout-aware markdown with table structure detection).
 - **Security:** A Security Proxy node that intercepts high-risk tool calls and requests user approval before execution.

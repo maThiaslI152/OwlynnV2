@@ -49,7 +49,7 @@ audience: agent
 ### Memory System (Unique vs frontier chat)
 - Three-tier: JSON STM · Qdrant/Mem0 LTM · personal topics/interests/conversations
 - Split inject: `memory_inject_lite` (fast, no vector) → router gate → `memory_retrieve`
-- Background extraction (Qwen3-VL-4B via Redis stream → idle-deferred LTM writes)
+- Background extraction (Gemma 4 E2B via Redis stream → idle-deferred LTM writes)
 - Validated in eval: session recall M1.2=100, LTM cross-thread M2.1=100
 
 ### Tool Suite (20+ tools)
@@ -80,7 +80,7 @@ audience: agent
 ## 3. Partially Built — Active Gaps ⚠️
 
 ### 3.1 Vision Route Fragility
-**What works:** Composer drag-and-drop, Qwen3-VL-4B lazy load, vision proxy for cloud path.  
+**What works:** Composer drag-and-drop, Gemma 4 E2B lazy load, vision proxy for cloud path.  
 **What's fixed:** F9.1 eval 100/100 with Gemma. Legacy Florence was unloadable via LM Studio API and removed. Cloud + image path verified.
 **Tracked as:** BUG-17 (see `BUG-TRACKER.md`)
 

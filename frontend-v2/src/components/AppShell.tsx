@@ -16,6 +16,7 @@ import { StudyDashboard } from './StudyDashboard'
 import { motion } from 'framer-motion'
 import { ModeSwitchConfirmation, PentestLoadingOverlay } from './ModeSwitchModal'
 import { StudyProgressPanel } from './StudyProgressPanel'
+import { StudyAnalytics } from './StudyAnalytics'
 import { StudyNotesSearch } from './StudyNotesSearch'
 import { PentestDashboard } from './PentestDashboard'
 import { EngagementSelector } from './EngagementSelector'
@@ -448,6 +449,7 @@ export function AppShell({
   const [searchQuery, setSearchQuery] = useState('')
   const [isSearching, setIsSearching] = useState(false)
   const [searchResults, setSearchResults] = useState<ProjectChat[] | null>(null)
+  const [showAnalytics, setShowAnalytics] = useState(false)
 
   useEffect(() => {
     if (!searchQuery.trim()) {
@@ -858,6 +860,9 @@ export function AppShell({
                               <>
                                 <span className="chat-list-item-name" title={chat.name}>
                                   {chat.name}
+                                  {chat.has_checkpoint === false && (
+                                    <span className="chat-list-item-legacy" title="History unavailable — created before persistent storage">⚠️</span>
+                                  )}
                                 </span>
                                 <span className="chat-list-item-actions">
                                   <button
@@ -976,9 +981,30 @@ export function AppShell({
 
           {activeMode === 'study' && (
             <details className="sidebar-accordion" open>
-              <summary>Study Progress</summary>
+              <summary style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span>Study Progress</span>
+                <button
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    setShowAnalytics(!showAnalytics)
+                  }}
+                  style={{
+                    background: 'none',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    borderRadius: '4px',
+                    color: 'rgba(255,255,255,0.6)',
+                    fontSize: '10px',
+                    padding: '2px 6px',
+                    cursor: 'pointer',
+                  }}
+                  title={showAnalytics ? 'Show progress' : 'Show analytics'}
+                >
+                  {showAnalytics ? 'Progress' : 'Analytics'}
+                </button>
+              </summary>
               <div className="sidebar-accordion-content">
-                <StudyProgressPanel />
+                {showAnalytics ? <StudyAnalytics /> : <StudyProgressPanel />}
               </div>
             </details>
           )}

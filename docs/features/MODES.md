@@ -1,3 +1,11 @@
+---
+status: active
+category: reference
+last_updated: 2026-07-09
+owner: ai-agent
+audience: agent
+---
+
 # Mode System
 
 Owlynn has three operational modes that change the UI, tools, and system prompt behavior.
