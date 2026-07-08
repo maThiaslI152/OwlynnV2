@@ -8,7 +8,7 @@ OWLYNN_API_URL = os.environ.get("OWLYNN_API_URL", "http://127.0.0.1:8000")
 BASE = f"{OWLYNN_API_URL}/api/browser_extension"
 
 
-def _wait_for_backend(timeout: int = 30) -> bool:
+def _wait_for_backend(timeout: int = 60) -> bool:
     """Wait for the Owlynn backend to be ready (handles startup race)."""
     deadline = time.time() + timeout
     while time.time() < deadline:
