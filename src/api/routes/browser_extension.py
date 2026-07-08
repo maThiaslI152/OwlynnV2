@@ -274,6 +274,82 @@ def format_active_tab_context(tab: dict) -> str:
     return "\n".join(lines)
 
 
+# ── REST endpoints (for MCP server and external clients) ──────────────
+
+
+@router.get("/status")
+async def extension_status():
+    """Check if a browser extension is currently connected."""
+    return {
+        "connected": is_extension_connected(),
+        "connections": len(active_connections),
+    }
+
+
+@router.post("/search")
+async def extension_search(request: Request):
+    """Dispatch a search query to the connected browser extension."""
+    if not is_extension_connected():
+        return {"error": "No browser extension connected", "results": []}
+    body = await request.json()
+    query = body.get("query", "")
+    engine = body.get("engine", "google")
+    if not query:
+        return {"error": "Missing 'query' field", "results": []}
+    search_url = _build_search_url(query, engine)
+    try:
+        results = await dispatch_extension_search(search_url)
+        return {"results": results, "engine": engine, "query": query}
+    except TimeoutError:
+        return {"error": "Search timed out", "results": []}
+    except Exception as exc:
+        return {"error": str(exc), "results": []}
+
+
+@router.post("/fetch")
+async def extension_fetch(request: Request):
+    """Fetch page content from URLs via the browser extension."""
+    if not is_extension_connected():
+        return {"error": "No browser extension connected", "results": []}
+    body = await request.json()
+    urls = body.get("urls", [])
+    if not urls:
+        return {"error": "Missing 'urls' field", "results": []}
+    try:
+        results = await dispatch_extension_fetch_urls(urls)
+        return {"results": results}
+    except TimeoutError:
+        return {"error": "Fetch timed out", "results": []}
+    except Exception as exc:
+        return {"error": str(exc), "results": []}
+
+
+@router.get("/screenshot")
+async def extension_screenshot():
+    """Capture a screenshot of the active browser tab."""
+    if not is_extension_connected():
+        return {"error": "No browser extension connected", "image_data": None}
+    try:
+        image_data = await dispatch_extension_capture_screenshot()
+        return {"image_data": image_data}
+    except TimeoutError:
+        return {"error": "Screenshot timed out", "image_data": None}
+    except Exception as exc:
+        return {"error": str(exc), "image_data": None}
+
+
+def _build_search_url(query: str, engine: str) -> str:
+    """Build a search URL for the given query and engine."""
+    from urllib.parse import quote_plus
+
+    encoded = quote_plus(query)
+    if engine == "bing":
+        return f"https://www.bing.com/search?q={encoded}"
+    if engine == "duckduckgo":
+        return f"https://duckduckgo.com/?q={encoded}"
+    return f"https://www.google.com/search?q={encoded}"
+
+
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     origin = websocket.headers.get("origin", "")
