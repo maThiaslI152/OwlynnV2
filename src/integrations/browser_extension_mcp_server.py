@@ -1,10 +1,26 @@
 import json
 import os
+import time
 
 import httpx
 
 OWLYNN_API_URL = os.environ.get("OWLYNN_API_URL", "http://127.0.0.1:8000")
 BASE = f"{OWLYNN_API_URL}/api/browser_extension"
+
+
+def _wait_for_backend(timeout: int = 30) -> bool:
+    """Wait for the Owlynn backend to be ready (handles startup race)."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            with httpx.Client(timeout=3) as client:
+                resp = client.get(f"{BASE}/status")
+                if resp.status_code < 500:
+                    return True
+        except (httpx.ConnectError, httpx.ReadTimeout):
+            pass
+        time.sleep(1)
+    return False
 
 
 def _check_available() -> str | None:
@@ -21,6 +37,9 @@ def _check_available() -> str | None:
     except Exception as e:
         return f"Backend check failed: {e}"
     return None
+
+
+_wait_for_backend()
 
 
 try:
