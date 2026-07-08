@@ -51,11 +51,21 @@ echo "[1/3] Qdrant + Redis..."
 
 _qdrant_started_local=0
 
-# Try containers first
+# Try containers first (qdrant, redis with RediSearch for checkpointing)
 if podman machine start 2>/dev/null || true; then
     podman compose up -d qdrant redis 2>/dev/null || \
     podman-compose up -d qdrant redis 2>/dev/null || \
     docker compose up -d qdrant redis 2>/dev/null || true
+fi
+
+# Ensure Redis container is running (may be in "Created" state if port was in use)
+if command -v podman &>/dev/null; then
+    _RC_STATE=$(podman inspect --format '{{.State.Status}}' owlynn_redis 2>/dev/null || echo "missing")
+    if [ "$_RC_STATE" = "created" ]; then
+        echo "      Starting owlynn_redis container (was in Created state)..."
+        podman start owlynn_redis 2>/dev/null || true
+        sleep 2
+    fi
 fi
 
 # Check if Qdrant is already up (either from containers or previous native run)
@@ -89,11 +99,17 @@ else
     fi
 fi
 
-# Redis (best-effort — only needed for session cache)
-if ! curl -sf http://127.0.0.1:6379 >/dev/null 2>&1; then
-    if command -v redis-server &>/dev/null; then
-        redis-server --daemonize yes --logfile /dev/null 2>/dev/null || true
+# Redis — verify container Redis has RediSearch (required for LangGraph checkpointing).
+if redis-cli PING 2>/dev/null | grep -q PONG; then
+    _REDIS_MODULES=$(redis-cli MODULE LIST 2>/dev/null | grep -c "search" || true)
+    if [ "$_REDIS_MODULES" -gt 0 ]; then
+        echo "      Redis ready (with RediSearch — checkpointing enabled)."
+    else
+        echo "      WARNING: Redis on :6379 has NO RediSearch. Conversations will NOT persist across restarts."
+        echo "      Fix: podman compose up -d redis (uses redis-stack-server image)"
     fi
+else
+    echo "      WARNING: No Redis on :6379. Session cache and checkpointing disabled."
 fi
 
 echo "      Ready."
