@@ -1,7 +1,7 @@
 ---
 status: active
 category: standards
-last_updated: 2026-07-09
+last_updated: 2026-07-10
 owner: ai-agent
 audience: agent
 ---
@@ -84,6 +84,17 @@ Project status tracker. Last updated: 2026-07-09 — Router decomposition, pente
 | **Error Handling Fix** | `StudyProgressPanel` now surfaces fetch errors via toast (was silently swallowing). | — |
 | **Dashboard Bug Fix** | Removed `chat_count` from dashboard response (field didn't exist, always returned 0). | — |
 | **Session Cleanup Script** | `scripts/cleanup_study_sessions.py` — archive quiz sessions older than 30 days. | [`features/STUDY.md`](features/STUDY.md) |
+
+## Recent Changes (2026-07-10 — Eco-Mode & Performance Optimizations)
+
+| Change | Impact | Doc |
+|--------|--------|-----|
+| **Eco-Mode Throttling** | Pauses background memory extraction and file indexing when disconnected from power. Forces router to use `complex-cloud` fallback to prevent local LLM execution from draining battery. Displays warning modal before starting Kali VM in Pentest mode when on battery. | [`changes/eco-mode/CHANGELOG.md`](changes/eco-mode/CHANGELOG.md), [`features/MEMORY.md`](features/MEMORY.md) |
+| **Parallel Tool Dispatch** | Fans out independent tool calls concurrently using `asyncio.gather()`. Restricts write/mutating tools to sequential execution for safety. Cuts multi-tool turn latency by 30-60%. | [`changes/performance-optimizations/CHANGELOG.md`](changes/performance-optimizations/CHANGELOG.md) |
+| **Idle LLM Unload** | Unloads local model from LM Studio after 15 minutes of chat inactivity to reclaim 3.5-5 GB of unified memory. Auto-reloads model on next chat message. | [`changes/performance-optimizations/CHANGELOG.md`](changes/performance-optimizations/CHANGELOG.md) |
+| **StirlingPDF Idle Shutdown** | (Opt-in) Stops the StirlingPDF container after 10 minutes of PDF inactivity, saving 200-300 MB of container RAM. Starts it back up on-demand during PDF ingestion. | [`changes/performance-optimizations/CHANGELOG.md`](changes/performance-optimizations/CHANGELOG.md), [`guides/dev-startup.md`](guides/dev-startup.md) |
+| **Follow-up Routing Bypass** | Short mid-task replies ("ok", "continue", "go ahead", etc.) reuse the previous turn's route, bypassing the LLM classifier to save 200-600ms routing latency. | [`changes/performance-optimizations/CHANGELOG.md`](changes/performance-optimizations/CHANGELOG.md) |
+| **Adaptive File Indexing** | Replaced the blind `asyncio.sleep(3)` during file uploads with a 300ms polling function that index files immediately once processed. | [`changes/performance-optimizations/CHANGELOG.md`](changes/performance-optimizations/CHANGELOG.md) |
 
 ## Recent Changes (2026-06-28 — Pentest)
 

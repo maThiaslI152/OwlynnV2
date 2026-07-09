@@ -17,6 +17,9 @@ from src.api.routes import (
     study,
     notebook,
     pentest,
+    scheduled_jobs,
+    config,
+    export,
 )
 from src.api.ws import handler as ws_handler
 from fastapi import FastAPI, Request
@@ -57,6 +60,82 @@ async def lifespan(app: FastAPI):
 
     setup_logging()
 
+    # ── Background Worker Init ────────────────────────────────────────────────
+    try:
+        from src.api.scheduler_manager import scheduler_manager
+
+        scheduler_manager.start()
+    except Exception as e:
+        logger.error(f"Failed to start APScheduler: {e}")
+
+    # ── Crash logging infrastructure ────────────────────────────────────────
+    import faulthandler
+    import sys
+    import threading
+    from pathlib import Path
+    from logging.handlers import RotatingFileHandler
+
+    _crash_log_dir = Path.home() / ".owlynn" / "logs"
+    _crash_log_dir.mkdir(parents=True, exist_ok=True)
+    _crash_log_path = _crash_log_dir / "crash.log"
+
+    # 2.1 faulthandler — captures segfaults, fatal Python errors, thread tracebacks
+    _crash_file = open(str(_crash_log_path), "a")
+    faulthandler.enable(file=_crash_file)
+
+    # 2.2 sys.excepthook — captures unhandled exceptions on the main thread
+    _crash_logger = logging.getLogger("system.crash")
+
+    def _crash_excepthook(exc_type, exc_value, exc_tb):
+        import datetime
+        import traceback as _tb
+
+        if exc_type is KeyboardInterrupt:
+            return
+        with open(str(_crash_log_path), "a") as f:
+            f.write(f"\n--- {datetime.datetime.now()} [main thread] ---\n")
+            _tb.print_exception(exc_type, exc_value, exc_tb, file=f)
+        _crash_logger.critical(
+            "Unhandled exception on main thread", exc_info=(exc_type, exc_value, exc_tb)
+        )
+
+    sys.excepthook = _crash_excepthook
+
+    def _threading_excepthook(args):
+        import datetime
+        import traceback as _tb
+
+        with open(str(_crash_log_path), "a") as f:
+            f.write(f"\n--- {datetime.datetime.now()} [background thread] ---\n")
+            _tb.print_exception(
+                args.exc_type, args.exc_value, args.exc_traceback, file=f
+            )
+        _crash_logger.critical(
+            "Unhandled exception in background thread",
+            exc_info=(args.exc_type, args.exc_value, args.exc_traceback),
+        )
+
+    threading.excepthook = _threading_excepthook
+
+    # 2.3 asyncio exception handler — captures unhandled async task exceptions
+    def _async_exception_handler(loop, context):
+        import datetime
+        import traceback as _tb
+
+        exc = context.get("exception")
+        msg = context.get("message", "Unhandled async exception")
+        _crash_logger.error(
+            "Async error: %s | exception: %s", msg, exc, exc_info=True if exc else None
+        )
+        with open(str(_crash_log_path), "a") as f:
+            f.write(f"\n--- {datetime.datetime.now()} [asyncio] ---\n")
+            f.write(f"message: {msg}\n")
+            if exc:
+                _tb.print_exception(type(exc), exc, exc.__traceback__, file=f)
+
+    loop = asyncio.get_running_loop()
+    loop.set_exception_handler(_async_exception_handler)
+
     from src.api.local_auth import init_local_run_token
 
     init_local_run_token(app)
@@ -67,6 +146,16 @@ async def lifespan(app: FastAPI):
     # Initialize the LangGraph Agent Engine Singleton asynchronously
     app.state.agent = await init_agent()
     app.state.sessions = {}  # thread_id -> GraphSession
+
+    # Start power monitor loop
+    from src.api.power_monitor import power_monitor_loop, is_on_battery
+
+    app.state.power_monitor_task = asyncio.create_task(power_monitor_loop())
+
+    # Start idle resource manager (LLM unload + StirlingPDF idle shutdown)
+    from src.api.idle_manager import idle_watcher_loop
+
+    app.state.idle_watcher_task = asyncio.create_task(idle_watcher_loop())
 
     # Preload router + embedding at startup; medium only when cloud unavailable.
     async def _preload_llms():
@@ -83,6 +172,11 @@ async def lifespan(app: FastAPI):
 
         preload_slots = config.get("startup.preload") or ["small", "embedding"]
         warmup = bool(config.get("startup.warmup", True))
+
+        if is_on_battery():
+            logger.info("[startup] Eco-Mode active: Skipping heavy LLM preloads.")
+            preload_slots = []
+            warmup = False
 
         # 1. Router (small) — always required
         try:
@@ -215,6 +309,14 @@ async def lifespan(app: FastAPI):
     _asyncio.ensure_future(_check_legacy_chats())
 
     yield
+    # ── Graceful Shutdown ─────────────────────────────────────────────────────
+    try:
+        from src.api.scheduler_manager import scheduler_manager
+
+        scheduler_manager.shutdown()
+    except Exception as e:
+        logger.error(f"Failed to shutdown APScheduler: {e}")
+
     if getattr(app.state, "memory_extraction_worker", False):
         await stop_extraction_worker()
     if getattr(app.state, "vision_manager", False):
@@ -256,6 +358,9 @@ app.include_router(study.router)
 app.include_router(notebook.router)
 app.include_router(pentest.router)
 app.include_router(ws_handler.router)
+app.include_router(scheduled_jobs.router)
+app.include_router(config.router)
+app.include_router(export.router)
 
 from src.api.local_auth import cors_allowed_origins
 
@@ -612,28 +717,49 @@ async def _auto_index_project_file(
         logger.info("Skipped auto-index for vision-only file %s", filename)
         return
 
-    # Wait for file processor to finish
-    await asyncio.sleep(3)
-
-    text = ""
-    ext = os.path.splitext(filename)[1].lower()
-
-    try:
-        # Try reading the processed cache — check both project-local and root workspace
-        project_processed_dir = os.path.join(os.path.dirname(filepath), ".processed")
+    async def _wait_for_processed_cache(fp: str, timeout: float = 8.0) -> str:
+        """Poll .processed/ for the cached text file instead of blindly sleeping."""
+        project_processed_dir = os.path.join(os.path.dirname(fp), ".processed")
         root_processed_dir = os.path.join(
             os.path.abspath(str(WORKSPACE_DIR)), ".processed"
         )
+        fname = os.path.basename(fp)
+        deadline = asyncio.get_event_loop().time() + timeout
+        while asyncio.get_event_loop().time() < deadline:
+            for pdir in [project_processed_dir, root_processed_dir]:
+                for cache_ext in [".txt", ".md"]:
+                    cache_path = os.path.join(pdir, fname + cache_ext)
+                    if os.path.exists(cache_path):
+                        try:
+                            with open(cache_path, "r", encoding="utf-8") as f:
+                                return f.read()
+                        except Exception:
+                            pass
+            await asyncio.sleep(0.3)
+        return ""
 
-        for pdir in [project_processed_dir, root_processed_dir]:
-            if text:
-                break
-            for cache_ext in [".txt", ".md"]:
-                cache_path = os.path.join(pdir, filename + cache_ext)
-                if os.path.exists(cache_path):
-                    with open(cache_path, "r", encoding="utf-8") as f:
-                        text = f.read()
+    text = await _wait_for_processed_cache(filepath)
+    ext = os.path.splitext(filename)[1].lower()
+
+    try:
+        # If poll didn't find the cache, try reading the processed dirs directly
+        if not text:
+            project_processed_dir = os.path.join(
+                os.path.dirname(filepath), ".processed"
+            )
+            root_processed_dir = os.path.join(
+                os.path.abspath(str(WORKSPACE_DIR)), ".processed"
+            )
+
+            for pdir in [project_processed_dir, root_processed_dir]:
+                if text:
                     break
+                for cache_ext in [".txt", ".md"]:
+                    cache_path = os.path.join(pdir, filename + cache_ext)
+                    if os.path.exists(cache_path):
+                        with open(cache_path, "r", encoding="utf-8") as f:
+                            text = f.read()
+                        break
 
         # Fallback: try reading as plain text
         if not text and ext in {

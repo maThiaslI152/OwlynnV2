@@ -69,6 +69,15 @@ async def _consumer_loop() -> None:
             pass
 
         while True:
+            try:
+                from src.api.power_monitor import ECO_MODE
+
+                if ECO_MODE:
+                    await asyncio.sleep(60)
+                    continue
+            except ImportError:
+                pass
+
             entries = await client.xreadgroup(
                 CONSUMER_GROUP,
                 consumer,
@@ -144,30 +153,74 @@ async def process_extraction_job(payload: dict[str, Any]) -> None:
         audit_warn("memory.extract", "mem0_unavailable")
         return
 
-    from src.agent.nodes.memory import _is_semantically_similar
+    from src.agent.llm import get_small_llm
+    from langchain_core.messages import HumanMessage
 
+    small_llm = await get_small_llm()
     saved = 0
+
     for atom in atoms:
         content = atom["content"]
-        if await _is_semantically_similar(memory, content, mem0_uid):
-            continue
-        metadata = {
-            "tier": atom["tier"],
-            "format": atom["format"],
-            "tags": atom["tags"],
-            "confidence": atom["confidence"],
-            "source": atom["source"],
-            "scenario_id": scenario_id or "",
-            "project_id": project_id,
-        }
-        await asyncio.to_thread(
-            memory.add,
-            content,
-            user_id=mem0_uid,
-            metadata=metadata,
-            infer=False,
-        )
-        saved += 1
+
+        try:
+            results_dict = await asyncio.to_thread(
+                lambda: memory.search(
+                    content[:200], filters={"user_id": mem0_uid}, limit=3
+                )
+            )
+            existing_results = (
+                results_dict.get("results", [])
+                if isinstance(results_dict, dict)
+                else results_dict
+            )
+        except Exception:
+            existing_results = []
+
+        existing_facts = [
+            (r.get("id"), r.get("memory") or r.get("text", ""))
+            for r in existing_results
+            if isinstance(r, dict)
+        ]
+
+        should_add = True
+        if existing_facts:
+            facts_str = "\n".join(
+                [f"ID: {fid}\nFact: {ftext}" for fid, ftext in existing_facts]
+            )
+            prompt = (
+                f"New fact: {content}\n\nExisting facts:\n{facts_str}\n\n"
+                "Compare the new fact to the existing facts. Output one of the following exact commands:\n"
+                "1. REDUNDANT - if the new fact is already covered.\n"
+                "2. NEW - if it is completely new.\n"
+                "3. DELETE <ID> - if the new fact supersedes the old one."
+            )
+            resp = await small_llm.ainvoke([HumanMessage(content=prompt)])
+            decision = str(resp.content).strip()
+
+            if decision.startswith("REDUNDANT"):
+                should_add = False
+            elif decision.startswith("DELETE"):
+                parts = decision.split(" ")
+                if len(parts) >= 2:
+                    try:
+                        await asyncio.to_thread(memory.delete, parts[1])
+                    except Exception:
+                        pass
+
+        if should_add:
+            metadata = {
+                "tier": atom["tier"],
+                "format": atom["format"],
+                "tags": atom["tags"],
+                "confidence": atom["confidence"],
+                "source": atom["source"],
+                "scenario_id": scenario_id or "",
+                "project_id": project_id,
+            }
+            await asyncio.to_thread(
+                memory.add, content, user_id=mem0_uid, metadata=metadata, infer=False
+            )
+            saved += 1
 
     audit_info(
         "memory.extract",

@@ -105,12 +105,12 @@ def search_memories(query: str, top_k: int = 8) -> list[dict]:
     if not memories:
         return []
 
-    query_words = set(re.findall(r"[a-z\u0e00-\u0e7f]+", query.lower()))
+    query_words = set(re.findall(r"\w+", query.lower(), re.UNICODE))
     window = memories[-_SEARCH_WINDOW:] if len(memories) > _SEARCH_WINDOW else memories
 
     scored = []
     for m in window:
-        fact_words = set(re.findall(r"[a-z\u0e00-\u0e7f]+", m.get("fact", "").lower()))
+        fact_words = set(re.findall(r"\w+", m.get("fact", "").lower(), re.UNICODE))
         overlap = len(query_words & fact_words)
         if overlap > 0:
             scored.append((overlap, m))

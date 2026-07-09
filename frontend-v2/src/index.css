@@ -1140,6 +1140,7 @@ body.tauri-glass .window-drag-strip {
 
 .connection-dot-connected { background: var(--green); box-shadow: 0 0 4px var(--green); }
 .connection-dot-connecting { background: var(--amber); animation: pulse-dot 1s ease-in-out infinite; }
+.connection-dot-reconnecting { background: var(--amber); animation: pulse-dot 0.5s ease-in-out infinite; }
 .connection-dot-disconnected { background: var(--text-muted); }
 .connection-dot-error { background: var(--red); }
 

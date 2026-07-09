@@ -43,6 +43,8 @@ export interface ModesSlice {
   updateActivityFeedItem: (id: string, update: Partial<ActivityFeedItem>) => void
   clearActivityFeed: () => void
   applyBrowserPageContext: (ctx: BrowserPageContext) => void
+  isEcoMode: boolean
+  setIsEcoMode: (eco: boolean) => void
 }
 
 export const createModesSlice: StateCreator<ModesSlice, [], [], ModesSlice> = (set) => ({
@@ -57,11 +59,13 @@ export const createModesSlice: StateCreator<ModesSlice, [], [], ModesSlice> = (s
   activityFeedItems: [],
   browserPageContext: null,
   browserPageContextNonce: 0,
+  isEcoMode: false,
 
   setSafeMode: (safeMode) => set({ safeMode }),
   setExecutionPolicy: (executionPolicy) => set({ executionPolicy }),
   setWindowMode: (windowMode) => set({ windowMode }),
   setActiveMode: (activeMode) => set({ activeMode }),
+  setIsEcoMode: (isEcoMode) => set({ isEcoMode }),
   setStudyView: (studyView) => set({ studyView }),
   setActiveEngagementId: (activeEngagementId) => set({ activeEngagementId }),
   addEngagementTab: (tab) =>

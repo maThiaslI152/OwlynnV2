@@ -1,6 +1,6 @@
 export * from './protocol.generated'
 
-export type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'error'
+export type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'error' | 'reconnecting'
 
 export interface ChatMessageAttachment {
   name: string

@@ -24,42 +24,58 @@ _cached_key: bytes | None = None
 
 
 def _get_master_key() -> bytes:
-    """Get or create the Fernet master key.
-
-    On first use, generates a random key and stores it in ~/.owlynn/.engagement_master_key.
-    """
+    """Get or create the Fernet master key from macOS Keychain."""
     global _cached_key
     if _cached_key:
         return _cached_key
 
     from cryptography.fernet import Fernet
+    import subprocess
 
-    key_path = Path.home() / ".owlynn" / ".engagement_master_key"
+    service = "OwlynnPentest"
+    account = "MasterKey"
 
-    # Try reading existing key
-    if key_path.exists():
-        try:
-            stored = key_path.read_bytes()
-            if stored:
-                _cached_key = stored
-                return _cached_key
-        except Exception as e:
-            logger.warning("Failed to read engagement master key: %s", e)
+    # Try reading from Keychain
+    try:
+        result = subprocess.run(
+            ["security", "find-generic-password", "-s", service, "-a", account, "-w"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        key_str = result.stdout.strip()
+        if key_str:
+            _cached_key = key_str.encode("utf-8")
+            return _cached_key
+    except subprocess.CalledProcessError:
+        logger.info(
+            "Engagement master key not found in Keychain. Generating a new one."
+        )
 
     # Generate new key
     new_key = Fernet.generate_key()
 
-    # Store securely in file
-    key_path.parent.mkdir(parents=True, exist_ok=True)
-    key_path.write_bytes(new_key)
+    # Store securely in Keychain
     try:
-        import os
-
-        os.chmod(str(key_path), 0o600)
-    except OSError:
-        pass
-
-    logger.info("Generated new engagement master key at %s", key_path)
+        subprocess.run(
+            [
+                "security",
+                "add-generic-password",
+                "-s",
+                service,
+                "-a",
+                account,
+                "-w",
+                new_key.decode("utf-8"),
+                "-U",  # Update if exists
+            ],
+            check=True,
+            capture_output=True,
+        )
+        logger.info("Successfully stored new engagement master key in macOS Keychain.")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to store master key in Keychain: {e}")
+        raise RuntimeError("Could not secure master key in macOS Keychain") from e
 
     _cached_key = new_key
     return new_key

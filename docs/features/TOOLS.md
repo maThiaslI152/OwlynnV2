@@ -1,7 +1,7 @@
 ---
 status: active
 category: reference
-last_updated: 2026-07-07
+last_updated: 2026-07-10
 owner: ai-agent
 audience: agent
 ---
@@ -61,6 +61,14 @@ src/api/routes/files.py            # Tool discovery (GET /api/tools)
 | `delete_workspace_file` | Delete a file |
 | `download_to_workspace` | Download a file from a URL directly into the isolated workspace directory. SSRF-protected via `url_policy.py` (blocks private IPs, localhost, cloud metadata) |
 | `upload_from_workspace` | Force an `<input type="file">` upload to a browser tab using Playwright CDP bypass (registered via `SCREEN_ASSIST_TOOLS`) |
+
+### Toolbox: `data_connectors`
+
+| Tool | Description |
+|------|-------------|
+| `ingest_github_repo` | Ingest and index a GitHub repository |
+| `ingest_youtube_transcript` | Ingest and index a YouTube video transcript |
+| `ingest_obsidian_vault` | Ingest and index an Obsidian markdown vault |
 
 ### Toolbox: `data_viz`
 
@@ -318,4 +326,5 @@ All other tools auto-approve. Dangerous shell patterns (`rm -rf`, `sudo`, etc.) 
 
 ## Last updated
 
+2026-07-10 — Added data_connectors toolbox (ingest_github_repo, ingest_youtube_transcript, ingest_obsidian_vault)
 2026-07-09 — Router decomposition (deterministic.py, resolver.py, modes.py); pentest tools section added (56+ tools across 11 categories); @scope_validated decorator applied to pentest tools; pentest memory node added; study tools expanded (flashcard_list, course_delete, study_note_update, quiz_session_delete); model name updated to gemma-4-e2b

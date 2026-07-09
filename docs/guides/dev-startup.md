@@ -1,7 +1,7 @@
 ---
 status: active
 category: guide
-last_updated: 2026-06-27
+last_updated: 2026-07-10
 audience: agent
 owner: ai-agent
 ---
@@ -126,27 +126,30 @@ python3 -c "from src.config.config_loader import validate_config; print(validate
 | `REDIS_URL` | Default `redis://localhost:6379` — no change needed |
 | `DOCLING_ARTIFACTS_PATH` | `.models/docling/` — auto-set, no change needed |
 
-## Step 2: Containers (Qdrant, Redis, PostgreSQL, StirlingPDF)
+## Step 2: Containers (Qdrant, Redis, PostgreSQL)
 
-The launcher script (`start.sh`) tries three backends in order: `podman compose` → `podman-compose` → `docker compose`. Any of these work. `start.sh` starts **core services only** (`qdrant`, `redis`, `stirling-pdf`). SearXNG is **not** started by default.
+The launcher script (`start.sh`) starts **core services only** (`qdrant`, `redis`, `postgres`) via podman/docker compose. StirlingPDF and SearXNG are **not** started at boot by default.
 
-> **New as of 2026-07-02:** The backend now also requires a **PostgreSQL** container for project/chat persistence. Start it alongside the other services:
+> **New as of 2026-07-02:** The backend requires a **PostgreSQL** container for project/chat persistence. Start the core services:
 
 ```bash
-# Start all required containers (choose one)
-podman compose up -d qdrant redis stirling-pdf postgres     # preferred (Podman users)
-docker compose up -d qdrant redis stirling-pdf postgres     # Docker users
+# Start all core containers (choose one)
+podman compose up -d qdrant redis postgres     # preferred (Podman users)
+docker compose up -d qdrant redis postgres     # Docker users
 
 # Verify they're running
 podman ps --format '{{.Names}}' | grep owlynn
-# Expected: owlynn_qdrant, owlynn_redis, owlynn_stirling_pdf, owlynn_postgres
+# Expected: owlynn_qdrant, owlynn_redis, owlynn_postgres
 ```
 
-PostgreSQL runs strictly on `127.0.0.1:5432`. Project and chat data that was formerly stored in a flat `projects.json` file is now persisted here via SQLAlchemy (`src/models/`). Alembic migrations run automatically on backend startup.
+PostgreSQL runs strictly on `127.0.0.1:5432`. Chat and project history are persisted here via SQLAlchemy. Alembic migrations run automatically on backend startup.
 
-**StirlingPDF** (~1GB image pull; **allocate 2GB container RAM** — 1GB causes Metaspace OOM crash loops on Java 25): PDF text extraction + OCR for scanned documents. Swagger UI: `http://127.0.0.1:8090/swagger-ui/index.html`. If Stirling is down, Owlynn falls back to PyMuPDF automatically.
+**StirlingPDF (On-Demand):** StirlingPDF container is launched on-demand (lazily) by the Python backend on the first PDF ingestion, saving ~2 GB of memory during idle sessions.
+- Capped JVM heap to 512 MB.
+- **Opt-in Idle Shutdown:** Set `services.stirling_pdf.idle_shutdown: true` in `defaults.yaml` to automatically stop the StirlingPDF container after 10 minutes of inactivity (saves ~200-300 MB of container RAM).
+- Swagger UI (when running): `http://127.0.0.1:8090/swagger-ui/index.html`. If Stirling is down, Owlynn falls back to PyMuPDF automatically.
 
-Manual smoke (after containers up): `python scripts/manual/stirling_pdf_smoke.py`
+Manual smoke (ensure container starts on-demand): `python scripts/manual/stirling_pdf_smoke.py`
 
 **SearXNG (opt-in):** Primary web search is the Brave browser extension (tier 0.2). To enable SearXNG as a fallback tier:
 

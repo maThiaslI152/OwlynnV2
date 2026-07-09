@@ -32,6 +32,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Files explicitly uploaded via frontend; bypasses Eco-Mode restrictions
+FORCE_PROCESS_FILES = set()
+
 
 class FileWatcherHandler(FileSystemEventHandler):
     """Handles filesystem events, queuing files for text extraction.
@@ -142,6 +145,19 @@ class FileWatcherHandler(FileSystemEventHandler):
         # Skip if within the .processed directory
         if filepath.startswith(self.processed_dir):
             return
+
+        try:
+            from src.api.power_monitor import ECO_MODE
+
+            if ECO_MODE and filepath not in FORCE_PROCESS_FILES:
+                logger.info(
+                    f"[Watcher] Eco-Mode active: Skipping background extraction for {filepath}"
+                )
+                return
+            if filepath in FORCE_PROCESS_FILES:
+                FORCE_PROCESS_FILES.discard(filepath)
+        except ImportError:
+            pass
 
         # Run processing in a background thread with slight delay for file locked operations (uploads)
         threading.Thread(

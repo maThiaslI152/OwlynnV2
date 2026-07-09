@@ -47,6 +47,7 @@ from src.agent.routing.deterministic import (
     _user_wants_data_viz,
     _user_wants_screen_assist,
     _is_simple_informational_query,
+    _is_followup_continuation,
 )
 from src.agent.routing.modes import (
     augment_toolbox_for_scenario,
@@ -670,6 +671,26 @@ async def router_node(state: AgentState) -> AgentState:
         route, toolbox = _resolve_complex_route(
             user_text, state, toolbox, cloud_available=cloud_available
         )
+
+    # ── Eco-Mode Routing Override ────────────────────────────────────────
+    try:
+        from src.api.power_monitor import ECO_MODE
+
+        if ECO_MODE:
+            from src.config.secret_store import resolve_deepseek_api_key
+
+            if resolve_deepseek_api_key():
+                route = "complex-cloud"
+                logger.info("[router] Eco-Mode active: forced route to complex-cloud")
+                classification_source = "eco_mode_force_cloud"
+            else:
+                route = "complex-default"
+                logger.info(
+                    "[router] Eco-Mode active but cloud missing: fallback to complex-default"
+                )
+                classification_source = "eco_mode_cloud_unavailable"
+    except ImportError:
+        pass
 
     # ── Apply mode-specific toolbox augmentation ─────────────────────────
     toolbox = augment_toolbox_for_scenario(toolbox, state.get("scenario_id"), user_text)

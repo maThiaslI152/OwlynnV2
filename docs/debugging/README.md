@@ -2,7 +2,7 @@
 status: active
 category: debugging
 audience: agent
-last_updated: 2026-06-15
+last_updated: 2026-07-09
 owner: ai-agent
 ---
 
@@ -18,6 +18,18 @@ owner: ai-agent
 - [`CHAT_PROTOCOL.md`](../CHAT_PROTOCOL.md) — WebSocket contract
 - [`STATUS.md`](../STATUS.md) — Current risks and model config
 - [`logging.md`](logging.md) — Full logging & trace system reference
+
+## Crash Log
+
+**Location:** `~/.owlynn/logs/crash.log` (rotating: 5MB max, 3 backups)
+
+Captures:
+- Python segfaults and fatal errors (via `faulthandler`)
+- Unhandled main-thread exceptions (via `sys.excepthook`)
+- Background thread exceptions (via `threading.excepthook`)
+- Unhandled async task exceptions (via `loop.set_exception_handler`)
+
+**Audit logs:** `~/.owlynn/logs/audit.jsonl` (structured JSON, all channels) and `~/.owlynn/logs/audit-errors.jsonl` (errors only).
 
 ## Symptom → File Mapping
 
@@ -44,6 +56,9 @@ owner: ai-agent
 | “Reading workspace file…” streams before tool card | `src/api/ws/handler.py`, `frontend-v2/src/lib/toolPreamble.ts` | [`changes/tool-preamble-read-file-fix/CHANGELOG.md`](../changes/tool-preamble-read-file-fix/CHANGELOG.md) |
 | Browser page not prefilled in composer | `browser-extension/`, `src/api/routes/browser_extension.py`, `frontend-v2/src/App.tsx` | [`changes/browser-extension-active-tab/CHANGELOG.md`](../changes/browser-extension-active-tab/CHANGELOG.md) |
 | Frontend blank / WS desync | `frontend-v2/src/App.tsx`, `frontend-v2/src/lib/wsClient.ts` | [frontend.md](frontend.md) |
+| App crashes during tool execution | `src/agent/core/complex.py`, `~/.owlynn/logs/crash.log` | [`changes/crash-proof-logging-reconnect/CHANGELOG.md`](../changes/crash-proof-logging-reconnect/CHANGELOG.md) |
+| WebSocket keeps disconnecting | `frontend-v2/src/lib/wsClient.ts` (auto-reconnect), `src/api/ws/handler.py` | [`changes/crash-proof-logging-reconnect/CHANGELOG.md`](../changes/crash-proof-logging-reconnect/CHANGELOG.md) |
+| Silent crash (no error in UI) | `~/.owlynn/logs/crash.log`, `src/api/server.py` (faulthandler) | [`changes/crash-proof-logging-reconnect/CHANGELOG.md`](../changes/crash-proof-logging-reconnect/CHANGELOG.md) |
 | Electron / Safe Mode IPC | `frontend-v2/src/lib/electronBridge.ts` | [frontend.md](frontend.md) |
 | Slow responses / thermal | `src/config/defaults.yaml` (M4 timeouts) | [profiling.md](profiling.md) |
 

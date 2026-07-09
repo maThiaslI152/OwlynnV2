@@ -580,6 +580,11 @@ async def api_upload_file(
         if not filepath.startswith(os.path.abspath(base_dir)):
             return {"status": "error", "message": "Access denied"}
 
+        # Explicitly uploaded by user: bypass Eco-Mode watchdog skip
+        from src.api.file_processor import FORCE_PROCESS_FILES
+
+        FORCE_PROCESS_FILES.add(filepath)
+
         file_bytes = await file.read()
         with open(filepath, "wb") as f:
             f.write(file_bytes)

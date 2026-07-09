@@ -40,14 +40,14 @@ class GraphSession:
                 except asyncio.CancelledError:
                     pass
                 except Exception as e:
-                    logger.error("Error in queued run: %s", e)
+                    logger.error("Error in queued run: %s", e, exc_info=True)
                 finally:
                     self.is_running = False
                     self._run_queue.task_done()
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error("Error in queue processor: %s", e)
+                logger.error("Error in queue processor: %s", e, exc_info=True)
 
     async def add_listener(self):
         q = asyncio.Queue()
@@ -106,10 +106,12 @@ class GraphSession:
                 q.put_nowait((err_msg, correlation_id))
             raise
         except Exception as e:
-            logger.warning("Error suppressed: %s", e)
-            import traceback
-
-            traceback.print_exc()
+            logger.error(
+                "Graph execution error for thread %s: %s",
+                self.thread_id,
+                e,
+                exc_info=True,
+            )
             err_msg = {"type": "error", "content": f"Graph Execution Error: {str(e)}"}
             self.event_buffer.append((err_msg, correlation_id))
             for q in list(self.listeners):

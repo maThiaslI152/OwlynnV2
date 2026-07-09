@@ -1194,6 +1194,12 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         state, thread_messages, web_on=web_on, vision_task=vision_task
     )
     tools_for_invoke: list | None = list(tools)
+    if tools_for_invoke:
+        from src.agent.tool_reranker import rerank_tools
+        from src.agent.core.complex_utils.formatter import latest_user_text
+
+        user_q = latest_user_text(thread_messages) or ""
+        tools_for_invoke = rerank_tools(user_q, tools_for_invoke, top_k=15)
     if web_on and not vision_task:
         tools_for_invoke = filter_tools_for_web_budget(tools_for_invoke, web_budget)
         if web_budget.blocked_tools and not web_budget.force_synthesis:
@@ -1621,7 +1627,88 @@ async def complex_tool_action_node(state: AgentState) -> AgentState:
         state, current_messages, web_on=web_on, vision_task=vision_task
     )
     tool_node = ToolNode(tools)
-    tool_payload = await tool_node.ainvoke({"messages": current_messages})
+
+    # ── Parallel tool dispatch ────────────────────────────────────────────
+    # Tools that write to shared state must remain sequential to avoid races.
+    _SERIAL_TOOLS = {
+        "write_workspace_file",
+        "edit_workspace_file",
+        "delete_workspace_file",
+        "notebook_run",
+        "run_kali_command",
+        "send_kali_input",
+        "metasploit_run",
+        "hydra_attack",
+        "john_crack",
+        "wifi_deauth",
+        "wifi_handshake_capture",
+        "wifi_crack_handshake",
+    }
+
+    async def _parallel_tool_dispatch(tool_calls: list[dict], messages: list) -> dict:
+        """Execute independent tool calls in parallel; serial tools run sequentially."""
+        # Check if any of the calls are serial — if so, fall back to default sequential
+        call_names = {tc.get("name", "") for tc in tool_calls}
+        if call_names & _SERIAL_TOOLS or len(tool_calls) <= 1:
+            return await tool_node.ainvoke({"messages": messages})
+
+        # Build individual single-call message lists and invoke in parallel
+        base_msgs = messages[:-1]  # all messages except the last AI turn
+        last_ai_msg = messages[-1]
+
+        async def _invoke_single(tc: dict) -> "ToolMessage":
+            """Create a synthetic AI message with only this one tool call."""
+            from langchain_core.messages import AIMessage
+
+            single_ai = AIMessage(
+                content=last_ai_msg.content,
+                tool_calls=[tc],
+                id=last_ai_msg.id,
+            )
+            result = await tool_node.ainvoke({"messages": base_msgs + [single_ai]})
+            msgs = result.get("messages", [])
+            return msgs[0] if msgs else None
+
+        results = await asyncio.gather(
+            *[_invoke_single(tc) for tc in tool_calls],
+            return_exceptions=True,
+        )
+        # Reassemble in original order; replace exceptions with error ToolMessages
+        tool_msgs = []
+        for tc, res in zip(tool_calls, results):
+            if isinstance(res, Exception):
+                tool_msgs.append(
+                    ToolMessage(
+                        content=f"Tool execution failed: {type(res).__name__}: {res}",
+                        tool_call_id=tc.get("id", "unknown"),
+                        name=tc.get("name", "unknown"),
+                    )
+                )
+            elif res is not None:
+                tool_msgs.append(res)
+        return {"messages": tool_msgs}
+
+    last_tool_calls = getattr(last_message, "tool_calls", None) or []
+    try:
+        tool_payload = await _parallel_tool_dispatch(last_tool_calls, current_messages)
+    except Exception as e:
+        logger.error("Tool execution crashed: %s", e, exc_info=True)
+
+        # Return error ToolMessage so the LLM can inform the user gracefully
+        last_msg = current_messages[-1]
+        tool_call_id = "unknown"
+        if hasattr(last_msg, "tool_calls") and last_msg.tool_calls:
+            tool_call_id = last_msg.tool_calls[0].get("id", "unknown")
+        error_msg = ToolMessage(
+            content=(
+                f"Tool execution failed with an internal error: {type(e).__name__}: {e}. "
+                "Please inform the user that the tool encountered an unexpected error "
+                "and suggest trying again or using a different approach."
+            ),
+            tool_call_id=tool_call_id,
+            name="system_error",
+        )
+        tool_payload = {"messages": [error_msg]}
     output_messages = tool_payload.get("messages", [])
     delta = _extract_tool_output_delta(current_messages, output_messages)
 

@@ -1,7 +1,7 @@
 ---
 status: active
 category: architecture
-last_updated: 2026-07-08
+last_updated: 2026-07-10
 owner: ai-agent
 audience: agent
 ---
@@ -16,7 +16,7 @@ Owlynn uses layered memory (STM, LTM, personal context, scenarios) with a **spli
 
 | Tier | Storage | What It Stores | Retrieval |
 |------|---------|---------------|-----------|
-| **Short-Term (STM)** | `data/memories.json` | Important facts from recent conversations | Keyword search via `memory_manager.py` |
+| **Short-Term (STM)** | `data/memories.json` | Important facts from recent conversations | Keyword search via `memory_manager.py`. Regex `re.UNICODE` bug fixed. |
 | **Long-Term (LTM)** | Qdrant via Mem0 | Embedding-indexed facts + L1 atoms | Semantic search (gated) |
 | **Personal** | `data/topics.json`, `data/interests.json`, `data/conversations.json` | User topics, interests, conversation history | Time-decay-weighted relevance |
 | **L2/L3 scenarios** | `scenarios/*/playbook.md`, `constraints.md` | Pentest / research workflows | Router `scenario_id` + markdown loader |
@@ -48,7 +48,7 @@ After the agent responds, `memory_write_node`:
 
 ### Background extraction (Gemma 4 E2B) — resource deferral
 
-LTM atom extraction uses the unified local model (`models.small`, `gemma-4-e2b-heretic-uncensored-mlx`) in a background worker. To avoid GPU/CPU contention with active chat or local fallback:
+LTM atom extraction uses the unified local model (`models.small`, `gemma-4-e2b-heretic-uncensored-mlx`) in a background worker. It has been upgraded to an Observer/Reflector 2-phase LLM pipeline for deduplication. To avoid GPU/CPU contention with active chat or local fallback:
 
 ```text
 memory_write → Redis queue → worker waits for idle window → invoke_medium_background() → Mem0
@@ -60,6 +60,7 @@ memory_write → Redis queue → worker waits for idle window → invoke_medium_
 - No foreground local-LLM call (agent complex/simple local path)
 - Post-turn cooldown (`idle_cooldown_seconds`, default 8s)
 - Lower CPU priority during invoke (`process_nice`, default 10)
+- **Eco-Mode (Battery Power)**: The background extraction worker automatically suspends and queues jobs when the Mac is disconnected from power, avoiding battery drain.
 
 LM Studio does **not** expose per-request GPU throttling via the OpenAI API; defer-until-idle is the practical mitigation on Apple Silicon unified memory.
 
@@ -93,7 +94,7 @@ memory:
 
 ## Context Budget Management
 
-Memory context is capped at 12000 characters (~3000 tokens) to stay within the model's context window. This prevents exceeding LM Studio's default `n_ctx=8192`.
+Memory context is capped at 24000 characters (~6000 tokens) to stay within the model's context window. This prevents exceeding LM Studio's default `n_ctx=8192`.
 
 The summarization system compresses older conversation turns when token usage exceeds 85% of the context window. Recent turns (last 10) are preserved in full. Summaries include a "Topics Discussed" section for continuity across compressions.
 
@@ -107,7 +108,7 @@ The `VectorLifecycleManager` orchestrates the insertion and deletion of vector d
 ## Known Issues
 
 1. **Mem0 requires `mem0ai[nlp]`** — install with `pip install mem0ai[nlp]` for spaCy/fastembed support
-2. **Memory context cap may cut important facts** — injected memory text is capped at **12000 characters** in `format_memory_context` (see `memory.py`); enhanced blocks use a separate 6000-char budget
+2. **Memory context cap may cut important facts** — injected memory text is capped at **24000 characters** in `format_memory_context` (see `memory.py`); enhanced blocks use a separate 6000-char budget
 3. **No STM→LTM promotion** — frequently recalled facts aren't auto-promoted to LTM with higher priority
 4. **Legacy chats without checkpoints** — chats created before the Redis checkpointer was enabled show "History unavailable" in the UI. The sidebar displays a ⚠️ icon on affected chats. These conversations cannot be recovered.
 
@@ -165,6 +166,7 @@ The frontend handles both the new structured format and the legacy array format 
 - `src/memory/semantic_cache.py` — Semantic response cache (redisvl)
 - `src/memory/personal_assistant.py` — Topic/interest tracking
 - `src/agent/nodes/summarize.py` — Auto-summarization
+- `src/config/engagement_crypto.py` — Fernet master key storage (macOS Keychain)
 - `src/config/defaults.yaml` — Memory configuration
 - `docs/features/SEMANTIC_CACHE.md` — Semantic cache feature documentation
 - `docs/architecture/REDIS_LIFECYCLE.md` — Redis checkpoint eviction and memory management

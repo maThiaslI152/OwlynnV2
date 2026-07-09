@@ -141,13 +141,39 @@ describe('WsClient protocol-safety regressions', () => {
     expect(onOpen).toHaveBeenCalledTimes(1)
   })
 
-  it('calls onClose when websocket closes', () => {
+  it('calls onClose when websocket closes intentionally', () => {
     const onClose = vi.fn()
     const client = new WsClient('ws://localhost/chat')
-    client.connect({ onClose })
+    const disconnect = client.connect({ onClose })
 
+    // Intentional close: disconnect sets flag, then close event fires
+    disconnect()
     simulateClose()
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('attempts reconnect on unexpected close and calls onClose after retries exhausted', () => {
+    vi.useFakeTimers()
+    const onClose = vi.fn()
+    const onReconnecting = vi.fn()
+    const onReconnectFailed = vi.fn()
+    const client = new WsClient('ws://localhost/chat')
+    client.connect({ onClose, onReconnecting, onReconnectFailed })
+
+    simulateClose()
+    // Should start reconnecting, not call onClose yet
+    expect(onReconnecting).toHaveBeenCalledWith(1, 5)
+    expect(onClose).not.toHaveBeenCalled()
+
+    // Exhaust all retries (5 attempts with exponential backoff)
+    for (let i = 0; i < 5; i++) {
+      vi.advanceTimersByTime(20000)
+      simulateClose()
+    }
+
+    expect(onReconnectFailed).toHaveBeenCalled()
+    expect(onClose).toHaveBeenCalled()
+    vi.useRealTimers()
   })
 
   it('calls onError when websocket errors', () => {
@@ -221,13 +247,13 @@ describe('WsClient protocol-safety regressions', () => {
     expect(mockSocket.close).toHaveBeenCalledTimes(1)
   })
 
-  it('triggers all lifecycle handlers in sequence: open, message, close', () => {
+  it('triggers all lifecycle handlers in sequence: open, message, close (intentional)', () => {
     const onOpen = vi.fn()
     const onClose = vi.fn()
     const onEvent = vi.fn()
 
     const client = new WsClient('ws://localhost/chat')
-    client.connect({ onOpen, onClose, onEvent })
+    const disconnect = client.connect({ onOpen, onClose, onEvent })
 
     simulateOpen()
     expect(onOpen).toHaveBeenCalledTimes(1)
@@ -238,6 +264,8 @@ describe('WsClient protocol-safety regressions', () => {
     expect(onEvent).toHaveBeenCalledTimes(1)
     expect(onClose).not.toHaveBeenCalled()
 
+    // Intentional disconnect: set flag, then simulate close event
+    disconnect()
     simulateClose()
     expect(onClose).toHaveBeenCalledTimes(1)
   })

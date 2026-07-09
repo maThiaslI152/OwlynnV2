@@ -47,6 +47,8 @@
 | Change HITL / approvals | [`docs/HITL.md`](docs/HITL.md) | `src/agent/hitl/`, `src/agent/nodes/{scope_clarify,plan_review,security_proxy}.py` |
 | Debug a symptom | [`docs/debugging/README.md`](docs/debugging/README.md) | Follow symptom → file table |
 | Change cloud / anonymization | [`docs/architecture/CLOUD-LLM-ARCHITECTURE.md`](docs/architecture/CLOUD-LLM-ARCHITECTURE.md) | `src/agent/nodes/complex.py`, `src/agent/nodes/complex_utils/` |
+| Change Eco-Mode / battery throttling | — | `src/api/power_monitor.py`, `src/agent/routing/router.py`, `src/api/ws/handler.py` |
+| Change idle resource management (LLM unload, StirlingPDF) | — | `src/api/idle_manager.py`, `src/api/server.py`, `src/api/ws/handler.py`, `src/pdf/intake.py` |
 | Run or configure the app | [`docs/guides/dev-startup.md`](docs/guides/dev-startup.md) | `start.sh`, `setup.sh`, `.env` |
 | Run CI / tests / evaluation | [`docs/standards/EVALUATION.md`](docs/standards/EVALUATION.md) | `scripts/ci.sh`, `scripts/run_*_eval.py` |
 | Change mode system (Normal/Study/Pentest) | — | `frontend-v2/src/components/ModeSwitcher.tsx`, `frontend-v2/src/state/slices/modesSlice.ts`, `src/api/ws/handler.py` |
@@ -69,6 +71,12 @@
 | Change pentest attack chain | — | `src/agent/pentest/attack_chain.py`, `src/tools/pentest_tools.py` (auto_recon, suggest_next_steps) |
 | Change browser extension | [`docs/features/BROWSER_EXTENSION.md`](docs/features/BROWSER_EXTENSION.md) | `browser-extension/`, `src/api/routes/browser_extension.py` |
 | Package Electron app | [`docs/guides/app-release.md`](docs/guides/app-release.md) | `frontend-v2/electron/`, `frontend-v2/electron-builder.yml` |
+| Change background jobs / scheduler | — | `src/api/scheduler_manager.py`, `src/api/routes/scheduled_jobs.py` |
+| Change config / settings UI | — | `src/api/routes/config.py`, `frontend-v2/src/components/SettingsPanel.tsx` |
+| Change citations UI | — | `frontend-v2/src/components/CitationsList.tsx` |
+| Change chat export API | — | `src/api/routes/export.py` |
+| Change tool reranking | — | `src/agent/tool_reranker.py`, `src/agent/core/complex.py` |
+| Change data connectors | — | `src/tools/data_connectors.py` |
 
 ## Mode System
 
@@ -226,6 +234,13 @@ When generating cache keys for chat histories or context gatekeepers (e.g., in `
 - **Prompt injection boundaries** — `fetch_webpage` output wrapped in `<web_context>` tags. Memory writes sanitized for injection patterns via `pii_scrubber.scrub_for_memory_write()`.
 - **Destructive command blocking** — `scope_guard.py` blocks `rm -rf /`, `mkfs`, `dd` to device, fork bombs, etc. regardless of engagement state.
 
+### Crash Logging & Tool Resilience (2026-07-09)
+- **Tool execution is crash-proof** — `ToolNode.ainvoke()` in `complex.py` is wrapped in try/except. On failure, returns error ToolMessage so the LLM can inform the user gracefully.
+- **Event forwarding is fault-isolated** — Per-event try/except in `forward_events` inner loop (`handler.py`). Bad events are logged and skipped instead of killing the forwarder.
+- **Crash log at `~/.owlynn/logs/crash.log`** — Rotating (5MB, 3 backups). Captures: `faulthandler` (segfaults), `sys.excepthook` (main thread), `threading.excepthook` (background threads), `loop.set_exception_handler` (async tasks).
+- **All tracebacks go to logs** — `traceback.print_exc()` replaced with `logger.error(..., exc_info=True)` throughout.
+- **WebSocket auto-reconnect** — Frontend reconnects with exponential backoff (1s→16s, max 5 retries), re-sends last user message to retry failed graph run.
+
 ### Browser Extension (Manifest V3) Strictness
 - **Explicit API Permissions:** Always explicitly add APIs (e.g., `"alarms"`) to the `permissions` array in `manifest.json`.
 - **CSP Compliance:** Do not use `frame-src` within the `extension_pages` Content Security Policy, and avoid port wildcards (`:*`) in `connect-src`.
@@ -244,6 +259,10 @@ When generating cache keys for chat histories or context gatekeepers (e.g., in `
 
 ## Last updated
 
+2026-07-10 — Phase 1 and 4 Roadmap Completion: Fixed HITL bypass, macOS Keychain for Fernet, Observer/Reflector 2-phase LLM pipeline, semantic tool reranking via Nomic, data connectors, APScheduler background jobs, Settings/Citations UI, Chat export. Changelog at docs/changes/phase-1-4-roadmap/CHANGELOG.md.
+2026-07-09 — Performance Optimizations (Idle + Active): Parallel tool dispatch (asyncio.gather for independent tools); idle LLM unload after 15min via LM Studio REST API; StirlingPDF idle-shutdown (opt-in); follow-up continuation bypass skips LLM router classifier; file cache poll replaces asyncio.sleep(3). Changelog at docs/changes/performance-optimizations/CHANGELOG.md.
+2026-07-09 — Eco-Mode Background Throttling and Intelligent Routing: Implemented battery monitoring via `pmset -g batt`. Background RAG extraction and file processing suspend when on battery. Router forces `complex-cloud` fallback. Frontend UI warning added for Pentest mode. Changelog at docs/changes/eco-mode/CHANGELOG.md.
+2026-07-09 — Crash-proof tool execution: wrapped ToolNode.ainvoke() in try/except, per-event error isolation in WS forward_events, crash logging (faulthandler + sys.excepthook + threading.excepthook + asyncio handler) to ~/.owlynn/logs/crash.log, frontend error event handler, WebSocket auto-reconnect with exponential backoff and thread resumption. Changelog at docs/changes/crash-proof-logging-reconnect/CHANGELOG.md.
 2026-07-08 — Pentest V3 features: multi-agent architecture (coordinator + executor pattern, PentestExecutor node, domain-specific prompts); 29 new tools across 9 categories (network, web, vuln, exploit, post-exploit, OSINT, AD, password, cloud); task graph (PentestTaskGraph DAG for attack dependency tracking); integrations (Shodan, Censys, HackerOne, Burp Suite MCP); enhanced reporting (PoC generator, CVSS calculator, compliance mapper). 67 total pentest tools. Changelog at docs/changes/pentest-v3-multi-agent/CHANGELOG.md.
 2026-07-08 — Pentest V2 features: live terminal streaming (WS-based, replaces 3s polling); cloud pentest proxy (CVE/methodology queries to cloud, target data stays local); wireless pentest tools (6 wifi_* tools, aircrack-ng suite, HITL gating); multi-engagement support (tabs, switching, cross-engagement compare); attack chain automation (auto_recon, suggest_next_steps, analyze_attack_surface). 38 total pentest tools. Changelog at docs/changes/pentest-v2-features/CHANGELOG.md.
 2026-07-07 — Browser extension bugfixes: fixed extension crashing by adding `alarms` to permissions; improved MV3 CSP strictness; fixed frontend streaming whitespace bug by removing `.strip()` in `formatter.py`; added UI animation tracking for tool execution state.

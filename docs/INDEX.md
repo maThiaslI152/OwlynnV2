@@ -1,7 +1,7 @@
 ---
 status: active
 category: reference
-last_updated: 2026-07-09
+last_updated: 2026-07-10
 owner: ai-agent
 audience: agent
 ---
@@ -12,14 +12,14 @@ audience: agent
 
 ```yaml
 manifest:
-  version: 15
-  generated: "2026-07-09T00:00:00Z"
+  version: 16
+  generated: "2026-07-10T04:24:13Z"
   files:
     - path: AGENTS.md
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-07-07
+      last_updated: 2026-07-10
     - path: docs/ADR.md
       status: active
       category: architecture
@@ -39,7 +39,7 @@ manifest:
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-06-07
+      last_updated: 2026-07-10
     - path: docs/BUG-ANALYSIS.md
       status: active
       category: audit
@@ -54,7 +54,7 @@ manifest:
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-06-10
+      last_updated: 2026-07-10
     - path: docs/architecture/CLOUD-LLM-ARCHITECTURE.md
       status: active
       category: reference
@@ -89,17 +89,17 @@ manifest:
       status: active
       category: architecture
       audience: agent
-      last_updated: 2026-07-07
+      last_updated: 2026-07-10
     - path: docs/INDEX.md
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-06-11
+      last_updated: 2026-07-10
     - path: docs/features/MEMORY.md
       status: active
       category: architecture
       audience: agent
-      last_updated: 2026-07-07
+      last_updated: 2026-07-10
     - path: docs/features/SEMANTIC_CACHE.md
       status: active
       category: performance
@@ -115,7 +115,7 @@ manifest:
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-06-18
+      last_updated: 2026-07-10
     - path: docs/architecture/PROJECT_OVERVIEW.md
       status: active
       category: reference
@@ -145,12 +145,12 @@ manifest:
       status: active
       category: standards
       audience: agent
-      last_updated: 2026-06-18
+      last_updated: 2026-07-10
     - path: docs/features/TOOLS.md
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-07-07
+      last_updated: 2026-07-10
     - path: docs/features/WEB_SEARCH.md
       status: active
       category: architecture
@@ -171,7 +171,27 @@ manifest:
       category: reference
       audience: agent
       last_updated: 2026-07-09
+    - path: docs/changes/phase-1-4-roadmap/CHANGELOG.md
+      status: active
+      category: changelog
+      audience: agent
+      last_updated: 2026-07-10
     - path: docs/changes/router-decomposition-pentest-v3/CHANGELOG.md
+      status: active
+      category: changelog
+      audience: agent
+      last_updated: 2026-07-09
+    - path: docs/changes/crash-proof-logging-reconnect/CHANGELOG.md
+      status: active
+      category: changelog
+      audience: agent
+      last_updated: 2026-07-09
+    - path: docs/changes/eco-mode/CHANGELOG.md
+      status: active
+      category: changelog
+      audience: agent
+      last_updated: 2026-07-09
+    - path: docs/changes/performance-optimizations/CHANGELOG.md
       status: active
       category: changelog
       audience: agent
@@ -195,7 +215,7 @@ manifest:
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-07-09
+      last_updated: 2026-07-10
     - path: docs/archive/AGENT_RESUME_PLAYBOOK.md
       status: archived
       category: archive
@@ -730,7 +750,7 @@ manifest:
       status: active
       category: guide
       audience: agent
-      last_updated: 2026-06-10
+      last_updated: 2026-07-10
     - path: docs/guides/file_formats.md
       status: active
       category: guide

@@ -1,7 +1,7 @@
 ---
 status: active
 category: reference
-last_updated: 2026-06-07
+last_updated: 2026-07-10
 owner: human
 ---
 
@@ -286,6 +286,21 @@ Project-scoping handled by `get_project_workspace(project_id)` with path-prefix 
 - Manually triggers a HITL interrupt for testing
 - Body: `{ "type": "security_approval_required | ask_user", ... }`
 - Response: `{ "status": "ok" }`
+
+### Scheduled Jobs
+
+`GET /api/scheduled-jobs`
+- Lists all active background scheduled jobs.
+
+### Config API
+
+`GET /api/config`
+- Retrieve full server configuration.
+
+### Export API
+
+`GET /api/export/chat/{thread_id}`
+- Export chat thread history.
 
 ## Key Decisions
 

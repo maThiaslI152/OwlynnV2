@@ -1,7 +1,7 @@
 ---
 status: active
 category: reference
-last_updated: 2026-06-15
+last_updated: 2026-07-10
 owner: ai-agent
 audience: agent
 ---
@@ -187,6 +187,7 @@ Cloud route (`complex-cloud`) with images: lazy-loaded Gemma 4 E2B (`models.visi
 - `AIMessage` with `tool_calls` forwarded for tool-call UI rendering
 - Tool-only placeholder text (preamble) is **not** sent as `assistant.message` when the turn is dominated by tool calls — UI relies on `tool_execution` instead
 - Tool lifecycle/output via `tool_execution` events (not `message`)
+- Internal assistant reminders (messages starting with `[Internal reminder`) and empty messages are suppressed.
 
 #### `error`
 
@@ -197,6 +198,8 @@ Cloud route (`complex-cloud`) with images: lazy-loaded Gemma 4 E2B (`models.visi
 Contract (tested via `test_ws_error_event_shape`):
 - `type` must equal `"error"`
 - `content` must be a non-empty string
+
+> **Note:** The `forward_events` loop in `handler.py` catches exceptions per-event, logging and skipping bad events rather than crashing the WebSocket stream.
 
 #### `tool_execution`
 
@@ -442,6 +445,17 @@ See [`changes/browser-extension-active-tab/CHANGELOG.md`](changes/browser-extens
 
 Sent by `notify_file_processed()` to trigger UI refresh of the workspace file panel.
 
+#### `eco_mode_changed`
+
+```json
+{
+  "type": "eco_mode_changed",
+  "isEcoMode": true
+}
+```
+
+- Sent to all active clients when the host OS power state changes (e.g. Mac unplugged from power to battery).
+
 #### `interrupt` (HITL)
 
 ```json
@@ -569,4 +583,5 @@ cd frontend-v2 && npx vitest run
 
 ## Last updated
 
+2026-07-09 — Documented crash-proof event forwarding loop and internal reminder suppression.
 2026-06-19 — Gemma 4 E2B vision proxy replaces Florence-2; `complex-cloud` → `large-cloud` in `model_info`

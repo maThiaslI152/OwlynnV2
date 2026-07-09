@@ -2,7 +2,7 @@
 status: active
 category: reference
 audience: agent
-last_updated: 2026-06-27
+last_updated: 2026-07-10
 owner: ai-agent
 ---
 
@@ -86,9 +86,15 @@ Do **not** add new `.py` test or patch scripts at repo root.
 |------|------|
 | `src/api/server.py` | FastAPI app entry |
 | `src/api/routes/*.py` | REST endpoints |
+| `src/api/routes/config.py` | Settings/Config API |
+| `src/api/routes/export.py` | Chat export API |
+| `src/api/routes/scheduled_jobs.py` | APScheduler REST API |
+| `src/api/scheduler_manager.py` | APScheduler background jobs |
 | `src/api/ws/handler.py` | WebSocket streaming, event serialization |
-| `docs/CHAT_PROTOCOL.md` | WS event contract |
-| `docs/API_REFERENCE.md` | REST reference |
+| `src/api/power_monitor.py` | Power state monitor loop (pmset status checks) |
+| `src/api/idle_manager.py` | Idle resource watcher (LM Studio unload + StirlingPDF shutdown) |
+| `docs/development/CHAT_PROTOCOL.md` | WS event contract |
+| `docs/development/API_REFERENCE.md` | REST reference |
 | `tests/test_websocket_event_contract.py` | WS contract tests |
 | `tests/test_frontend_backend_alignment.py` | Frontend/backend alignment |
 
@@ -104,6 +110,9 @@ Do **not** add new `.py` test or patch scripts at repo root.
 | `frontend-v2/src/state/slices/*.ts` | Modular Zustand state slices (chat, cloud, tools, modes) |
 | `frontend-v2/electron/main.ts` | Electron main process |
 | `frontend-v2/src/components/AppShell.tsx` | Layout shell |
+| `frontend-v2/src/components/SettingsPanel.tsx` | Settings UI |
+| `frontend-v2/src/components/CitationsList.tsx` | Citations UI |
+| `frontend-v2/src/components/Composer.tsx` | Chat composer (drag-and-drop context) |
 
 ## Memory
 
@@ -113,7 +122,7 @@ Do **not** add new `.py` test or patch scripts at repo root.
 | `src/models/` | PostgreSQL SQLAlchemy models (Project, Chat) |
 | `src/memory/` | STM/LTM/personal managers, Mem0/Qdrant, PostgreSQL managers |
 | `data/topics.json` | Personal topic decay (runtime data) |
-| `docs/MEMORY.md` | Memory tier contract |
+| `docs/features/MEMORY.md` | Memory tier contract |
 | `tests/test_memory_nodes.py` | Memory node tests |
 | `tests/test_memory_retrieve_gate.py` | Gated retrieval tests |
 
@@ -123,7 +132,9 @@ Do **not** add new `.py` test or patch scripts at repo root.
 |------|------|
 | `src/agent/tool_sets.py` | `ToolboxRegistry`, tool list resolution |
 | `src/tools/` | Tool implementations (`@tool` decorators) |
-| `docs/TOOLS.md` | Tool reference |
+| `src/agent/tool_reranker.py` | Semantic tool reranking via Nomic embeddings |
+| `src/tools/data_connectors.py` | Data connectors (GitHub, YouTube, Obsidian) |
+| `docs/features/TOOLS.md` | Tool reference |
 | `tests/test_toolbox_registry*.py` | Toolbox tests |
 | `tests/test_mcp_tool_binding.py` | MCP merge + HITL prefix tests |
 | `tests/test_web_tools.py` | Web search tools |
@@ -141,19 +152,19 @@ Do **not** add new `.py` test or patch scripts at repo root.
 | File | Role |
 |------|------|
 | `src/pdf/intake.py` | Unified PDF text extraction (Stirling → OCR → PyMuPDF) |
-| `src/integrations/stirling_pdf.py` | StirlingPDF HTTP client |
-| `src/api/file_processor.py` | Workspace watcher — writes `.processed/*.txt` |
+| `src/integrations/stirling_pdf.py` | StirlingPDF HTTP client (supports on-demand lazy start/idle shutdown) |
+| `src/api/file_processor.py` | Workspace watcher — writes `.processed/*.txt` (bypassed on battery) |
 | `src/api/shared.py` | Chat attachment inline PDF extraction |
 | `src/tools/core_tools.py` | `read_workspace_file` PDF path |
-| `docker-compose.yml` | `owlynn_stirling_pdf` service on port 8090 |
+| `docker-compose.yml` | Services definition (Qdrant, Redis, Postgres, StirlingPDF) |
 | `tests/test_pdf_intake.py` | Mocked intake tests (no live container in CI) |
 
 ## Graph orchestration
 
 | File | Role |
 |------|------|
-| `src/agent/graph.py` | `build_graph()`, conditional edges, HITL routing |
-| `docs/AGENT_FLOW.md` | Node-by-node flow reference |
+| `src/agent/core/graph.py` | `build_graph()`, conditional edges, HITL routing |
+| `docs/architecture/AGENT_FLOW.md` | Node-by-node flow reference |
 | `tests/test_graph.py` | Graph wiring tests |
 | `tests/test_graph_summarize_wiring.py` | Summarize gate tests |
 
@@ -186,7 +197,7 @@ START → memory_inject_lite → router → memory_retrieve → auto_summarize? 
 1. Edit `src/api/ws/handler.py` — `serialize_message()` / emit helpers
 2. Update `frontend-v2/src/types/protocol.ts` and consumers in `App.tsx`
 3. Run `pytest tests/test_websocket_event_contract.py -q`
-4. Update [`CHAT_PROTOCOL.md`](CHAT_PROTOCOL.md)
+4. Update [`CHAT_PROTOCOL.md`](CHAT_PROTOCOL.md) -> `docs/development/CHAT_PROTOCOL.md`
 
 ### Fix memory panel / context
 

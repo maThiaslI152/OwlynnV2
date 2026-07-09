@@ -484,3 +484,202 @@ These constraints should guide all feature implementation:
 ## Last updated
 
 2026-06-07 — architecture, routing, models, API/CLI/image status, Docling/Knowledge Cache, Tier 1 completion
+2026-07-10 — Deep-dive AnythingLLM comparison (§8–§11 below): full codebase read of both projects, Ollama migration plan, July 2026 bug/debt list
+
+---
+
+## 8. Deep-Dive: Owlynn vs AnythingLLM (July 2026)
+
+> **Method:** Both codebases read directly (~60 Owlynn files, ~40 AnythingLLM files). No assumptions.
+> **Design clarification:** Owlynn is intentionally **macOS-optimized and single-user by design**. Points marked ❌ below are gaps to close, not design violations. Multi-user support and cross-platform deployment are explicitly **out of scope** and will not be added.
+
+### 8.1 Where AnythingLLM Leads (Gaps to Close)
+
+| Area | AnythingLLM Has | Owlynn Status | Priority |
+|------|----------------|---------------|----------|
+| **Tool reranking** | ONNX cross-encoder selects top-15 tools from all loaded tools (~80% token reduction) | All tools always injected — expensive as count hits 100+ | 🔴 P0 |
+| **Settings UI** | Full admin panel: model, embedder, vector DB, agent config all in UI | Requires `defaults.yaml` editing | 🔴 P0 |
+| **Source citations** | Expandable doc source previews after RAG responses | No provenance shown for RAG results | 🔴 P0 |
+| **Data connectors** | GitHub repo, YouTube transcript, Confluence, Obsidian vault, Paperless-ngx, website crawl | Local files only; no remote ingestion | 🟠 P1 |
+| **Observer/Reflector memory extraction** | 2-phase: extract candidates → deduplicate, scope, filter → add/update/delete | Single-phase extraction, no deduplication | 🟠 P1 |
+| **Drag-and-drop into chat (session context)** | Drop file → injected as context for this turn only, not permanently embedded | Workspace file management is separate | 🟠 P1 |
+| **Chat export** | JSON + CSV export | No export | 🟠 P1 |
+| **Scheduled autonomous jobs** | Cron-scheduled agent tasks with configurable tool subsets | No equivalent | 🟠 P1 |
+| **SQL database query tool** | MySQL / PostgreSQL / MSSQL read-query agent | No database access | 🟠 P1 |
+| **Vector result caching** | Filesystem cache — skips re-embedding identical content | Re-embeds on every re-upload | 🟡 P2 |
+| **Document watch/sync** | Auto-re-embeds watched documents on 7-day staleness check | File watcher detects new files but doesn't re-embed on change | 🟡 P2 |
+| **Message feedback** | Thumbs up/down stored to DB, usable for fine-tuning | No message rating | 🟡 P2 |
+| **Chart generation** | Recharts SVG from agent output | Notebook can produce plots but not as inline UI output | 🟡 P2 |
+| **EPUB + audio transcription** | ebooklib EPUB, Whisper audio → text | PDF, DOCX, XLSX, MD, code only | 🟡 P2 |
+| **Onboarding wizard** | 3-step first-run wizard | Assumes technical users; no onboarding | 🟡 P2 |
+| **Auto-update (Electron)** | Desktop app update mechanism | Manual re-download required | 🟢 P3 |
+| **Web push notifications** | Browser push for async task completions | No push notifications | 🟢 P3 |
+
+### 8.2 Where Owlynn Leads (the Moat — do not lose these)
+
+These are areas where Owlynn is architecturally ahead. Any refactoring must preserve them:
+
+| Owlynn Advantage | Why It Matters |
+|-----------------|----------------|
+| **LangGraph multi-agent coordinator/executor** | AIbitat (ALLM) is single-agent + tools, not a graph. Owlynn has true coordinator → executor with DAG task tracking. |
+| **Cloud circuit breaker** | 3-failure → 60s cooldown → half-open. ALLM has nothing. |
+| **Per-turn cost tracking + DeepSeek KV cache optimization** | Users see spend per message. Cloud payload assembled for stable prefix layers (10× cost on cache hits). ALLM sends raw content, no cost visibility. |
+| **PII anonymization before cloud** | Session-local placeholder → deanonymized in response. ALLM sends raw user content to cloud APIs. |
+| **Semantic cache (redisvl, 92% threshold)** | Short-circuits full graph for near-duplicate queries. ALLM has no equivalent — every query hits full pipeline. |
+| **Eco-Mode battery awareness** | Routes cloud on battery to save GPU. Novel for laptop users. ALLM has no power awareness. |
+| **Hybrid BM25 + vector RAG + RRF** | Strictly better recall than ALLM's cosine-only search. |
+| **HITL for all sensitive tools by default** | Pentest tools, destructive file ops, notebook all require approval. ALLM has no HITL. |
+| **SSRF + path traversal + scope guard + PII scrub on write** | Defense-in-depth. ALLM has CORS: origin: true (wildcard) and no SSRF protection. |
+| **Pentest Mode (67 tools, Lima VM, Burp MCP)** | No competitor has security research as a first-class mode. |
+| **Study Mode (21 tools, SM-2 spaced repetition)** | No competitor has a structured learning system. |
+| **Screen Assist (macOS AX API + tmux capture)** | Deep OS integration that no web-first product can replicate. |
+| **Browser extension with DOM interaction + Moodle extraction** | ALLM's extension only clips pages. Owlynn's extension drives browser state. |
+| **Idle LLM unload** | Frees ~14GB unified memory after 15min. ALLM keeps models loaded indefinitely. |
+| **Auto-summarization at 85% context fill** | Prevents silent context overflow. ALLM has no equivalent protection. |
+
+---
+
+## 9. LLM Backend Strategy: LM Studio → Ollama Migration Plan
+
+### Current State (LM Studio)
+
+Owlynn currently runs all local inference through **LM Studio** because:
+- New open-weight models release frequently (daily/weekly in 2026) and need rapid testing
+- LM Studio's GUI makes downloading, quantizing, and switching models trivial
+- MLX-optimized models for Apple Silicon are well-supported in LM Studio
+- The `model_swap.py` pattern (load/unload via LM Studio management API) leverages LM Studio's REST control surface
+
+This is the right tradeoff for the current phase. LM Studio stays as the primary backend.
+
+### Future State (Ollama)
+
+When the model landscape stabilizes (fewer daily "must test" releases) and Owlynn's model lineup solidifies, migrate to **Ollama** for the following reasons:
+
+| Reason | Detail |
+|--------|--------|
+| **System integration** | Ollama exposes a native macOS service (`launchd`), deep macOS integration, proper log routing to `/var/log` or unified logging |
+| **Open logging** | Ollama's inference logs are accessible, parseable, and useful for debugging prompts. LM Studio logs are opaque. |
+| **Reproducibility** | `Modelfile` allows pinning exact model versions, quantizations, and system prompts. Reproducible across machines. |
+| **No GUI dependency** | Ollama is a headless CLI service — no GUI app needed. Better for automated startup (`start.sh`) and future Linux path. |
+| **OpenAI-compatible endpoint** | Same interface as LM Studio (`/v1/chat/completions`) — migration is a one-line endpoint URL change in `defaults.yaml`. |
+| **Model library** | HuggingFace GGUF import + curated Ollama library covers all models LM Studio supports. |
+| **`asyncio.gather` parallelism** | Ollama handles concurrent requests better than LM Studio's single-inference model. |
+
+### Migration Path (Low Risk)
+
+Since both LM Studio and Ollama expose identical OpenAI-compatible endpoints, the migration requires:
+
+1. **Add `models.backend` config key** to `defaults.yaml`: `lm_studio` (current) or `ollama`
+2. **Parameterize the endpoint URL** in `llm.py`: `base_url: str = config.get("models.backend_url", "http://localhost:1234/v1")`
+3. **Port `model_swap.py`**: Replace LM Studio management API calls (`POST /api/v1/models/load`, `DELETE /api/v1/models/unload`) with Ollama equivalents (`POST /api/pull`, `DELETE /api/delete` — or just keep models loaded since Ollama manages VRAM more gracefully)
+4. **Test with Ollama**: Run parallel benchmarks between LM Studio and Ollama on Owlynn's standard prompts
+5. **Keep LM Studio as fallback**: During transition period, support both backends via config flag
+
+**Estimated effort:** 1–2 days for full migration once model lineup is stable.
+
+### When to Migrate
+
+Trigger the migration when **both** conditions are true:
+- The pentest model (Gemma 4 12B Coder), small model (Gemma 4 E2B), and embedding model (nomic) are stable enough that daily model swapping is no longer needed
+- Ollama has stable MLX backend support for Apple Silicon (monitor: `ollama/ollama` GitHub releases)
+
+---
+
+## 10. July 2026 Bug & Debt List (Owlynn-Specific)
+
+Bugs found during the July 2026 deep-dive. Ordered by severity:
+
+| # | Severity | Issue | File | Fix |
+|---|----------|-------|------|-----|
+| 1 | 🔴 Security | **Pentest executor bypasses HITL** — tool calls inside `pentest_executor_node` go directly via `ToolNode`, not through `security_proxy_node` | `src/agent/pentest/executor.py` | Route executor tool calls through `security_proxy_node` |
+| 2 | 🔴 Security | **Pentest credentials stored in plaintext JSON** — comment says "Fernet encryption — Phase 3" but not implemented | `src/memory/pentest_engagement.py` | Implement Fernet, store key in macOS Keychain |
+| 3 | 🔴 Bug | **`podman` called on a Docker system** — `engagement_set_phase("report")` runs `podman start owlynn_stirling-pdf` but project uses Docker | `src/tools/pentest_tools.py:65` | Replace `podman` with `docker` |
+| 4 | 🟠 Bug | **STM keyword search is Latin/Thai-only** — `re.findall(r"[a-z\u0e00-\u0e7f]+")` silently returns nothing for CJK/Arabic/etc. Falls back to most-recent memories | `src/memory/memory_manager.py` | Replace with `re.findall(r"\w+", text, re.UNICODE)` |
+| 5 | 🟠 Bug | **`SemanticCache.embed()` sync stub** — raises `NotImplementedError`; if redisvl calls sync path, silent crash | `src/memory/semantic_cache.py` | Implement or guard with explicit error message |
+| 6 | 🟠 Bug | **`"price"` substring in web hints** — matches `"caprice"`, `"capricious"` and incorrectly forces web search | `src/agent/routing/deterministic.py:57` | Change to `r"\bprice\b"` word boundary |
+| 7 | 🟠 Debt | **`SENSITIVE_TOOLS` defined twice** — identical set in `hitl/policy.py` AND `nodes/security_proxy.py`; drift risk | Both files | Single source in `policy.py`, import in `security_proxy.py` |
+| 8 | 🟠 Debt | **Model swap has no distributed lock** — concurrent pentest mode requests could race on LM Studio model loading | `src/agent/model_swap.py` | Redis `SET NX PX` lock using existing Redis connection |
+| 9 | 🟡 Debt | **Memory context capped at 6000 chars** with 1M token cloud context window — artificially conservative | `src/agent/nodes/memory.py` | Raise to 20,000+ chars for cloud path turns |
+| 10 | 🟡 Debt | **TTS is a commented-out stub** — `synthesize()` call commented out; `AthenaSoundClassifier.mlmodel` sits unused at repo root | `src/api/tts_worker.py` | Un-stub or remove from feature list until implemented |
+| 11 | 🟡 Debt | **Dockerfile contradicts architecture policy** — AGENTS.md says "never containerize backend"; a `Dockerfile` and `backend` service in `docker-compose.yml` exist anyway | `Dockerfile`, `docker-compose.yml` | Remove or clearly mark as "CI only, not for production use" |
+| 12 | 🟢 Minor | **`docker-compose.yml` uses `version: '3.8'`** — deprecated schema, generates warnings | `docker-compose.yml` | Remove `version:` line (Compose Spec default) |
+
+---
+
+## 11. Prioritized Improvements for Owlynn (July 2026)
+
+Merging the June 2026 roadmap with July 2026 findings. Excludes intentional design choices (single-user, macOS-only).
+
+### 🔴 P0 — Fix First (Bugs + Highest-Impact Gaps)
+
+| # | Item | Why |
+|---|------|-----|
+| 1 | Fix pentest executor HITL bypass | Active security hole — executor bypasses all approval gates |
+| 2 | Fix pentest credentials plaintext storage | Sensitive data stored unencrypted |
+| 3 | Fix `podman` → `docker` call | Silent failure on every `report` phase transition |
+| 4 | Fix STM Unicode keyword search | Multilingual users get unpredictable memory behavior silently |
+| 5 | **Settings UI** (model names, API key, HITL policy, response style) | Biggest usability gap vs all competitors. Config should not require YAML knowledge. |
+| 6 | **Tool reranking** (embedding-based top-N selection before prompt injection) | Tool count is 100+; all descriptions always injected = expensive and degrades routing quality |
+
+### 🟠 P1 — Do Next
+
+| # | Item | Why |
+|---|------|-----|
+| 7 | **Source citations panel** | RAG responses give no provenance — trust gap |
+| 8 | Deduplicate `SENSITIVE_TOOLS` | Single source of truth prevents silent drift |
+| 9 | Redis lock for model swap | Race condition risk on concurrent pentest mode requests |
+| 10 | **Data connectors** (GitHub repo, YouTube transcript, Obsidian vault) | Highest-frequency document ingestion patterns missing |
+| 11 | **Observer/Reflector memory extraction** | Upgrade extraction worker to 2-phase; prevents memory bloat |
+| 12 | **Drag-and-drop files into chat** (session context, not permanently embedded) | Standard UX in ALLM, Open WebUI, ChatGPT |
+| 13 | **Chat export** (JSON / Markdown) | One endpoint + button, low effort |
+| 14 | **Ollama support** (parallel backend option alongside LM Studio) | Removes LM Studio hard dependency; enables headless operation and better logging |
+| 15 | **Scheduled autonomous jobs** (APScheduler + `ScheduledJob` DB model) | Enables daily summaries, study reminders, workspace sync |
+| 16 | Raise memory context cap to 20,000+ chars for cloud path | 6000 char cap is far too conservative for a 1M token window |
+
+### 🟡 P2 — Polish Pass
+
+| # | Item | Why |
+|---|------|-----|
+| 17 | Vector result cache (content hash → skip re-embedding) | Prevents wasted embedding calls on unchanged docs |
+| 18 | Document watch/sync (re-embed on source file change) | File watcher detects new files but misses edits |
+| 19 | Message feedback (thumbs up/down → DB) | Future eval dataset / fine-tuning signal |
+| 20 | Chart generation tool (matplotlib → inline PNG) | Notebook has matplotlib; surface as dedicated tool |
+| 21 | EPUB + audio transcription support | `ebooklib` + `faster-whisper`, both <100 lines each |
+| 22 | Onboarding wizard (LM Studio check → name → response style) | Reduces first-run failure rate significantly |
+| 23 | Complete TTS (`tts_worker.py` un-stub) + STT (push-to-talk Whisper) | Infrastructure half-done; `AthenaSoundClassifier.mlmodel` already at repo root |
+| 24 | `SemanticCache.embed()` stub — implement or guard | Silent crash risk if redisvl calls sync path |
+| 25 | Fix `"price"` substring → word boundary in deterministic router | Spurious web search triggers on unrelated words |
+
+### 🟢 P3 — Future / Optional
+
+| # | Item | Why |
+|---|------|-----|
+| 26 | SQL database query tool | `sqlalchemy` + read-only by default + HITL for writes |
+| 27 | GitHub Releases + `electron-updater` | Auto-update for Electron app; currently manual re-download |
+| 28 | Web push notifications for async task completions | `pywebpush`, ~100 lines |
+| 29 | Presidio NER-based PII anonymization (replace regex-only) | Microsoft open-source; catches names/orgs/medical that regex misses |
+| 30 | Gmail / Calendar via MCP config (not built-in) | Community MCP servers exist; just wire `mcp_config.json` |
+| 31 | Telegram bot | `python-telegram-bot` + WS handler route; Owlynn WS infra already exists |
+
+### ⚫ Intentional Non-Goals (Do Not Implement)
+
+| Item | Reason |
+|------|--------|
+| Multi-user support / RBAC | Owlynn is single-user by design. Deep personalization is the value proposition. |
+| Cross-platform (Linux / Windows) | macOS-optimized by design. Screen Assist, AX API, Lima/Kali, pmset are macOS-native. |
+| Cloud deployment / Docker backend | Backend must run natively on host for Screen Assist tools. |
+| Embeddable widget | Irrelevant for a personal desktop agent. |
+| Community marketplace | Solo dev project; MCP servers cover extensibility use case. |
+| i18n | English-first by design for now; can revisit if needed. |
+
+---
+
+## Related
+
+- [`docs/architecture/overview.md`](architecture/overview.md) — current system architecture
+- [`docs/CLOUD-LLM-ARCHITECTURE.md`](CLOUD-LLM-ARCHITECTURE.md) — cloud connection and caches
+- [`docs/architecture/DEEPSEEK_V4_INTEGRATION.md`](architecture/DEEPSEEK_V4_INTEGRATION.md) — DeepSeek V4 optimization reference
+- [`docs/architecture/KNOWLEDGE_CACHE.md`](architecture/KNOWLEDGE_CACHE.md) — conversation knowledge layer
+- [`docs/FUTURE_WORKS.md`](FUTURE_WORKS.md) — prioritized roadmap
+- [`docs/README.md`](README.md) — project documentation map
+- [`docs/INDEX.md`](INDEX.md) — documentation index

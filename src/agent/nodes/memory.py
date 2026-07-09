@@ -563,7 +563,7 @@ def format_memory_context(
     if enhanced_context:
         lines.append("\n=== Your Knowledge About User ===")
         max_enhanced_chars = (
-            6000  # ~1500 tokens — leave room for system prompt + messages
+            24000  # ~6000 tokens — leave room for system prompt + messages
         )
         if len(enhanced_context) > max_enhanced_chars:
             enhanced_context = (

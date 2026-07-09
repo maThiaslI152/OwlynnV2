@@ -60,12 +60,15 @@ const spinnerStyle: React.CSSProperties = {
   animation: 'spin 0.8s linear infinite',
   margin: '0 auto 16px',
 }
+import { useAppStore } from '../state/useAppStore'
+
 export function ModeSwitchConfirmation({
   targetMode,
   onConfirm,
   onCancel,
 }: ModeSwitchModalProps) {
   const isEntering = targetMode === 'pentest'
+  const isEcoMode = useAppStore(state => state.isEcoMode)
 
   return (
     <div style={overlayStyle} onClick={onCancel}>
@@ -82,6 +85,13 @@ export function ModeSwitchConfirmation({
         <div style={{ fontSize: 12, lineHeight: 1.8, color: 'rgba(255,255,255,0.6)', marginBottom: 24 }}>
           {isEntering ? (
             <>
+              {isEcoMode && (
+                <div style={{ color: '#e94560', fontWeight: 'bold', marginBottom: 8, padding: 8, background: 'rgba(233,69,96,0.1)', borderRadius: 6, border: '1px solid rgba(233,69,96,0.3)' }}>
+                  ⚠️ Warning: Mac is on battery (Eco-Mode active).
+                  Running Kali VM and the Pentest Model is highly power intensive. 
+                  Please connect to a power adapter to prevent performance degradation or battery drain.
+                </div>
+              )}
               <div>- Kali VM will start (~30-60s cold boot)</div>
               <div>- Local pentest model (Gemma 4 12B)</div>
               <div>- Workspace and chats will be hidden</div>

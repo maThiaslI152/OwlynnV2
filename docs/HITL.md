@@ -1,7 +1,7 @@
 ---
 status: active
 category: architecture
-last_updated: 2026-07-07
+last_updated: 2026-07-10
 owner: ai-agent
 audience: agent
 ---
@@ -21,7 +21,7 @@ Owlynn uses a multi-gate HITL system to keep the agent safe while minimizing int
 | **Router HITL** | `router.py:470-534` | LLM router confidence < 60% OR skill matcher finds ambiguous matches |
 | **Scope Clarify** | `scope_clarify.py` | Underspecified build/create requests (e.g. "build a calculator" with no language/UI specified) |
 | **Plan Review** | `plan_review.py` | Tool calls matching sensitive policy (file deletion, network access, execution) |
-| **Security Proxy** | `security_proxy.py` | Destructive, network, or privilege-escalation tool calls |
+| **Security Proxy** | `security_proxy.py` | Destructive, network, or privilege-escalation tool calls (deduplicated SENSITIVE_TOOLS via hitl policy) |
 
 ## How Interrupts Work
 
@@ -86,7 +86,7 @@ The scope guard (`src/tools/scope_guard.py`) blocks catastrophic commands regard
 - `src/agent/nodes/router.py` — Router HITL decisions
 - `src/agent/nodes/scope_clarify.py` — Scope clarification node
 - `src/agent/nodes/plan_review.py` — Plan review before sensitive execution
-- `src/agent/nodes/security_proxy.py` — Security policy enforcement, execution policy evaluation
+- `src/agent/nodes/security_proxy.py` — Security policy enforcement, handles internal tool calls (HITL bypass fix), imports SENSITIVE_TOOLS from policy
 - `src/agent/hitl/scope_heuristics.py` — Build/create detection heuristics
 - `src/tools/scope_guard.py` — Pentest scope enforcement, destructive command blocking
 - `src/agent/pii_scrubber.py` — PII scrubbing + prompt injection neutralization for memory writes

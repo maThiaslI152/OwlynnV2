@@ -59,6 +59,14 @@ def _stirling_extract(
 
 def extract_pdf_text_from_path(path: str, *, page_markers: bool = False) -> str:
     """Extract text from a PDF file on disk."""
+    # Record PDF activity (resets StirlingPDF idle timer) and ensure container is up
+    try:
+        from src.api.idle_manager import record_pdf_activity
+
+        record_pdf_activity()
+    except Exception:
+        pass
+
     if stirling_pdf.is_configured() and stirling_pdf.ensure_available():
         try:
             text = _stirling_extract(file_path=path)
@@ -82,6 +90,14 @@ def extract_pdf_text_from_path(path: str, *, page_markers: bool = False) -> str:
 
 def extract_pdf_text_from_bytes(data: bytes, *, filename: str = "upload.pdf") -> str:
     """Extract text from PDF bytes (chat attachments)."""
+    # Record PDF activity (resets StirlingPDF idle timer)
+    try:
+        from src.api.idle_manager import record_pdf_activity
+
+        record_pdf_activity()
+    except Exception:
+        pass
+
     if stirling_pdf.is_configured() and stirling_pdf.ensure_available():
         try:
             text = _stirling_extract(file_bytes=data, filename=filename)

@@ -15,6 +15,7 @@ export type Server =
   | VoiceTtsStateEvent
   | VoiceStartedEvent
   | SafeModeChangedEvent
+  | EcoModeChangedEvent
   | ScreenAssistStateEvent
   | ActionProposalEvent
   | ActionProposalResultEvent
@@ -71,22 +72,24 @@ export type Type9 = "voice.started";
 export type Mode = "wake_word" | "ptt";
 export type Type10 = "safe_mode.changed";
 export type Mode1 = "normal" | "safe_readonly" | "safe_confirmed_exec" | "safe_isolated";
-export type Type11 = "screen_assist.state";
+export type Type11 = "eco_mode_changed";
+export type Isecomode = boolean;
+export type Type12 = "screen_assist.state";
 export type Mode2 = "off" | "preview" | "annotating";
 export type Source = "screen" | "window" | "region";
 export type PreviewPath = string | null;
-export type Type12 = "action.proposal";
+export type Type13 = "action.proposal";
 export type Id2 = string;
 export type Summary = string;
 export type Source1 = "screen_assist" | "voice" | "system";
 export type CreatedAt = number;
 export type Status = "pending" | "approved" | "rejected";
-export type Type13 = "action.proposal.result";
+export type Type14 = "action.proposal.result";
 export type Id3 = string;
 export type Status1 = "approved" | "rejected";
-export type Type14 = "interrupt";
+export type Type15 = "interrupt";
 export type Interrupts = unknown[];
-export type Type16 = "tool_execution";
+export type Type17 = "tool_execution";
 export type Status2 = "running" | "success" | "error";
 export type ToolName2 = string;
 export type ToolCallId1 = string | null;
@@ -102,8 +105,8 @@ export type Filename = string;
 export type Url = string;
 export type Kind = "interactive" | "static";
 export type MimeType = string;
-export type Type17 = "router_info";
-export type Type18 = "model_info";
+export type Type18 = "router_info";
+export type Type19 = "model_info";
 export type Model = string;
 export type ModelUsed1 = string | null;
 export type Swapping = boolean | null;
@@ -115,7 +118,7 @@ export type Model1 = string;
 export type Status3 = string;
 export type Reason = string | null;
 export type DurationMs = number | null;
-export type Type19 = "cloud_usage";
+export type Type20 = "cloud_usage";
 export type Turn = {
   [k: string]: unknown;
 } | null;
@@ -126,53 +129,53 @@ export type Budget = {
   [k: string]: unknown;
 } | null;
 export type WarningThresholds = number[] | null;
-export type Type20 = "cloud_budget_warning";
+export type Type21 = "cloud_budget_warning";
 export type Threshold = number;
 export type UsedPct = number;
 export type UsedTokens = number;
 export type DailyTokenLimit = number;
 export type EstimatedCostUsd = number | null;
-export type Type21 = "context_summarized";
+export type Type22 = "context_summarized";
 export type Summary1 = string;
 export type Takeaways = string[];
 export type MessagesCompressed = number;
 export type TokensFreed = number;
-export type Type22 = "memory_updated";
+export type Type23 = "memory_updated";
 export type ThreadId = string | null;
-export type Type23 = "file_status";
+export type Type24 = "file_status";
 export type Name = string | null;
 export type Status4 = string | null;
 export type Chunks = number | null;
 export type Error1 = string | null;
-export type Type24 = "browser.page_context";
+export type Type25 = "browser.page_context";
 export type Url1 = string | null;
 export type Title = string | null;
 export type Text1 = string | null;
 export type Selection = string | null;
 export type Intent = string | null;
-export type Type25 = "coherence_retry_started";
+export type Type26 = "coherence_retry_started";
 export type Attempt = number | null;
 export type OriginalConfidence = number | null;
-export type Type26 = "coherence_retry_completed";
-export type Type27 = "response_coherence";
+export type Type27 = "coherence_retry_completed";
+export type Type28 = "response_coherence";
 export type Coherent = boolean;
 export type Confidence2 = number;
 export type DurationMs1 = number;
 export type Reason1 = string | null;
 export type CorrelationId = string | null;
-export type Type28 = "cloud_fallback";
+export type Type29 = "cloud_fallback";
 export type Reason2 = string;
 export type FallbackModel = string;
 export type CanRetry = boolean;
 export type CorrelationId1 = string | null;
-export type Type29 = "error";
+export type Type30 = "error";
 export type Content4 = string;
 export type CorrelationId2 = string | null;
-export type Type30 = "pentest.terminal";
+export type Type31 = "pentest.terminal";
 export type Data = string;
 export type Snapshot = string | null;
 export type Window = string;
-export type Type31 = "pentest.terminal_status";
+export type Type32 = "pentest.terminal_status";
 export type Connected = boolean;
 export type Host = string;
 export type Session1 = string;
@@ -184,7 +187,7 @@ export type Client =
   | PlanReviewResponseClientEvent
   | PentestTerminalStartClientEvent
   | PentestTerminalStopClientEvent;
-export type Type32 = "user.message";
+export type Type33 = "user.message";
 export type CorrelationId3 = string | null;
 export type Id4 = string;
 export type Content5 = string;
@@ -197,18 +200,18 @@ export type Files =
 export type ProjectId = string | null;
 export type PersonaId = string | null;
 export type Source2 = ("text" | "voice") | null;
-export type Type33 = "stop";
-export type Type34 = "security_approval";
+export type Type34 = "stop";
+export type Type35 = "security_approval";
 export type Approved = boolean;
 export type CorrelationId4 = string | null;
-export type Type35 = "ask_user_response";
+export type Type36 = "ask_user_response";
 export type CorrelationId5 = string | null;
-export type Type36 = "plan_review_response";
+export type Type37 = "plan_review_response";
 export type Approved1 = boolean;
 export type Feedback = string | null;
 export type CorrelationId6 = string | null;
-export type Type37 = "pentest.terminal_start";
-export type Type38 = "pentest.terminal_stop";
+export type Type38 = "pentest.terminal_start";
+export type Type39 = "pentest.terminal_stop";
 
 export interface ProtocolEvents {
   server: Server;
@@ -283,15 +286,20 @@ export interface SafeModeChangedEvent {
   mode: Mode1;
   [k: string]: unknown;
 }
-export interface ScreenAssistStateEvent {
+export interface EcoModeChangedEvent {
   type?: Type11;
+  isEcoMode: Isecomode;
+  [k: string]: unknown;
+}
+export interface ScreenAssistStateEvent {
+  type?: Type12;
   mode: Mode2;
   source: Source;
   preview_path?: PreviewPath;
   [k: string]: unknown;
 }
 export interface ActionProposalEvent {
-  type?: Type12;
+  type?: Type13;
   proposal: ActionProposalPayload;
   [k: string]: unknown;
 }
@@ -304,18 +312,18 @@ export interface ActionProposalPayload {
   [k: string]: unknown;
 }
 export interface ActionProposalResultEvent {
-  type?: Type13;
+  type?: Type14;
   id: Id3;
   status: Status1;
   [k: string]: unknown;
 }
 export interface InterruptEvent {
-  type?: Type14;
+  type?: Type15;
   interrupts: Interrupts;
   [k: string]: unknown;
 }
 export interface ToolExecutionEvent {
-  type?: Type16;
+  type?: Type17;
   status: Status2;
   tool_name: ToolName2;
   tool_call_id?: ToolCallId1;
@@ -338,7 +346,7 @@ export interface ChartArtifact {
   [k: string]: unknown;
 }
 export interface RouterInfoEvent {
-  type?: Type17;
+  type?: Type18;
   metadata: Metadata;
   [k: string]: unknown;
 }
@@ -346,7 +354,7 @@ export interface Metadata {
   [k: string]: unknown;
 }
 export interface ModelInfoEvent {
-  type?: Type18;
+  type?: Type19;
   model: Model;
   model_used?: ModelUsed1;
   swapping?: Swapping;
@@ -362,7 +370,7 @@ export interface FallbackChainItem {
   [k: string]: unknown;
 }
 export interface CloudUsageEvent {
-  type?: Type19;
+  type?: Type20;
   turn?: Turn;
   session?: Session;
   budget?: Budget;
@@ -370,7 +378,7 @@ export interface CloudUsageEvent {
   [k: string]: unknown;
 }
 export interface CloudBudgetWarningEvent {
-  type?: Type20;
+  type?: Type21;
   threshold: Threshold;
   used_pct: UsedPct;
   used_tokens: UsedTokens;
@@ -379,7 +387,7 @@ export interface CloudBudgetWarningEvent {
   [k: string]: unknown;
 }
 export interface ContextSummarizedEvent {
-  type?: Type21;
+  type?: Type22;
   summary: Summary1;
   takeaways: Takeaways;
   messages_compressed: MessagesCompressed;
@@ -387,12 +395,12 @@ export interface ContextSummarizedEvent {
   [k: string]: unknown;
 }
 export interface MemoryUpdatedEvent {
-  type?: Type22;
+  type?: Type23;
   thread_id?: ThreadId;
   [k: string]: unknown;
 }
 export interface FileStatusEvent {
-  type?: Type23;
+  type?: Type24;
   name?: Name;
   status?: Status4;
   chunks?: Chunks;
@@ -400,7 +408,7 @@ export interface FileStatusEvent {
   [k: string]: unknown;
 }
 export interface BrowserPageContextEvent {
-  type?: Type24;
+  type?: Type25;
   url?: Url1;
   title?: Title;
   text?: Text1;
@@ -409,17 +417,17 @@ export interface BrowserPageContextEvent {
   [k: string]: unknown;
 }
 export interface CoherenceRetryStartedEvent {
-  type?: Type25;
+  type?: Type26;
   attempt?: Attempt;
   original_confidence?: OriginalConfidence;
   [k: string]: unknown;
 }
 export interface CoherenceRetryCompletedEvent {
-  type?: Type26;
+  type?: Type27;
   [k: string]: unknown;
 }
 export interface ResponseCoherenceEvent {
-  type?: Type27;
+  type?: Type28;
   coherent: Coherent;
   confidence: Confidence2;
   duration_ms: DurationMs1;
@@ -428,7 +436,7 @@ export interface ResponseCoherenceEvent {
   [k: string]: unknown;
 }
 export interface CloudFallbackEvent {
-  type?: Type28;
+  type?: Type29;
   reason: Reason2;
   fallback_model: FallbackModel;
   can_retry?: CanRetry;
@@ -436,27 +444,27 @@ export interface CloudFallbackEvent {
   [k: string]: unknown;
 }
 export interface ErrorEvent {
-  type?: Type29;
+  type?: Type30;
   content: Content4;
   correlation_id?: CorrelationId2;
   [k: string]: unknown;
 }
 export interface PentestTerminalChunkEvent {
-  type?: Type30;
+  type?: Type31;
   data: Data;
   snapshot?: Snapshot;
   window?: Window;
   [k: string]: unknown;
 }
 export interface PentestTerminalStatusEvent {
-  type?: Type31;
+  type?: Type32;
   connected: Connected;
   host?: Host;
   session?: Session1;
   [k: string]: unknown;
 }
 export interface UserMessageEvent {
-  type?: Type32;
+  type?: Type33;
   correlation_id?: CorrelationId3;
   id: Id4;
   content: Content5;
@@ -468,17 +476,17 @@ export interface UserMessageEvent {
   [k: string]: unknown;
 }
 export interface StopClientEvent {
-  type?: Type33;
+  type?: Type34;
   [k: string]: unknown;
 }
 export interface SecurityApprovalClientEvent {
-  type?: Type34;
+  type?: Type35;
   approved: Approved;
   correlation_id?: CorrelationId4;
   [k: string]: unknown;
 }
 export interface AskUserResponseClientEvent {
-  type?: Type35;
+  type?: Type36;
   answer: Answer;
   correlation_id?: CorrelationId5;
   [k: string]: unknown;
@@ -487,18 +495,18 @@ export interface Answer {
   [k: string]: unknown;
 }
 export interface PlanReviewResponseClientEvent {
-  type?: Type36;
+  type?: Type37;
   approved: Approved1;
   feedback?: Feedback;
   correlation_id?: CorrelationId6;
   [k: string]: unknown;
 }
 export interface PentestTerminalStartClientEvent {
-  type?: Type37;
+  type?: Type38;
   [k: string]: unknown;
 }
 export interface PentestTerminalStopClientEvent {
-  type?: Type38;
+  type?: Type39;
   [k: string]: unknown;
 }
 

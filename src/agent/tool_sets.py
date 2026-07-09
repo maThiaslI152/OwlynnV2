@@ -60,6 +60,11 @@ from src.tools.pentest_ad import PENTEST_AD_TOOLS
 from src.tools.pentest_password import PENTEST_PASSWORD_TOOLS
 from src.tools.pentest_cloud import PENTEST_CLOUD_TOOLS
 from src.tools.pentest_reporting import PENTEST_REPORTING_TOOLS
+from src.tools.data_connectors import (
+    ingest_github_repo,
+    ingest_youtube_transcript,
+    ingest_obsidian_vault,
+)
 
 # Full tool set with web search enabled
 COMPLEX_TOOLS_WITH_WEB: list = [
@@ -195,6 +200,10 @@ TOOLBOX_REGISTRY: dict[str, list] = {
         list_workspace_files,
         delete_workspace_file,
         download_to_workspace,
+        ingest_github_repo,
+        ingest_youtube_transcript,
+        ingest_obsidian_vault,
+
     ],
     "data_viz": [
         create_docx,

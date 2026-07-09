@@ -1,7 +1,7 @@
 ---
 status: active
 category: architecture
-last_updated: 2026-07-09
+last_updated: 2026-07-10
 owner: ai-agent
 audience: agent
 ---
@@ -42,7 +42,7 @@ Browser (http://127.0.0.1:5173)
 |--------|------|----------------|
 | **Config** | `src/config/defaults.yaml` | Single source of truth for all settings. Override chain: YAML → env → profile |
 | **Config Loader** | `src/config/config_loader.py` | Layered config with typed accessors, env var mapping, validation |
-| **Agent Graph** | `src/agent/graph.py` | LangGraph orchestration: memory→router→simple/complex→tools→memory |
+| **Agent Graph** | `src/agent/core/graph.py` | LangGraph orchestration: memory→router→simple/complex→tools→memory |
 | **Router** | `src/agent/routing/router.py` | Cloud-primary routing: `simple`, `complex-cloud` — keyword bypass, LLM classifier, HITL |
 | **Simple Node** | `src/agent/core/simple.py` | Fast answers via local unified model (Gemma 4 E2B), retry-once on failure |
 | **Complex Node** | `src/agent/core/complex.py` | Tool-augmented reasoning — Cloud DeepSeek V4 |
@@ -55,7 +55,11 @@ Browser (http://127.0.0.1:5173)
 | **HITL** | `src/agent/hitl/` | Safety gates: scope_clarify, plan_review, security_proxy |
 | **LLM Pool** | `src/agent/llm.py` | Singleton pool: router + extraction + cloud instances |
 | **Tools** | `src/tools/` | Web search, file ops, notebook, skills, MCP |
+| **Tool Reranker** | `src/agent/tool_reranker.py` | Semantic tool reranking using Nomic embeddings |
 | **API** | `src/api/server.py` | FastAPI with REST + WebSocket + OpenAI-compatible endpoints |
+| **Scheduler** | `src/api/scheduler_manager.py` | APScheduler for autonomous background jobs |
+| **Power monitor** | `src/api/power_monitor.py` | Battery status watcher via pmset, handles Eco-Mode transitions |
+| **Idle manager** | `src/api/idle_manager.py` | Resource optimization watcher (LLM model unload, StirlingPDF shutdown) |
 | **Frontend** | `frontend-v2/` | React 19 + Vite + Zustand + Electron main process |
 
 ## Agent Flow
@@ -126,8 +130,8 @@ Context budget: memory capped at 6000 chars (~1500 tokens) to stay within model 
 ## Related
 
 - `docs/HITL.md` — Safety gates documentation
-- `docs/MEMORY.md` — Memory system documentation
-- `docs/CLOUD-LLM-ARCHITECTURE.md` — Cloud connection, caches, cost tracking
+- `docs/features/MEMORY.md` — Memory system documentation
+- `docs/architecture/CLOUD-LLM-ARCHITECTURE.md` — Cloud connection, caches, cost tracking
 - `docs/architecture/DEEPSEEK_V4_INTEGRATION.md` — DeepSeek V4 API + optimization reference
 - `docs/guides/dev-startup.md` — Dev setup and config reference
 - `src/config/defaults.yaml` — Centralized configuration

@@ -139,6 +139,49 @@ _SIMPLE_INFO_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Short confirmations/continuations that should reuse the prior route
+# instead of triggering the LLM classifier (saves 200–600ms per turn)
+_FOLLOWUP_TOKENS = {
+    "ok",
+    "okay",
+    "yes",
+    "yes please",
+    "yep",
+    "yeah",
+    "sure",
+    "go",
+    "go ahead",
+    "go on",
+    "continue",
+    "proceed",
+    "do it",
+    "do that",
+    "do it now",
+    "run it",
+    "run that",
+    "sounds good",
+    "looks good",
+    "makes sense",
+    "that works",
+    "perfect",
+    "great",
+    "nice",
+    "cool",
+    "got it",
+    "keep going",
+    "next",
+    "next step",
+    "what's next",
+    "agree",
+    "agreed",
+    "confirmed",
+    "confirm",
+    "approve",
+    "yes do it",
+    "yes go ahead",
+    "yes please go ahead",
+}
+
 _CASUAL_HINTS = {
     "hi",
     "hello",
@@ -373,6 +416,23 @@ def _is_casual_chatter(text: str) -> bool:
     return any(lower.startswith(hint) for hint in _CASUAL_HINTS)
 
 
+def _is_followup_continuation(text: str, state: "AgentState") -> bool:
+    """Detect short follow-up confirmations that should reuse the previous route.
+
+    Conditions:
+    - Message is very short (≤ 40 chars)
+    - Text (stripped, lowercased) matches a known continuation token
+    - The previous AI turn actually used tools (we are mid-task)
+    """
+    stripped = text.lower().strip().rstrip("!.,?")
+    if len(stripped) > 40:
+        return False
+    if stripped not in _FOLLOWUP_TOKENS:
+        return False
+    # Verify we are mid-task (previous turn had tool calls)
+    return _has_tool_history(state)
+
+
 def _is_personal_info_disclosure(text: str) -> bool:
     """Detect user sharing personal info (name, location, job)."""
     return bool(_PERSONAL_INFO_PATTERNS.search(text))
@@ -546,6 +606,47 @@ async def check_deterministic_bypasses(
             "router_metadata": metadata,
             "needs_memory_retrieval": False,
             "scenario_id": None,
+        }
+
+    # ── 2.5. Follow-up continuation ─────────────────────────────────────
+    # Short mid-task acknowledgements (ok, continue, go ahead, etc.) reuse
+    # the previous turn's route instead of going through the LLM classifier.
+    if _is_followup_continuation(user_text, state):
+        prev_route = (
+            state.get("route")
+            or _resolve_complex_route(
+                user_text, state, ["all"], cloud_available=cloud_available
+            )[0]
+        )
+        budget = estimate_token_budget(user_text, prev_route)
+        metadata = _build_router_metadata(
+            prev_route,
+            confidence=0.92,
+            reasoning="followup_continuation_bypass",
+            classification_source="deterministic",
+            cloud_available=cloud_available,
+            has_images=has_images,
+            task_category="followup",
+            estimated_tokens=budget,
+            web_on=web_on,
+        )
+        audit_info(
+            "agent.lifecycle",
+            "router_decision",
+            route=prev_route,
+            confidence=0.92,
+            source="followup_continuation_bypass",
+            task_category="followup",
+        )
+        return {
+            "route": prev_route,
+            "token_budget": budget,
+            "selected_toolboxes": state.get("selected_toolboxes") or ["all"],
+            "router_clarification_used": False,
+            "skill_matched": None,
+            "router_metadata": metadata,
+            "needs_memory_retrieval": False,
+            "scenario_id": state.get("scenario_id"),
         }
 
     # ── 3. Personal info disclosure ──────────────────────────────────────

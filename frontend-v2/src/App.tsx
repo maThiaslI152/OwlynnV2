@@ -403,6 +403,45 @@ function App() {
         }
       },
       onError: () => setConnection('error'),
+      onReconnecting: (attempt, maxRetries) => {
+        if (disposed) return
+        setConnection('reconnecting')
+        toast(`Reconnecting... (${attempt}/${maxRetries})`, {
+          icon: '🔄',
+          duration: 3000,
+          id: 'ws-reconnecting',
+        })
+      },
+      onReconnected: () => {
+        if (disposed) return
+        toast.success('Reconnected — retrying your last message', {
+          id: 'ws-reconnecting',
+        })
+      },
+      onReconnectFailed: () => {
+        if (disposed) return
+        setConnection('disconnected')
+        toast.error('Connection lost. Please start a new chat.', {
+          id: 'ws-reconnecting',
+        })
+        // Finalize any in-progress streaming message after all retries exhausted
+        const msgs = useAppStore.getState().messages
+        const last = msgs[msgs.length - 1]
+        if (last && last.role === 'assistant' && last.id?.startsWith('stream-')) {
+          useAppStore.setState({
+            messages: msgs.map((m, idx) =>
+              idx === msgs.length - 1
+                ? {
+                    id: crypto.randomUUID(),
+                    role: 'assistant',
+                    content: m.content || '',
+                    ts: Date.now(),
+                  }
+                : m
+            ),
+          })
+        }
+      },
       onEvent: (event: ServerEvent) => {
         if (disposed) return
         
@@ -507,6 +546,17 @@ function App() {
           }
         } else if (event.type === 'safe_mode.changed') {
           setSafeMode(event.mode)
+        } else if (event.type === 'eco_mode_changed') {
+          useAppStore.getState().setIsEcoMode(event.isEcoMode)
+          if (event.isEcoMode) {
+            toast('Eco-Mode Active: Power adapter disconnected', {
+              style: {
+                background: 'rgba(233,69,96,0.1)',
+                border: '1px solid rgba(233,69,96,0.3)',
+                color: '#e94560',
+              }
+            })
+          }
         } else if (event.type === 'screen_assist.state') {
           setScreenAssistMode(event.mode)
           setScreenAssistSource(event.source)
@@ -670,9 +720,13 @@ function App() {
         } else if ((event as any).type === 'browser_launch_requested') {
           toast('Extension disconnected. Launching Brave Browser...', { icon: <Globe size={16} /> })
           void tauriBridge.launchBrowser()
+        } else if (event.type === 'error') {
+          const content = (event as any).content || 'An unexpected error occurred'
+          toast.error(content)
+          useAppStore.setState({ pendingCorrelationId: null })
         }
       },
-    })
+    }, effectiveThreadId)
 
     setConnection('connecting')
     return () => {

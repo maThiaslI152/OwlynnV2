@@ -20,17 +20,8 @@ logger = logging.getLogger(__name__)
 
 from src.config.log_middleware import log_hitl_event, log_node
 
-from src.agent.hitl.policy import is_information_retrieval
+from src.agent.hitl.policy import is_information_retrieval, SENSITIVE_TOOLS
 from src.agent.hitl.context import enrich_interrupt
-
-SENSITIVE_TOOLS = {
-    "write_workspace_file",
-    "edit_workspace_file",
-    "delete_workspace_file",
-    "notebook_run",
-    "study_note_save",
-    "flashcard_deck_create",
-}
 
 SENSITIVE_PATTERN_RE = re.compile(
     r"(?:\brm\s+-rf\b|(?:^|[;&|])\s*curl\b|(?:^|[;&|])\s*wget\b|\bsudo\b|\bchmod\b|\bchown\b|\bssh\b|\bscp\b)",

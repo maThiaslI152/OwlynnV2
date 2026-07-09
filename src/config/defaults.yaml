@@ -47,6 +47,14 @@ startup:
     - small      # Gemma 4 E2B unified local model (routing, vision, extraction)
     - embedding  # nomic embed — always
   warmup: true
+  idle_unload_minutes: 15  # Unload local LLM from LM Studio after N mins idle (0 = disabled)
+
+# ── Services ─────────────────────────────────────────────────────────────────
+services:
+  stirling_pdf:
+    idle_shutdown: false  # Stop StirlingPDF container after idle; restart on-demand (saves ~200-300MB)
+    idle_minutes: 10      # How long to wait before stopping the container
+
 # ── Models — AI/LLM Configuration ────────────────────────────────────────────
 # Unified Local: qwen3-vl-4b — Routing, Fallback, Vision, Memory extraction
 # Cloud: DeepSeek V4 — primary workhorse for all complex reasoning

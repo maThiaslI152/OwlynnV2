@@ -31,7 +31,7 @@ audience: human
 5. **Run setup** — `./setup.sh` (installs Python deps, downloads Docling models)
 6. **Run start.sh once** — `./start.sh` (writes `~/.owlynn/config.json`, starts containers)
 7. **Build the app** — `cd frontend-v2 && npm run build`
-8. **Install** — drag `frontend-v2/release/Owlynn-0.1.4.dmg` to `/Applications`
+8. **Install** — drag `frontend-v2/release/Owlynn-0.1.6.dmg` to `/Applications`
 9. **Launch** — double-click Owlynn.app in `/Applications`
 
 ## What Happens on Launch
@@ -121,8 +121,8 @@ Key config in `frontend-v2/electron-builder.yml`:
 - **`extraResources`**: bundles `browser-extension/` and `splash.html` into Resources/
 
 Output:
-- `frontend-v2/release/Owlynn-0.1.4.dmg` — macOS installer
-- `frontend-v2/release/Owlynn-0.1.4-mac-arm64.zip` — portable archive
+- `frontend-v2/release/Owlynn-0.1.6.dmg` — macOS installer
+- `frontend-v2/release/Owlynn-0.1.6-mac-arm64.zip` — portable archive
 
 ## Packaging Fixes (v0.1.1)
 

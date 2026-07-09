@@ -144,6 +144,11 @@ class SafeModeChangedEvent(BaseModel):
     mode: Literal["normal", "safe_readonly", "safe_confirmed_exec", "safe_isolated"]
 
 
+class EcoModeChangedEvent(BaseModel):
+    type: Literal["eco_mode_changed"] = "eco_mode_changed"
+    isEcoMode: bool
+
+
 class ScreenAssistStateEvent(BaseModel):
     type: Literal["screen_assist.state"] = "screen_assist.state"
     mode: Literal["off", "preview", "annotating"]
@@ -335,6 +340,7 @@ ServerEvent = Annotated[
         VoiceTtsStateEvent,
         VoiceStartedEvent,
         SafeModeChangedEvent,
+        EcoModeChangedEvent,
         ScreenAssistStateEvent,
         ActionProposalEvent,
         ActionProposalResultEvent,
