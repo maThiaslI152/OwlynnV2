@@ -41,6 +41,12 @@ def _clean():
     teardown_benchmark_llms()
 
 
+@pytest.fixture(autouse=True)
+def _mock_rerank():
+    with patch("src.agent.core.complex.rerank_tools", side_effect=lambda q, t, top_k=15: t) as mock:
+        yield mock
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Per-route latency
 # ═══════════════════════════════════════════════════════════════════════════
