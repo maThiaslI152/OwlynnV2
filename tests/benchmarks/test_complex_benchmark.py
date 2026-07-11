@@ -43,7 +43,7 @@ def _clean():
 
 @pytest.fixture(autouse=True)
 def _mock_rerank():
-    with patch("src.agent.core.complex.rerank_tools", side_effect=lambda q, t, top_k=15: t) as mock:
+    with patch("src.agent.tool_reranker.rerank_tools", side_effect=lambda q, t, top_k=15: t) as mock:
         yield mock
 
 
@@ -137,7 +137,7 @@ class TestFallbackChainCoverage:
         async def _cloud_raises(*_args, **_kwargs):
             raise CloudUnavailableError("No API key")
 
-        setup_benchmark_llms(medium=mock_medium)
+        setup_benchmark_llms(medium=mock_medium, fallback=mock_medium)
         profile = ProfileBuilder().build()
 
         state = make_complex_state(route="complex-cloud")

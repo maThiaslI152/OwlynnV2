@@ -251,6 +251,7 @@ def setup_benchmark_llms(
     small: Optional[MockDelayLLM] = None,
     medium: Optional[MockDelayLLM] = None,
     cloud: Optional[MockDelayLLM] = None,
+    fallback: Optional[MockDelayLLM] = None,
 ) -> dict:
     """Register mock LLMs in LLMPool and return the override dict."""
     overrides = {}
@@ -260,6 +261,8 @@ def setup_benchmark_llms(
         overrides["medium"] = medium
     if cloud is not None:
         overrides["cloud"] = cloud
+    if fallback is not None:
+        overrides["fallback"] = fallback
     LLMPool.set_test_overrides(overrides)
     return overrides
 
