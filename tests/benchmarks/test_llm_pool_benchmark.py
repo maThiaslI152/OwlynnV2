@@ -74,24 +74,24 @@ class TestPoolConcurrentAccess:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("concurrency", [1, 2, 4, 8])
-    async def test_pool_concurrent_get_medium(self, concurrency: int):
-        """Concurrent get_medium_llm() calls — tests lock contention."""
+    async def test_pool_concurrent_get_cloud(self, concurrency: int):
+        """Concurrent get_cloud_llm() calls — tests lock contention."""
         from src.agent.llm import LLMPool
 
         mock = make_mock_llm(delay_ms=0, content="pooled")
-        setup_benchmark_llms(medium=mock)
+        setup_benchmark_llms(cloud=mock)
 
         # Warm: ensure pool is populated
-        await LLMPool.get_medium_llm("default")
+        await LLMPool.get_cloud_llm("flash")
 
         async def _get():
-            return await LLMPool.get_medium_llm("default")
+            return await LLMPool.get_cloud_llm("flash")
 
         args_list = [() for _ in range(concurrency * 5)]
         tracker = await time_concurrent(_get, args_list, concurrency=concurrency)
 
         entry = BenchmarkEntry(
-            name=f"pool_get_medium_c{concurrency}",
+            name=f"pool_get_cloud_c{concurrency}",
             category="pool",
             warmup_iters=0,
             measured_iters=tracker.count,
@@ -99,7 +99,6 @@ class TestPoolConcurrentAccess:
             samples_ms=[s * 1000 for s in tracker.samples],
         )
         record_entry(entry)
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Pool cold vs warm
@@ -146,23 +145,23 @@ class TestPoolColdVsWarm:
         record_entry(entry)
 
     @pytest.mark.asyncio
-    async def test_pool_medium_warm_cache_hit(self):
-        """Medium LLM with same variant returns cached instance instantly."""
+    async def test_pool_cloud_warm_cache_hit(self):
+        """Cloud LLM with same variant returns cached instance instantly."""
         from src.agent.llm import LLMPool
 
         LLMPool.clear()
 
         mock = make_mock_llm(delay_ms=0, content="pooled")
-        setup_benchmark_llms(medium=mock)
+        setup_benchmark_llms(cloud=mock)
 
         # First call populates pool
-        _ = await LLMPool.get_medium_llm("default")
+        _ = await LLMPool.get_cloud_llm("flash")
 
         # Warm calls with same variant
         tracker = LatencyTracker()
         for _ in range(BENCH_ITERATIONS):
             start = asyncio.get_running_loop().time()
-            _ = await LLMPool.get_medium_llm("default")
+            _ = await LLMPool.get_cloud_llm("flash")
             tracker.record((asyncio.get_running_loop().time() - start))
 
         entry = BenchmarkEntry(

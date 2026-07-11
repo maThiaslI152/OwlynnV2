@@ -80,7 +80,7 @@ class TestComplexPerRouteLatency:
         with (
             patch("src.agent.core.complex.get_profile", return_value=profile),
             patch(
-                "src.agent.core.complex.get_medium_llm",
+                "src.agent.core.complex.get_cloud_llm",
                 new_callable=AsyncMock,
                 return_value=mock_llm,
             ),
@@ -143,7 +143,7 @@ class TestFallbackChainCoverage:
 
         with (
             patch(
-                "src.agent.core.complex.get_medium_llm",
+                "src.agent.core.complex.get_cloud_llm",
                 new_callable=AsyncMock,
                 return_value=mock_medium,
             ),
@@ -185,7 +185,7 @@ class TestFallbackChainCoverage:
 
         with (
             patch(
-                "src.agent.core.complex.get_medium_llm",
+                "src.agent.core.complex.get_cloud_llm",
                 new_callable=AsyncMock,
                 return_value=mock_fail,
             ),
@@ -500,7 +500,7 @@ class TestGraphE2ELatency:
             ),
             patch("src.agent.core.complex.get_profile", return_value=profile),
             patch(
-                "src.agent.core.complex.get_medium_llm",
+                "src.agent.core.complex.get_cloud_llm",
                 new_callable=AsyncMock,
                 return_value=mock_llm,
             ),

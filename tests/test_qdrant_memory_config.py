@@ -10,7 +10,7 @@ def test_long_term_source_uses_lmstudio_nomic_embedder():
     text = (root / "src/memory/long_term.py").read_text(encoding="utf-8")
     assert '"text-embedding-nomic-embed-text-v1.5-embedding"' in text
     assert '"owlynn_memory_nomic"' in text
-    assert '"provider": "lmstudio"' in text
+    assert '"provider": "ollama" if _provider == "ollama" else "lmstudio"' in text
     assert '"provider": "qdrant"' in text
     assert "6333" in text
     assert "768" in text
