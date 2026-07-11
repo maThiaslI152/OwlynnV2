@@ -84,11 +84,6 @@ class TestComplexPerRouteLatency:
                 new_callable=AsyncMock,
                 return_value=mock_llm,
             ),
-            patch(
-                "src.agent.core.complex.get_cloud_llm",
-                new_callable=AsyncMock,
-                return_value=mock_llm,
-            ),
         ):
             # Warmup
             for _ in range(BENCH_WARMUP):
@@ -142,11 +137,6 @@ class TestFallbackChainCoverage:
         state = make_complex_state(route="complex-cloud")
 
         with (
-            patch(
-                "src.agent.core.complex.get_cloud_llm",
-                new_callable=AsyncMock,
-                return_value=mock_medium,
-            ),
             patch("src.agent.core.complex.get_cloud_llm", side_effect=_cloud_raises),
             patch("src.agent.core.complex.get_profile", return_value=profile),
         ):
@@ -184,11 +174,6 @@ class TestFallbackChainCoverage:
         state = make_complex_state(route="complex-default")
 
         with (
-            patch(
-                "src.agent.core.complex.get_cloud_llm",
-                new_callable=AsyncMock,
-                return_value=mock_fail,
-            ),
             patch(
                 "src.agent.core.complex.get_cloud_llm",
                 new_callable=AsyncMock,
@@ -499,11 +484,6 @@ class TestGraphE2ELatency:
                 return_value=(route == "complex-cloud"),
             ),
             patch("src.agent.core.complex.get_profile", return_value=profile),
-            patch(
-                "src.agent.core.complex.get_cloud_llm",
-                new_callable=AsyncMock,
-                return_value=mock_llm,
-            ),
             patch(
                 "src.agent.core.complex.get_cloud_llm",
                 new_callable=AsyncMock,
