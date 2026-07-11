@@ -1,7 +1,7 @@
 ---
 status: active
 category: debugging
-last_updated: 2026-05-31
+last_updated: 2026-07-12
 owner: human
 ---
 
@@ -28,7 +28,7 @@ START → memory_inject → [summarize_gate → auto_summarize] → router
 |---------|-------------|-----------|-----|
 | Persona/system prompt leaks into response (BUG-1) | System message included in `messages` list incorrectly | Inspect `AgentState.messages` before simple/complex node | Filter system messages from message list before passing to LLM |
 | Router misclassifies (simple sent to complex, or vice versa) | Small LLM hallucination or keyword bypass misfire | Check `router_info` WS event for `classification_source` | Adjust keyword patterns in router, check small LLM output |
-| Infinite loop (router → complex → tool → router) | Recursion limit not configured or graph edge misconfigured | Check iteration count in LangGraph stream | Set `recursion_limit` in graph config (default: 25) |
+| Infinite loop (router → complex → tool → router) | Recursion limit not configured or graph edge misconfigured | Check iteration count in LangGraph stream | Set `recursion_limit` in graph config (default: 15) |
 | Agent produces no response (empty output) | LLM returned empty content or network error swallowed | Check LangGraph stream for error events | Add timeout and error handling in complex/simple nodes |
 | `ToolMessage` not followed by `AIMessage` | Tool node produced no output or graph edge broken | Check graph state after `tool_action` node | Verify tool execution completed and edge to `complex_llm` exists |
 | Security proxy blocks ALL tools | `SENSITIVE_TOOLS` set too broad or all tools flagged | Check `security_proxy.py` `SENSITIVE_TOOLS` set | Ensure only truly sensitive tools are in the set |
@@ -226,7 +226,7 @@ INFO:src.agent.nodes.summarize:Active tokens 3200/10000 (32%), skipping summariz
 ### Procedure 2: Infinite Loop / Message Never Completes
 
 1. Check the graph's recursion limit:
-   - Default is 25 (set in `graph.py` via `recursion_limit` in config)
+   - Default is 15 (set in `graph.py` via `recursion_limit` in config)
    - If tool calls cycle (LLM calls tool, tool result leads to more tool calls), count can hit limit
 
 2. Check for router → complex → router cycling:

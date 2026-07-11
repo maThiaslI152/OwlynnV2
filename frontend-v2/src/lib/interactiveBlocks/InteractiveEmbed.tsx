@@ -1,5 +1,5 @@
-import { ChatInteractiveChart } from '../../components/ChatInteractiveChart'
-import { ChatImageViewer } from '../../components/ChatImageViewer'
+import { ChatInteractiveChart } from '../../components/chat/ChatInteractiveChart'
+import { ChatImageViewer } from '../../components/chat/ChatImageViewer'
 import {
   isInteractiveChartUrl,
   isWorkspaceImageUrl,

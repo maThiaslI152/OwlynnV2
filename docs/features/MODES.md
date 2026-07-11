@@ -1,7 +1,7 @@
 ---
 status: active
 category: reference
-last_updated: 2026-07-09
+last_updated: 2026-07-12
 owner: ai-agent
 audience: agent
 ---
@@ -77,7 +77,7 @@ User clicks "Pentest" in ModeSwitcher
 
 ### Study Mode
 
-- Auto-sets `response_style: learning`
+- Auto-sets `response_style: learning` (with length constraints)
 - Forces `scenario_id: study`
 - Sidebar shows: Courses, exam countdown, Study Progress panel
 - Right panel shows: Study progress, weak areas, streak

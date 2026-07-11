@@ -14,4 +14,5 @@ export interface ChatMessage {
   content: string
   ts: number
   attachments?: ChatMessageAttachment[]
+  status?: 'pending' | 'sent'
 }

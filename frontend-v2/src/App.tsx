@@ -4,7 +4,8 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { Globe } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { listen } from './lib/electronBridge'
-import { AppShell } from './components/AppShell'
+import { AppShell } from './components/layout/AppShell'
+import { ModalManager } from './components/layout/ModalManager'
 import { WsClient } from './lib/wsClient'
 import { useAppStore } from './state/useAppStore'
 import { electronBridge as tauriBridge } from './lib/electronBridge'
@@ -17,7 +18,7 @@ import {
   toToolExecutionSnapshot,
   type ConversationToolActivity,
 } from './appEventHandlers'
-import { parseHitlPrompt } from './components/HitlPromptCard'
+import { parseHitlPrompt } from './components/chat/HitlPromptCard'
 import {
   fetchCloudUsage,
   parseCloudUsagePayload,
@@ -121,6 +122,7 @@ function App() {
     total_cards: number; due_cards: number; project_id?: string
   }>>([])
   const activeMode = useAppStore((s) => s.activeMode)
+  const messages = useAppStore((s) => s.messages)
   const activeEngagementId = useAppStore((s) => s.activeEngagementId)
   const setActiveMode = useAppStore((s) => s.setActiveMode)
   const projectThreadsRef = useRef<Record<string, string>>({ default: initialThreadId })
@@ -844,22 +846,38 @@ function App() {
       }
     }
 
-    addMessage(message)
+    addMessage({ ...message, status: 'pending' })
     setPendingCorrelationId(message.id)
-    const modeScenarioId = activeMode === 'study' ? 'study' : activeMode === 'pentest' ? 'pentest' : undefined
-    wsClientRef.current?.send({
-      correlation_id: message.id,
-      type: 'user.message',
-      id: message.id,
-      content: message.content,
-      message: content,
-      files: files && files.length > 0 ? files.map(toWsFilePayload) : undefined,
-      project_id: activeProjectId,
-      persona_id: activePersonaId,
-      ...(responseStyle ? { response_style: responseStyle } : {}),
-      ...(modeScenarioId ? { scenario_id: modeScenarioId } : {}),
+  }, [addMessage])
+
+  // Decoupled Optimistic UI Dispatcher
+  useEffect(() => {
+    const store = useAppStore.getState()
+    const msgs = store.messages
+    const pendingMsgs = msgs.filter((m) => m.role === 'user' && m.status === 'pending')
+    
+    pendingMsgs.forEach((msg) => {
+      // Mark as sent in store to avoid duplicate dispatch
+      store.setMessages(msgs.map((m) => m.id === msg.id ? { ...m, status: 'sent' } : m))
+      
+      const activePersonaId = store.activePersonaId
+      const responseStyle = store.responseStyle || store.evalResponseStyle || undefined
+      const modeScenarioId = activeMode === 'study' ? 'study' : activeMode === 'pentest' ? 'pentest' : undefined
+      
+      wsClientRef.current?.send({
+        correlation_id: msg.id,
+        type: 'user.message',
+        id: msg.id,
+        content: msg.content,
+        message: msg.content, // backend might expect raw text without suffix here but Composer logic previously set content and message to same or suffix-appended text
+        files: msg.attachments && msg.attachments.length > 0 ? msg.attachments.map((f: any) => ({ name: f.name, data: f.previewUrl, type: f.type })) : undefined,
+        project_id: activeProjectId,
+        persona_id: activePersonaId,
+        ...(responseStyle ? { response_style: responseStyle } : {}),
+        ...(modeScenarioId ? { scenario_id: modeScenarioId } : {}),
+      })
     })
-  }, [addMessage, activeProjectId, activeMode])
+  }, [messages, activeProjectId, activeMode])
 
   useEffect(() => {
     const store = useAppStore.getState()
@@ -1151,6 +1169,7 @@ function App() {
 
   return (
     <>
+    <ModalManager />
     <AppShell
       onSend={handleSend}
       projects={projects}

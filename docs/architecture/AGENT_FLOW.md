@@ -1,7 +1,7 @@
 ---
 status: active
 category: architecture
-last_updated: 2026-07-07
+last_updated: 2026-07-12
 owner: ai-agent
 audience: agent
 ---
@@ -217,12 +217,12 @@ pytest tests/test_memory_nodes.py -v
 | `router_clarification_threshold` | float | `0.6` | router |
 | `cloud_escalation_enabled` | boolean | `true` | complex_llm |
 | `cloud_anonymization_enabled` | boolean | `true` | complex_llm (cloud path) |
-| `recursion_limit` | integer | `100` | graph (global) |
+| `recursion_limit` | integer | `15` | graph (global) |
 
 ## Graph Run Limits
 
 To prevent infinite execution loops and silent crashes in multi-turn tool-calling runs (e.g., stateful Python notebook cells), the LangGraph `recursion_limit` is set globally.
-- **Default limit**: Increased from the LangGraph default of `25` to `100`.
+- **Default limit**: Lowered to `15`.
 - **Configuration**: Overridden via `defaults.yaml` -> `complex.recursion_limit`.
 - **Scope**: Applied to all graph run configurations in the WebSocket chat handlers and OpenAI API compatibility endpoints.
 

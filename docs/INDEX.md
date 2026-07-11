@@ -12,8 +12,8 @@ audience: agent
 
 ```yaml
 manifest:
-  version: 16
-  generated: "2026-07-10T04:24:13Z"
+  version: 19
+  generated: "2026-07-12T02:14:07Z"
   files:
     - path: AGENTS.md
       status: active
@@ -29,12 +29,12 @@ manifest:
       status: active
       category: architecture
       audience: agent
-      last_updated: 2026-07-07
+      last_updated: 2026-07-12
     - path: docs/architecture/REDIS_LIFECYCLE.md
       status: active
       category: architecture
       audience: agent
-      last_updated: 2026-07-07
+      last_updated: 2026-07-10
     - path: docs/development/API_REFERENCE.md
       status: active
       category: reference
@@ -115,7 +115,7 @@ manifest:
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-07-10
+      last_updated: 2026-07-12
     - path: docs/architecture/PROJECT_OVERVIEW.md
       status: active
       category: reference
@@ -160,7 +160,7 @@ manifest:
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-06-28
+      last_updated: 2026-07-12
     - path: docs/features/PENTEST.md
       status: active
       category: reference
@@ -172,6 +172,21 @@ manifest:
       audience: agent
       last_updated: 2026-07-09
     - path: docs/changes/phase-1-4-roadmap/CHANGELOG.md
+      status: active
+      category: changelog
+      audience: agent
+      last_updated: 2026-07-10
+    - path: docs/changes/frontend-v2-architecture/CHANGELOG.md
+      status: active
+      category: changelog
+      audience: agent
+      last_updated: 2026-07-12
+    - path: docs/changes/phase-6-postgres-checkpointer/CHANGELOG.md
+      status: active
+      category: changelog
+      audience: agent
+      last_updated: 2026-07-10
+    - path: docs/changes/phase-5-ollama/CHANGELOG.md
       status: active
       category: changelog
       audience: agent
@@ -215,7 +230,7 @@ manifest:
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-07-10
+      last_updated: 2026-07-12
     - path: docs/archive/AGENT_RESUME_PLAYBOOK.md
       status: archived
       category: archive
@@ -570,7 +585,7 @@ manifest:
       status: active
       category: debugging
       audience: agent
-      last_updated: 2026-05-31
+      last_updated: 2026-07-12
     - path: docs/debugging/backend-api.md
       status: active
       category: debugging

@@ -1,7 +1,7 @@
 ---
 status: active
 category: architecture
-last_updated: 2026-07-10
+last_updated: 2026-07-12
 owner: ai-agent
 audience: agent
 ---
@@ -25,15 +25,18 @@ Browser (http://127.0.0.1:5173)
   │     ├─► WebSocket handler (streaming responses)
   │     └─► Tool execution (web search, file ops, REPL, MCP)
   │
-  ├─► LM Studio (port 1234)
+  ├─► Local LLM Provider (LM Studio: 1234 / Ollama: 11434)
   │     ├─► Gemma 4 E2B unified local model (startup preload)
   │     └─► nomic embedding (startup preload)
   │
   ├─► Qdrant (port 6333)
   │     └─► Long-term memory (Mem0 embeddings)
   │
+  ├─► PostgreSQL (port 5432)
+  │     └─► LangGraph checkpointing / session persistence
+  │
   └─► Redis (port 6379)
-        └─► LangGraph checkpointing / session persistence
+        └─► Semantic Cache / Memory extraction queue
 ```
 
 ## Key Modules
@@ -43,6 +46,7 @@ Browser (http://127.0.0.1:5173)
 | **Config** | `src/config/defaults.yaml` | Single source of truth for all settings. Override chain: YAML → env → profile |
 | **Config Loader** | `src/config/config_loader.py` | Layered config with typed accessors, env var mapping, validation |
 | **Agent Graph** | `src/agent/core/graph.py` | LangGraph orchestration: memory→router→simple/complex→tools→memory |
+| **Checkpointer** | `src/agent/core/checkpointer.py`| PostgreSQL checkpointer (`AsyncPostgresSaver`) managing state |
 | **Router** | `src/agent/routing/router.py` | Cloud-primary routing: `simple`, `complex-cloud` — keyword bypass, LLM classifier, HITL |
 | **Simple Node** | `src/agent/core/simple.py` | Fast answers via local unified model (Gemma 4 E2B), retry-once on failure |
 | **Complex Node** | `src/agent/core/complex.py` | Tool-augmented reasoning — Cloud DeepSeek V4 |
@@ -58,7 +62,7 @@ Browser (http://127.0.0.1:5173)
 | **Tool Reranker** | `src/agent/tool_reranker.py` | Semantic tool reranking using Nomic embeddings |
 | **API** | `src/api/server.py` | FastAPI with REST + WebSocket + OpenAI-compatible endpoints |
 | **Scheduler** | `src/api/scheduler_manager.py` | APScheduler for autonomous background jobs |
-| **Power monitor** | `src/api/power_monitor.py` | Battery status watcher via pmset, handles Eco-Mode transitions |
+| **Power monitor** | `src/api/power_monitor.py` | Async battery status watcher via pmset, handles Eco-Mode transitions |
 | **Idle manager** | `src/api/idle_manager.py` | Resource optimization watcher (LLM model unload, StirlingPDF shutdown) |
 | **Frontend** | `frontend-v2/` | React 19 + Vite + Zustand + Electron main process |
 

@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import './hitl-cards.css'
 import App from './App.tsx'
+import './i18n'
 
 // Apply Tauri-specific glass mode for native frosted effects.
 const hasTauriInternals = typeof window !== 'undefined' && Boolean((window as any).__TAURI_INTERNALS__);
@@ -12,7 +13,7 @@ if (hasTauriInternals) {
 }
 
 import { Toaster } from 'react-hot-toast'
-import { ErrorBoundary } from './components/ErrorBoundary'
+import { ErrorBoundary } from './components/shared/ErrorBoundary'
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 

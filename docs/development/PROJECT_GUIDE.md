@@ -2,7 +2,7 @@
 status: active
 category: reference
 audience: agent
-last_updated: 2026-07-10
+last_updated: 2026-07-12
 owner: ai-agent
 ---
 
@@ -44,7 +44,7 @@ Do **not** add new `.py` test or patch scripts at repo root.
 | `src/agent/nodes/complex_utils/cloud_payload.py` | Cloud prompt layers, anonymization, tool-arg compaction on replay (BUG-27) |
 | `src/agent/nodes/complex_utils/vision_qwen3vl.py` | Qwen3-VL output parser |
 | `src/agent/nodes/complex_utils/vision_*.py` | Vision proxy for cloud image path (Qwen3-VL default) |
-| `src/agent/nodes/complex_utils/lm_studio_vision.py` | LM Studio auto-load for vision VLM |
+| `src/agent/nodes/complex_utils/lm_studio_vision.py` | LM Studio auto-load for vision VLM (bypassed for Ollama) |
 | `src/tools/mcp_client.py` | MCP stdio client; tools merged via `merge_mcp_tools()` |
 | `mcp_config.json` | MCP server manifests (see `mcp_config.json.example`) |
 | `src/config/defaults.yaml` | Model names, routing, `mcp.*`, `startup.preload` (source of truth) |
@@ -91,8 +91,8 @@ Do **not** add new `.py` test or patch scripts at repo root.
 | `src/api/routes/scheduled_jobs.py` | APScheduler REST API |
 | `src/api/scheduler_manager.py` | APScheduler background jobs |
 | `src/api/ws/handler.py` | WebSocket streaming, event serialization |
-| `src/api/power_monitor.py` | Power state monitor loop (pmset status checks) |
-| `src/api/idle_manager.py` | Idle resource watcher (LM Studio unload + StirlingPDF shutdown) |
+| `src/api/power_monitor.py` | Async power state monitor (pmset status checks) |
+| `src/api/idle_manager.py` | Idle resource watcher (LM Studio unload (bypassed for Ollama) + StirlingPDF shutdown) |
 | `docs/development/CHAT_PROTOCOL.md` | WS event contract |
 | `docs/development/API_REFERENCE.md` | REST reference |
 | `tests/test_websocket_event_contract.py` | WS contract tests |
@@ -102,17 +102,19 @@ Do **not** add new `.py` test or patch scripts at repo root.
 
 | File | Role |
 |------|------|
-| `frontend-v2/src/App.tsx` | App shell, WebSocket lifecycle, HITL resume |
+| `frontend-v2/src/App.tsx` | App shell, WebSocket lifecycle, HITL resume, Optimistic UI Pipeline |
 | `frontend-v2/src/lib/electronBridge.ts` | Electron IPC (Safe Mode, screen assist) |
 | `frontend-v2/src/lib/wsClient.ts` | WebSocket client |
+| `frontend-v2/src/lib/eventBus.ts` | Transient event bus for UI interactions (e.g. FOCUS_COMPOSER) |
 | `frontend-v2/src/lib/toolPreamble.ts` | Filter tool-only placeholder text from chat stream |
+| `frontend-v2/src/sdk/index.ts` | API SDK Layer abstracting raw fetch calls |
 | `frontend-v2/src/state/useAppStore.ts` | Main Zustand store assembler (combines slices) |
 | `frontend-v2/src/state/slices/*.ts` | Modular Zustand state slices (chat, cloud, tools, modes) |
 | `frontend-v2/electron/main.ts` | Electron main process |
 | `frontend-v2/src/components/AppShell.tsx` | Layout shell |
 | `frontend-v2/src/components/SettingsPanel.tsx` | Settings UI |
 | `frontend-v2/src/components/CitationsList.tsx` | Citations UI |
-| `frontend-v2/src/components/Composer.tsx` | Chat composer (drag-and-drop context) |
+| `frontend-v2/src/components/chat/Composer.tsx` | Chat composer (drag-and-drop context) |
 
 ## Memory
 
@@ -164,6 +166,7 @@ Do **not** add new `.py` test or patch scripts at repo root.
 | File | Role |
 |------|------|
 | `src/agent/core/graph.py` | `build_graph()`, conditional edges, HITL routing |
+| `src/agent/core/checkpointer.py` | `AsyncPostgresSaver` LangGraph checkpointer initialization |
 | `docs/architecture/AGENT_FLOW.md` | Node-by-node flow reference |
 | `tests/test_graph.py` | Graph wiring tests |
 | `tests/test_graph_summarize_wiring.py` | Summarize gate tests |
@@ -208,7 +211,7 @@ START → memory_inject_lite → router → memory_retrieve → auto_summarize? 
 ### Swap a model
 
 1. Edit `src/config/defaults.yaml` — `models.small.model_name` or `models.cloud.model_name`
-2. Match LM Studio loaded name exactly
+2. Match LM Studio or Ollama loaded name exactly
 3. Run `pytest tests/test_llm_pool.py -q`
 
 ## CI, tests, and evaluation

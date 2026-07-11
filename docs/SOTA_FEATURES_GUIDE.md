@@ -35,7 +35,7 @@ This feature lets the user switch assistant personas (e.g., Owlynn, Coder, Write
     *   Maintains `activePersonaId` (defaulting to `"default"`) and provides `setActivePersonaId(id)`.
 *   **WebSocket Contract**: [frontend-v2/src/types/protocol.ts](file:///Users/tim/Works/OwlynnV2/frontend-v2/src/types/protocol.ts) & [frontend-v2/src/App.tsx](file:///Users/tim/Works/OwlynnV2/frontend-v2/src/App.tsx)
     *   Extends `UserMessageEvent` to support `persona_id` and binds it to outgoing socket messages.
-*   **Visual Pill Dropdown Selector**: [frontend-v2/src/components/Composer.tsx](file:///Users/tim/Works/OwlynnV2/frontend-v2/src/components/Composer.tsx)
+*   **Visual Pill Dropdown Selector**: [frontend-v2/src/components/chat/Composer.tsx](file:///Users/tim/Works/OwlynnV2/frontend-v2/src/components/chat/Composer.tsx)
     *   Implements the dynamically fetched selector pill and card dropdown, complete with a click-outside auto-close hook.
 *   **Curated Glassmorphic Styles**: [frontend-v2/src/index.css](file:///Users/tim/Works/OwlynnV2/frontend-v2/src/index.css)
     *   Contains modern styling rules: `backdrop-filter: blur(16px)`, active cyan/blue glows, card lists, hover micro-animations, and entry transitions.

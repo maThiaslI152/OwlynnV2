@@ -114,18 +114,18 @@ The `VectorLifecycleManager` orchestrates the insertion and deletion of vector d
 
 ## Checkpoint Persistence
 
-Conversation history is stored in Redis via LangGraph's `AsyncRedisSaver`. Each graph run automatically saves checkpoints after every step.
+Conversation history is stored in PostgreSQL natively via LangGraph's `AsyncPostgresSaver` (in `src/agent/core/checkpointer.py`). Each graph run automatically saves checkpoints after every step.
 
 ### Startup Verification
 
-On startup, `init_agent()` performs a round-trip write test (`aput` → `aget_tuple` → cleanup) to verify the Redis checkpointer can actually persist data. If the test fails, the system falls back to `MemorySaver` with a warning — conversations will NOT persist across restarts.
+On startup, `init_agent()` performs a round-trip write test (`aput` → `aget_tuple` → cleanup) to verify the PostgreSQL checkpointer can actually persist data. If the test fails, the system falls back to `MemorySaver` with a warning — conversations will NOT persist across restarts.
 
 ### Legacy Chat Detection
 
-On startup, a background task scans all PostgreSQL chat records and checks for corresponding checkpoint keys in Redis. Chats without checkpoint data are logged:
+On startup, a background task scans all PostgreSQL chat records and checks for corresponding checkpoint tuples via `aget_tuple()`. Chats without checkpoint data are logged:
 
 ```
-[startup] 5/20 chats have no checkpoint data (created before Redis checkpointer).
+[startup] 5/20 chats have no checkpoint data (created before checkpointer).
 These chats will show 'history unavailable' when opened.
 ```
 
@@ -168,5 +168,6 @@ The frontend handles both the new structured format and the legacy array format 
 - `src/agent/nodes/summarize.py` — Auto-summarization
 - `src/config/engagement_crypto.py` — Fernet master key storage (macOS Keychain)
 - `src/config/defaults.yaml` — Memory configuration
+- `src/agent/core/checkpointer.py` — `AsyncPostgresSaver` LangGraph checkpointer initialization
 - `docs/features/SEMANTIC_CACHE.md` — Semantic cache feature documentation
-- `docs/architecture/REDIS_LIFECYCLE.md` — Redis checkpoint eviction and memory management
+- `docs/architecture/REDIS_LIFECYCLE.md` — Redis semantic cache and extraction memory management
