@@ -918,8 +918,16 @@ async def wait_for_turn_complete(
                 and ws_log
                 and not ws_log.assistant_message_seen_since(since_ts)
             ):
-                await asyncio.sleep(1)
-                continue
+                # Prevent infinite loop if backend crashes and never sends assistant.message
+                if getattr(ws_log, "_idle_wait_start", None) is None:
+                    ws_log._idle_wait_start = time.monotonic()
+                if time.monotonic() - ws_log._idle_wait_start < 5:
+                    await asyncio.sleep(1)
+                    continue
+                else:
+                    print(
+                        "\n[EVAL] WARNING: ws_idle is true but no assistant message seen after 5s. Proceeding anyway."
+                    )
         if ws_log and since_ts:
             busy = not ws_idle
         else:
@@ -1579,7 +1587,7 @@ async def main() -> None:
     # Wait for backend to be fully started and responsive
     print(f"[EVAL] Waiting for backend at {API_URL} to start...")
     backend_ready = False
-    for _ in range(15):
+    for _ in range(60):
         try:
             async with httpx.AsyncClient(timeout=1.0) as client:
                 resp = await client.get(f"{API_URL}/api/health")

@@ -1,7 +1,7 @@
 ---
 status: active
 category: reference
-last_updated: 2026-07-10
+last_updated: 2026-07-14
 owner: ai-agent
 audience: agent
 ---
@@ -12,8 +12,8 @@ audience: agent
 
 ```yaml
 manifest:
-  version: 19
-  generated: "2026-07-12T02:14:07Z"
+  version: 20
+  generated: "2026-07-14T02:54:54Z"
   files:
     - path: AGENTS.md
       status: active
@@ -841,6 +841,11 @@ manifest:
       category: reference
       audience: agent
       last_updated: 2026-06-10
+    - path: docs/changes/frontier-eval-stability/CHANGELOG.md
+      status: active
+      category: changelog
+      audience: agent
+      last_updated: 2026-07-14
 ```
 
 ## Related

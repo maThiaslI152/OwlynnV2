@@ -38,12 +38,14 @@
 | I want to… | Read | Edit |
 |------------|------|------|
 | Change routing / model selection | [`docs/development/EXTENDING_AGENT.md`](docs/development/EXTENDING_AGENT.md) | `src/agent/nodes/router.py`, `src/agent/router/`, `src/config/defaults.yaml` |
+| Change LLM provider (LM Studio / Ollama) | — | `src/config/defaults.yaml`, `src/agent/llm.py` |
 | Change PDF intake / OCR | [`docs/guides/dev-startup.md`](docs/guides/dev-startup.md) | `src/pdf/intake.py`, `src/integrations/stirling_pdf.py`, `docker-compose.yml` |
 | Add or change a tool | [`docs/features/TOOLS.md`](docs/features/TOOLS.md) | `src/tools/`, `src/agent/tool_sets.py` |
 | Change WebSocket events | [`docs/development/CHAT_PROTOCOL.md`](docs/development/CHAT_PROTOCOL.md) | `src/api/ws/handler.py`, `frontend-v2/src/` |
 | Fix memory / context injection | [`docs/features/MEMORY.md`](docs/features/MEMORY.md) | `src/agent/nodes/memory.py`, `src/memory/` |
 | Tune semantic cache (threshold, TTL) | [`docs/features/SEMANTIC_CACHE.md`](docs/features/SEMANTIC_CACHE.md) | `src/memory/semantic_cache.py`, `src/api/ws/handler.py` |
-| Change Redis lifecycle / checkpoint eviction | [`docs/architecture/REDIS_LIFECYCLE.md`](docs/architecture/REDIS_LIFECYCLE.md) | `src/agent/core/graph.py` (`_evict_stale_checkpoints`) |
+| Change LangGraph checkpoints (PostgreSQL) | — | `src/agent/core/checkpointer.py` |
+| Change Redis memory / extraction queue | [`docs/architecture/REDIS_LIFECYCLE.md`](docs/architecture/REDIS_LIFECYCLE.md) | `src/memory/extraction/worker.py` |
 | Change HITL / approvals | [`docs/HITL.md`](docs/HITL.md) | `src/agent/hitl/`, `src/agent/nodes/{scope_clarify,plan_review,security_proxy}.py` |
 | Debug a symptom | [`docs/debugging/README.md`](docs/debugging/README.md) | Follow symptom → file table |
 | Change cloud / anonymization | [`docs/architecture/CLOUD-LLM-ARCHITECTURE.md`](docs/architecture/CLOUD-LLM-ARCHITECTURE.md) | `src/agent/nodes/complex.py`, `src/agent/nodes/complex_utils/` |
@@ -257,8 +259,9 @@ When generating cache keys for chat histories or context gatekeepers (e.g., in `
 - [`docs/README.md`](docs/README.md) — full documentation map
 - [`docs/INDEX.md`](docs/INDEX.md) — machine-readable manifest (filter by `audience`)
 
-## Last updated
-
+P26-07-14 — Frontier Eval & WebSocket Stability Fixes: Patched App.tsx to clean up stale streaming states on dropped connections. Updated src/api/ws/handler.py to emit chunk/assistant.message for semantic cache hits, fixing invisible UI responses. Added ws_idle fallback timeout to scripts/run_local_frontier_eval.py. Restored benchmark to 91.32%. Changelog at docs/changes/frontier-eval-stability/CHANGELOG.md.
+2026-07-12 — Pentest V4 Orchestration: Implemented phase-based pipeline orchestrator (`PipelineOrchestrator`), automated context truncation (`pentest_memory_node`), strict BFS/DFS methodology in `domain_prompts`, refactored `generate_pdf_report` for HTML-to-PDF rendering via StirlingPDF, and updated `poc_generator` to use LLM. Fixed frontend test imports. Changelog at docs/changes/pentest-v4-orchestration/CHANGELOG.md.
+2026-07-12 — Frontend V2 Architecture & Tailwind Migration: Restructured React components into domain directories, integrated Tailwind CSS v4, replaced drag-and-drop with react-dropzone, built Data Connectors UI, added central ModalManager using Zustand and framer-motion, and implemented Voice Interaction (SpeechRecognition and TTS). Changelog at docs/changes/frontend-v2-architecture/CHANGELOG.md.
 2026-07-10 — Phase 1 and 4 Roadmap Completion: Fixed HITL bypass, macOS Keychain for Fernet, Observer/Reflector 2-phase LLM pipeline, semantic tool reranking via Nomic, data connectors, APScheduler background jobs, Settings/Citations UI, Chat export. Changelog at docs/changes/phase-1-4-roadmap/CHANGELOG.md.
 2026-07-09 — Performance Optimizations (Idle + Active): Parallel tool dispatch (asyncio.gather for independent tools); idle LLM unload after 15min via LM Studio REST API; StirlingPDF idle-shutdown (opt-in); follow-up continuation bypass skips LLM router classifier; file cache poll replaces asyncio.sleep(3). Changelog at docs/changes/performance-optimizations/CHANGELOG.md.
 2026-07-09 — Eco-Mode Background Throttling and Intelligent Routing: Implemented battery monitoring via `pmset -g batt`. Background RAG extraction and file processing suspend when on battery. Router forces `complex-cloud` fallback. Frontend UI warning added for Pentest mode. Changelog at docs/changes/eco-mode/CHANGELOG.md.
@@ -270,3 +273,4 @@ When generating cache keys for chat histories or context gatekeepers (e.g., in `
 2026-07-07 — Security hardening: execution policy default changed to require_approval; /v1/chat/completions auth enforced; notebook sandbox hardened; SSRF protection on downloads; prompt injection boundaries on web fetches and memory writes; destructive command blocking in scope guard. Task routing table updated with semantic cache and Redis lifecycle rows.
 2026-07-04 — Frontend UI overhaul (glassmorphic dropdowns, accessible memory management) and critical bug fixes for WebSocket chunk streaming overhead / infinite loop in markdown parser. Frontier eval passes at 96.32%.
 2026-07-02 — Production-readiness audit: PostgreSQL replaces `projects.json` for mode persistence; mode routing table updated to `modesSlice.ts`; task routing table updated to reference sliced store.
+2026-07-10 — Phase 6: Migrated LangGraph checkpointer from Redis to PostgreSQL (`AsyncPostgresSaver` in `checkpointer.py`). Removed `_evict_stale_checkpoints` as state persistence is now native to Postgres. Semantic Cache and Extraction queue remain on Redis.

@@ -2,7 +2,7 @@
 /** App shell — WebSocket lifecycle and HITL resume. See docs/CHAT_PROTOCOL.md */
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { Globe } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { listen } from './lib/electronBridge'
 import { AppShell } from './components/layout/AppShell'
 import { ModalManager } from './components/layout/ModalManager'
@@ -59,6 +59,7 @@ function App() {
     : window.location.host
   const defaultWs = `${wsProtocol}//${wsHost}/ws/chat`
   const wsBaseUrl = import.meta.env.VITE_WS_BASE_URL ?? defaultWs
+  const queryClient = useQueryClient()
   const [localRunToken, setLocalRunToken] = useState<string>('')
 
   // Fetch the local run token for WS authentication
@@ -110,6 +111,7 @@ function App() {
   const setTtsSpeaking = useAppStore((s) => s.setTtsSpeaking)
   const appendStreamChunk = useAppStore((s) => s.appendStreamChunk)
   const clearSession = useAppStore((s) => s.clearSession)
+  const connectionState = useAppStore((s) => s.connectionState)
   const makeThreadId = () => `thread-${crypto.randomUUID()}`
   const initialThreadId = makeThreadId()
   const [projects, setProjects] = useState<ProjectSummary[]>([])
@@ -368,6 +370,10 @@ function App() {
     }
 
     const disconnect = wsClient.connect({
+      onAuthFailed: () => {
+        setLocalRunToken('')
+        queryClient.invalidateQueries({ queryKey: ['local-run-token'] })
+      },
       onOpen: () => {
         if (disposed) return
         setConnection('connected')
@@ -478,6 +484,25 @@ function App() {
 
         if (isIdleStatus && pendingId) {
             useAppStore.setState({ pendingCorrelationId: null })
+            
+            // Fix stuck streaming cursors when backend crashes before finishing stream
+            const store = useAppStore.getState()
+            const lastMsg = store.messages[store.messages.length - 1]
+            if (lastMsg && lastMsg.role === 'assistant' && lastMsg.id?.startsWith('stream-')) {
+                store.updateMessage(lastMsg.id, {
+                    ...lastMsg,
+                    id: lastMsg.id.replace('stream-', 'msg-'),
+                    status: 'complete'
+                })
+            }
+            
+            // Fix stuck running tools
+            const { toolExecutionHistory, pushToolExecution } = store
+            toolExecutionHistory.forEach(tool => {
+                if (tool.status === 'running') {
+                    pushToolExecution({ ...tool, status: 'error' })
+                }
+            })
         } else if (!isIdleStatus && eventId && !pendingId) {
             useAppStore.setState({ pendingCorrelationId: eventId })
             // Fallback: clear pendingCorrelationId after 120s of no meaningful WS activity
@@ -852,6 +877,8 @@ function App() {
 
   // Decoupled Optimistic UI Dispatcher
   useEffect(() => {
+    if (connectionState !== 'connected') return;
+
     const store = useAppStore.getState()
     const msgs = store.messages
     const pendingMsgs = msgs.filter((m) => m.role === 'user' && m.status === 'pending')
@@ -877,7 +904,7 @@ function App() {
         ...(modeScenarioId ? { scenario_id: modeScenarioId } : {}),
       })
     })
-  }, [messages, activeProjectId, activeMode])
+  }, [messages, activeProjectId, activeMode, connectionState])
 
   useEffect(() => {
     const store = useAppStore.getState()

@@ -1110,7 +1110,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                     await websocket.send_json(
                         _cache_payload(
                             {
-                                "type": "stream",
+                                "type": "chunk",
                                 "content": cached_answer,
                                 "model": "cache",
                             }
@@ -1119,7 +1119,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                     await websocket.send_json(
                         _cache_payload(
                             {
-                                "type": "message",
+                                "type": "assistant.message",
                                 "role": "assistant",
                                 "content": cached_answer,
                                 "model": "cache",
