@@ -44,7 +44,8 @@ external_services:
 # ── Startup preload ──────────────────────────────────────────────────────────
 startup:
   preload:
-    - small      # Gemma 4 E2B unified local model (routing, vision, extraction)
+    - small      # Gemma 4 E2B unified local model (routing, extraction)
+    - vision     # Baidu OCR (specialized for image transcription)
     - embedding  # nomic embed — always
   warmup: true
   idle_unload_minutes: 15  # Unload local LLM from LM Studio after N mins idle (0 = disabled)
@@ -62,8 +63,8 @@ models:
   provider: "lm_studio"                       # "lm_studio" or "ollama"
   small:
     base_url: "http://127.0.0.1:1234/v1"      # SMALL_LLM_BASE_URL env
-    model_name: "baidu.Unlimited-OCR-GGUF"
-    lm_studio_model_key: "baidu.Unlimited-OCR-GGUF"  # For model swap API
+    model_name: "gemma4-12b-qat-uncensored-hauhaucs-balanced@q4_k_m"
+    lm_studio_model_key: "gemma4-12b-qat-uncensored-hauhaucs-balanced@q4_k_m"  # For model swap API
     temperature: 0.1                          # Low temp for consistent routing classification
     max_tokens: 8192                          # Increased budget for vision/extraction tasks
     max_output_tokens: 8192
@@ -75,6 +76,19 @@ models:
       keep_alive: -1                          # Ask LM Studio to keep model loaded
       # LM Studio handles concurrency internally (e.g. 2 parallel slots).
       # Configure this within LM Studio's Server settings.
+
+  vision:
+    base_url: "http://127.0.0.1:1234/v1"      # VISION_LLM_BASE_URL env
+    model_name: "baidu.Unlimited-OCR-GGUF"
+    lm_studio_model_key: "baidu.unlimited-ocr"  # For model swap API
+    temperature: 0.1
+    max_tokens: 8192
+    max_output_tokens: 8192
+    timeout: 180
+    request_timeout: 180
+    extra_body:
+      top_p: 0.95
+      keep_alive: -1
 
   cloud:
     provider: "deepseek"                     # "deepseek" or "openrouter"
@@ -362,8 +376,8 @@ cloud:
   vision_prompt_mode: standard                # standard | qwen3vl
   vision_lm_studio_auto_load: true             # Load model via native API before vision
   vision_lm_studio_load_timeout: 120
-  vision_qwen3vl_system: "You are an OCR sensor. Output ALL visible text exactly as it appears — transcribe every word, number, symbol, and code snippet verbatim. Then list any UI elements (buttons, fields, menus). Do NOT describe the image, do NOT add interpretation, do NOT say 'the image shows' — output raw transcription only."
-  vision_qwen3vl_user: "Extract the exact text from this image. List all visible text, UI elements (buttons, fields, menus), and code verbatim."
+  vision_qwen3vl_system: "You are a comprehensive and objective AI vision assistant. Your task is to analyze images accurately and without bias. Provide a detailed, factual description of the visual content, including the overall scene, subjects, and context. In addition, transcribe any visible text (words, numbers, code) verbatim, and identify key UI elements or structured data (charts, diagrams) if present. Be thorough, neutral, and precise."
+  vision_qwen3vl_user: "Please analyze this image thoroughly. Describe the scene, subjects, and context objectively, and transcribe any visible text or UI elements exactly as they appear."
   circuit_breaker:
     failure_threshold: 3
     cooldown_seconds: 60

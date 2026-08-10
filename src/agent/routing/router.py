@@ -63,81 +63,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-# ── Router prompt with toolbox classification ────────────────────────────
-ROUTER_PROMPT = """Classify in one shot. No reasoning, no preamble, no markdown.
 
-simple = casual chatter, acknowledgements (ok, got it, cool), short conversational praises, greetings/thanks ONLY. If the user asks ANY factual question, trivia, or asks about a topic/event that might require research or internet access, MUST classify as complex.
-complex = code/math/writing, multi-step work, OR needs live web/news/weather/prices. ANY mention of code, python, bugs, review, OR factual questions MUST be classified as complex.
-browser_local = user explicitly asks to interact with the browser extension (clicking, typing, reading DOM). The local model will drive the extension natively.
-
-Toolbox categories (pick one or more, or "all" if unsure):
-- web_search: web lookup, live data, current information, news, weather, prices. IMPORTANT: If the requested factual information is fully answered by the provided Knowledge Cache, DO NOT include web_search.
-- file_ops: read/write/edit/list/delete workspace files
-- data_viz: create documents/spreadsheets/presentations/PDFs, run code, data analysis, charts
-- productivity: task management, todos, skills, workflow templates
-- memory: recall past conversations, user preferences, stored facts
-- screen_assist: local tmux terminal, macOS UI context, browser tab, remote Kali SSH tmux (read-only)
-- mcp: external MCP servers (e.g. pentest SSH/tmux on Kali) — only when configured in mcp_config.json
-- all: when unsure or multiple categories needed
-
-Reply with exactly one JSON object (nothing else). OUTPUT ONLY RAW VALID JSON. NO MARKDOWN. NO CODE BLOCKS. NO PREAMBLE.
-The execution_plan should briefly break down the steps required to solve the user's request (e.g. 1. search for X, 2. write to file Y). If simple routing, set execution_plan to "none" and needs_memory_retrieval to false. If the Knowledge Cache fully answers the question, set needs_memory_retrieval to false and omit web_search from toolbox:
-{{"routing":"simple"|"complex"|"browser_local","confidence":0.0-1.0,"toolbox":["name1","name2"],"execution_plan":"Step 1... Step 2..." | "none","needs_memory_retrieval":true|false,"scenario_id":"pentest"|"research"|"study"|null}}
-
-Knowledge Cache:
-{knowledge_context}
-
-Message: {user_input}
-
-JSON:"""
-
-
-def parse_routing(
-    content: str,
-) -> tuple[str, float, list[str], str | None, bool | None, str | None]:
-    """Extract routing decision, confidence, toolbox, plan, memory gate, and scenario."""
-    # Strip thinking blocks — handles both Gemma (<think>) and Qwen (<thinking>) formats.
-    content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
-    content = re.sub(r"<thinking>.*?</thinking>", "", content, flags=re.DOTALL).strip()
-    content = re.sub(
-        r"Thinking Process:.*?(?=\n\n[^\d]|\Z)", "", content, flags=re.DOTALL
-    ).strip()
-    try:
-        match = re.search(r"\{.*\}", content, re.DOTALL)
-        if match:
-            parsed = json.loads(match.group(0))
-            decision = parsed.get("routing", "complex").lower().strip()
-            if decision not in ("simple", "complex", "browser_local"):
-                decision = "complex"
-            confidence = float(parsed.get("confidence", 0.5))
-            toolbox = parsed.get("toolbox", "all")
-            if isinstance(toolbox, str):
-                toolbox = [toolbox]
-            execution_plan = parsed.get("execution_plan")
-            needs_memory = parsed.get("needs_memory_retrieval")
-            if needs_memory is not None:
-                needs_memory = bool(needs_memory)
-            scenario_id = parsed.get("scenario_id")
-            if scenario_id is not None and str(scenario_id).lower() in {
-                "null",
-                "none",
-                "",
-            }:
-                scenario_id = None
-            elif scenario_id is not None:
-                scenario_id = str(scenario_id).strip().lower() or None
-            return (
-                decision,
-                confidence,
-                toolbox,
-                execution_plan,
-                needs_memory,
-                scenario_id,
-            )
-    except Exception as e:
-        logger.warning("Error suppressed: %s", e)
-        pass
-    return "complex", 0.5, ["all"], None, None, None
 
 
 def _build_low_confidence_router_choices(
@@ -382,63 +308,14 @@ async def router_node(state: AgentState) -> AgentState:
     if pentest_result is not None:
         return pentest_result
 
-    # ── Stage 1: Ask Small LLM for simple/complex + toolbox ──────────────
-    small_llm = await get_small_llm()
+    # ── Stage 1: Fast routing (LLM bypassed for Local-First) ──────────────
     decision = "complex"
-    confidence = 0.5
+    confidence = 1.0
     toolbox = ["all"]
     parsed_needs: bool | None = None
     parsed_scenario: str | None = None
     execution_plan: str | None = None
-
-    try:
-        router_llm = small_llm.bind(
-            temperature=float(config.get("router_llm.temperature", 0.05)),
-            max_tokens=int(config.get("router_llm.max_tokens")),
-        )
-        response = await router_llm.ainvoke(
-            [
-                HumanMessage(
-                    content=ROUTER_PROMPT.format(
-                        knowledge_context=state.get("knowledge_context") or "None",
-                        user_input=json.dumps(
-                            user_text[: int(config.get("routing.max_input_chars", 500))]
-                        ),
-                    )
-                )
-            ]
-        )
-        decision, confidence, toolbox, execution_plan, parsed_needs, parsed_scenario = (
-            parse_routing(str(response.content))
-        )
-        classification_source = "llm_classifier"
-
-        # ── Override: Enforce complex for factual questions ──
-        if decision == "simple":
-            _question_words = re.compile(
-                r"\b(what|who|where|when|why|how much|how many|is there|are there|can you|could you)\b",
-                re.IGNORECASE,
-            )
-            if "?" in user_text or _question_words.search(user_text):
-                # Exempt casual small talk / conversational inquiries
-                if not re.search(
-                    r"\b(how are you|how do you do|what's up|whats up|what do you think|how are you doing|are you sure|make sense\?|makes sense\?|got it\?)\b",
-                    user_text,
-                    re.IGNORECASE,
-                ):
-                    logger.info(
-                        "[router] Overriding 'simple' to 'complex' due to question detection"
-                    )
-                    decision = "complex"
-                    confidence = 0.9  # Confident override
-                    classification_source = "question_heuristic_override"
-                    if "web_search" not in toolbox and "all" not in toolbox:
-                        toolbox.append("web_search")
-    except Exception as e:
-        logger.error(f"[router] Error during routing: {e}")
-        audit_warn("agent.lifecycle", "router_llm_error", error=str(e)[:120])
-        decision, confidence, toolbox = "complex", 0.5, ["all"]
-        classification_source = "llm_classifier"
+    classification_source = "hardcoded_local_first"
 
     # ── HITL clarification and proactive skill matching ────────────────
     profile = get_profile()

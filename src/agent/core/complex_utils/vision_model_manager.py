@@ -57,7 +57,7 @@ class VisionModelManager:
         self._inflight += 1
         try:
             if self._client is None:
-                model_cfg = get_model_config("small")
+                model_cfg = get_model_config("vision") or get_model_config("small")
                 model_name = str(
                     model_cfg.get("model_name") or configured_vision_model_name()
                 )
@@ -82,7 +82,7 @@ class VisionModelManager:
                     "agent.model",
                     "vision_proxy_loaded",
                     model=model_name,
-                    role="qwen3vl_vision",
+                    role="vision_proxy",
                 )
             self.touch()
             return self._client

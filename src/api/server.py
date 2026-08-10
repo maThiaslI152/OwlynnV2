@@ -217,6 +217,15 @@ async def lifespan(app: FastAPI):
             except Exception as e:
                 logger.warning("[startup] Extraction LLM preload failed: %s", e)
 
+        # 4. Vision — (e.g. Baidu OCR)
+        if "vision" in preload_slots:
+            try:
+                from src.agent.core.complex_utils.vision_model_manager import get_vision_llm
+                await get_vision_llm()
+                logger.info("[startup] Vision LLM client created")
+            except Exception as e:
+                logger.warning("[startup] Vision LLM preload failed: %s", e)
+
         if warmup:
             await _asyncio.sleep(2)
             warmup_text = [HumanMessage(content="hi")]
