@@ -115,6 +115,10 @@ async def _drain_pending_jobs() -> None:
 
     from src.memory.db_models import ExtractionJob
     from src.models.db import AsyncSessionLocal
+    from src.agent.model_swap import IS_PENTEST_SWAPPED
+
+    if IS_PENTEST_SWAPPED:
+        return
 
     try:
         async with AsyncSessionLocal() as session:

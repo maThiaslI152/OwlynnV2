@@ -24,6 +24,9 @@ logger = logging.getLogger(__name__)
 _LOAD_TIMEOUT_S = 120.0
 _POLL_INTERVAL_S = 2.0
 
+IS_PENTEST_SWAPPED = False
+
+
 
 def _management_base() -> str:
     return str(
@@ -146,6 +149,9 @@ async def swap_to_pentest() -> dict:
     small_key = _small_model_key()
     pentest_key = _pentest_model_key()
 
+    global IS_PENTEST_SWAPPED
+    IS_PENTEST_SWAPPED = True
+
     if config.get("models.provider", "lm_studio") == "ollama":
         return {"ok": True, "message": "Using Ollama (auto-loads models on demand)."}
 
@@ -180,6 +186,9 @@ async def swap_to_default() -> dict:
     """
     small_key = _small_model_key()
     pentest_key = _pentest_model_key()
+
+    global IS_PENTEST_SWAPPED
+    IS_PENTEST_SWAPPED = False
 
     if config.get("models.provider", "lm_studio") == "ollama":
         return {"ok": True, "message": "Using Ollama (auto-loads models on demand)."}

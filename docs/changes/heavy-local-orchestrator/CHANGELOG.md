@@ -8,6 +8,7 @@
 - Decoupled vision processing from the `small` slot. Added a dedicated `vision` model slot pointing to `baidu.Unlimited-OCR-GGUF` for strict OCR/vision analysis.
 - Rewrote the vision system prompt (`vision_qwen3vl_system`) in `defaults.yaml` to be unbiased and comprehensive, instructing the model to describe visual scenes rather than restricting it to raw text extraction.
 - Modified `src/api/server.py` to support explicitly preloading the `vision` model at application startup.
+- Fixed a model collision bug by removing legacy overrides from `.env.local` and implementing a proactive VRAM flush (`swap_to_default`) on backend startup to ensure lingering pentest models don't block the 12B orchestrator from loading.
 
 **Why:**
 - On high-memory hardware (e.g., M4 Mac with 24GB unified memory), using a small 4B router model unnecessarily segments capabilities and wastes Time-To-First-Token. Running everything through a single, powerful 12B model provides better reliability and reduces architectural complexity while staying entirely local.

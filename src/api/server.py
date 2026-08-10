@@ -180,6 +180,11 @@ async def lifespan(app: FastAPI):
 
         # 1. Router (small) — always required
         try:
+            from src.agent.model_swap import swap_to_default
+            
+            # Ensure LM Studio is in the default state (unloads pentest model if stuck in VRAM)
+            await swap_to_default()
+            
             await LLMPool.get_small_llm()
             logger.info("[startup] Small LLM client created")
         except Exception as e:
