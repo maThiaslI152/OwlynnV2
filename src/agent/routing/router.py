@@ -37,6 +37,7 @@ from src.agent.routing.resolver import (
     _memory_gate_fields,
     _build_router_metadata,
     _knowledge_cache_likely_answers,
+    _check_travel_mode,
 )
 from src.agent.routing.deterministic import (
     check_deterministic_bypasses,
@@ -672,25 +673,18 @@ async def router_node(state: AgentState) -> AgentState:
             user_text, state, toolbox, cloud_available=cloud_available
         )
 
-    # ── Eco-Mode Routing Override ────────────────────────────────────────
-    try:
-        from src.api.power_monitor import ECO_MODE
-
-        if ECO_MODE:
-            from src.config.secret_store import resolve_deepseek_api_key
-
-            if resolve_deepseek_api_key():
-                route = "complex-cloud"
-                logger.info("[router] Eco-Mode active: forced route to complex-cloud")
-                classification_source = "eco_mode_force_cloud"
-            else:
-                route = "complex-default"
-                logger.info(
-                    "[router] Eco-Mode active but cloud missing: fallback to complex-default"
-                )
-                classification_source = "eco_mode_cloud_unavailable"
-    except ImportError:
-        pass
+    # ── Eco-Mode / Travel Mode Routing Override ──────────────────────────
+    if route != "simple" and route != "browser_local" and _check_travel_mode():
+        if cloud_available:
+            route = "complex-cloud"
+            logger.info("[router] Travel Mode active: forced route to complex-cloud")
+            classification_source = "travel_mode_force_cloud"
+        else:
+            route = "complex-local"
+            logger.info(
+                "[router] Travel Mode active but cloud missing: fallback to complex-local"
+            )
+            classification_source = "travel_mode_cloud_unavailable"
 
     # ── Apply mode-specific toolbox augmentation ─────────────────────────
     toolbox = augment_toolbox_for_scenario(toolbox, state.get("scenario_id"), user_text)

@@ -92,7 +92,10 @@ async def api_get_advanced_settings():
 async def api_get_unified_settings():
     """Get merged profile and advanced settings in one payload."""
     try:
-        from src.config.secret_store import resolve_deepseek_api_key
+        from src.config.secret_store import (
+            resolve_deepseek_api_key,
+            resolve_openrouter_api_key,
+        )
 
         profile = get_profile()
         unified = dict(profile)
@@ -141,6 +144,8 @@ async def api_get_unified_settings():
         # Check Keychain first, then env var, then (deprecated) profile.
         deepseek_key = resolve_deepseek_api_key()
         unified["deepseek_api_key"] = "••••••••" if deepseek_key else ""
+        openrouter_key = resolve_openrouter_api_key()
+        unified["openrouter_api_key"] = "••••••••" if openrouter_key else ""
         return unified
     except Exception as e:
         logger.error("Error: %s", e)
@@ -158,6 +163,8 @@ async def api_update_unified_settings(body: dict):
         from src.config.secret_store import (
             store_deepseek_api_key,
             delete_deepseek_api_key,
+            store_openrouter_api_key,
+            delete_openrouter_api_key,
         )
 
         # Allowed fields: profile VALID_FIELDS + advanced settings defaults + cloud budget
@@ -169,7 +176,6 @@ async def api_update_unified_settings(body: dict):
         updated = []
         for field, value in body.items():
             if field == "deepseek_api_key":
-                # Secure storage path — Keychain, not profile
                 key_value = str(value).strip() if value else ""
                 if key_value and key_value != "••••••••":
                     store_deepseek_api_key(key_value)
@@ -177,7 +183,14 @@ async def api_update_unified_settings(body: dict):
                 elif not key_value:
                     delete_deepseek_api_key()
                     updated.append(field)
-                # If sent as "••••••••", ignore — it's the masked placeholder
+            elif field == "openrouter_api_key":
+                key_value = str(value).strip() if value else ""
+                if key_value and key_value != "••••••••":
+                    store_openrouter_api_key(key_value)
+                    updated.append(field)
+                elif not key_value:
+                    delete_openrouter_api_key()
+                    updated.append(field)
             elif field in allowed:
                 update_profile(field, value)
                 updated.append(field)
@@ -189,7 +202,11 @@ async def api_update_unified_settings(body: dict):
                 "cloud_thinking_mode",
                 "cloud_reasoning_effort",
                 "cloud_escalation_enabled",
+                "travel_mode",
                 "deepseek_api_key",
+                "openrouter_api_key",
+                "cloud_provider",
+                "openrouter_model",
             )
         ):
             from src.agent.llm import LLMPool

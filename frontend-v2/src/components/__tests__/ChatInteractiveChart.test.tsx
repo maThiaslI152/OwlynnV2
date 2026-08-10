@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { ChatInteractiveChart } from '../ChatInteractiveChart'
+import { ChatInteractiveChart } from '../chat/ChatInteractiveChart'
 
 describe('ChatInteractiveChart', () => {
   it('renders iframe and expand dialog', () => {

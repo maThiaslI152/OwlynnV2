@@ -59,10 +59,11 @@ services:
 # Unified Local: qwen3-vl-4b — Routing, Fallback, Vision, Memory extraction
 # Cloud: DeepSeek V4 — primary workhorse for all complex reasoning
 models:
+  provider: "lm_studio"                       # "lm_studio" or "ollama"
   small:
     base_url: "http://127.0.0.1:1234/v1"      # SMALL_LLM_BASE_URL env
-    model_name: "gemma-4-e2b-heretic-uncensored-mlx"
-    lm_studio_model_key: "gemma-4-e2b-heretic-uncensored-mlx"  # For model swap API
+    model_name: "baidu.Unlimited-OCR-GGUF"
+    lm_studio_model_key: "baidu.Unlimited-OCR-GGUF"  # For model swap API
     temperature: 0.1                          # Low temp for consistent routing classification
     max_tokens: 8192                          # Increased budget for vision/extraction tasks
     max_output_tokens: 8192
@@ -76,6 +77,8 @@ models:
       # Configure this within LM Studio's Server settings.
 
   cloud:
+    provider: "deepseek"                     # "deepseek" or "openrouter"
+    openrouter_model: ""                     # if set, overrides tier selection
     base_url: "https://api.deepseek.com/v1"  # CLOUD_LLM_BASE_URL env
     model_name: "deepseek-v4-flash"          # CLOUD_LLM_MODEL_NAME env
     temperature: 0.4
@@ -117,6 +120,20 @@ models:
         - "public_knowledge"
       max_cloud_tokens: 4096
       sanitize_targets: true
+
+  complex_local:
+    provider: "lm_studio"
+    base_url: "http://127.0.0.1:1234/v1"
+    model_name: "gemma4-12b-qat-uncensored-hauhaucs-balanced@q4_k_m"
+    lm_studio_model_key: "gemma4-12b-qat-uncensored-hauhaucs-balanced@q4_k_m"
+    temperature: 0.4
+    max_tokens: 16384
+    max_output_tokens: 16384
+    timeout: 180
+    request_timeout: 180
+    context_window: 65536
+    extra_body:
+      top_p: 0.95
 
   embedding:
     base_url: "http://127.0.0.1:1234/v1"
@@ -162,7 +179,7 @@ routing:
   # Per-route budget maximums
   budget_max:
     cloud: 16384
-    other: 4096                           # Balanced for M4 at ~4 TPS (prevents 10-minute hangs)
+    other: 16384                           # Increased for M4 24GB
 
   # Skill matching
   skill:
@@ -331,6 +348,7 @@ coherence:
 
 # ── Cloud ────────────────────────────────────────────────────────────────────
 cloud:
+  travel_mode: false                         # Force DeepSeek fallback to save local battery
   escalation_enabled: true
   anonymization_enabled: true
   thinking_mode: auto                        # auto | always | never

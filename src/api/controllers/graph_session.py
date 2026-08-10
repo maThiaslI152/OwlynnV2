@@ -124,25 +124,21 @@ class GraphSession:
 
             # Verify checkpoint was persisted (non-blocking)
             try:
-                from src.config.settings import REDIS_URL
-                import redis.asyncio as aioredis
+                from src.agent.core.checkpointer import get_postgres_saver
 
                 async def _check_checkpoint():
-                    client = aioredis.from_url(REDIS_URL)
-                    count = 0
-                    async for _ in client.scan_iter(
-                        match=f"checkpoint:{self.thread_id}:*", count=10
-                    ):
-                        count += 1
-                        if count > 0:
-                            break
-                    await client.aclose()
-                    if count == 0:
-                        logger.warning(
-                            "No checkpoint found for thread %s after graph run — "
-                            "history may not persist across restarts",
-                            self.thread_id,
-                        )
+                    try:
+                        saver = await get_postgres_saver()
+                        config = {"configurable": {"thread_id": self.thread_id}}
+                        result = await saver.aget_tuple(config)
+                        if result is None:
+                            logger.warning(
+                                "No checkpoint found for thread %s after graph run — "
+                                "history may not persist across restarts",
+                                self.thread_id,
+                            )
+                    except Exception as e:
+                        logger.warning("Failed to verify postgres checkpoint: %s", e)
 
                 import asyncio as _asyncio
 

@@ -203,7 +203,6 @@ TOOLBOX_REGISTRY: dict[str, list] = {
         ingest_github_repo,
         ingest_youtube_transcript,
         ingest_obsidian_vault,
-
     ],
     "data_viz": [
         create_docx,

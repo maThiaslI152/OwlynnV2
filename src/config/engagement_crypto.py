@@ -1,22 +1,21 @@
 """Per-engagement credential encryption using Fernet (AES-128-CBC).
 
-Master key is stored in ~/.owlynn/.engagement_master_key.
-Credentials are encrypted per-engagement and stored in credentials.enc files.
+Phase 3 — Unified State Management: credential blobs are now stored in the
+PentestCredentials table (PostgreSQL) instead of credentials.enc flat files.
+The Fernet master key continues to be stored in macOS Keychain; only the
+I/O layer has changed (file → DB row).
 
 Usage::
 
     from src.config.engagement_crypto import encrypt_credentials, decrypt_credentials
-    encrypt_credentials("eng-abc123", {"user": "admin", "pass": "secret"})
-    creds = decrypt_credentials("eng-abc123")
+    await encrypt_credentials("eng-abc123", {"users": [...]})
+    creds = await decrypt_credentials("eng-abc123")
 """
 
 from __future__ import annotations
 
 import json
 import logging
-from pathlib import Path
-
-from src.config.settings import DATA_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +73,7 @@ def _get_master_key() -> bytes:
         )
         logger.info("Successfully stored new engagement master key in macOS Keychain.")
     except subprocess.CalledProcessError as e:
-        logger.error(f"Failed to store master key in Keychain: {e}")
+        logger.error("Failed to store master key in Keychain: %s", e)
         raise RuntimeError("Could not secure master key in macOS Keychain") from e
 
     _cached_key = new_key
@@ -88,54 +87,86 @@ def _get_fernet():
     return Fernet(_get_master_key())
 
 
-def _credentials_path(engagement_id: str) -> Path:
-    return DATA_DIR / "pentest_engagements" / engagement_id / "credentials.enc"
+# ---------------------------------------------------------------------------
+# DB-backed encrypt / decrypt
+# ---------------------------------------------------------------------------
 
 
-def encrypt_credentials(engagement_id: str, credentials: dict) -> None:
-    """Encrypt and store credentials for an engagement.
+async def encrypt_credentials(engagement_id: str, credentials: dict) -> None:
+    """Encrypt and store credentials for an engagement in the DB.
 
     Args:
         engagement_id: The engagement ID.
         credentials: Dict of credential data (e.g., {"users": [{"username": "...", "password": "...", "note": "..."}]}).
     """
+    from sqlalchemy import select
+
+    from src.memory.db_models import PentestCredentials
+    from src.models.db import AsyncSessionLocal
+
     fernet = _get_fernet()
     plaintext = json.dumps(credentials, ensure_ascii=False).encode("utf-8")
     ciphertext = fernet.encrypt(plaintext)
 
-    path = _credentials_path(engagement_id)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(ciphertext)
+    async with AsyncSessionLocal() as session:
+        async with session.begin():
+            # Replace any existing credential row for this engagement.
+            stmt = select(PentestCredentials).where(
+                PentestCredentials.engagement_id == engagement_id
+            )
+            result = await session.execute(stmt)
+            existing = result.scalar_one_or_none()
+
+            if existing is not None:
+                existing.data = ciphertext
+                session.add(existing)
+            else:
+                row = PentestCredentials(
+                    engagement_id=engagement_id,
+                    data=ciphertext,
+                )
+                session.add(row)
+
     logger.info("Encrypted credentials for engagement %s", engagement_id)
 
 
-def decrypt_credentials(engagement_id: str) -> dict:
-    """Decrypt and return credentials for an engagement.
+async def decrypt_credentials(engagement_id: str) -> dict:
+    """Decrypt and return credentials for an engagement from the DB.
 
-    Returns empty dict if no credentials file exists or decryption fails.
+    Returns empty dict if no credential row exists or decryption fails.
     """
-    path = _credentials_path(engagement_id)
-    if not path.exists():
+    from sqlalchemy import select
+
+    from src.memory.db_models import PentestCredentials
+    from src.models.db import AsyncSessionLocal
+
+    async with AsyncSessionLocal() as session:
+        stmt = select(PentestCredentials).where(
+            PentestCredentials.engagement_id == engagement_id
+        )
+        result = await session.execute(stmt)
+        row = result.scalar_one_or_none()
+
+    if row is None:
         return {}
 
     try:
         fernet = _get_fernet()
-        ciphertext = path.read_bytes()
-        plaintext = fernet.decrypt(ciphertext)
+        plaintext = fernet.decrypt(row.data)
         return json.loads(plaintext.decode("utf-8"))
     except Exception as e:
         logger.warning("Failed to decrypt credentials for %s: %s", engagement_id, e)
         return {}
 
 
-def add_credential(
+async def add_credential(
     engagement_id: str,
     username: str,
     password: str,
     note: str = "",
 ) -> None:
     """Add a single credential to the engagement's encrypted store."""
-    creds = decrypt_credentials(engagement_id)
+    creds = await decrypt_credentials(engagement_id)
     users = creds.get("users", [])
     users.append(
         {
@@ -145,12 +176,12 @@ def add_credential(
         }
     )
     creds["users"] = users
-    encrypt_credentials(engagement_id, creds)
+    await encrypt_credentials(engagement_id, creds)
 
 
-def list_credentials(engagement_id: str) -> list[dict]:
+async def list_credentials(engagement_id: str) -> list[dict]:
     """List credential metadata (usernames + notes, no passwords)."""
-    creds = decrypt_credentials(engagement_id)
+    creds = await decrypt_credentials(engagement_id)
     return [
         {"username": u.get("username", ""), "note": u.get("note", "")}
         for u in creds.get("users", [])

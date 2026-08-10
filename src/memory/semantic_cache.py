@@ -1,118 +1,192 @@
-"""Semantic Caching for repetitive queries using redisvl."""
+"""Semantic Caching using PostgreSQL pgvector.
 
-import os
+Replaces the previous Redis redisvl implementation.  Cache entries are stored
+in the ``semantic_cache`` table managed by
+:class:`~src.memory.db_models.SemanticCacheEntry`.
+
+All operations are async and use the shared :mod:`src.models.db` session.
+"""
+
+from __future__ import annotations
+
 import logging
-import asyncio
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy import delete, text
+
+from src.config.config_loader import config
+from src.memory.db_models import SemanticCacheEntry
+from src.models.db import AsyncSessionLocal
 
 logger = logging.getLogger(__name__)
 
-from src.config.config_loader import config
-from src.config.settings import REDIS_URL
+# ---------------------------------------------------------------------------
+# Config
+# ---------------------------------------------------------------------------
 
-try:
-    from redisvl.extensions.cache.llm import SemanticCache
-    from redisvl.utils.vectorize.base import BaseVectorizer
-    import redis.asyncio as redis
-except ImportError:
-    SemanticCache = None
-    BaseVectorizer = object
-    logger.warning("redisvl not available, Semantic Caching disabled.")
-
-from openai import AsyncOpenAI
-from typing import List
-
-_embed_model = config.get(
-    "models.embedding.model_name", "text-embedding-nomic-embed-text-v1.5-embedding"
+_embed_model: str = config.get(
+    "models.embedding.model_name",
+    "text-embedding-nomic-embed-text-v1.5-embedding",
 )
-_embed_url = config.get("models.embedding.base_url", "http://127.0.0.1:1234/v1")
+_embed_url: str = config.get("models.embedding.base_url", "http://127.0.0.1:1234/v1")
 
-from pydantic import PrivateAttr
-
-
-class CustomOpenAIVectorizer(BaseVectorizer):
-    dims: int = 768
-    _client: AsyncOpenAI = PrivateAttr()
-
-    def __init__(self, model: str, base_url: str):
-        super().__init__(model=model)
-        self._client = AsyncOpenAI(api_key="sk-dummy", base_url=base_url)
-
-    def embed(self, text: str, **kwargs) -> List[float]:
-        raise NotImplementedError()
-
-    async def aembed(self, text: str, **kwargs) -> List[float]:
-        response = await self._client.embeddings.create(input=[text], model=self.model)
-        return response.data[0].embedding
-
-    def embed_many(self, texts: List[str], **kwargs) -> List[List[float]]:
-        raise NotImplementedError()
-
-    async def aembed_many(self, texts: List[str], **kwargs) -> List[List[float]]:
-        response = await self._client.embeddings.create(input=texts, model=self.model)
-        return [d.embedding for d in response.data]
+# Cosine distance threshold: < 0.08 ≈ >92% similar → cache hit
+_CACHE_THRESHOLD: float = 0.08
 
 
-semantic_cache = None
+# ---------------------------------------------------------------------------
+# Internal helper
+# ---------------------------------------------------------------------------
 
 
-async def init_semantic_cache():
-    global semantic_cache
-    if not SemanticCache:
-        return
+async def _get_embedding(text_: str) -> list[float]:
+    """Delegate to the shared embedding helper in :mod:`src.memory.long_term`."""
+    from src.memory.long_term import get_embedding  # noqa: PLC0415
 
-    try:
-        # Override dummy key for OpenAI SDK since LM Studio doesn't check it
-        os.environ.setdefault("OPENAI_API_KEY", "sk-dummy")
+    return await get_embedding(text_)
 
-        vectorizer = CustomOpenAIVectorizer(model=_embed_model, base_url=_embed_url)
 
-        redis_client = redis.from_url(REDIS_URL)
+# ---------------------------------------------------------------------------
+# Public interface
+# ---------------------------------------------------------------------------
 
-        semantic_cache = SemanticCache(
-            name="owlynn_semantic_cache",
-            distance_threshold=0.08,  # 92% similarity threshold
-            vectorizer=vectorizer,
-            redis_url=REDIS_URL,
-        )
-        # Use the async client
-        semantic_cache._async_redis_client = redis_client
-        # Index is auto-created by SemanticCache.__init__(); async index is
-        # lazy-initialised on first acheck()/astore() call in redisvl >=0.20.
-        logger.info("Semantic cache initialized (name=owlynn_semantic_cache)")
-    except Exception as e:
-        logger.warning("Failed to initialize Semantic Cache: %s", e)
-        semantic_cache = None
+
+async def init_semantic_cache() -> None:
+    """No-op initialiser kept for API compatibility.
+
+    The ``semantic_cache`` table is created by Alembic migrations.  Nothing
+    needs to be set up at runtime.
+    """
+    logger.info("[semantic_cache] pgvector semantic cache ready (table=semantic_cache)")
 
 
 async def check_semantic_cache(prompt: str, project_id: str = "default") -> str | None:
-    if not semantic_cache:
+    """Look up a semantically similar prompt in the cache.
+
+    The lookup is scoped to *project_id* so that caches from different
+    projects don't bleed into each other.
+
+    Args:
+        prompt:     The raw user prompt to look up.
+        project_id: Project scope for the lookup.
+
+    Returns:
+        The cached response string, or ``None`` if no hit was found.
+    """
+    try:
+        scoped_prompt = f"[Project: {project_id}] {prompt}"
+        embedding = await _get_embedding(scoped_prompt)
+        vec_literal = str(embedding)
+
+        sql = text(
+            """
+            SELECT response
+            FROM semantic_cache
+            WHERE project_id = :project_id
+              AND (embedding::vector <=> (:vec)::vector) < :threshold
+            ORDER BY embedding::vector <=> (:vec)::vector
+            LIMIT 1
+            """
+        )
+
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                sql,
+                {
+                    "project_id": project_id,
+                    "vec": vec_literal,
+                    "threshold": _CACHE_THRESHOLD,
+                },
+            )
+            row = result.fetchone()
+
+        if row:
+            logger.debug("[semantic_cache] Cache HIT for project=%s", project_id)
+            return row.response
+
+        logger.debug("[semantic_cache] Cache MISS for project=%s", project_id)
         return None
+
+    except Exception as exc:
+        logger.warning("[semantic_cache] check failed: %s", exc, exc_info=True)
+        return None
+
+
+async def store_semantic_cache(
+    prompt: str,
+    response: str,
+    project_id: str = "default",
+) -> None:
+    """Embed *prompt* and INSERT a new entry into ``semantic_cache``.
+
+    Args:
+        prompt:     The raw user prompt to cache.
+        response:   The LLM response to store.
+        project_id: Project scope for the cache entry.
+    """
     try:
         scoped_prompt = f"[Project: {project_id}] {prompt}"
-        results = await semantic_cache.acheck(prompt=scoped_prompt)
-        if results and len(results) > 0:
-            return results[0]["response"]
-    except Exception as e:
-        logger.warning("Semantic Cache check failed: %s", e)
-    return None
+        embedding = await _get_embedding(scoped_prompt)
+
+        row = SemanticCacheEntry(
+            project_id=project_id,
+            prompt_scoped=scoped_prompt,
+            response=response,
+            embedding=embedding,
+        )
+
+        async with AsyncSessionLocal() as session:
+            session.add(row)
+            await session.commit()
+
+        logger.debug("[semantic_cache] Stored entry for project=%s", project_id)
+
+    except Exception as exc:
+        logger.warning("[semantic_cache] store failed: %s", exc, exc_info=True)
 
 
-async def store_semantic_cache(prompt: str, response: str, project_id: str = "default"):
-    if not semantic_cache:
-        return
+async def cleanup_old_cache_entries(days: int = 30) -> int:
+    """Delete cache entries older than *days* days.
+
+    Args:
+        days: Entries created more than this many days ago are removed.
+              Defaults to 30 days.
+
+    Returns:
+        Number of rows deleted.
+    """
     try:
-        scoped_prompt = f"[Project: {project_id}] {prompt}"
-        await semantic_cache.astore(prompt=scoped_prompt, response=response)
-    except Exception as e:
-        logger.warning("Semantic Cache store failed: %s", e)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
+        async with AsyncSessionLocal() as session:
+            stmt = delete(SemanticCacheEntry).where(
+                SemanticCacheEntry.created_at < cutoff
+            )
+            result = await session.execute(stmt)
+            await session.commit()
+            deleted = result.rowcount
+
+        logger.info(
+            "[semantic_cache] Cleaned up %d entries older than %d days", deleted, days
+        )
+        return deleted
+
+    except Exception as exc:
+        logger.warning("[semantic_cache] cleanup failed: %s", exc, exc_info=True)
+        return 0
+
+
+# ---------------------------------------------------------------------------
+# Quick smoke-test (python -m src.memory.semantic_cache)
+# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
+    import asyncio
 
-    async def test():
+    async def _test() -> None:
         await init_semantic_cache()
         await store_semantic_cache("Hello world", "Hi there!", project_id="test")
         res = await check_semantic_cache("Hello world", project_id="test")
         print("Result:", res)
 
-    asyncio.run(test())
+    asyncio.run(_test())

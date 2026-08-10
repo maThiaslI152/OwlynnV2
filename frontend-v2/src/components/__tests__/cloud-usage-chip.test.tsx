@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { useAppStore } from '../../state/useAppStore'
-import { CloudUsageChip } from '../CloudUsageChip'
+import { CloudUsageChip } from '../shared/CloudUsageChip'
 
 beforeEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true)

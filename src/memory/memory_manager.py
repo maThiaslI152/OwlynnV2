@@ -1,92 +1,84 @@
 """
 Cross-Session Memory Manager (STM)
 -----------------------------------
-Persists important facts across chat sessions in data/memories.json.
+Persists important facts across chat sessions in the ``memories`` PostgreSQL
+table (replaces data/memories.json).
 The agent calls save_memory() to store, search_memories() to retrieve.
 """
 
-import json
 import logging
 import re
-from datetime import datetime
-from pathlib import Path
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
-from src.memory.file_lock import get_file_lock
+from sqlalchemy import select, delete, func
+
 from src.config.audit_log import audit_info, audit_debug
 from src.config.config_loader import config
+from src.models.db import AsyncSessionLocal
+from src.memory.db_models import Memory
 
-_MEMORIES_PATH = (
-    Path(__file__).resolve().parent.parent.parent / "data" / "memories.json"
-)
 _MAX_MEMORIES = int(config.get("memory.max_facts", 200))
 _SEARCH_WINDOW = int(config.get("memory.search_window", 50))
 
 
-def _read_file() -> list[dict]:
-    """Read memories from disk, returning [] on any error."""
-    try:
-        data = json.loads(_MEMORIES_PATH.read_text(encoding="utf-8"))
-        return data if isinstance(data, list) else []
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        return []
+async def load_memories() -> list[dict]:
+    """Load all memories from the database."""
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(Memory).order_by(Memory.id))
+        rows = result.scalars().all()
+    return [
+        {"fact": m.fact, "timestamp": m.created_at.isoformat() if m.created_at else ""}
+        for m in rows
+    ]
 
 
-def _write_file(memories: list[dict]) -> None:
-    """Atomically write memories to disk via temp-file rename."""
-    _MEMORIES_PATH.parent.mkdir(parents=True, exist_ok=True)
-    tmp = _MEMORIES_PATH.with_suffix(".tmp")
-    try:
-        tmp.write_text(
-            json.dumps(memories, ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
-        tmp.replace(_MEMORIES_PATH)
-    except OSError as exc:
-        logger.error("Failed to write memories: %s", exc)
-        tmp.unlink(missing_ok=True)
-        raise
-
-
-def load_memories() -> list[dict]:
-    """Load all memories from disk."""
-    with get_file_lock(_MEMORIES_PATH):
-        return _read_file()
-
-
-def save_memory(fact: str) -> str:
+async def save_memory(fact: str) -> str:
     """Save a new fact/memory to persistent storage. Returns confirmation string."""
     fact = fact.strip()
     if not fact:
         return "Empty fact — nothing saved."
 
-    with get_file_lock(_MEMORIES_PATH):
-        memories = _read_file()
-        before_count = len(memories)
-
+    async with AsyncSessionLocal() as session:
         # Avoid exact duplicates (case-insensitive)
-        if any(m.get("fact", "").lower().strip() == fact.lower() for m in memories):
+        existing = await session.execute(
+            select(Memory).where(func.lower(Memory.fact) == fact.lower())
+        )
+        if existing.scalar_one_or_none() is not None:
+            total = await session.scalar(select(func.count()).select_from(Memory))
             audit_debug(
-                "memory.stm", "save_skipped_duplicate", total_count=before_count
+                "memory.stm", "save_skipped_duplicate", total_count=total
             )
             return f"Memory already exists: '{fact}'"
 
-        memories.append({"fact": fact, "timestamp": datetime.now().isoformat()})
+        # Check current count for cap enforcement
+        total_before = await session.scalar(select(func.count()).select_from(Memory))
 
-        # Cap at max
+        new_mem = Memory(fact=fact, created_at=datetime.now(tz=timezone.utc))
+        session.add(new_mem)
+        await session.flush()  # get auto-assigned id
+
         capped = False
-        if len(memories) > _MAX_MEMORIES:
+        if total_before >= _MAX_MEMORIES:
             capped = True
-            memories = memories[-_MAX_MEMORIES:]
+            # Remove the oldest records to stay within the cap
+            excess = total_before - _MAX_MEMORIES + 1
+            oldest_ids = (
+                await session.execute(
+                    select(Memory.id).order_by(Memory.id).limit(excess)
+                )
+            ).scalars().all()
+            if oldest_ids:
+                await session.execute(delete(Memory).where(Memory.id.in_(oldest_ids)))
 
-        _write_file(memories)
+        await session.commit()
 
-    after_count = len(memories)
+    total_after = await _count_memories()
     audit_info(
         "memory.stm",
         "saved",
-        total_count=after_count,
+        total_count=total_after,
         was_dedup=False,
         was_capped=capped,
         removed=capped,
@@ -94,14 +86,21 @@ def save_memory(fact: str) -> str:
     return f"✅ Remembered: '{fact}'"
 
 
-def search_memories(query: str, top_k: int = 8) -> list[dict]:
+async def search_memories(query: str, top_k: int = 8) -> list[dict]:
     """
     Keyword-overlap search over the most recent _SEARCH_WINDOW memories.
     Returns up to top_k matches sorted by relevance, falling back to
     the most recent memories when no keyword match is found.
     """
-    with get_file_lock(_MEMORIES_PATH):
-        memories = _read_file()
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(Memory).order_by(Memory.id))
+        rows = result.scalars().all()
+
+    memories = [
+        {"fact": m.fact, "timestamp": m.created_at.isoformat() if m.created_at else ""}
+        for m in rows
+    ]
+
     if not memories:
         return []
 
@@ -117,18 +116,18 @@ def search_memories(query: str, top_k: int = 8) -> list[dict]:
 
     if scored:
         scored.sort(key=lambda x: -x[0])
-        result = [m for _, m in scored[:top_k]]
+        result_list = [m for _, m in scored[:top_k]]
         audit_debug(
             "memory.stm",
             "searched",
             query_word_count=len(query_words),
-            match_count=len(result),
+            match_count=len(result_list),
             total_count=len(memories),
         )
-        return result
+        return result_list
 
     # Fallback: most recent
-    result = window[-top_k:]
+    result_list = window[-top_k:]
     audit_debug(
         "memory.stm",
         "searched_fallback",
@@ -136,21 +135,35 @@ def search_memories(query: str, top_k: int = 8) -> list[dict]:
         match_count=0,
         total_count=len(memories),
     )
-    return result
+    return result_list
 
 
-def delete_memory(fact: str) -> bool:
+async def delete_memory(fact: str) -> bool:
     """Remove a specific fact from memories. Returns True if removed."""
-    with get_file_lock(_MEMORIES_PATH):
-        memories = _read_file()
-        before = len(memories)
-        filtered = [m for m in memories if m.get("fact") != fact]
-        if len(filtered) < before:
-            _write_file(filtered)
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(Memory).where(Memory.fact == fact)
+        )
+        target = result.scalar_one_or_none()
+        if target is not None:
+            before = await session.scalar(select(func.count()).select_from(Memory))
+            await session.delete(target)
+            await session.commit()
+            after = before - 1
             audit_info(
-                "memory.stm", "deleted", total_before=before, total_after=len(filtered)
+                "memory.stm", "deleted", total_before=before, total_after=after
             )
             return True
 
-    audit_debug("memory.stm", "delete_not_found", total_count=before)
+    total = await _count_memories()
+    audit_debug("memory.stm", "delete_not_found", total_count=total)
     return False
+
+
+# ── Internal helpers ────────────────────────────────────────────────────────
+
+
+async def _count_memories() -> int:
+    """Return current row count for audit logging."""
+    async with AsyncSessionLocal() as session:
+        return await session.scalar(select(func.count()).select_from(Memory)) or 0

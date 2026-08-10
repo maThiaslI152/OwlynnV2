@@ -585,7 +585,14 @@ async def api_upload_file(
 
         FORCE_PROCESS_FILES.add(filepath)
 
-        file_bytes = await file.read()
+        # Enforce a 200MB upload cap before reading into memory.
+        _MAX_UPLOAD_BYTES = 200 * 1024 * 1024  # 200 MB
+        file_bytes = await file.read(_MAX_UPLOAD_BYTES + 1)
+        if len(file_bytes) > _MAX_UPLOAD_BYTES:
+            return {
+                "status": "error",
+                "message": "File too large. Maximum upload size is 200 MB.",
+            }
         with open(filepath, "wb") as f:
             f.write(file_bytes)
 

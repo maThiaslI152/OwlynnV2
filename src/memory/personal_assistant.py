@@ -12,25 +12,21 @@ Features:
 - Cross-conversation memory enrichment
 """
 
-import json
 import logging
 import math
 import re
-from datetime import datetime, timedelta
-from pathlib import Path
+import asyncio
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
+from sqlalchemy import select, delete
+
 from src.config.audit_log import audit_info, audit_debug
 from src.config.config_loader import config
-from src.memory.file_lock import get_file_lock
-
-_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
-MEMORIES_PATH = _DATA_DIR / "memories.json"
-TOPICS_PATH = _DATA_DIR / "topics.json"
-INTERESTS_PATH = _DATA_DIR / "interests.json"
-CONVERSATIONS_PATH = _DATA_DIR / "conversations.json"
+from src.models.db import AsyncSessionLocal
+from src.memory.db_models import Topic, Interest, Conversation
 
 # Decay constants (sourced from centralized config)
 TOPIC_HALF_LIFE_DAYS = int(config.get("memory.decay.topic_half_life_days", 14))
@@ -48,30 +44,10 @@ def _time_decay(last_active_iso: str, half_life_days: float) -> float:
         last_active = datetime.fromisoformat(last_active_iso)
     except (ValueError, TypeError):
         return RELEVANCE_FLOOR
-    age_days = max((datetime.now() - last_active).total_seconds() / 86400, 0)
+    # Handle both naive and aware datetimes
+    now = datetime.now(tz=last_active.tzinfo)
+    age_days = max((now - last_active).total_seconds() / 86400, 0)
     return max(0.5 ** (age_days / half_life_days), RELEVANCE_FLOOR)
-
-
-def _read_json(path: Path, default=None):
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        return data
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        return default if default is not None else {}
-
-
-def _write_json(path: Path, data) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
-    try:
-        tmp.write_text(
-            json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-        )
-        tmp.replace(path)
-    except OSError as exc:
-        logger.error("Failed to write %s: %s", path, exc)
-        tmp.unlink(missing_ok=True)
-        raise
 
 
 # ── Topic & Interest Extraction ─────────────────────────────────────────────
@@ -171,7 +147,7 @@ class ConversationSummary:
         topics = TopicExtractor.extract_topics(all_text)
         interests = TopicExtractor.extract_interests(all_text)
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "message_count": len(messages),
             "user_messages": len(user_msgs),
             "topics": topics,
@@ -203,7 +179,7 @@ class MemoryEnricher:
     ) -> Dict:
         return {
             "fact": fact,
-            "created_at": datetime.now().isoformat(),
+            "created_at": datetime.now(tz=timezone.utc).isoformat(),
             "topics": topics,
             "interests": interests,
             "relevance_score": 1.0,
@@ -213,7 +189,7 @@ class MemoryEnricher:
 
     @staticmethod
     def calculate_relevance(memory: Dict) -> float:
-        created = memory.get("created_at", datetime.now().isoformat())
+        created = memory.get("created_at", datetime.now(tz=timezone.utc).isoformat())
         base_decay = _time_decay(created, TOPIC_HALF_LIFE_DAYS)
         ref_boost = 1 + (memory.get("reference_count", 0) * 0.15)
         return base_decay * ref_boost
@@ -222,133 +198,212 @@ class MemoryEnricher:
 # ── Topic & Interest Tracking ────────────────────────────────────────────────
 
 
-def load_topics() -> Dict[str, List[Dict]]:
-    with get_file_lock(TOPICS_PATH):
-        return _read_json(TOPICS_PATH, {})
+async def load_topics() -> Dict[str, List[Dict]]:
+    """Load all topics from the database, grouped by category."""
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(Topic))
+        rows = result.scalars().all()
+
+    grouped: Dict[str, List[Dict]] = {}
+    for t in rows:
+        entry = {
+            "name": t.name,
+            "occurrences": t.occurrences,
+            "first_mentioned": t.first_mentioned.isoformat() if t.first_mentioned else "",
+            "last_mentioned": t.last_mentioned.isoformat() if t.last_mentioned else "",
+            "strength": t.strength,
+        }
+        grouped.setdefault(t.category, []).append(entry)
+    return grouped
 
 
-def save_topics(topics: Dict) -> None:
-    with get_file_lock(TOPICS_PATH):
-        _write_json(TOPICS_PATH, topics)
+_topic_lock = asyncio.Lock()
 
 
-def track_topic(category: str, topic: str, strength: float = 1.0) -> None:
-    with get_file_lock(TOPICS_PATH):
-        topics = load_topics()
-        if category not in topics:
-            topics[category] = []
+async def track_topic(category: str, topic: str, strength: float = 1.0) -> None:
+    """Upsert a topic observation into the database with concurrency retry."""
+    now = datetime.now(tz=timezone.utc)
+    from sqlalchemy.exc import IntegrityError
+    async with _topic_lock:
+        for attempt in range(5):
+            async with AsyncSessionLocal() as session:
+                try:
+                    result = await session.execute(
+                        select(Topic).where(Topic.category == category, Topic.name == topic).with_for_update()
+                    )
+                    existing = result.scalar_one_or_none()
 
-        existing = next((t for t in topics[category] if t["name"] == topic), None)
-        now = datetime.now().isoformat()
-
-        if existing:
-            existing["occurrences"] += 1
-            existing["last_mentioned"] = now
-            existing["strength"] = min(existing["strength"] + 0.1, 5.0)
-            audit_debug(
-                "memory.topics",
-                "topic_updated",
-                topic=topic,
-                category=category,
-                occurrence=existing["occurrences"],
-                strength=round(existing["strength"], 2),
-            )
-        else:
-            topics[category].append(
-                {
-                    "name": topic,
-                    "occurrences": 1,
-                    "first_mentioned": now,
-                    "last_mentioned": now,
-                    "strength": strength,
-                }
-            )
-            audit_info(
-                "memory.topics",
-                "topic_extracted",
-                topic=topic,
-                category=category,
-                occurrence=1,
-                decay_score=1.0,
-            )
-        save_topics(topics)
-
-
-def load_interests() -> Dict[str, Dict]:
-    with get_file_lock(INTERESTS_PATH):
-        return _read_json(INTERESTS_PATH, {})
-
-
-def save_interests(interests: Dict) -> None:
-    with get_file_lock(INTERESTS_PATH):
-        _write_json(INTERESTS_PATH, interests)
+                    if existing:
+                        existing.occurrences += 1
+                        existing.last_mentioned = now
+                        existing.strength = min(existing.strength + 0.1, 5.0)
+                        session.add(existing)
+                        audit_debug(
+                            "memory.topics",
+                            "topic_updated",
+                            topic=topic,
+                            category=category,
+                            occurrence=existing.occurrences,
+                            strength=round(existing.strength, 2),
+                        )
+                    else:
+                        session.add(
+                            Topic(
+                                category=category,
+                                name=topic,
+                                occurrences=1,
+                                first_mentioned=now,
+                                last_mentioned=now,
+                                strength=strength,
+                            )
+                        )
+                        audit_info(
+                            "memory.topics",
+                            "topic_extracted",
+                            topic=topic,
+                            category=category,
+                            occurrence=1,
+                            decay_score=1.0,
+                        )
+                    await session.commit()
+                    break
+                except IntegrityError:
+                    await session.rollback()
+                    if attempt == 4:
+                        raise
+                    await asyncio.sleep(0.01 * (attempt + 1))
 
 
-def update_interests(extracted_interests: Dict[str, bool]) -> None:
-    with get_file_lock(INTERESTS_PATH):
-        interests = load_interests()
-        now = datetime.now().isoformat()
-        for interest, present in extracted_interests.items():
+async def load_interests() -> Dict[str, Dict]:
+    """Load all interests from the database."""
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(Interest))
+        rows = result.scalars().all()
+
+    return {
+        i.name: {
+            "count": i.count,
+            "first_observed": i.first_observed.isoformat() if i.first_observed else "",
+            "last_observed": i.last_observed.isoformat() if i.last_observed else "",
+            "strength": i.strength,
+        }
+        for i in rows
+    }
+
+
+_interest_lock = asyncio.Lock()
+
+
+async def update_interests(extracted_interests: Dict[str, bool]) -> None:
+    """Upsert interest observations into the database with concurrency retry."""
+    now = datetime.now(tz=timezone.utc)
+    from sqlalchemy.exc import IntegrityError
+
+    async with _interest_lock:
+        for interest_name, present in extracted_interests.items():
             if not present:
                 continue
-            if interest not in interests:
-                interests[interest] = {
-                    "count": 1,
-                    "first_observed": now,
-                    "last_observed": now,
-                    "strength": 1.0,
-                }
-                audit_debug(
-                    "memory.topics", "interest_extracted", interest=interest, count=1
-                )
-            else:
-                interests[interest]["count"] += 1
-                interests[interest]["last_observed"] = now
-                interests[interest]["strength"] = min(
-                    interests[interest]["strength"] + 0.2, 5.0
-                )
-                audit_debug(
-                    "memory.topics",
-                    "interest_updated",
-                    interest=interest,
-                    count=interests[interest]["count"],
-                    decay_score=round(interests[interest]["strength"], 2),
-                )
-        save_interests(interests)
+
+            for attempt in range(5):
+                async with AsyncSessionLocal() as session:
+                    try:
+                        result = await session.execute(
+                            select(Interest).where(Interest.name == interest_name).with_for_update()
+                        )
+                        existing = result.scalar_one_or_none()
+
+                        if existing is None:
+                            session.add(
+                                Interest(
+                                    name=interest_name,
+                                    count=1,
+                                    first_observed=now,
+                                    last_observed=now,
+                                    strength=1.0,
+                                )
+                            )
+                            audit_debug(
+                                "memory.topics", "interest_extracted", interest=interest_name, count=1
+                            )
+                        else:
+                            existing.count += 1
+                            existing.last_observed = now
+                            existing.strength = min(existing.strength + 0.2, 5.0)
+                            session.add(existing)
+                            audit_debug(
+                                "memory.topics",
+                                "interest_updated",
+                                interest=interest_name,
+                                count=existing.count,
+                                decay_score=round(existing.strength, 2),
+                            )
+                        await session.commit()
+                        break
+                    except IntegrityError:
+                        await session.rollback()
+                        if attempt == 4:
+                            raise
+                        await asyncio.sleep(0.01 * (attempt + 1))
 
 
 # ── Conversation Tracking ────────────────────────────────────────────────────
 
 
-def load_conversations_history(limit: Optional[int] = None) -> List[Dict]:
-    with get_file_lock(CONVERSATIONS_PATH):
-        data = _read_json(CONVERSATIONS_PATH, [])
-        if not isinstance(data, list):
-            return []
+async def load_conversations_history(limit: Optional[int] = None) -> List[Dict]:
+    """Load conversation records from the database, ordered oldest-first."""
+    async with AsyncSessionLocal() as session:
+        stmt = select(Conversation).order_by(Conversation.recorded_at)
         if limit and limit > 0:
-            return data[-limit:]
-        return data
+            # Fetch last N by ordering desc then reversing in Python
+            stmt = (
+                select(Conversation)
+                .order_by(Conversation.recorded_at.desc())
+                .limit(limit)
+            )
+            result = await session.execute(stmt)
+            rows = list(reversed(result.scalars().all()))
+        else:
+            result = await session.execute(stmt)
+            rows = result.scalars().all()
+
+    return [_conv_to_dict(c) for c in rows]
 
 
-def save_conversations_history(history: List[Dict]) -> None:
-    with get_file_lock(CONVERSATIONS_PATH):
-        _write_json(CONVERSATIONS_PATH, history)
-
-
-def record_conversation(messages: List[Dict], session_id: str = None) -> Dict:
+async def record_conversation(messages: List[Dict], session_id: str = None) -> Dict:
+    """Summarise and persist a completed conversation. Returns the summary dict."""
     summary = ConversationSummary.create_summary(messages)
-    summary["session_id"] = session_id or f"session_{datetime.now().timestamp()}"
+    summary["session_id"] = session_id or f"session_{datetime.now(tz=timezone.utc).timestamp()}"
 
-    with get_file_lock(CONVERSATIONS_PATH):
-        history = load_conversations_history()
-        history.append(summary)
-        history = history[-100:]  # keep last 100
-        save_conversations_history(history)
+    async with AsyncSessionLocal() as db_session:
+        # Keep only last 100 conversations — delete oldest if over limit
+        count_result = await db_session.execute(
+            select(Conversation).order_by(Conversation.recorded_at)
+        )
+        all_convs = count_result.scalars().all()
+        if len(all_convs) >= 100:
+            excess_ids = [c.id for c in all_convs[: len(all_convs) - 99]]
+            await db_session.execute(
+                delete(Conversation).where(Conversation.id.in_(excess_ids))
+            )
+
+        db_session.add(
+            Conversation(
+                session_id=summary["session_id"],
+                message_count=summary.get("message_count", 0),
+                user_messages=summary.get("user_messages", 0),
+                topics=summary.get("topics", {}),
+                interests=summary.get("interests", {}),
+                key_questions=summary.get("key_questions", []),
+                summary_text=summary.get("summary_text", ""),
+                recorded_at=datetime.now(tz=timezone.utc),
+            )
+        )
+        await db_session.commit()
 
     for category, items in summary.get("topics", {}).items():
         for item in items:
-            track_topic(category, item)
-    update_interests(summary.get("interests", {}))
+            await track_topic(category, item)
+    await update_interests(summary.get("interests", {}))
 
     audit_info(
         "memory.topics",
@@ -380,15 +435,18 @@ def _score_interest(data: dict) -> float:
     return base_strength * recency * count_factor
 
 
-def get_current_focus(limit: int = 3) -> List[Tuple[str, str, float]]:
+async def get_current_focus(limit: int = 3) -> List[Tuple[str, str, float]]:
     """Detect what the user is CURRENTLY focused on (last FOCUS_WINDOW_DAYS)."""
-    topics = load_topics()
-    cutoff = datetime.now() - timedelta(days=FOCUS_WINDOW_DAYS)
+    topics = await load_topics()
+    cutoff = datetime.now(tz=timezone.utc) - timedelta(days=FOCUS_WINDOW_DAYS)
     focus_items = []
     for category, topic_list in topics.items():
         for topic in topic_list:
             try:
                 last_dt = datetime.fromisoformat(topic.get("last_mentioned", ""))
+                # Normalise to UTC-aware for comparison
+                if last_dt.tzinfo is None:
+                    last_dt = last_dt.replace(tzinfo=timezone.utc)
             except (ValueError, TypeError):
                 continue
             if last_dt >= cutoff:
@@ -397,9 +455,9 @@ def get_current_focus(limit: int = 3) -> List[Tuple[str, str, float]]:
     return focus_items[:limit]
 
 
-def get_relevant_topics(limit: int = 5) -> List[Tuple[str, str]]:
+async def get_relevant_topics(limit: int = 5) -> List[Tuple[str, str]]:
     """Get most relevant topics with time decay applied."""
-    topics = load_topics()
+    topics = await load_topics()
     all_topics = []
     for category, topic_list in topics.items():
         for topic in topic_list:
@@ -410,16 +468,18 @@ def get_relevant_topics(limit: int = 5) -> List[Tuple[str, str]]:
     return [(cat, name) for cat, name, _ in all_topics[:limit]]
 
 
-def get_fading_topics(limit: int = 3) -> List[Tuple[str, str, int]]:
+async def get_fading_topics(limit: int = 3) -> List[Tuple[str, str, int]]:
     """Get topics that used to be active but are fading."""
-    topics = load_topics()
-    cutoff_recent = datetime.now() - timedelta(days=FOCUS_WINDOW_DAYS)
-    cutoff_old = datetime.now() - timedelta(days=60)
+    topics = await load_topics()
+    cutoff_recent = datetime.now(tz=timezone.utc) - timedelta(days=FOCUS_WINDOW_DAYS)
+    cutoff_old = datetime.now(tz=timezone.utc) - timedelta(days=60)
     fading = []
     for category, topic_list in topics.items():
         for topic in topic_list:
             try:
                 last_dt = datetime.fromisoformat(topic.get("last_mentioned", ""))
+                if last_dt.tzinfo is None:
+                    last_dt = last_dt.replace(tzinfo=timezone.utc)
             except (ValueError, TypeError):
                 continue
             if (
@@ -427,15 +487,15 @@ def get_fading_topics(limit: int = 3) -> List[Tuple[str, str, int]]:
                 and topic.get("occurrences", 0) >= 3
             ):
                 fading.append(
-                    (category, topic["name"], (datetime.now() - last_dt).days)
+                    (category, topic["name"], (datetime.now(tz=timezone.utc) - last_dt).days)
                 )
     fading.sort(key=lambda x: x[2])
     return fading[:limit]
 
 
-def get_user_interests_summary() -> str:
+async def get_user_interests_summary() -> str:
     """Get summary of user interests with time decay."""
-    interests = load_interests()
+    interests = await load_interests()
     scored = []
     for interest, data in interests.items():
         score = _score_interest(data)
@@ -457,10 +517,10 @@ def get_user_interests_summary() -> str:
     return "\n".join(parts)
 
 
-def get_recent_conversation_summary(days: int = 7) -> str:
+async def get_recent_conversation_summary(days: int = 7) -> str:
     """Get tiered summary of recent conversations."""
-    history = load_conversations_history()
-    now = datetime.now()
+    history = await load_conversations_history()
+    now = datetime.now(tz=timezone.utc)
     today_cutoff = now - timedelta(days=1)
     week_cutoff = now - timedelta(days=days)
 
@@ -470,6 +530,8 @@ def get_recent_conversation_summary(days: int = 7) -> str:
     for conv in reversed(history):
         try:
             conv_time = datetime.fromisoformat(conv.get("timestamp", ""))
+            if conv_time.tzinfo is None:
+                conv_time = conv_time.replace(tzinfo=timezone.utc)
         except (ValueError, TypeError):
             continue
         if conv_time < week_cutoff:
@@ -499,17 +561,17 @@ def get_recent_conversation_summary(days: int = 7) -> str:
 # ── Context Builder ──────────────────────────────────────────────────────────
 
 
-def get_memory_context_for_prompt() -> str:
+async def get_memory_context_for_prompt() -> str:
     """Build comprehensive, time-aware memory context for system prompt injection."""
     parts = []
 
-    focus = get_current_focus(3)
+    focus = await get_current_focus(3)
     if focus:
         parts.append("## Currently Focused On:")
         for category, topic, _score in focus:
             parts.append(f"- {topic} ({category.replace('_', ' ')})")
 
-    topics = get_relevant_topics(5)
+    topics = await get_relevant_topics(5)
     focus_names = {t[1] for t in focus} if focus else set()
     filtered = [(c, n) for c, n in topics if n not in focus_names]
     if filtered:
@@ -517,20 +579,37 @@ def get_memory_context_for_prompt() -> str:
         for category, topic in filtered:
             parts.append(f"- {topic} ({category.replace('_', ' ')})")
 
-    interests = get_user_interests_summary()
+    interests = await get_user_interests_summary()
     if interests:
         parts.append("\n## User Activity Patterns:")
         parts.append(interests)
 
-    recent = get_recent_conversation_summary(7)
+    recent = await get_recent_conversation_summary(7)
     if recent:
         parts.append("\n## Recent Conversations:")
         parts.append(recent)
 
-    fading = get_fading_topics(3)
+    fading = await get_fading_topics(3)
     if fading:
         parts.append("\n## Previously Active (not recently mentioned):")
         for _category, topic, days_ago in fading:
             parts.append(f"- {topic} (last mentioned {days_ago} days ago)")
 
     return "\n".join(parts)
+
+
+# ── Internal helpers ─────────────────────────────────────────────────────────
+
+
+def _conv_to_dict(c: Conversation) -> Dict:
+    """Convert a Conversation ORM row to the legacy summary dict format."""
+    return {
+        "session_id": c.session_id,
+        "timestamp": c.recorded_at.isoformat() if c.recorded_at else "",
+        "message_count": c.message_count,
+        "user_messages": c.user_messages,
+        "topics": c.topics or {},
+        "interests": c.interests or {},
+        "key_questions": c.key_questions or [],
+        "summary_text": c.summary_text or "",
+    }

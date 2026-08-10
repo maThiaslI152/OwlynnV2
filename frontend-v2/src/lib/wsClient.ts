@@ -11,12 +11,14 @@ interface ConnectHandlers {
   onReconnecting?: (attempt: number, maxRetries: number) => void
   onReconnected?: () => void
   onReconnectFailed?: () => void
+  onAuthFailed?: () => void
 }
 
 export class WsClient {
   private socket: WebSocket | null = null
   private readonly url: string
   private listeners: Map<string, Set<EventHandler>> = new Map()
+  private messageBuffer: ClientEvent[] = []
 
   // Auto-reconnect state
   private reconnectAttempt = 0
@@ -79,16 +81,29 @@ export class WsClient {
       this.reconnectAttempt = 0
       this._clearReconnectTimer()
       this.connectHandlers?.onOpen?.()
-      // Replay last message on reconnect if we have one
-      if (this.lastSentMessage && this.connectHandlers?.onReconnected) {
+
+      // Flush buffered messages
+      if (this.messageBuffer.length > 0) {
+        const toSend = [...this.messageBuffer]
+        this.messageBuffer = []
+        toSend.forEach((msg) => this.send(msg))
+      } else if (this.lastSentMessage && this.connectHandlers?.onReconnected) {
+        // Replay last message on reconnect if we have one and no buffer was flushed
         this.connectHandlers.onReconnected()
         // Re-send the last user message to retry the failed graph run
         this.send(this.lastSentMessage)
       }
     })
 
-    this.socket.addEventListener('close', () => {
+    this.socket.addEventListener('close', (event) => {
       if (this.intentionalClose) {
+        this.connectHandlers?.onClose?.()
+        return
+      }
+      // Handle Authentication Failure
+      if (event.code === 4001) {
+        toast.error('Session expired. Re-authenticating...')
+        this.connectHandlers?.onAuthFailed?.()
         this.connectHandlers?.onClose?.()
         return
       }
@@ -141,7 +156,10 @@ export class WsClient {
     if ((event as any).type === 'user.message') {
       this.lastSentMessage = event
     }
-    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      this.messageBuffer.push(event)
+      return
+    }
     this.socket.send(JSON.stringify(event))
   }
 }

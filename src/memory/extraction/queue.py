@@ -1,49 +1,84 @@
-"""Redis stream queue for async memory extraction jobs."""
+"""PostgreSQL-backed job queue for async memory extraction.
+
+Replaces the Redis stream (owlynn:memory:extract) with a simple
+PostgreSQL table queue using INSERT ON CONFLICT DO NOTHING for dedup
+and LISTEN/NOTIFY for efficient wakeup.
+"""
 
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import uuid
 from typing import Any
 
-from src.config.settings import REDIS_URL
-
 logger = logging.getLogger(__name__)
 
-STREAM_KEY = "owlynn:memory:extract"
-CONSUMER_GROUP = "owlynn-extractors"
-_DEDUP: dict[str, float] = {}
-_DEDUP_TTL_S = 86_400
-
-
-def _dedup_key(payload: dict[str, Any]) -> str:
-    return str(payload.get("turn_id") or payload.get("job_id") or uuid.uuid4())
+_NOTIFY_CHANNEL = "extraction_channel"
 
 
 async def enqueue_extraction(payload: dict[str, Any]) -> bool:
-    """Enqueue a memory extraction job. Returns True if queued."""
-    key = _dedup_key(payload)
-    if key in _DEDUP:
-        return False
-    _DEDUP[key] = asyncio.get_running_loop().time()
+    """Enqueue a memory extraction job.
 
-    body = json.dumps({**payload, "turn_id": key})
+    Uses INSERT ... ON CONFLICT DO NOTHING so duplicate turn_ids are
+    silently dropped (replaces the in-process _DEDUP dict).
+    Returns True if the job was newly enqueued, False if already exists.
+    """
+    from sqlalchemy import text
+
+    from src.memory.db_models import ExtractionJob
+    from src.models.db import AsyncSessionLocal
+
+    turn_id: str = str(payload.get("turn_id") or payload.get("job_id") or uuid.uuid4())
+
     try:
-        import redis.asyncio as aioredis
+        async with AsyncSessionLocal() as session:
+            job = ExtractionJob(
+                turn_id=turn_id,
+                mem0_uid=str(payload.get("mem0_uid", "owner")),
+                project_id=str(payload.get("project_id", "default")),
+                scenario_id=str(payload.get("scenario_id", "normal")),
+                turn_text=str(payload.get("turn_text", "")),
+                status="pending",
+            )
+            # merge handles the ON CONFLICT DO NOTHING equivalent for PK/unique
+            from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-        client = aioredis.from_url(REDIS_URL, decode_responses=True)
-        try:
-            await client.xadd(STREAM_KEY, {"payload": body})
+            stmt = (
+                pg_insert(ExtractionJob)
+                .values(
+                    turn_id=job.turn_id,
+                    mem0_uid=job.mem0_uid,
+                    project_id=job.project_id,
+                    scenario_id=job.scenario_id,
+                    turn_text=job.turn_text,
+                    status="pending",
+                )
+                .on_conflict_do_nothing(index_elements=["turn_id"])
+                .returning(ExtractionJob.id)
+            )
+            result = await session.execute(stmt)
+            row = result.fetchone()
+            await session.commit()
+
+            if row is None:
+                # Already existed — dedup hit
+                return False
+
+            job_id = row[0]
+            # Wake up the worker via LISTEN/NOTIFY
+            await session.execute(
+                text(f"SELECT pg_notify('{_NOTIFY_CHANNEL}', :job_id)"),
+                {"job_id": str(job_id)},
+            )
+            await session.commit()
             return True
-        finally:
-            await client.aclose()
+
     except Exception as exc:
         logger.warning(
-            "[memory.extract] Redis enqueue failed: %s — using in-process fallback", exc
+            "[memory.extract] DB enqueue failed: %s — using in-process fallback", exc
         )
         from src.memory.extraction.worker import schedule_extraction_fallback
 
-        schedule_extraction_fallback(payload)
+        schedule_extraction_fallback({**payload, "turn_id": turn_id})
         return True

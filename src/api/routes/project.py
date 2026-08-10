@@ -25,7 +25,7 @@ from src.memory.personal_assistant import (
 async def api_get_topics():
     """Get tracked topics with relevance scores and recency."""
     try:
-        topics = get_relevant_topics(limit=10)
+        topics = await get_relevant_topics(limit=10)
         return {"status": "ok", "topics": topics}
     except Exception as e:
         logger.error("Error: %s", e)
@@ -36,7 +36,7 @@ async def api_get_topics():
 async def api_get_interests():
     """Get detected interests with occurrence counts."""
     try:
-        interests = get_user_interests_summary()
+        interests = await get_user_interests_summary()
         return {"status": "ok", "interests": interests}
     except Exception as e:
         logger.error("Error: %s", e)
@@ -47,7 +47,7 @@ async def api_get_interests():
 async def api_get_conversations(limit: int = 10):
     """Get recent conversation history with summaries."""
     try:
-        conversations = load_conversations_history(limit=limit)
+        conversations = await load_conversations_history(limit=limit)
         return {"status": "ok", "conversations": conversations}
     except Exception as e:
         logger.error("Error: %s", e)
@@ -88,8 +88,8 @@ async def api_track_topic(body: dict):
         category = body.get("category", "other")
         if not topic:
             return {"status": "error", "message": "Topic required"}
-        result = track_topic(topic, category)
-        topics = get_relevant_topics(limit=10)
+        result = await track_topic(topic, category)
+        topics = await get_relevant_topics(limit=10)
         return {"status": "ok", "message": result, "topics": topics}
     except Exception as e:
         logger.error("Error: %s", e)
@@ -103,8 +103,8 @@ async def api_update_interests(body: dict):
         interests = body.get("interests", {})
         if not interests:
             return {"status": "error", "message": "Interests required"}
-        update_interests(interests)
-        updated = get_user_interests_summary()
+        await update_interests(interests)
+        updated = await get_user_interests_summary()
         return {"status": "ok", "interests": updated}
     except Exception as e:
         logger.error("Error: %s", e)
@@ -122,9 +122,15 @@ async def api_create_project(body: dict):
     name = body.get("name", "New Project")
     instructions = body.get("instructions")
     mode = body.get("mode", "normal")
-    return await project_manager.create_project(
-        name, instructions=instructions, mode=mode
-    )
+    try:
+        return await project_manager.create_project(
+            name, instructions=instructions, mode=mode
+        )
+    except Exception as e:
+        import traceback
+
+        traceback.print_exc()
+        raise
 
 
 @router.get("/api/projects/{project_id}")
@@ -135,20 +141,16 @@ async def api_get_project(project_id: str):
 
     # Enrich chats with checkpoint status (non-blocking best-effort)
     try:
-        import redis.asyncio as aioredis
-        from src.config.settings import REDIS_URL
+        from src.agent.core.checkpointer import get_postgres_saver
 
-        client = aioredis.from_url(REDIS_URL)
+        saver = await get_postgres_saver()
         for chat in project.get("chats", []):
             chat_id = chat.get("id")
             if not chat_id:
                 continue
-            has_checkpoint = False
-            async for _ in client.scan_iter(match=f"checkpoint:{chat_id}:*", count=5):
-                has_checkpoint = True
-                break
-            chat["has_checkpoint"] = has_checkpoint
-        await client.aclose()
+            config = {"configurable": {"thread_id": chat_id}}
+            result = await saver.aget_tuple(config)
+            chat["has_checkpoint"] = result is not None
     except Exception:
         pass  # best-effort, don't fail the request
 

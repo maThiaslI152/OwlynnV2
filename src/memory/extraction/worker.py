@@ -1,9 +1,14 @@
-"""Background memory extraction worker (8B custom prompt → Qdrant via Mem0)."""
+"""Background memory extraction worker — PostgreSQL queue backend.
+
+Replaces the Redis xreadgroup consumer loop with:
+  - LISTEN/NOTIFY for efficient wakeup
+  - SELECT ... FOR UPDATE SKIP LOCKED for safe concurrent processing
+  - Proper retry tracking and DLQ behaviour (retry_count, status=failed)
+"""
 
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from typing import Any
 
@@ -13,25 +18,26 @@ from src.agent.pii_scrubber import scrub_for_storage
 from src.config.audit_log import audit_debug, audit_info, audit_warn
 from src.config.config_loader import config
 from src.memory.extraction.prompts import build_extraction_messages
-from src.memory.extraction.queue import CONSUMER_GROUP, STREAM_KEY
 from src.memory.extraction.schema import parse_extraction_response
-from src.config.settings import REDIS_URL
 
 logger = logging.getLogger(__name__)
 
+_NOTIFY_CHANNEL = "extraction_channel"
+_MAX_RETRIES = 3
+_POLL_INTERVAL_S = 30  # fallback poll when LISTEN is idle
 _worker_task: asyncio.Task | None = None
 _fallback_tasks: set[asyncio.Task] = set()
 
 
 def schedule_extraction_fallback(payload: dict[str, Any]) -> None:
-    """In-process fallback when Redis is unavailable."""
+    """In-process fallback when DB enqueue fails (e.g., during tests)."""
     task = asyncio.create_task(process_extraction_job(payload))
     _fallback_tasks.add(task)
     task.add_done_callback(_fallback_tasks.discard)
 
 
 async def start_extraction_worker() -> None:
-    """Start Redis stream consumer (idempotent)."""
+    """Start the PostgreSQL-backed extraction worker (idempotent)."""
     global _worker_task
     if _worker_task and not _worker_task.done():
         return
@@ -50,27 +56,27 @@ async def stop_extraction_worker() -> None:
 
 
 async def _consumer_loop() -> None:
+    """Main consume loop: LISTEN for notifications, poll as fallback."""
     try:
-        import redis.asyncio as aioredis
+        import asyncpg  # type: ignore[import-untyped]
     except ImportError:
-        logger.warning(
-            "[memory.extract] redis package unavailable — worker not started"
-        )
+        logger.warning("[memory.extract] asyncpg not available — worker not started")
         return
 
-    consumer = f"owlynn-{id(asyncio.get_running_loop())}"
-    client = aioredis.from_url(REDIS_URL, decode_responses=True)
+    from src.models.db import DATABASE_URL
+
+    # Build a raw asyncpg DSN from the SQLAlchemy URL
+    raw_dsn = DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
+
+    conn: asyncpg.Connection | None = None
     try:
-        try:
-            await client.xgroup_create(
-                STREAM_KEY, CONSUMER_GROUP, id="0", mkstream=True
-            )
-        except Exception:
-            pass
+        conn = await asyncpg.connect(raw_dsn)
+        await conn.add_listener(_NOTIFY_CHANNEL, _on_notify)
+        logger.info("[memory.extract] PostgreSQL LISTEN started on channel '%s'", _NOTIFY_CHANNEL)
 
         while True:
             try:
-                from src.api.power_monitor import ECO_MODE
+                from src.api.power_monitor import ECO_MODE  # type: ignore[import-untyped]
 
                 if ECO_MODE:
                     await asyncio.sleep(60)
@@ -78,39 +84,109 @@ async def _consumer_loop() -> None:
             except ImportError:
                 pass
 
-            entries = await client.xreadgroup(
-                CONSUMER_GROUP,
-                consumer,
-                {STREAM_KEY: ">"},
-                count=1,
-                block=5000,
-            )
-            if not entries:
-                continue
-            for _stream, messages in entries:
-                for msg_id, fields in messages:
-                    raw = fields.get("payload", "{}")
-                    try:
-                        payload = json.loads(raw)
-                        await process_extraction_job(payload)
-                        await client.xack(STREAM_KEY, CONSUMER_GROUP, msg_id)
-                    except Exception as exc:
-                        audit_warn(
-                            "memory.extract",
-                            "job_failed",
-                            reason=str(exc)[:160],
-                            msg_id=msg_id,
-                        )
+            # Poll for any missed pending jobs (handles crash recovery & fallback)
+            await _drain_pending_jobs()
+
+            # Wait up to _POLL_INTERVAL_S for a NOTIFY or timeout
+            await asyncio.sleep(_POLL_INTERVAL_S)
+
     except asyncio.CancelledError:
         raise
     except Exception as exc:
-        logger.warning("[memory.extract] consumer stopped: %s", exc)
+        logger.warning("[memory.extract] worker stopped: %s", exc)
     finally:
-        await client.aclose()
+        if conn:
+            try:
+                await conn.remove_listener(_NOTIFY_CHANNEL, _on_notify)
+                await conn.close()
+            except Exception:
+                pass
+
+
+def _on_notify(connection: Any, pid: int, channel: str, payload: str) -> None:
+    """Called by asyncpg when a NOTIFY arrives — triggers an immediate drain."""
+    asyncio.create_task(_drain_pending_jobs())
+
+
+async def _drain_pending_jobs() -> None:
+    """Claim and process all pending jobs using FOR UPDATE SKIP LOCKED."""
+    from sqlalchemy import select, update
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    from src.memory.db_models import ExtractionJob
+    from src.models.db import AsyncSessionLocal
+
+    try:
+        async with AsyncSessionLocal() as session:
+            # Claim one job atomically
+            stmt = (
+                select(ExtractionJob)
+                .where(
+                    ExtractionJob.status == "pending",
+                    ExtractionJob.retry_count < _MAX_RETRIES,
+                )
+                .order_by(ExtractionJob.enqueued_at)
+                .limit(1)
+                .with_for_update(skip_locked=True)
+            )
+            result = await session.execute(stmt)
+            job = result.scalar_one_or_none()
+            if job is None:
+                return
+
+            # Mark as processing
+            job.status = "processing"
+            await session.commit()
+            job_id = job.id
+
+        # Execute outside the lock so we don't hold it during LLM call
+        payload = {
+            "turn_id": job.turn_id,
+            "turn_text": job.turn_text,
+            "mem0_uid": job.mem0_uid,
+            "project_id": job.project_id,
+            "scenario_id": job.scenario_id,
+        }
+        try:
+            await process_extraction_job(payload)
+            status, error = "done", None
+        except Exception as exc:
+            status, error = "failed", str(exc)[:500]
+            audit_warn(
+                "memory.extract",
+                "job_failed",
+                job_id=job_id,
+                retry_count=job.retry_count,
+                reason=error,
+            )
+
+        # Update final status
+        async with AsyncSessionLocal() as session:
+            from datetime import datetime, timezone
+
+            await session.execute(
+                update(ExtractionJob)
+                .where(ExtractionJob.id == job_id)
+                .values(
+                    status=status if status == "done" or job.retry_count + 1 >= _MAX_RETRIES else "pending",
+                    retry_count=job.retry_count + 1,
+                    error=error,
+                    processed_at=datetime.now(timezone.utc),
+                )
+            )
+            await session.commit()
+
+        # Recursively drain more pending jobs
+        await _drain_pending_jobs()
+
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        logger.warning("[memory.extract] drain error: %s", exc)
 
 
 async def process_extraction_job(payload: dict[str, Any]) -> None:
-    """PII scrub → 8B extract → validate → Mem0 store."""
+    """PII scrub → 8B extract → validate → pgvector store."""
     turn_text = str(payload.get("turn_text", "")).strip()
     if not turn_text:
         return
@@ -122,11 +198,10 @@ async def process_extraction_job(payload: dict[str, Any]) -> None:
         return
 
     scrubbed, redactions = scrub_for_storage(turn_text)
-    scenario_id = payload.get("scenario_id")
     mem0_uid = str(payload.get("mem0_uid", "owner"))
     project_id = payload.get("project_id", "default")
 
-    from src.agent.llm import get_extraction_llm
+    from src.agent.llm import get_extraction_llm, get_small_llm
     from src.agent.local_llm_scheduler import invoke_medium_background
 
     messages_spec = build_extraction_messages(scrubbed, scenario_id)
@@ -147,38 +222,22 @@ async def process_extraction_job(payload: dict[str, Any]) -> None:
         audit_info("memory.extract", "no_atoms", redactions=redactions)
         return
 
-    from src.memory.long_term import memory
+    from src.memory.long_term import LongTermMemory
 
-    if memory is None:
-        audit_warn("memory.extract", "mem0_unavailable")
-        return
-
-    from src.agent.llm import get_small_llm
-    from langchain_core.messages import HumanMessage
-
+    ltm = LongTermMemory()
     small_llm = await get_small_llm()
     saved = 0
 
     for atom in atoms:
         content = atom["content"]
 
-        try:
-            results_dict = await asyncio.to_thread(
-                lambda: memory.search(
-                    content[:200], filters={"user_id": mem0_uid}, limit=3
-                )
-            )
-            existing_results = (
-                results_dict.get("results", [])
-                if isinstance(results_dict, dict)
-                else results_dict
-            )
-        except Exception:
-            existing_results = []
-
+        # Semantic dedup: search for similar existing memories
+        existing_results = await ltm.search(
+            content[:200], filters={"user_id": mem0_uid}, limit=3
+        )
         existing_facts = [
-            (r.get("id"), r.get("memory") or r.get("text", ""))
-            for r in existing_results
+            (r.get("id"), r.get("memory", ""))
+            for r in existing_results.get("results", [])
             if isinstance(r, dict)
         ]
 
@@ -189,7 +248,7 @@ async def process_extraction_job(payload: dict[str, Any]) -> None:
             )
             prompt = (
                 f"New fact: {content}\n\nExisting facts:\n{facts_str}\n\n"
-                "Compare the new fact to the existing facts. Output one of the following exact commands:\n"
+                "Compare the new fact to the existing facts. Output one of:\n"
                 "1. REDUNDANT - if the new fact is already covered.\n"
                 "2. NEW - if it is completely new.\n"
                 "3. DELETE <ID> - if the new fact supersedes the old one."
@@ -203,7 +262,7 @@ async def process_extraction_job(payload: dict[str, Any]) -> None:
                 parts = decision.split(" ")
                 if len(parts) >= 2:
                     try:
-                        await asyncio.to_thread(memory.delete, parts[1])
+                        await ltm.delete(parts[1])
                     except Exception:
                         pass
 
@@ -217,9 +276,7 @@ async def process_extraction_job(payload: dict[str, Any]) -> None:
                 "scenario_id": scenario_id or "",
                 "project_id": project_id,
             }
-            await asyncio.to_thread(
-                memory.add, content, user_id=mem0_uid, metadata=metadata, infer=False
-            )
+            await ltm.add(content, user_id=mem0_uid, metadata=metadata)
             saved += 1
 
     audit_info(

@@ -26,7 +26,7 @@ You are a task router. Classify the user's request into a route.
 
 Routes:
 - simple: greetings, thanks, trivial questions
-- complex-default: general coding, reasoning, multi-step tasks, and images
+- complex-local: general coding, reasoning, multi-step tasks, and images
 - complex-cloud: frontier-quality reasoning, proofs, advanced math
 
 Current model variant loaded: {current_variant}
@@ -55,7 +55,7 @@ Reply with exactly one JSON object (no markdown, no extra text):
 def _default_classification(*, cloud_available: bool = False) -> RouteClassification:
     """Return safe default classification on any failure."""
     return RouteClassification(
-        route="complex-cloud",
+        route="complex-local",
         confidence=0.5,
         toolbox=["all"],
         reasoning="fallback-default",
@@ -78,9 +78,9 @@ def parse_classification(content: str) -> RouteClassification:
 
         parsed = json.loads(match.group(0))
 
-        route = str(parsed.get("route", "complex-cloud")).lower().strip()
+        route = str(parsed.get("route", "complex-local")).lower().strip()
         if route not in VALID_ROUTES:
-            route = "complex-cloud"
+            route = "complex-local"
 
         confidence = float(parsed.get("confidence", 0.5))
 

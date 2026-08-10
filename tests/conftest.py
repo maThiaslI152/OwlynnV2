@@ -90,6 +90,7 @@ def setup_database_schema():
     # This prevents 'no such table' errors when xdist workers run subsets of tests
     import src.models.project
     import src.memory.scenarios
+    import src.memory.db_models
 
     async def _create_tables():
         async with engine.begin() as conn:

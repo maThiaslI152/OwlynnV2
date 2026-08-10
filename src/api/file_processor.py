@@ -53,11 +53,12 @@ class FileWatcherHandler(FileSystemEventHandler):
             invoked after each file is processed (or on error).
     """
 
-    def __init__(self, workspace_dir, on_processed_callback=None):
+    def __init__(self, workspace_dir, main_loop, on_processed_callback=None):
         self.workspace_dir = os.path.abspath(workspace_dir)
         self.processed_dir = os.path.join(self.workspace_dir, ".processed")
         os.makedirs(self.processed_dir, exist_ok=True)
         self._docling_converter = None
+        self.main_loop = main_loop
         self.on_processed_callback = on_processed_callback  # callback(filename)
 
     def on_created(self, event):
@@ -87,20 +88,10 @@ class FileWatcherHandler(FileSystemEventHandler):
         filename = os.path.basename(event.src_path)
         import asyncio
 
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                loop.create_task(
-                    VectorLifecycleManager.on_file_deleted(self.workspace_dir, filename)
-                )
-            else:
-                loop.run_until_complete(
-                    VectorLifecycleManager.on_file_deleted(self.workspace_dir, filename)
-                )
-        except RuntimeError:
-            asyncio.run(
-                VectorLifecycleManager.on_file_deleted(self.workspace_dir, filename)
-            )
+        asyncio.run_coroutine_threadsafe(
+            VectorLifecycleManager.on_file_deleted(self.workspace_dir, filename),
+            self.main_loop,
+        )
 
     def on_moved(self, event):
         if event.is_directory:
@@ -117,26 +108,12 @@ class FileWatcherHandler(FileSystemEventHandler):
         new_filename = os.path.basename(event.dest_path)
         import asyncio
 
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                loop.create_task(
-                    VectorLifecycleManager.on_file_renamed(
-                        self.workspace_dir, old_filename, new_filename
-                    )
-                )
-            else:
-                loop.run_until_complete(
-                    VectorLifecycleManager.on_file_renamed(
-                        self.workspace_dir, old_filename, new_filename
-                    )
-                )
-        except RuntimeError:
-            asyncio.run(
-                VectorLifecycleManager.on_file_renamed(
-                    self.workspace_dir, old_filename, new_filename
-                )
-            )
+        asyncio.run_coroutine_threadsafe(
+            VectorLifecycleManager.on_file_renamed(
+                self.workspace_dir, old_filename, new_filename
+            ),
+            self.main_loop,
+        )
 
     def _trigger_processing(self, filepath):
         # Skip hidden files and already processed files to prevent loops
@@ -173,6 +150,12 @@ class FileWatcherHandler(FileSystemEventHandler):
                 return
 
             self.process_file(filepath)
+        except ValueError as e:
+            # Ignore I/O operation on closed file during pytest teardown
+            if "I/O operation on closed file" not in str(e):
+                logger.error(
+                    f"[Watcher] ValueError in delayed process for {filepath}: {e}"
+                )
         except Exception as e:
             logger.error(f"[Watcher] Error in delayed process for {filepath}: {e}")
 
@@ -949,11 +932,12 @@ def _catchup_unprocessed_files(workspace_dir, handler):
         logger.error(f"[Watcher] Error during offline catch-up scan: {e}")
 
 
-def start_watcher(workspace_dir, on_processed_callback=None):
+def start_watcher(workspace_dir, main_loop, on_processed_callback=None):
     """Start the watchdog observer thread in the background.
 
     Args:
         workspace_dir: Path to the workspace directory to monitor.
+        main_loop: Main asyncio event loop.
         on_processed_callback: Optional callback ``(filename, status)``
             invoked after each file is processed.
 
@@ -962,7 +946,7 @@ def start_watcher(workspace_dir, on_processed_callback=None):
     """
     workspace_dir = os.path.abspath(workspace_dir)
     event_handler = FileWatcherHandler(
-        workspace_dir, on_processed_callback=on_processed_callback
+        workspace_dir, main_loop, on_processed_callback=on_processed_callback
     )
 
     # Sweep for files that were added/modified while the server was offline

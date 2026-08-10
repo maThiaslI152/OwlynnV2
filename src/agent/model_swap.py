@@ -146,6 +146,9 @@ async def swap_to_pentest() -> dict:
     small_key = _small_model_key()
     pentest_key = _pentest_model_key()
 
+    if config.get("models.provider", "lm_studio") == "ollama":
+        return {"ok": True, "message": "Using Ollama (auto-loads models on demand)."}
+
     async with httpx.AsyncClient() as client:
         # Check current state
         catalog = await _get_catalog(client)
@@ -177,6 +180,9 @@ async def swap_to_default() -> dict:
     """
     small_key = _small_model_key()
     pentest_key = _pentest_model_key()
+
+    if config.get("models.provider", "lm_studio") == "ollama":
+        return {"ok": True, "message": "Using Ollama (auto-loads models on demand)."}
 
     async with httpx.AsyncClient() as client:
         # Check current state

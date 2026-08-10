@@ -7,15 +7,23 @@ logger = logging.getLogger(__name__)
 
 _openai_client = None
 
+
 def get_openai_client():
     global _openai_client
     if _openai_client is None:
         try:
-            base_url = config.get("models.embedding.base_url", "http://127.0.0.1:1234/v1")
-            _openai_client = OpenAI(base_url=base_url, api_key="lm-studio")
+            provider = config.get("models.provider", "lm_studio")
+            default_base = (
+                "http://127.0.0.1:11434/v1"
+                if provider == "ollama"
+                else "http://127.0.0.1:1234/v1"
+            )
+            base_url = config.get("models.embedding.base_url", default_base)
+            _openai_client = OpenAI(base_url=base_url, api_key="sk-local-no-key-needed")
         except Exception as e:
             logger.error(f"Failed to create OpenAI client for embeddings: {e}")
     return _openai_client
+
 
 def rerank_tools(query: str, tools: list, top_k: int = 15) -> list:
     if len(tools) <= top_k:
@@ -32,12 +40,13 @@ def rerank_tools(query: str, tools: list, top_k: int = 15) -> list:
             t.description if hasattr(t, "description") else str(t) for t in tools
         ]
 
-        embed_model = config.get("models.embedding.model_name", "text-embedding-nomic-embed-text-v1.5-embedding")
+        embed_model = config.get(
+            "models.embedding.model_name",
+            "text-embedding-nomic-embed-text-v1.5-embedding",
+        )
 
         # Embed query and tools
-        res_query = client.embeddings.create(
-            input=[query], model=embed_model
-        )
+        res_query = client.embeddings.create(input=[query], model=embed_model)
         query_emb = np.array(res_query.data[0].embedding)
 
         res_tools = client.embeddings.create(

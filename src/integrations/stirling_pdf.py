@@ -25,6 +25,7 @@ from src.config.settings import (
 logger = logging.getLogger(__name__)
 
 _CONVERT_PDF_TEXT = "/api/v1/convert/pdf/text"
+_CONVERT_HTML_PDF = "/api/v1/convert/html/pdf"
 _OCR_PDF = "/api/v1/misc/ocr-pdf"
 _STATUS = "/api/v1/info/status"
 
@@ -186,3 +187,12 @@ def ocr_then_extract(
     """OCR a scanned PDF, then extract text from the OCR output."""
     ocr_bytes = ocr_pdf(file_path=file_path, file_bytes=file_bytes, filename=filename)
     return extract_text(file_bytes=ocr_bytes, filename=f"ocr_{filename}")
+
+
+def html_to_pdf(html_content: str, filename: str = "report.html") -> bytes:
+    """Convert HTML string to PDF bytes via StirlingPDF."""
+    return _post_file(
+        _CONVERT_HTML_PDF,
+        file_bytes=html_content.encode("utf-8"),
+        filename=filename,
+    )

@@ -5,6 +5,7 @@ Reviews pending tool calls, identifies sensitive operations, builds a
 human-readable plan summary with pitfalls, and interrupts for approval.
 """
 
+import hashlib
 import json
 import logging
 import re
@@ -35,6 +36,23 @@ def _tool_calls_from_last_message(state: AgentState) -> list[dict[str, Any]]:
         return []
     last = messages[-1]
     return list(getattr(last, "tool_calls", None) or [])
+
+
+def _hash_tool_calls(tool_calls: list[dict]) -> str:
+    """Compute a stable SHA-256 fingerprint of tool names + args.
+
+    Used by security_proxy to verify that the tools being approved are
+    exactly the ones the human reviewed — preventing LLM tool substitution
+    after plan approval.
+    """
+    canonical = json.dumps(
+        [
+            {"name": str(c.get("name", "")), "args": c.get("args", {})}
+            for c in tool_calls
+        ],
+        sort_keys=True,
+    )
+    return hashlib.sha256(canonical.encode()).hexdigest()
 
 
 def _has_sensitive_pending(state: AgentState) -> bool:
@@ -151,6 +169,9 @@ async def plan_review_node(state: AgentState) -> AgentState:
         )
         return {
             "plan_review_approved": True,
+            # Fingerprint of the exact tools+args approved by the human.
+            # security_proxy checks this hash to detect LLM tool substitution.
+            "plan_review_tool_hash": _hash_tool_calls(tool_calls),
             "plan_review_feedback": decision.get("feedback", "")
             if isinstance(decision, dict)
             else "",

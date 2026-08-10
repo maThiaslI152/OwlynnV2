@@ -10,7 +10,7 @@ from src.memory.long_term import memory as mem0_memory
 
 @router.get("/api/memories")
 async def api_get_memories():
-    return load_memories()
+    return await load_memories()
 
 
 @router.get("/api/templates/{template_id}")
@@ -43,8 +43,8 @@ async def api_add_memory(body: dict):
     fact = body.get("fact")
     if not fact:
         return {"status": "error", "message": "Fact required"}
-    result = save_memory(fact)
-    return {"status": "ok", "message": result, "memories": load_memories()}
+    result = await save_memory(fact)
+    return {"status": "ok", "message": result, "memories": await load_memories()}
 
 
 @router.delete("/api/memories")
@@ -52,8 +52,8 @@ async def api_delete_memory(body: dict):
     fact = body.get("fact")
     if not fact:
         return {"status": "error", "message": "Fact required"}
-    success = delete_memory(fact)
-    return {"status": "ok" if success else "error", "memories": load_memories()}
+    success = await delete_memory(fact)
+    return {"status": "ok" if success else "error", "memories": await load_memories()}
 
 
 # ─── Mem0 LTM API endpoints ──────────────────────────────────────────

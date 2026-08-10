@@ -54,7 +54,11 @@ def is_loopback_client(request: Request) -> bool:
 
     try:
         ip = ipaddress.ip_address(host)
-        return ip.is_loopback or ip.is_private
+        # Only trust true loopback (127.x.x.x / ::1).
+        # Removing ip.is_private — the RFC-1918 private range (10.x, 172.16.x, 192.168.x)
+        # could allow access from VPN peers or shared-network devices if the server
+        # were ever misconfigured to bind on 0.0.0.0 instead of 127.0.0.1.
+        return ip.is_loopback
     except ValueError:
         return False
 

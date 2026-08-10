@@ -65,6 +65,31 @@ def resolve_deepseek_api_key() -> str:
     return profile_key
 
 
+def resolve_openrouter_api_key() -> str:
+    """Resolve the OpenRouter API key in priority order."""
+    key = os.environ.get("OPENROUTER_API_KEY", "").strip()
+    if key:
+        return key
+
+    try:
+        if _SECRETS_ENV_PATH.exists():
+            for line in _SECRETS_ENV_PATH.read_text(encoding="utf-8").splitlines():
+                if line.startswith("OPENROUTER_API_KEY="):
+                    file_key = line.split("=", 1)[1].strip()
+                    # Strip single quotes if they were added by the writer
+                    if file_key.startswith("'") and file_key.endswith("'"):
+                        file_key = file_key[1:-1]
+                    if file_key:
+                        return file_key
+    except Exception as e:
+        logger.debug("Failed to read secrets.env for OpenRouter: %s", e)
+
+    from src.memory.user_profile import get_profile
+
+    profile = get_profile()
+    return (profile.get("openrouter_api_key") or "").strip()
+
+
 def store_deepseek_api_key(api_key: str) -> None:
     """Store the DeepSeek API key in ~/.owlynn/secrets.env.
 
@@ -85,10 +110,10 @@ def store_deepseek_api_key(api_key: str) -> None:
     os.environ["DEEPSEEK_API_KEY"] = key
 
     # Write to ~/.owlynn/secrets.env for terminal session sourcing
-    _write_secrets_env(key)
+    _write_secrets_env("DEEPSEEK_API_KEY", key)
 
     # Clear from legacy profile
-    _clear_profile_key()
+    _clear_profile_key("deepseek_api_key")
 
 
 def delete_deepseek_api_key() -> None:
@@ -96,7 +121,25 @@ def delete_deepseek_api_key() -> None:
     _clear_profile_key()
     # Remove from env and secrets file
     os.environ.pop("DEEPSEEK_API_KEY", None)
-    _write_secrets_env("")
+    _write_secrets_env("DEEPSEEK_API_KEY", "")
+
+
+def store_openrouter_api_key(api_key: str) -> None:
+    """Store the OpenRouter API key."""
+    if not api_key or not api_key.strip():
+        raise ValueError("API key must be non-empty")
+
+    key = api_key.strip()
+    os.environ["OPENROUTER_API_KEY"] = key
+    _write_secrets_env("OPENROUTER_API_KEY", key)
+    _clear_profile_key("openrouter_api_key")
+
+
+def delete_openrouter_api_key() -> None:
+    """Remove the OpenRouter API key."""
+    _clear_profile_key("openrouter_api_key")
+    os.environ.pop("OPENROUTER_API_KEY", None)
+    _write_secrets_env("OPENROUTER_API_KEY", "")
 
 
 def verify_deepseek_api_key(api_key: str) -> tuple[bool, str]:
@@ -164,24 +207,18 @@ def verify_deepseek_api_key(api_key: str) -> tuple[bool, str]:
 # ── private helpers ──────────────────────────────────────────────
 
 
-def _write_secrets_env(api_key: str) -> None:
-    """Write (or clear) DEEPSEEK_API_KEY in ~/.owlynn/secrets.env.
-
-    The file is shell-sourceable: ``source ~/.owlynn/secrets.env``.
-    An empty ``api_key`` removes the line from the file.
-    Uses atomic write (temp + rename) to prevent corruption on crash.
-    """
+def _write_secrets_env(key_name: str, api_key: str) -> None:
+    """Write (or clear) an API key in ~/.owlynn/secrets.env."""
     try:
         _SECRETS_ENV_PATH.parent.mkdir(parents=True, exist_ok=True)
         existing_lines: list[str] = []
         if _SECRETS_ENV_PATH.exists():
             existing_lines = _SECRETS_ENV_PATH.read_text(encoding="utf-8").splitlines()
-        # Remove any previous DEEPSEEK_API_KEY line
-        filtered = [
-            ln for ln in existing_lines if not ln.startswith("DEEPSEEK_API_KEY=")
-        ]
+        # Remove any previous line for this key
+        filtered = [ln for ln in existing_lines if not ln.startswith(f"{key_name}=")]
         if api_key:
-            filtered.append(f"DEEPSEEK_API_KEY={api_key}")
+            escaped = api_key.replace("'", "'\"'\"'")
+            filtered.append(f"{key_name}='{escaped}'")
         tmp = _SECRETS_ENV_PATH.with_suffix(".tmp")
         tmp.write_text(
             "\n".join(filtered) + ("\n" if filtered else ""), encoding="utf-8"
@@ -189,7 +226,8 @@ def _write_secrets_env(api_key: str) -> None:
         tmp.replace(_SECRETS_ENV_PATH)
         _SECRETS_ENV_PATH.chmod(0o600)  # owner read/write only
         logger.info(
-            "DeepSeek API key %s in %s",
+            "%s %s in %s",
+            key_name,
             "written" if api_key else "removed",
             _SECRETS_ENV_PATH,
         )
@@ -197,16 +235,16 @@ def _write_secrets_env(api_key: str) -> None:
         logger.warning("Failed to update secrets.env: %s", e)
 
 
-def _clear_profile_key() -> None:
-    """Clear the deepseek_api_key field from user profile."""
+def _clear_profile_key(key_name: str = "deepseek_api_key") -> None:
+    """Clear the api key field from user profile."""
     try:
         from src.memory.user_profile import get_profile, _save_profile
 
         profile = get_profile()
-        if profile.get("deepseek_api_key"):
-            profile["deepseek_api_key"] = ""
+        if profile.get(key_name):
+            profile[key_name] = ""
             _save_profile(profile)
-            logger.info("Cleared deepseek_api_key from user_profile.json")
+            logger.info("Cleared %s from user_profile.json", key_name)
     except Exception as e:
         logger.warning("Failed to clear profile key: %s", e)
 

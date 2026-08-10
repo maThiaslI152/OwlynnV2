@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { useAppStore } from '../../state/useAppStore'
-import { Composer } from '../Composer'
-import { OrchestrationPanel } from '../OrchestrationPanel'
-import { SafeModePanel } from '../SafeModePanel'
-import { ProjectKnowledgePanel } from '../ProjectKnowledgePanel'
-import { AppShell } from '../AppShell'
+import { Composer } from '../chat/Composer'
+import { OrchestrationPanel } from '../shared/OrchestrationPanel'
+import { SafeModePanel } from '../shared/SafeModePanel'
+import { ProjectKnowledgePanel } from '../shared/ProjectKnowledgePanel'
+import { AppShell } from '../layout/AppShell'
 import { WORKSPACE_REF_DRAG_TYPE, workspaceRefAttachment } from '../../lib/attachments'
 
 const mockSetSafeMode = vi.hoisted(() =>

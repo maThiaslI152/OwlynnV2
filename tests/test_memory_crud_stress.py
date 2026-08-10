@@ -2,10 +2,9 @@
 Stress tests for concurrent operations on MemoryManager and PersonalAssistant.
 """
 
-import threading
+import asyncio
 import time
 import unittest
-from concurrent.futures import ThreadPoolExecutor
 
 from src.memory.memory_manager import (
     save_memory,
@@ -20,58 +19,53 @@ from src.memory.personal_assistant import (
 )
 
 
-class TestMemoryCRUDStress(unittest.TestCase):
-    def setUp(self):
+class TestMemoryCRUDStress(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
         # Clear out memories to start fresh
-
-        # Note: We do not clear topics/interests strictly here to avoid wiping local dev data,
-        # but we use unique keys to isolate test data.
         self.test_id = str(time.time())
 
-    def test_concurrent_stm_saves(self):
+    async def test_concurrent_stm_saves(self):
         """Concurrent saves to STM should not lose any facts."""
-        num_threads = 40
-        facts_to_save = [f"Stress fact {self.test_id} #{i}" for i in range(num_threads)]
+        num_tasks = 40
+        facts_to_save = [f"Stress fact {self.test_id} #{i}" for i in range(num_tasks)]
 
-        def _save_fact(fact):
-            save_memory(fact)
+        async def _save_fact(fact):
+            await save_memory(fact)
 
-        with ThreadPoolExecutor(max_workers=10) as pool:
-            list(pool.map(_save_fact, facts_to_save))
+        await asyncio.gather(*[_save_fact(f) for f in facts_to_save])
 
-        memories = load_memories()
+        memories = await load_memories()
         saved_facts = {m.get("fact") for m in memories}
 
         # Verify all our unique facts made it
         for fact in facts_to_save:
             self.assertIn(fact, saved_facts)
 
-    def test_concurrent_personal_assistant_updates(self):
+    async def test_concurrent_personal_assistant_updates(self):
         """Concurrent updates to topics and interests should not clobber each other."""
-        num_threads = 50
+        num_tasks = 50
         category = f"stress_category_{self.test_id}"
         topic_name = "concurrent_topic"
 
-        def _update(_):
-            track_topic(category, topic_name, strength=1.0)
-            update_interests({f"stress_interest_{self.test_id}": True})
+        async def _update():
+            await track_topic(category, topic_name, strength=1.0)
+            await update_interests({f"stress_interest_{self.test_id}": True})
 
-        with ThreadPoolExecutor(max_workers=10) as pool:
-            list(pool.map(_update, range(num_threads)))
+        await asyncio.gather(*[_update() for _ in range(num_tasks)])
 
-        topics = load_topics()
+        topics = await load_topics()
         self.assertIn(category, topics)
 
         topic_entry = next(
             (t for t in topics[category] if t["name"] == topic_name), None
         )
         self.assertIsNotNone(topic_entry)
-        self.assertEqual(topic_entry["occurrences"], num_threads)
+        self.assertEqual(topic_entry["occurrences"], num_tasks)
 
-        interests = load_interests()
+        interests = await load_interests()
         self.assertIn(f"stress_interest_{self.test_id}", interests)
         self.assertEqual(
-            interests[f"stress_interest_{self.test_id}"]["count"], num_threads
+            interests[f"stress_interest_{self.test_id}"]["count"], num_tasks
         )
 
 

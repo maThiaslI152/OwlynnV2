@@ -98,9 +98,10 @@ def estimate_token_budget(user_text: str, route: str) -> int:
         input_reserve = int(reserves_cfg.get("cloud", 8000))
         budget_max = int(budget_max_cfg.get("cloud", 16384))
     else:
-        context = _MEDIUM_DEFAULT_CONTEXT
+        # Default to complex-local
+        context = int(config.get("models.complex_local.context_window", 65536))
         input_reserve = int(reserves_cfg.get("default", 4000))
-        budget_max = int(budget_max_cfg.get("other", 8192))
+        budget_max = int(budget_max_cfg.get("other", 16384))
 
     text_len = len(user_text)
     text_lower = user_text.lower()
@@ -151,11 +152,26 @@ def _check_cloud_available() -> bool:
     return bool(api_key)
 
 
+def _check_travel_mode() -> bool:
+    """Check if Travel Mode is enabled via profile or Eco-Mode."""
+    travel_mode = get_profile().get("travel_mode", False)
+    if not travel_mode:
+        try:
+            from src.api.power_monitor import ECO_MODE
+            if ECO_MODE:
+                travel_mode = True
+        except ImportError:
+            pass
+    return travel_mode
+
 def _preferred_complex_route(cloud_available: bool | None = None) -> str:
-    """Default complex route: cloud when escalation is available, else local."""
+    """Default complex route: local-first, cloud on travel/fallback."""
     if cloud_available is None:
         cloud_available = _check_cloud_available()
-    return "complex-cloud" if cloud_available else "complex-default"
+    
+    if _check_travel_mode() and cloud_available:
+        return "complex-cloud"
+    return "complex-local"
 
 
 def _has_image_content(state: AgentState) -> bool:
@@ -201,46 +217,30 @@ def _resolve_complex_route(
     *,
     cloud_available: bool | None = None,
 ) -> tuple[str, list[str]]:
-    """Given a complex classification, pick the specific route.
-
-    Returns (route, toolbox) — toolbox may be adjusted.
-    """
+    """Given a complex classification, pick the specific route (local-first or cloud)."""
     if cloud_available is None:
         cloud_available = _check_cloud_available()
 
     scenario_id = state.get("scenario_id")
     if scenario_id == "pentest":
-        return "complex-default", toolbox
+        return "complex-local", toolbox
+
+    if _check_travel_mode() and cloud_available:
+        return "complex-cloud", toolbox
 
     text_len = len(user_text)
     estimated_input = 4000 + (text_len // 4)
+    _LOCAL_MAX_CONTEXT = int(config.get("models.complex_local.context_window", 65536))
 
-    if _has_image_content(state):
+    if estimated_input > _LOCAL_MAX_CONTEXT * 0.80:
         if cloud_available:
             return "complex-cloud", toolbox
-        return "complex-default", toolbox
-
-    if cloud_available and "web_search" in toolbox:
-        return "complex-cloud", toolbox
-
-    if estimated_input > _MEDIUM_LONGCTX_CONTEXT * 0.80:
-        if cloud_available:
-            return "complex-cloud", toolbox
-        return "complex-default", toolbox
-
-    if estimated_input > _MEDIUM_DEFAULT_CONTEXT * 0.80:
-        if cloud_available:
-            return "complex-cloud", toolbox
-        return "complex-default", toolbox
 
     if _needs_frontier_quality(user_text):
         if cloud_available:
             return "complex-cloud", toolbox
-        return "complex-default", toolbox
 
-    if cloud_available:
-        return "complex-cloud", toolbox
-    return "complex-default", toolbox
+    return "complex-local", toolbox
 
 
 def _build_router_metadata(

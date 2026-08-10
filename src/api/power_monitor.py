@@ -9,14 +9,28 @@ logger = logging.getLogger(__name__)
 ECO_MODE = False
 
 
-def is_on_battery() -> bool:
-    """Synchronously check if Mac is running on battery using pmset."""
+async def is_on_battery() -> bool:
+    """Asynchronously check if Mac is running on battery using pmset."""
     try:
-        result = subprocess.run(
-            ["pmset", "-g", "batt"], capture_output=True, text=True, check=True
+        proc = await asyncio.create_subprocess_exec(
+            "pmset",
+            "-g",
+            "batt",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
-        # 'pmset -g batt' outputs "Now drawing from 'Battery Power'" when unplugged
-        return "Now drawing from 'Battery Power'" in result.stdout
+        stdout, _ = await proc.communicate()
+        if stdout:
+            # 'pmset -g batt' outputs "Now drawing from 'Battery Power'" when unplugged
+            return "Now drawing from 'Battery Power'" in stdout.decode()
+        return False
+    except asyncio.CancelledError:
+        if "proc" in locals():
+            try:
+                proc.terminate()
+            except Exception:
+                pass
+        raise
     except Exception as e:
         logger.warning("Failed to check battery status: %s", e)
         return False
@@ -44,11 +58,11 @@ async def power_monitor_loop():
     logger.info("Power monitor loop started.")
 
     # Initialize state
-    ECO_MODE = is_on_battery()
+    ECO_MODE = await is_on_battery()
 
     while True:
         try:
-            current_battery_state = is_on_battery()
+            current_battery_state = await is_on_battery()
             if current_battery_state != ECO_MODE:
                 logger.info("Power state changed. Eco-Mode: %s", current_battery_state)
                 ECO_MODE = current_battery_state

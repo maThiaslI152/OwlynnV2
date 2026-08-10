@@ -24,6 +24,7 @@ export interface ChatSlice {
   contextCompression: CompressionInfo | null
   
   setConnectionState: (state: ConnectionState) => void
+  setMessages: (messages: ChatMessage[]) => void
   addMessage: (message: ChatMessage) => void
   appendStreamChunk: (chunk: string) => void
   setPendingCorrelationId: (id: string | null) => void
@@ -51,6 +52,7 @@ export const createChatSlice: StateCreator<ChatSlice, [], [], ChatSlice> = (set)
   contextCompression: null,
 
   setConnectionState: (connectionState) => set({ connectionState }),
+  setMessages: (messages) => set({ messages }),
   addMessage: (message) =>
     set((state) => ({
       messages: [...state.messages, message],

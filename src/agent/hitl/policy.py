@@ -10,15 +10,17 @@ SAFE_TOOLS = {
     "capture_local_terminal",
     "read_screen_element",
     "get_active_browser_context",
-    "capture_kali_terminal",
+    # NOTE: capture_kali_terminal is intentionally NOT here — moved to SENSITIVE_TOOLS
+    # because it reads live terminal state that may contain plaintext credentials.
     "wifi_analyze_pcap",
     "wifi_wps_scan",
     "wifi_scan",
     "searchsploit",
     "cve_lookup",
     "subfinder",
-    "shodan_search",
-    "censys_search",
+    # NOTE: shodan_search and censys_search are intentionally NOT here — moved to
+    # SENSITIVE_TOOLS because they make outbound API calls with engagement target data,
+    # which constitutes target intelligence exfiltration without user approval.
     "burp_get_issues",
     "poc_generator",
     "cvss_calculator",
@@ -55,6 +57,11 @@ SENSITIVE_TOOLS = {
     "s3_enum",
     "burp_scan_target",
     "hackerone_submit",
+    # Moved from SAFE_TOOLS — makes outbound API calls with target intelligence
+    "shodan_search",
+    "censys_search",
+    # Moved from SAFE_TOOLS — reads live terminal state that may contain credentials
+    "capture_kali_terminal",
 }
 
 SENSITIVE_PATTERN_RE = re.compile(

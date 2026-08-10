@@ -92,8 +92,10 @@ _ALLOWED_MODULES = {
     "typing",
     "dataclasses",
     "enum",
-    "pathlib",
-    "os.path",
+    # NOTE: pathlib and os.path intentionally excluded.
+    # pathlib.Path.read_bytes() / write_bytes() bypass the removed `open` builtin
+    # by calling OS-level syscalls directly, enabling sandbox escape.
+    # pathlib also exposes pathlib.os which gives access to os.system.
     "hashlib",
     "hmac",
     "secrets",

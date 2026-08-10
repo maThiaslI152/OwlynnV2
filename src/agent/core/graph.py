@@ -77,7 +77,7 @@ def summarize_gate(state: AgentState) -> str:
 
 
 def route_decision(state: AgentState) -> str:
-    route = state.get("route", "complex-cloud")
+    route = state.get("route", "complex-local")
     set_route(route)
     if route == "simple":
         audit_debug(
@@ -288,9 +288,9 @@ def build_graph():
     )
 
     def browser_local_next(state: AgentState) -> str:
-        # If route was changed to complex-cloud (via handoff), go to scope_clarify or complex_llm
+        # If route was changed to complex-cloud or complex-local (via handoff), go to scope_clarify
         route = state.get("route")
-        if route == "complex-cloud":
+        if route in ("complex-cloud", "complex-local"):
             return "scope_clarify"
         # Otherwise, check if there are pending tool calls
         messages = list(state.get("messages") or [])
@@ -389,7 +389,7 @@ def build_graph():
 
 # --- Init Agent Async Wrapper ---
 from langgraph.checkpoint.memory import MemorySaver
-from src.config.settings import MCP_CONFIG_PATH, REDIS_URL
+from src.config.settings import MCP_CONFIG_PATH
 from src.tools.mcp_client import mcp_manager
 from src.config.secret_store import resolve_deepseek_api_key
 from src.agent.cloud.cloud_circuit_breaker import reset_circuit_breaker
@@ -483,22 +483,7 @@ async def _verify_checkpointer_write(checkpointer) -> bool:
         result = await checkpointer.aget_tuple(config)
         if result is None:
             return False
-        # Clean up test data
-        try:
-            import redis.asyncio as aioredis
-
-            client = aioredis.from_url(REDIS_URL)
-            async for key in client.scan_iter(
-                match=f"checkpoint:{test_thread}:*", count=10
-            ):
-                await client.delete(key)
-            async for key in client.scan_iter(
-                match=f"checkpoint_latest:{test_thread}:*", count=10
-            ):
-                await client.delete(key)
-            await client.aclose()
-        except Exception:
-            pass  # cleanup is best-effort
+        # Note: Test thread data is left in the DB as cleanup is backend-specific.
         return True
     except Exception as e:
         logger.warning("Checkpointer write-test failed: %s", e)
@@ -506,7 +491,7 @@ async def _verify_checkpointer_write(checkpointer) -> bool:
 
 
 async def init_agent(checkpointer=None):
-    """Initializes the agent with Redis checkpointer (falls back to MemorySaver)."""
+    """Initializes the agent with Postgres checkpointer (falls back to MemorySaver)."""
     try:
         await mcp_manager.initialize(str(MCP_CONFIG_PATH))
     except Exception as e:
@@ -526,25 +511,24 @@ async def init_agent(checkpointer=None):
 
     if checkpointer is None:
         try:
-            from langgraph.checkpoint.redis.aio import AsyncRedisSaver
+            from src.agent.core.checkpointer import get_postgres_saver
 
-            checkpointer = AsyncRedisSaver(redis_url=REDIS_URL)
-            await checkpointer.setup()
+            checkpointer = await get_postgres_saver()
 
             # Verify the checkpointer can actually write (round-trip test)
             _test_passed = await _verify_checkpointer_write(checkpointer)
             if _test_passed:
-                logger.info("Using Redis checkpointer at %s", REDIS_URL)
-                # Start background eviction of stale checkpoint keys (runs every 24h)
-                _asyncio.ensure_future(_evict_stale_checkpoints(REDIS_URL))
+                logger.info("Using Postgres checkpointer")
             else:
                 logger.warning(
-                    "Redis checkpointer write-test failed — falling back to MemorySaver. "
+                    "Postgres checkpointer write-test failed — falling back to MemorySaver. "
                     "Conversations will NOT persist across restarts."
                 )
                 checkpointer = MemorySaver()
         except Exception as e:
-            logger.warning("Redis unavailable (%s), falling back to MemorySaver", e)
+            logger.warning(
+                "Postgres checkpointer unavailable (%s), falling back to MemorySaver", e
+            )
             checkpointer = MemorySaver()
 
     # Initialize the semantic cache (non-blocking, degrades gracefully on error)
@@ -556,40 +540,6 @@ async def init_agent(checkpointer=None):
         logger.warning("Semantic cache init failed: %s", e)
 
     return builder.compile(checkpointer=checkpointer)
-
-
-async def _evict_stale_checkpoints(redis_url: str, max_age_days: int = 30):
-    """
-    Background task that scans Redis for LangGraph checkpoint keys older than
-    `max_age_days` and deletes them to prevent unbounded memory growth.
-    Runs once on startup then repeats every 24 hours.
-    """
-    import asyncio
-    import redis.asyncio as aioredis
-
-    max_age_secs = max_age_days * 86_400
-    while True:
-        try:
-            client = aioredis.from_url(redis_url)
-            cursor = 0
-            evicted = 0
-            async for key in client.scan_iter(match="checkpoint:*", count=500):
-                ttl = await client.ttl(key)
-                if ttl == -1:  # No TTL set — check creation time via OBJECT IDLETIME
-                    idle = await client.object("IDLETIME", key)
-                    if idle is not None and idle > max_age_secs:
-                        await client.delete(key)
-                        evicted += 1
-            await client.aclose()
-            if evicted:
-                logger.info(
-                    "[checkpoint-evict] Evicted %d stale checkpoint keys (> %d days idle)",
-                    evicted,
-                    max_age_days,
-                )
-        except Exception as e:
-            logger.warning("[checkpoint-evict] Error during eviction scan: %s", e)
-        await asyncio.sleep(86_400)  # Sleep 24 hours
 
 
 async def _log_cloud_connectivity():

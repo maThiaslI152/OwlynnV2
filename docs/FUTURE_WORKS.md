@@ -101,3 +101,17 @@ While the major known bugs are squashed, the project's `STATUS.md` outlines seve
 17. **Wireless Pentest Tools**
     - **Why:** Users want WiFi scanning, deauthentication, and handshake capture tools for wireless pentesting.
     - **Action:** Add tools for `aircrack-ng`, `airodump-ng`, `aireplay-ng` with proper safety checks and HITL approval.
+
+## 🟣 P6: Architecture Overhaul (Evaluation Topics 3, 4, 5)
+
+18. **Unified State Management** (Topic 3)
+    - **Why:** State is currently fragmented across Redis, JSON files (STM), Mem0 + Qdrant (LTM), and PostgreSQL, leading to desyncs and race conditions.
+    - **Action:** Migrate to a single relational source of truth (PostgreSQL/SQLite) and build a unified `MemoryProvider` interface for all memory tiers.
+
+19. **Backend-Driven Native Integration** (Topic 4)
+    - **Why:** Desktop-native features like Screen Assist and TTS are locked behind Electron IPC, breaking browser parity and complicating the codebase.
+    - **Action:** Move macOS accessibility and TTS into the Python backend using `pyobjc`/`osascript`, making Electron a thin webview and switching to Playwright MCP for browser automation.
+
+20. **Pentest Sandbox & API Safety** (Topic 5)
+    - **Why:** The Kali Lima VM network bridging is fragile, and relying on regex to block destructive bash commands is a severe security risk.
+    - **Action:** Replace Lima VM with a rootless Docker container sandbox. Transition from raw bash execution to structured API wrappers for pentest tools (e.g., `run_nmap`).

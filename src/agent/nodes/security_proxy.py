@@ -301,23 +301,42 @@ async def security_proxy_node(state: AgentState) -> AgentState:
             log_hitl_event("hitl_skipped", decision="execution_policy_auto")
             approved = True
         # ── Dedup: skip second interrupt when plan_review already approved ────
+        # SECURITY: only skip if the tool calls are IDENTICAL to what was reviewed.
+        # If the LLM substituted a different tool after plan_review approved, we must
+        # run the full interrupt — otherwise an attacker can swap in a dangerous tool
+        # and have it auto-approved via the stale plan_review_approved flag.
         elif state.get("plan_review_approved"):
-            logger.info(
-                "[security_proxy] Plan review already approved — skipping duplicate interrupt"
-            )
-            log_hitl_event(
-                "hitl_skipped",
-                decision="plan_review_dedup",
-                sensitive_count=len(sensitive_calls),
-            )
-            return {
-                "execution_approved": True,
-                "security_decision": "approved",
-                "security_reason": "Plan review approved; security proxy skipped duplicate interrupt.",
-                "pending_tool_names": [
-                    str(c.get("name", "unknown")) for c in tool_calls
-                ],
-            }
+            from src.agent.nodes.plan_review import _hash_tool_calls
+
+            reviewed_hash = state.get("plan_review_tool_hash", "")
+            current_hash = _hash_tool_calls(tool_calls)
+
+            if reviewed_hash and reviewed_hash == current_hash:
+                logger.info(
+                    "[security_proxy] Plan review already approved (tool hash verified) — skipping duplicate interrupt"
+                )
+                log_hitl_event(
+                    "hitl_skipped",
+                    decision="plan_review_dedup",
+                    sensitive_count=len(sensitive_calls),
+                )
+                return {
+                    "execution_approved": True,
+                    "security_decision": "approved",
+                    "security_reason": "Plan review approved; security proxy skipped duplicate interrupt.",
+                    "pending_tool_names": [
+                        str(c.get("name", "unknown")) for c in tool_calls
+                    ],
+                }
+            else:
+                # Tool calls changed after plan review — fall through to full interrupt.
+                logger.warning(
+                    "[security_proxy] Tool hash mismatch after plan_review approval — "
+                    "LLM may have substituted tool calls. Running full security interrupt. "
+                    "reviewed=%s current=%s",
+                    reviewed_hash[:12] if reviewed_hash else "none",
+                    current_hash[:12],
+                )
         else:
             enriched_payload = enrich_interrupt(
                 {

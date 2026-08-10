@@ -11,6 +11,7 @@ STYLE_INSTRUCTIONS: dict[str, str] = {
     "learning": (
         "\n\nResponse style: Learning mode — teach clearly: define terms, use a concrete example "
         "where helpful, and build from simple to more detailed. "
+        "CRITICAL: Keep your prose concise (under 3 short paragraphs max). Do not write walls of text! "
         "Prefer interactive blocks (`render_interactive_block` or owlynn-* fences) over walls "
         "of text: one brief intro sentence, then the widget. "
         "When the user asks for flashcards, call `flashcard_deck_create` (≥5 pairs). "

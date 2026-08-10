@@ -51,7 +51,7 @@ services:
     mem_limit: 2g
 
   postgres:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:pg15
     container_name: owlynn_postgres
     environment:
       POSTGRES_USER: owlynn

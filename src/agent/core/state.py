@@ -62,6 +62,7 @@ class AgentState(TypedDict):
     scenario_context: str | None  # Loaded scenario markdown block
     persona: str | None  # Persona summary string
     persona_id: str | None  # Active persona ID (e.g. 'coder', 'writer', 'default')
+    pentest_current_phase: str | None  # Track phase for context truncation
 
     # Toolbox names selected by the router (e.g. ["web_search", "file_ops"] or ["all"])
     selected_toolboxes: list[str] | None

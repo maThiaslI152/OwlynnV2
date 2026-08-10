@@ -101,3 +101,8 @@ redis_data/
 *.rdb
 *.aof
 *.log
+
+# Local SQLite Database
+local.db
+*.coverage.*
+*.patch

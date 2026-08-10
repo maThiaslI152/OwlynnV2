@@ -872,11 +872,11 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     security_reason = state.get("security_reason")
     profile = get_profile()
 
-    route = state.get("route") or "complex-cloud"
+    route = state.get("route") or "complex-local"
     has_images = _message_has_image_content(thread_messages) or bool(
         (state.get("router_metadata") or {}).get("has_images")
     )
-    vision_task = has_images and route == "complex-cloud"
+    vision_task = has_images and route in ("complex-cloud", "complex-local")
     knowledge_context = state.get("knowledge_context") or "None"
     force_web_synthesis = web_on and not vision_task and web_budget.force_synthesis
 
@@ -1406,7 +1406,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     retry_still_dsml = False
     if (
         force_web_synthesis
-        and route == "complex-cloud"
+        and route in ("complex-cloud", "complex-local")
         and "fallback" not in model_label
         and needs_web_synthesis_retry(
             has_tool_calls=has_tool_calls,
@@ -1503,20 +1503,6 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                     has_tool_calls = bool(getattr(response, "tool_calls", None))
                 out_messages = [nudge, response]
 
-    # Strip thinking tags and DSML pseudo-tool markup from assistant responses
-    for i, msg in enumerate(out_messages):
-        if isinstance(msg, AIMessage) and msg.content:
-            cleaned = _strip_dsml_blocks(_strip_thinking_tags(str(msg.content)))
-            if cleaned != msg.content:
-                out_messages[i] = AIMessage(
-                    content=cleaned,
-                    tool_calls=list(getattr(msg, "tool_calls", None) or []),
-                    additional_kwargs=dict(
-                        getattr(msg, "additional_kwargs", None) or {}
-                    ),
-                    id=getattr(msg, "id", None),
-                )
-
     # ── Cutoff detection: auto-continue if LLM hit token budget ────────────
     _cutoff_round = state.get("_cutoff_round", 0)
 
@@ -1529,6 +1515,22 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         and completion_tokens
         >= (state.get("token_budget") or _DEFAULT_TOKEN_BUDGET) - 15
     )
+
+    # Strip thinking tags and DSML pseudo-tool markup from assistant responses
+    for i, msg in enumerate(out_messages):
+        if isinstance(msg, AIMessage) and msg.content:
+            cleaned = _strip_dsml_blocks(_strip_thinking_tags(str(msg.content)))
+            if is_length_cutoff and cleaned.count("```") % 2 != 0:
+                cleaned += "\n```\n"
+            if cleaned != msg.content:
+                out_messages[i] = AIMessage(
+                    content=cleaned,
+                    tool_calls=list(getattr(msg, "tool_calls", None) or []),
+                    additional_kwargs=dict(
+                        getattr(msg, "additional_kwargs", None) or {}
+                    ),
+                    id=getattr(msg, "id", None),
+                )
 
     if (
         not has_tool_calls
@@ -1618,11 +1620,11 @@ async def complex_tool_action_node(state: AgentState) -> AgentState:
         web_on = True
     web_on = bool(web_on)
 
-    route = state.get("route") or "complex-cloud"
+    route = state.get("route") or "complex-local"
     has_images = _message_has_image_content(current_messages) or bool(
         (state.get("router_metadata") or {}).get("has_images")
     )
-    vision_task = has_images and route == "complex-cloud"
+    vision_task = has_images and route in ("complex-cloud", "complex-local")
     tools = _resolve_complex_tools(
         state, current_messages, web_on=web_on, vision_task=vision_task
     )

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import { HitlPromptCard, type HitlPromptViewModel } from '../HitlPromptCard'
-import { ToolActivityCard, type ToolActivitySnapshot } from '../ToolActivityCard'
+import { HitlPromptCard, type HitlPromptViewModel } from '../chat/HitlPromptCard'
+import { ToolActivityCard, type ToolActivitySnapshot } from '../chat/ToolActivityCard'
 
 beforeEach(() => {
   vi.clearAllMocks()

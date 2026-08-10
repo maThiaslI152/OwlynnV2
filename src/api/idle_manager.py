@@ -64,6 +64,9 @@ async def _get_loaded_model_key() -> Optional[str]:
 
 async def _unload_llm() -> None:
     """Unload the current model from LM Studio to free unified memory."""
+    if config.get("models.provider", "lm_studio") == "ollama":
+        return
+
     model_key = (
         config.get("models.small.lm_studio_model_key") or await _get_loaded_model_key()
     )
@@ -91,6 +94,9 @@ async def ensure_llm_loaded() -> None:
     We send a lightweight completions ping with a short timeout so the model
     is warm before the real graph invocation begins.
     """
+    if config.get("models.provider", "lm_studio") == "ollama":
+        return
+
     global _llm_unloaded
     if not _llm_unloaded:
         return

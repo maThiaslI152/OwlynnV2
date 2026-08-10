@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { useAppStore } from '../../state/useAppStore'
 import { parseCloudUsagePayload } from '../../lib/cloudUsage'
-import { CloudSettingsPanel } from '../CloudSettingsPanel'
-import { CloudUsagePanel } from '../CloudUsagePanel'
+import { CloudSettingsPanel } from '../shared/CloudSettingsPanel'
+import { CloudUsagePanel } from '../shared/CloudUsagePanel'
 
 vi.mock('../../lib/localRunToken', () => ({
   getLocalRunToken: vi.fn().mockResolvedValue('test-token'),

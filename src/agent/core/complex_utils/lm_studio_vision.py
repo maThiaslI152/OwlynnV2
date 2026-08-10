@@ -94,6 +94,9 @@ async def ensure_vision_vlm_loaded() -> bool:
 
     Only the configured vision VLM (Gemma 4 E2B) may process images — never router/extraction.
     """
+    if config.get("models.provider", "lm_studio") == "ollama":
+        return True
+
     if await is_vision_vlm_loaded():
         return True
     if not config.get("cloud.vision_lm_studio_auto_load", True):

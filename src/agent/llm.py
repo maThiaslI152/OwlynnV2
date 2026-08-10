@@ -40,10 +40,22 @@ def _build_local_llm_client(
     extra_body["max_output_tokens"] = model_cfg.get(
         "max_output_tokens", max_output_tokens
     )
+    provider = config.get("models.provider", "lm_studio")
+    default_base = (
+        "http://127.0.0.1:11434/v1"
+        if provider == "ollama"
+        else "http://127.0.0.1:1234/v1"
+    )
+
+    # Optional Ollama extra_body cleanup to prevent warnings, though langchain_openai passes it through
+    if provider == "ollama" and "keep_alive" in extra_body:
+        # Ollama supports keep_alive but sometimes differently, keeping it is harmless
+        pass
+
     return ChatOpenAI(
         model=model_cfg.get("model_name", config.get_small_model_name()),
         api_key="sk-local-no-key-needed",
-        base_url=model_cfg.get("base_url", "http://127.0.0.1:1234/v1"),
+        base_url=model_cfg.get("base_url", default_base),
         temperature=model_cfg.get("temperature", temperature),
         max_tokens=max_tokens or model_cfg.get("max_tokens"),
         extra_body=extra_body,
@@ -59,6 +71,7 @@ class LLMPool:
     _small_llm: Optional[ChatOpenAI] = None
     _fallback_llm: Optional[ChatOpenAI] = None
     _pentest_llm: Optional[ChatOpenAI] = None
+    _complex_local_llm: Optional[ChatOpenAI] = None
 
     _cloud_llm_flash: Optional[ChatOpenAI] = None
     _cloud_llm_pro: Optional[ChatOpenAI] = None
@@ -157,6 +170,66 @@ class LLMPool:
             audit_debug("agent.model", "pool_cache_hit", slot="fallback")
         return cls._fallback_llm
 
+    # ── complex_local (dedicated reasoning model) ─────────────────────────
+
+    @classmethod
+    async def get_complex_local_llm(cls) -> ChatOpenAI:
+        """Get or create cached complex-local LLM instance."""
+        if "complex_local" in cls._test_overrides:
+            audit_debug("agent.model", "pool_test_override", slot="complex_local")
+            return cls._test_overrides["complex_local"]
+        _COMPLEX_DEFAULTS = dict(
+            temperature=0.4,
+            max_tokens=16384,
+            max_output_tokens=16384,
+            timeout=180,
+        )
+        if cls._complex_local_llm is None:
+            try:
+                async with cls._lock:
+                    if cls._complex_local_llm is None:
+                        model_cfg = get_model_config("complex_local")
+                        model_name = model_cfg.get("model_name", "gemma4-12b-qat")
+                        extra_body = dict(model_cfg.get("extra_body") or {})
+                        extra_body["max_output_tokens"] = model_cfg.get(
+                            "max_output_tokens", _COMPLEX_DEFAULTS["max_output_tokens"]
+                        )
+                        provider = config.get("models.complex_local.provider", "lm_studio")
+                        default_base = (
+                            "http://127.0.0.1:11434/v1"
+                            if provider == "ollama"
+                            else "http://127.0.0.1:1234/v1"
+                        )
+
+                        cls._complex_local_llm = ChatOpenAI(
+                            model=model_name,
+                            api_key="sk-local-no-key-needed",
+                            base_url=model_cfg.get("base_url", default_base),
+                            temperature=model_cfg.get(
+                                "temperature", _COMPLEX_DEFAULTS["temperature"]
+                            ),
+                            max_tokens=model_cfg.get(
+                                "max_tokens", _COMPLEX_DEFAULTS["max_tokens"]
+                            ),
+                            extra_body=extra_body,
+                            request_timeout=model_cfg.get("request_timeout")
+                            or model_cfg.get("timeout", _COMPLEX_DEFAULTS["timeout"]),
+                            stream_chunk_timeout=None,
+                        )
+                        audit_info(
+                            "agent.model",
+                            "pool_instance_created",
+                            slot="complex_local",
+                            model=model_name,
+                        )
+            except Exception as e:
+                logger.warning("Complex Local LLM creation error: %s", e)
+                # Fallback to small model logic if broken
+                return await cls.get_fallback_llm()
+        else:
+            audit_debug("agent.model", "pool_cache_hit", slot="complex_local")
+        return cls._complex_local_llm
+
     # ── pentest (dedicated pentest model) ──────────────────────────────
 
     @classmethod
@@ -185,12 +258,17 @@ class LLMPool:
                         extra_body["max_output_tokens"] = model_cfg.get(
                             "max_output_tokens", _PENTEST_DEFAULTS["max_output_tokens"]
                         )
+                        provider = config.get("models.provider", "lm_studio")
+                        default_base = (
+                            "http://127.0.0.1:11434/v1"
+                            if provider == "ollama"
+                            else "http://127.0.0.1:1234/v1"
+                        )
+
                         cls._pentest_llm = ChatOpenAI(
                             model=pentest_model_name,
                             api_key="sk-local-no-key-needed",
-                            base_url=model_cfg.get(
-                                "base_url", "http://127.0.0.1:1234/v1"
-                            ),
+                            base_url=model_cfg.get("base_url", default_base),
                             temperature=model_cfg.get(
                                 "temperature", _PENTEST_DEFAULTS["temperature"]
                             ),
@@ -219,32 +297,72 @@ class LLMPool:
 
     @classmethod
     def _resolve_cloud_model_name(cls, tier: Optional[str] = None) -> str:
-        """Map profile tier (flash|pro) to DeepSeek model id."""
+        """Map profile tier (flash|pro) to model id."""
         profile = get_profile()
+        provider = profile.get("cloud_provider") or config.get(
+            "models.cloud.provider", "deepseek"
+        )
         tier = (tier or profile.get("cloud_model_tier") or "flash").lower()
+
+        if provider == "openrouter":
+            # Allow user to specify specific openrouter model, otherwise defaults
+            base = profile.get("openrouter_model") or config.get(
+                "models.cloud.openrouter_model"
+            )
+            if base:
+                return base
+            # Sensible defaults for OpenRouter tiers
+            return (
+                "anthropic/claude-3.5-sonnet"
+                if tier == "pro"
+                else "google/gemini-1.5-flash"
+            )
+
+        # DeepSeek logic
         tiers = config.get("models.cloud.tiers") or {}
         if tier == "pro":
-            return tiers.get("pro") or "deepseek-v4-pro"
+            return tiers.get("pro") or "deepseek-reasoner"
         return (
             config.get("models.cloud.model_name")
             or profile.get("cloud_llm_model_name")
             or tiers.get("flash")
-            or config.get_cloud_model_name()
+            or "deepseek-chat"
         )
 
     @classmethod
     async def _build_cloud_client(cls, model_name: str) -> ChatOpenAI:
-        """Create a ChatOpenAI client for DeepSeek V4."""
-        from src.config.secret_store import resolve_deepseek_api_key
+        """Create a ChatOpenAI client for the active cloud provider."""
+        from src.config.secret_store import (
+            resolve_deepseek_api_key,
+            resolve_openrouter_api_key,
+        )
         from src.config.config_loader import config
 
-        api_key = resolve_deepseek_api_key()
-        if not api_key:
-            raise CloudUnavailableError(
-                "No DeepSeek API key configured. Set DEEPSEEK_API_KEY env var, "
-                "store in macOS Keychain via Settings, or set deepseek_api_key "
-                "in user profile."
+        profile = get_profile()
+        provider = profile.get("cloud_provider") or config.get(
+            "models.cloud.provider", "deepseek"
+        )
+
+        if provider == "openrouter":
+            api_key = resolve_openrouter_api_key()
+            if not api_key:
+                raise CloudUnavailableError("No OpenRouter API key configured.")
+            base_url = "https://openrouter.ai/api/v1"
+            # OpenRouter headers for routing
+            extra_body = {"route": "fallback"}
+        else:
+            api_key = resolve_deepseek_api_key()
+            if not api_key:
+                raise CloudUnavailableError(
+                    "No DeepSeek API key configured. Set DEEPSEEK_API_KEY env var, "
+                    "store in macOS Keychain via Settings, or set deepseek_api_key "
+                    "in user profile."
+                )
+            base_url = config.get(
+                "models.cloud.base_url", "https://api.deepseek.com/v1"
             )
+            extra_body = dict(config.get("models.cloud.extra_body") or {})
+
         model_cfg = get_model_config("cloud")
         timeout = float(
             model_cfg.get("timeout")
@@ -253,12 +371,12 @@ class LLMPool:
         return ChatOpenAI(
             model=model_name,
             api_key=api_key,
-            base_url=model_cfg.get("base_url", "https://api.deepseek.com/v1"),
+            base_url=base_url,
             streaming=True,
             max_tokens=model_cfg.get("max_tokens"),
             temperature=model_cfg.get("temperature", 0.4),
             request_timeout=timeout,
-            extra_body=dict(model_cfg.get("extra_body") or {}),
+            extra_body=extra_body,
         )
 
     @classmethod
@@ -297,6 +415,8 @@ class LLMPool:
         """Clear cached instances (call when profile or config updates)."""
         cls._small_llm = None
         cls._fallback_llm = None
+        cls._pentest_llm = None
+        cls._complex_local_llm = None
         cls._cloud_llm_flash = None
         cls._cloud_llm_pro = None
         cls._test_overrides = {}
@@ -353,3 +473,7 @@ async def get_pentest_llm() -> ChatOpenAI:
 async def get_fallback_llm() -> ChatOpenAI:
     """Get fallback LLM instance (local model, expanded context for complex tasks)."""
     return await LLMPool.get_fallback_llm()
+
+async def get_complex_local_llm() -> ChatOpenAI:
+    """Get complex local LLM instance (primary local reasoning)."""
+    return await LLMPool.get_complex_local_llm()

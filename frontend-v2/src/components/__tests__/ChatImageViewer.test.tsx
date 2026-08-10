@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { ChatImageViewer } from '../ChatImageViewer'
+import { ChatImageViewer } from '../chat/ChatImageViewer'
 
 describe('ChatImageViewer', () => {
   it('opens lightbox on click', () => {

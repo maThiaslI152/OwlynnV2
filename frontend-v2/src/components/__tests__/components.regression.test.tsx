@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { useAppStore } from '../../state/useAppStore'
-import { ActionProposalQueue } from '../ActionProposalQueue'
+import { ActionProposalQueue } from '../shared/ActionProposalQueue'
 
 // Note: ToolExecutionPanel is not tested here because it depends heavily on
 // browser-only APIs (crypto.subtle, Clipboard API, Blob, URL.createObjectURL)

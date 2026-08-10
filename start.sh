@@ -45,71 +45,15 @@ echo "════════════════════════�
 echo ""
 
 # ═══════════════════════════════════════════════════════════════════
-# [1/3] Qdrant + Redis (containers preferred, binary fallback)
+# [1/3] PostgreSQL Database (containers preferred)
 # ═══════════════════════════════════════════════════════════════════
-echo "[1/3] Qdrant + Redis..."
+echo "[1/3] PostgreSQL Database..."
 
-_qdrant_started_local=0
-
-# Try containers first (qdrant, redis with RediSearch for checkpointing)
+# Try containers first (postgres with pgvector)
 if podman machine start 2>/dev/null || true; then
-    podman compose up -d qdrant redis 2>/dev/null || \
-    podman-compose up -d qdrant redis 2>/dev/null || \
-    docker compose up -d qdrant redis 2>/dev/null || true
-fi
-
-# Ensure Redis container is running (may be in "Created" state if port was in use)
-if command -v podman &>/dev/null; then
-    _RC_STATE=$(podman inspect --format '{{.State.Status}}' owlynn_redis 2>/dev/null || echo "missing")
-    if [ "$_RC_STATE" = "created" ]; then
-        echo "      Starting owlynn_redis container (was in Created state)..."
-        podman start owlynn_redis 2>/dev/null || true
-        sleep 2
-    fi
-fi
-
-# Check if Qdrant is already up (either from containers or previous native run)
-if curl -sf http://127.0.0.1:6333/healthz >/dev/null 2>&1; then
-    echo "      Qdrant ready."
-else
-    # Try native Qdrant binary (installed via GitHub releases to ~/bin or /usr/local/bin)
-    _QDRANT_BIN=""
-    if command -v qdrant &>/dev/null; then
-        _QDRANT_BIN="qdrant"
-    elif [ -x "${HOME}/bin/qdrant" ]; then
-        _QDRANT_BIN="${HOME}/bin/qdrant"
-    fi
-    if [ -n "$_QDRANT_BIN" ]; then
-        echo "      Starting native Qdrant binary..."
-        mkdir -p "${HOME}/.owlynn/storage"
-        (cd "${HOME}/.owlynn" && "$_QDRANT_BIN" >/dev/null 2>&1) &
-        _PIDS+=("$!")
-        _qdrant_started_local=1
-        # Wait up to 10s for Qdrant to be ready
-        for _i in $(seq 1 10); do
-            sleep 1
-            if curl -sf http://127.0.0.1:6333/healthz >/dev/null 2>&1; then
-                echo "      Qdrant ready (native binary)."
-                break
-            fi
-        done
-    else
-        echo "      WARNING: Qdrant not available. Long-term memory (mem0) will be disabled."
-        echo "      Install: curl -L https://github.com/qdrant/qdrant/releases/latest/download/qdrant-aarch64-apple-darwin.tar.gz | tar xz -C ~/bin"
-    fi
-fi
-
-# Redis — verify container Redis has RediSearch (required for LangGraph checkpointing).
-if redis-cli PING 2>/dev/null | grep -q PONG; then
-    _REDIS_MODULES=$(redis-cli MODULE LIST 2>/dev/null | grep -c "search" || true)
-    if [ "$_REDIS_MODULES" -gt 0 ]; then
-        echo "      Redis ready (with RediSearch — checkpointing enabled)."
-    else
-        echo "      WARNING: Redis on :6379 has NO RediSearch. Conversations will NOT persist across restarts."
-        echo "      Fix: podman compose up -d redis (uses redis-stack-server image)"
-    fi
-else
-    echo "      WARNING: No Redis on :6379. Session cache and checkpointing disabled."
+    podman-compose up -d postgres 2>/dev/null || \
+    docker-compose up -d postgres 2>/dev/null || \
+    docker compose up -d postgres 2>/dev/null || true
 fi
 
 echo "      Ready."
@@ -156,6 +100,7 @@ export DOCLING_ARTIFACTS_PATH="${DOCLING_ARTIFACTS_PATH:-$(pwd)/.models/docling/
 export PYTHONPATH="$(pwd):$PYTHONPATH"
 export STIRLING_PDF_URL="${STIRLING_PDF_URL:-http://localhost:8090}"
 export STIRLING_PDF_API_KEY="${STIRLING_PDF_API_KEY:-owlynn-local-dev}"
+export DATABASE_URL="${DATABASE_URL:-postgresql+asyncpg://owlynn:owlynn_password@127.0.0.1:5432/owlynn}"
 
 if ! command -v uv &>/dev/null; then
     echo "      ERROR: uv is not installed. Please install uv first."

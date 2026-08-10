@@ -99,6 +99,9 @@ VALID_FIELDS = {
     "cloud_model_tier": str,
     "cloud_thinking_mode": str,
     "cloud_reasoning_effort": str,
+    "cloud_provider": str,
+    "openrouter_model": str,
+    "openrouter_api_key": str,
 }
 
 

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { useAppStore } from '../../state/useAppStore'
-import { ToolExecutionPanel } from '../ToolExecutionPanel'
+import { ToolExecutionPanel } from '../chat/ToolExecutionPanel'
 
 beforeEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true)

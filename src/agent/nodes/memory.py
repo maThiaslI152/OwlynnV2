@@ -220,7 +220,7 @@ async def _build_memory_context_async(
                 logger.warning("[mem0] global search failed: %s", e)
 
     profile = get_profile()
-    enhanced_context = get_memory_context_for_prompt()
+    enhanced_context = await get_memory_context_for_prompt()
 
     project_instructions = ""
     if project_id and project_id != "default":
@@ -849,7 +849,7 @@ async def memory_write_node(state: AgentState) -> AgentState:
             eng = get_active_engagement()
             if eng:
                 human_preview = str(last_human)[:200]
-                log_event(
+                await log_event(
                     eng["id"],
                     "conversation_turn",
                     f"User: {human_preview}...",
@@ -898,7 +898,7 @@ async def memory_write_node(state: AgentState) -> AgentState:
             message_dicts.append({"role": role, "content": content})
 
         # Record conversation and extract topics/interests
-        await asyncio.to_thread(record_conversation, message_dicts, session_id)
+        await record_conversation(message_dicts, session_id)
 
     except Exception as e:
         logger.warning("[Memory] Failed to record conversation: %s", e)

@@ -173,7 +173,7 @@ async def lifespan(app: FastAPI):
         preload_slots = config.get("startup.preload") or ["small", "embedding"]
         warmup = bool(config.get("startup.warmup", True))
 
-        if is_on_battery():
+        if await is_on_battery():
             logger.info("[startup] Eco-Mode active: Skipping heavy LLM preloads.")
             preload_slots = []
             warmup = False
@@ -254,10 +254,14 @@ async def lifespan(app: FastAPI):
     # Embedding models are pre-pulled manually via `ollama pull` or LM Studio UI.
     # The app relies on them being already available; no auto-load at startup.
 
-    # Start background file watcher with WebSocket callback
+    # Start background file watcher
     try:
+        from src.api.file_processor import start_watcher
+
         app.state.file_watcher = start_watcher(
-            WORKSPACE_DIR, on_processed_callback=notify_file_processed
+            WORKSPACE_DIR,
+            main_loop=asyncio.get_running_loop(),
+            on_processed_callback=notify_file_processed,
         )
     except Exception as e:
         logger.warning("Failed to start file watcher: %s", e)
@@ -271,12 +275,15 @@ async def lifespan(app: FastAPI):
     async def _check_legacy_chats():
         try:
             import asyncio as _asyncio
-            import redis.asyncio as aioredis
             from src.memory.project import project_manager
-            from src.config.settings import REDIS_URL
+            from src.agent.core.checkpointer import get_postgres_saver
 
             await _asyncio.sleep(5)  # let the system stabilize
-            client = aioredis.from_url(REDIS_URL)
+            try:
+                saver = await get_postgres_saver()
+            except Exception:
+                return
+
             legacy_count = 0
             total_count = 0
             for proj in await project_manager.list_projects():
@@ -285,18 +292,13 @@ async def lifespan(app: FastAPI):
                     if not chat_id:
                         continue
                     total_count += 1
-                    has_checkpoint = False
-                    async for _ in client.scan_iter(
-                        match=f"checkpoint:{chat_id}:*", count=5
-                    ):
-                        has_checkpoint = True
-                        break
-                    if not has_checkpoint:
+                    config = {"configurable": {"thread_id": chat_id}}
+                    result = await saver.aget_tuple(config)
+                    if result is None:
                         legacy_count += 1
-            await client.aclose()
             if legacy_count > 0:
                 logger.warning(
-                    "[startup] %d/%d chats have no checkpoint data (created before Redis checkpointer). "
+                    "[startup] %d/%d chats have no checkpoint data (created before Postgres checkpointer). ",
                     "These chats will show 'history unavailable' when opened.",
                     legacy_count,
                     total_count,
@@ -414,8 +416,8 @@ class LocalAuthMiddleware(BaseHTTPMiddleware):
     _EXEMPT_PATHS = {
         "/api/health",
         "/api/local-run-token",
-        "/api/usage",
         "/api/cloud-status",
+        "/api/usage",
     }
     _EXEMPT_PREFIXES = (
         "/api/browser_extension",
@@ -692,7 +694,7 @@ async def api_dev_hitl_trigger(body: dict):
 async def api_get_memory_context():
     """Get comprehensive memory context for UI display."""
     try:
-        context = get_memory_context_for_prompt()
+        context = await get_memory_context_for_prompt()
         return {
             "status": "ok",
             "memory_context": context,
