@@ -12,8 +12,8 @@ audience: agent
 
 ```yaml
 manifest:
-  version: 20
-  generated: "2026-07-14T02:54:54Z"
+  version: 21
+  generated: "2026-08-11T01:53:00Z"
   files:
     - path: AGENTS.md
       status: active
@@ -165,7 +165,7 @@ manifest:
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-07-09
+      last_updated: 2026-08-11
     - path: docs/features/STUDY.md
       status: active
       category: reference
@@ -846,6 +846,11 @@ manifest:
       category: changelog
       audience: agent
       last_updated: 2026-07-14
+    - path: docs/changes/pentest-anonymity-docs/CHANGELOG.md
+      status: active
+      category: changelog
+      audience: agent
+      last_updated: 2026-08-11
 ```
 
 ## Related
@@ -856,4 +861,4 @@ manifest:
 
 ## Last updated
 
-2026-06-26 — manifest v9; added frontier-eval-2026-06-26.md
+2026-08-11 — manifest v21; added pentest-anonymity-docs
