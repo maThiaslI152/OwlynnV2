@@ -2372,42 +2372,7 @@ body.tauri-glass .window-drag-strip {
   50% { opacity: 1; }
 }
 
-/* ── Inspector Overlay (compact mode) ──────────────────── */
 
-.right-panel-overlay {
-  position: fixed;
-  top: 0;
-  right: 0;
-  width: 300px;
-  height: 100vh;
-  height: 100dvh;
-  z-index: 100;
-  box-shadow: var(--shadow-lg);
-  border-left: 1px solid var(--border-default);
-  animation: slide-in 0.18s ease-out;
-}
-
-@keyframes slide-in {
-  from { transform: translateX(100%); }
-  to { transform: translateX(0); }
-}
-
-.right-panel-overlay .inspector-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 14px 10px;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.right-panel-overlay .inspector-header h2 {
-  font-size: 0.8rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
-  margin: 0;
-}
 
 /* ── Orchestration Panel ───────────────────────────────── */
 
@@ -2484,10 +2449,10 @@ body.tauri-glass .window-drag-strip {
   color: var(--text-secondary);
 }
 
-/* ── Safe Mode ─────────────────────────────────────────── */
+/* ── Safe Mode Forms ─────────────────────────────────────────── */
 
-.right-panel select,
-.right-panel input {
+.menu-dropdown-content select,
+.menu-dropdown-content input {
   border: 1px solid var(--border-default);
   background: var(--bg-base);
   color: var(--text-primary);
@@ -2499,12 +2464,12 @@ body.tauri-glass .window-drag-strip {
   transition: border-color 0.15s;
 }
 
-.right-panel select:focus,
-.right-panel input:focus {
+.menu-dropdown-content select:focus,
+.menu-dropdown-content input:focus {
   border-color: var(--accent);
 }
 
-.right-panel label {
+.menu-dropdown-content label {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -3232,16 +3197,7 @@ details.sidebar-accordion summary:hover {
   -webkit-backdrop-filter: blur(14px) saturate(120%);
 }
 
-.left-panel,
-.right-panel {
-  backdrop-filter: blur(22px) saturate(140%);
-  -webkit-backdrop-filter: blur(22px) saturate(140%);
-}
 
-.center-panel {
-  backdrop-filter: blur(14px) saturate(120%);
-  -webkit-backdrop-filter: blur(14px) saturate(120%);
-}
 
 .orchestration-gauge-wrap {
   display: flex;
