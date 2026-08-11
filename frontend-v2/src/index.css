@@ -2255,35 +2255,9 @@ body.tauri-glass .window-drag-strip {
 .attachment-remove:hover {
   color: var(--red);
 }
+/* NOTE: Right panel was consolidated into the MacMenuBar status pill dropdown.
+   Former .right-panel CSS removed (2026-08-11 audit cleanup). */
 
-/* ── Right Panel ───────────────────────────────────────── */
-
-.right-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  padding: 0;
-  border-left: 1px solid rgba(148, 196, 255, 0.08);
-}
-
-.inspector-header {
-  position: relative;
-  z-index: 30;
-  overflow: visible;
-  padding: 14px 14px 10px;
-  border-bottom: 1px solid var(--border-subtle);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.inspector-header h2 {
-  font-size: 0.76rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--text-muted);
-}
 
 .inspector-section {
   border-bottom: 1px solid rgba(148, 196, 255, 0.1);

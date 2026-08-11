@@ -436,7 +436,6 @@ export function AppShell({
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const [streamActive, setStreamActive] = useState(false)
-  const [inspectorOpen, setInspectorOpen] = useState(false)
   const isStreamingRef = useRef(false)
   const [renamingChatId, setRenamingChatId] = useState<string | null>(null)
   const [renamingProjectId, setRenamingProjectId] = useState<string | null>(null)
@@ -556,9 +555,6 @@ export function AppShell({
       void tauriBridge.setWindowSize(1200, 800)
     }
     setWindowMode(targetMode)
-    if (targetMode === 'compact') {
-      setInspectorOpen(false)
-    }
   }, [setWindowMode])
 
   // Detect streaming
@@ -617,17 +613,6 @@ export function AppShell({
     return () => { disposed = true }
   }, [connectionState, setCloudStatus])
 
-  // ESC key closes inspector overlay in compact mode
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.key === 'Escape' && windowMode === 'compact' && inspectorOpen) {
-      setInspectorOpen(false)
-    }
-  }, [windowMode, inspectorOpen])
-
-  useEffect(() => {
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [handleKeyDown])
 
   // Click outside to close safe mode popover
   useEffect(() => {

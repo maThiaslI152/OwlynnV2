@@ -24,7 +24,7 @@ import {
   parseCloudUsagePayload,
   parseContextBreakdown,
 } from './lib/cloudUsage'
-import { toWsFilePayload, type AttachedFile, isWorkspaceRef } from './lib/attachments'
+import { type AttachedFile, isWorkspaceRef } from './lib/attachments'
 import { isToolPreambleText } from './lib/toolPreamble'
 import type { BrowserPageContext } from './lib/browserPageContext'
 import type { ChatMessage, ServerEvent } from './types/protocol'
@@ -489,11 +489,9 @@ function App() {
             const store = useAppStore.getState()
             const lastMsg = store.messages[store.messages.length - 1]
             if (lastMsg && lastMsg.role === 'assistant' && lastMsg.id?.startsWith('stream-')) {
-                store.updateMessage(lastMsg.id, {
-                    ...lastMsg,
-                    id: lastMsg.id.replace('stream-', 'msg-'),
-                    status: 'complete'
-                })
+                store.setMessages(store.messages.map((m) =>
+                    m.id === lastMsg.id ? { ...m, id: m.id.replace('stream-', 'msg-'), status: 'sent' } : m
+                ))
             }
             
             // Fix stuck running tools
@@ -840,9 +838,6 @@ function App() {
   }, [addMessage, executionPolicy, handleInterrupt, latestToolExecution, pushToolExecution, setLatestToolExecution, setOperatorNote, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setTtsSpeaking, upsertActionProposal, updateActionProposalStatus])
 
   const handleSend = useCallback((content: string, files?: AttachedFile[]) => {
-    const store = useAppStore.getState()
-    const activePersonaId = store.activePersonaId
-    const responseStyle = store.responseStyle || store.evalResponseStyle || undefined
     const message: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',

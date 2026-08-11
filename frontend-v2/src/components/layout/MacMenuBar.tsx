@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import toast from 'react-hot-toast'
 import { SafeModePanel } from '../shared/SafeModePanel'
+import { SettingsPanel } from '../shared/SettingsPanel'
 import { CloudSettingsPanel } from '../shared/CloudSettingsPanel'
 import { CloudUsagePanel } from '../shared/CloudUsagePanel'
 import { OrchestrationPanel } from '../shared/OrchestrationPanel'
@@ -22,6 +23,7 @@ interface MacMenuBarProps {
 
 export function MacMenuBar({ isCompact, onToggleMode }: MacMenuBarProps) {
   const [activeMenu, setActiveMenu] = useState<string | null>(null)
+  const [showSettings, setShowSettings] = useState(false)
   const connectionState = useAppStore((s) => s.connectionState)
   const cloudStatus = useAppStore((s) => s.cloudStatus)
   const activeMode = useAppStore((s) => s.activeMode)
@@ -70,7 +72,10 @@ export function MacMenuBar({ isCompact, onToggleMode }: MacMenuBarProps) {
                 setActiveMenu(null)
               }}>About Owlynn</div>
               <div className="menu-dropdown-divider" />
-              <div className="menu-dropdown-item" onClick={() => setActiveMenu('system')}>Settings...</div>
+              <div className="menu-dropdown-item" onClick={() => {
+                setActiveMenu(null)
+                setShowSettings(true)
+              }}>Settings...</div>
               <div className="menu-dropdown-divider" />
               <div className="menu-dropdown-item" onClick={() => {
                 electronBridge.hideToTray()
@@ -184,6 +189,10 @@ export function MacMenuBar({ isCompact, onToggleMode }: MacMenuBarProps) {
           )}
         </div>
       </div>
+      {/* ── Full Settings Modal ── */}
+      {showSettings && (
+        <SettingsPanel onClose={() => setShowSettings(false)} />
+      )}
     </div>
   )
 }
