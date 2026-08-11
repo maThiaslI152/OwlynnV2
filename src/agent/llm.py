@@ -23,6 +23,16 @@ class CloudUnavailableError(Exception):
     """Raised when no valid DeepSeek API key is configured."""
 
 
+DEFAULT_LOCAL_STOP_TOKENS = [
+    "<end_of_turn>",
+    "<|im_end|>",
+    "<|endoftext|>",
+    "<|eot_id|>",
+    "</s>",
+    "<|end_of_sentence|>",
+]
+
+
 def _build_local_llm_client(
     *,
     temperature: float = 0.2,
@@ -52,12 +62,14 @@ def _build_local_llm_client(
         # Ollama supports keep_alive but sometimes differently, keeping it is harmless
         pass
 
+    stop_tokens = model_cfg.get("stop") or DEFAULT_LOCAL_STOP_TOKENS
     return ChatOpenAI(
         model=model_cfg.get("model_name", config.get_small_model_name()),
         api_key="sk-local-no-key-needed",
         base_url=model_cfg.get("base_url", default_base),
         temperature=model_cfg.get("temperature", temperature),
         max_tokens=max_tokens or model_cfg.get("max_tokens"),
+        stop=stop_tokens,
         extra_body=extra_body,
         request_timeout=model_cfg.get("request_timeout")
         or model_cfg.get("timeout", timeout),
@@ -201,6 +213,7 @@ class LLMPool:
                             else "http://127.0.0.1:1234/v1"
                         )
 
+                        stop_tokens = model_cfg.get("stop") or DEFAULT_LOCAL_STOP_TOKENS
                         cls._complex_local_llm = ChatOpenAI(
                             model=model_name,
                             api_key="sk-local-no-key-needed",
@@ -211,6 +224,7 @@ class LLMPool:
                             max_tokens=model_cfg.get(
                                 "max_tokens", _COMPLEX_DEFAULTS["max_tokens"]
                             ),
+                            stop=stop_tokens,
                             extra_body=extra_body,
                             request_timeout=model_cfg.get("request_timeout")
                             or model_cfg.get("timeout", _COMPLEX_DEFAULTS["timeout"]),
@@ -265,6 +279,7 @@ class LLMPool:
                             else "http://127.0.0.1:1234/v1"
                         )
 
+                        stop_tokens = model_cfg.get("stop") or DEFAULT_LOCAL_STOP_TOKENS
                         cls._pentest_llm = ChatOpenAI(
                             model=pentest_model_name,
                             api_key="sk-local-no-key-needed",
@@ -275,6 +290,7 @@ class LLMPool:
                             max_tokens=model_cfg.get(
                                 "max_tokens", _PENTEST_DEFAULTS["max_tokens"]
                             ),
+                            stop=stop_tokens,
                             extra_body=extra_body,
                             request_timeout=model_cfg.get("request_timeout")
                             or model_cfg.get("timeout", _PENTEST_DEFAULTS["timeout"]),

@@ -194,10 +194,15 @@ async def _invoke_local_fallback(
         min(budget, _DEFAULT_TOKEN_BUDGET),
         max_context,
     )
+    from src.agent.llm import DEFAULT_LOCAL_STOP_TOKENS
+
+    stop_tokens = get_model_config("small").get("stop") or DEFAULT_LOCAL_STOP_TOKENS
     if tools:
-        bound = llm.bind_tools(tools).bind(max_tokens=fallback_budget)
+        bound = llm.bind_tools(tools).bind(
+            max_tokens=fallback_budget, stop=stop_tokens
+        )
     else:
-        bound = llm.bind(max_tokens=fallback_budget)
+        bound = llm.bind(max_tokens=fallback_budget, stop=stop_tokens)
     logger.info(
         "[complex] Invoking local fallback model context=%d budget=%d",
         max_context,

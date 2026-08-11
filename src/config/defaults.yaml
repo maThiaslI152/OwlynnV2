@@ -70,7 +70,13 @@ models:
     max_output_tokens: 8192
     context_window: 65536                     # Expanded for fallback capability (was 32768)
     timeout: 180                              # Allow up to 180s for complex fallback tasks
-    request_timeout: 180                      # HTTP request timeout
+    stop:
+      - "<end_of_turn>"
+      - "<|im_end|>"
+      - "<|endoftext|>"
+      - "<|eot_id|>"
+      - "</s>"
+      - "<|end_of_sentence|>"
     extra_body:
       top_p: 0.95
       keep_alive: -1                          # Ask LM Studio to keep model loaded
@@ -123,6 +129,13 @@ models:
     timeout: 180
     request_timeout: 180
     context_window: 32768                     # 32K — model supports up to 262K, 32K balances VRAM
+    stop:
+      - "<end_of_turn>"
+      - "<|im_end|>"
+      - "<|endoftext|>"
+      - "<|eot_id|>"
+      - "</s>"
+      - "<|end_of_sentence|>"
     extra_body:
       keep_alive: 0                           # Unload after idle (model swap handles lifecycle)
       flash_attention: true
@@ -146,6 +159,13 @@ models:
     timeout: 180
     request_timeout: 180
     context_window: 65536
+    stop:
+      - "<end_of_turn>"
+      - "<|im_end|>"
+      - "<|endoftext|>"
+      - "<|eot_id|>"
+      - "</s>"
+      - "<|end_of_sentence|>"
     extra_body:
       top_p: 0.95
 
