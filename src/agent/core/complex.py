@@ -195,6 +195,7 @@ async def _invoke_local_fallback(
         max_context,
     )
     from src.agent.llm import DEFAULT_LOCAL_STOP_TOKENS
+    from src.config.config_loader import get_model_config
 
     stop_tokens = get_model_config("small").get("stop") or DEFAULT_LOCAL_STOP_TOKENS
     if tools:
