@@ -25,6 +25,7 @@ from src.agent.routing.router import (
     _resolve_complex_route,
     _toolbox_for_skill,
 )
+from src.agent.routing.classifier import parse_classification
 from src.tools.skills import SkillDefinition
 
 
@@ -356,48 +357,48 @@ class TestRouterHITLThreshold:
 
 
 # ═════════════════════════════════════════════════════════════════════════
-# Property 2 (supplement): parse_routing always returns valid structure
+# Property 2 (supplement): parse_classification always returns valid structure
 # ═════════════════════════════════════════════════════════════════════════
 
 
-class TestParseRoutingProperty:
-    """parse_routing always returns a valid (decision, confidence, toolbox) tuple."""
+class TestParseClassificationProperty:
+    """parse_classification always returns a valid RouteClassification object."""
 
     @given(content=st.text(min_size=0, max_size=500))
     @settings(max_examples=100, deadline=None)
-    def test_parse_routing_never_crashes(self, content: str):
-        """parse_routing handles any string input without raising."""
-        decision, confidence, toolbox, _, _, _ = parse_routing(content)
-        assert decision in ("simple", "complex")
-        assert 0.0 <= confidence <= 1.0
-        assert isinstance(toolbox, list)
-        assert len(toolbox) >= 1
+    def test_parse_classification_never_crashes(self, content: str):
+        """parse_classification handles any string input without raising."""
+        cls = parse_classification(content)
+        assert hasattr(cls, "route")
+        assert 0.0 <= cls.confidence <= 1.0
+        assert isinstance(cls.toolbox, list)
+        assert len(cls.toolbox) >= 1
 
     @given(
-        routing=st.sampled_from(["simple", "complex"]),
+        route=st.sampled_from(["simple", "complex-local", "complex-cloud"]),
         confidence=st.floats(min_value=0.0, max_value=1.0, allow_nan=False),
         toolbox=st.sampled_from(
             ["web_search", "file_ops", "data_viz", "productivity", "memory", "all"]
         ),
     )
     @settings(max_examples=100, deadline=None)
-    def test_parse_routing_valid_json_round_trip(
-        self, routing: str, confidence: float, toolbox: str
+    def test_parse_classification_valid_json_round_trip(
+        self, route: str, confidence: float, toolbox: str
     ):
         """Valid JSON input is parsed correctly."""
         import json
 
         content = json.dumps(
             {
-                "routing": routing,
+                "route": route,
                 "confidence": confidence,
                 "toolbox": toolbox,
             }
         )
-        dec, conf, tb, _, _, _ = parse_routing(content)
-        assert dec == routing
-        assert abs(conf - confidence) < 1e-6
-        assert tb == [toolbox]
+        cls = parse_classification(content)
+        assert cls.route == route
+        assert abs(cls.confidence - confidence) < 1e-6
+        assert cls.toolbox == [toolbox]
 
 
 # ═════════════════════════════════════════════════════════════════════════

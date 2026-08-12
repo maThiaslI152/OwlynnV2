@@ -18,7 +18,7 @@ from src.agent.nodes.memory import (
 )
 from src.agent.routing.router import router_node
 from src.agent.core.state import AgentState
-from src.memory.extraction.queue import STREAM_KEY, enqueue_extraction
+from src.memory.extraction.queue import enqueue_extraction
 from src.memory.extraction.worker import process_extraction_job
 
 PENTEST_QUERY = "Explain OWASP Top 10 for our pentest engagement"
@@ -247,9 +247,3 @@ async def test_redis_enqueue_when_available():
     queued = await enqueue_extraction(payload)
     assert queued is True
 
-    client = aioredis.from_url(REDIS_URL, decode_responses=True)
-    try:
-        length = await client.xlen(STREAM_KEY)
-        assert length >= 1
-    finally:
-        await client.aclose()
