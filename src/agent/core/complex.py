@@ -878,11 +878,11 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     security_reason = state.get("security_reason")
     profile = get_profile()
 
-    route = state.get("route") or "complex-local"
+    route = state.get("route") or "complex-cloud"
     has_images = _message_has_image_content(thread_messages) or bool(
         (state.get("router_metadata") or {}).get("has_images")
     )
-    vision_task = has_images and route in ("complex-cloud", "complex-local")
+    vision_task = has_images and route == "complex-cloud"
     knowledge_context = state.get("knowledge_context") or "None"
     force_web_synthesis = web_on and not vision_task and web_budget.force_synthesis
 
@@ -1412,7 +1412,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     retry_still_dsml = False
     if (
         force_web_synthesis
-        and route in ("complex-cloud", "complex-local")
+        and route == "complex-cloud"
         and "fallback" not in model_label
         and needs_web_synthesis_retry(
             has_tool_calls=has_tool_calls,
@@ -1626,11 +1626,11 @@ async def complex_tool_action_node(state: AgentState) -> AgentState:
         web_on = True
     web_on = bool(web_on)
 
-    route = state.get("route") or "complex-local"
+    route = state.get("route") or "complex-cloud"
     has_images = _message_has_image_content(current_messages) or bool(
         (state.get("router_metadata") or {}).get("has_images")
     )
-    vision_task = has_images and route in ("complex-cloud", "complex-local")
+    vision_task = has_images and route == "complex-cloud"
     tools = _resolve_complex_tools(
         state, current_messages, web_on=web_on, vision_task=vision_task
     )

@@ -55,7 +55,7 @@ async def enqueue_extraction(payload: dict[str, Any]) -> bool:
                     status="pending",
                 )
                 .on_conflict_do_nothing(index_elements=["turn_id"])
-                .returning(ExtractionJob.id)  # type: ignore[arg-type]
+                .returning(ExtractionJob.id)  # type: ignore[call-overload]
             )
             result = await session.execute(stmt)
             row = result.fetchone()
