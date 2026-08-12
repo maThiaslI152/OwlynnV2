@@ -2945,6 +2945,7 @@ dependencies = [
     { name = "numpy" },
     { name = "openpyxl" },
     { name = "pandas" },
+    { name = "pgvector" },
     { name = "pillow" },
     { name = "playwright" },
     { name = "plotly" },
@@ -2992,6 +2993,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.26" },
     { name = "openpyxl", specifier = ">=3.0" },
     { name = "pandas", specifier = ">=2.0" },
+    { name = "pgvector", specifier = ">=0.5.0" },
     { name = "pillow", specifier = ">=10.0" },
     { name = "playwright", specifier = ">=1.40" },
     { name = "plotly", specifier = ">=5.0" },
@@ -3082,6 +3084,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/08/bc/81fb621e5ab4131e6f324c9ba6cb2a9f3b146c92f12484bec95efe8c8347/patchright-1.60.1-py3-none-win32.whl", hash = "sha256:05b98a6afdbe7e6645fe223009c47cc8e7859df55fd8ce9d8a9925b3389b0ee1", size = 37886460, upload-time = "2026-06-03T12:12:16.598Z" },
     { url = "https://files.pythonhosted.org/packages/74/8e/fff80350ed2c2c1f62145d667070799c60ca9e9b28d54e4f751f0b4f8da6/patchright-1.60.1-py3-none-win_amd64.whl", hash = "sha256:51b306ed55cd58f1bca24641458f5c9f7e86a1f1727dcffdead669cfe4c0a485", size = 37886465, upload-time = "2026-06-03T12:12:21.448Z" },
     { url = "https://files.pythonhosted.org/packages/ee/b8/b6d1bfe98a420c1ccfb2f23a7bb2b4cdb40170907bae638e7ae92abd287c/patchright-1.60.1-py3-none-win_arm64.whl", hash = "sha256:f795728c1e27fc226dbe203c1aec713a537f01be963474fe0f3691f5e6457f9f", size = 34022283, upload-time = "2026-06-03T12:12:26.732Z" },
+]
+
+[[package]]
+name = "pgvector"
+version = "0.5.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/a7/ec/6eb80aebc728200f95229219882994c1b0585b956ca47da5edb9d062627a/pgvector-0.5.0.tar.gz", hash = "sha256:07a9dcf735696879406983afc6eba9a787cef7c0cf6c367ca1a5779f036dee74", size = 35170, upload-time = "2026-07-06T18:27:27.767Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5c/e4/a5573f2c579ca9ad133293bfb624148ba0893674ca4a6eeec85ced9a6a09/pgvector-0.5.0-py3-none-any.whl", hash = "sha256:fedc9800894e6da2be51358d7b7c574bf34f247ca741a5a09513622135f5964f", size = 30958, upload-time = "2026-07-06T18:27:26.797Z" },
 ]
 
 [[package]]

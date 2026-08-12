@@ -19,7 +19,6 @@ from langchain_core.messages import HumanMessage
 
 from src.agent.routing.router import (
     estimate_token_budget,
-    parse_routing,
     _has_image_content,
     _needs_frontier_quality,
     _resolve_complex_route,
