@@ -20,12 +20,11 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from hypothesis import given, settings, assume, HealthCheck
+from hypothesis import HealthCheck, assume, given, settings
 from hypothesis import strategies as st
 
 from src.agent.nodes.memory import _get_mem0_user_id, format_memory_context
 from src.memory.project import ProjectManager
-
 
 # ── Strategies ───────────────────────────────────────────────────────────
 

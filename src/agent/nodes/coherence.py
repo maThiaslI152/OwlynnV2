@@ -1,21 +1,24 @@
 """
 Coherence Checker Node — Evaluates answer coherence and turn latency.
 
-Calculates turn duration, checks response coherence using the small local LLM,
+Calculates turn duration, checks response coherence using the main local LLM,
 and calibrates confidence based on coherence scores and tool execution failures.
 """
 
-import time
 import json
-import re
 import logging
-from typing import Dict, Any
+import re
+import time
+from typing import Any
 
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
-from src.agent.llm import get_small_llm
+from langchain_core.messages import ToolMessage
+
 from src.agent.core.state import AgentState
+from src.agent.llm import get_main_llm
+
+get_small_llm = get_main_llm
+from src.config.audit_log import audit_info, audit_warn
 from src.config.log_middleware import log_node
-from src.config.audit_log import audit_warn, audit_info
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +37,7 @@ Do not include any preamble, thinking process, or markdown formatting outside of
 JSON output:"""
 
 
-def _parse_coherence_json(content: str) -> Dict[str, Any]:
+def _parse_coherence_json(content: str) -> dict[str, Any]:
     """Parse JSON evaluation safely, removing thinking tags and wrappers."""
     if not content:
         return {
@@ -69,7 +72,7 @@ def _parse_coherence_json(content: str) -> Dict[str, Any]:
 
 
 @log_node("coherence_check")
-async def coherence_check_node(state: AgentState) -> Dict[str, Any]:
+async def coherence_check_node(state: AgentState) -> dict[str, Any]:
     """Evaluate response coherence, compute turn latency, and calibrate confidence."""
     messages = state.get("messages") or []
     if not messages:
@@ -161,9 +164,9 @@ async def coherence_check_node(state: AgentState) -> Dict[str, Any]:
     }
     if query_content and response_content:
         try:
-            small_llm = await get_small_llm()
+            main_llm = await get_main_llm()
             # Bind low temperature to ensure consistent evaluations
-            runnable = small_llm.bind(temperature=0.1)
+            runnable = main_llm.bind(temperature=0.1)
             prompt_text = COHERENCE_PROMPT.format(
                 query=query_content, response=response_content
             )

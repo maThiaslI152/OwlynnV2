@@ -13,11 +13,10 @@ import pytest
 
 from src.tools.skills import (
     SkillLoader,
-    list_skills,
     invoke_skill,
+    list_skills,
     run_skill_chain,
 )
-
 
 # ---------------------------------------------------------------------------
 # Test skill file contents

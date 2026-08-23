@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 
 sys.modules["mem0"] = MagicMock()
 
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.graph.message import add_messages
 
 from src.agent.core.state import AgentState
@@ -33,7 +33,6 @@ def _build_state(**overrides) -> AgentState:
         "model_used": None,
         "memory_context": None,
         "persona": None,
-        "current_medium_model": None,
         "selected_toolboxes": None,
         "token_budget": None,
         "pending_tool_calls": None,

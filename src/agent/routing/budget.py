@@ -10,16 +10,12 @@ Extracted from src/agent/nodes/router.py and enhanced to guarantee:
 
 from src.config.config_loader import config
 from src.config.settings import (
-    MEDIUM_DEFAULT_CONTEXT,
-    MEDIUM_LONGCTX_CONTEXT,
     CLOUD_CONTEXT,
 )
 
 # ── Context window constants per model tier ──────────────────────────────
-_MEDIUM_DEFAULT_CONTEXT = MEDIUM_DEFAULT_CONTEXT  # 100_000
-_MEDIUM_LONGCTX_CONTEXT = MEDIUM_LONGCTX_CONTEXT  # 131_072
-_CLOUD_CONTEXT = CLOUD_CONTEXT  # 131_072
-_SMALL_MODEL_CONTEXT = int(config.get("models.small.context_window", 65536))
+_CLOUD_CONTEXT = CLOUD_CONTEXT  # 131_072 / 1M
+_MAIN_MODEL_CONTEXT = config.get_main_model_context_window()
 
 # Tier definitions: (max_input_chars, tier_budget)
 _BUDGET_TIERS = [
@@ -78,7 +74,7 @@ def estimate_token_budget(user_text: str, route: str) -> int:
         budget = 256
         if len(user_text) > 100:
             budget = 512
-        budget = min(budget, _SMALL_MODEL_CONTEXT - 1500)
+        budget = min(budget, _MAIN_MODEL_CONTEXT - 1500)
         return max(1, int(budget))
 
     # ── Determine context window and reserves based on route ─────────────
@@ -87,7 +83,7 @@ def estimate_token_budget(user_text: str, route: str) -> int:
         input_reserve = 8000
         budget_max = 16384
     else:  # complex-default
-        context = _MEDIUM_DEFAULT_CONTEXT
+        context = _MAIN_MODEL_CONTEXT
         input_reserve = 4000
         budget_max = 8192
 

@@ -6,13 +6,13 @@ Provides power users with a terminal interface to query the running agent,
 stream responses, and check server status.
 """
 
+import json
+import logging
 import os
 import sys
-import json
+
 import click
 import httpx
-
-import logging
 
 logger = logging.getLogger(__name__)
 DEFAULT_URL = "http://127.0.0.1:8000"
@@ -25,7 +25,6 @@ def get_base_url() -> str:
 @click.group()
 def cli():
     """Owlynn local AI coworker command line helper."""
-    pass
 
 
 @cli.command()
@@ -41,7 +40,7 @@ def query(prompt: str, project: str, approve_sensitive: bool):
     from src.config.config_loader import config
 
     payload = {
-        "model": config.get_small_model_name(),
+        "model": config.get_main_model_name(),
         "messages": [{"role": "user", "content": prompt}],
         "stream": False,
         "project_id": project,
@@ -93,7 +92,7 @@ def stream(prompt: str, project: str, approve_sensitive: bool):
     from src.config.config_loader import config
 
     payload = {
-        "model": config.get_small_model_name(),
+        "model": config.get_main_model_name(),
         "messages": [{"role": "user", "content": prompt}],
         "stream": True,
         "project_id": project,

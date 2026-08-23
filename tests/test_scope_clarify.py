@@ -1,6 +1,7 @@
 """Tests for scope_clarify node and scope_heuristics."""
 
 import pytest
+
 from src.agent.hitl.scope_heuristics import needs_clarification
 
 
@@ -51,7 +52,7 @@ class TestScopeHeuristics:
 
 class TestFixturesLoader:
     def test_load_fixtures(self):
-        from src.hitl.fixtures import load_fixture, list_fixtures
+        from src.hitl.fixtures import list_fixtures, load_fixture
 
         fixtures = list_fixtures()
         assert len(fixtures) >= 5

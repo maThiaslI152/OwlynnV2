@@ -42,12 +42,15 @@ let reconnectAttempts = 0;
 let reconnectTimer = null;
 
 // ── Service Worker Keepalive ───────────────────────────────────────────
-// MV3 service workers can be terminated. Use chrome.alarms to keep alive.
+// MV3 service workers can be terminated. Use chrome.alarms to keep alive and auto-reconnect.
 chrome.alarms.create('owlynn-keepalive', { periodInMinutes: 0.5 });
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'owlynn-keepalive') {
     if (socket && socket.readyState === WebSocket.OPEN) {
       socket.send(JSON.stringify({ type: "ping" }));
+    } else if (!socket || socket.readyState === WebSocket.CLOSED) {
+      console.log("[Owlynn Bridge] Keepalive detected closed connection. Reconnecting...");
+      connect().catch(() => {});
     }
   }
 });
@@ -872,8 +875,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponseCallback) => 
   }
 
   if (message.type === "GET_CONNECTION_STATUS") {
+    const isConnected = !!(socket && socket.readyState === WebSocket.OPEN);
+    if (!isConnected && (!socket || socket.readyState === WebSocket.CLOSED)) {
+      connect().catch(() => {});
+    }
     sendResponseCallback({
-      connected: !!(socket && socket.readyState === WebSocket.OPEN),
+      connected: isConnected,
     });
     return false;
   }
@@ -903,6 +910,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponseCallback) => 
   }
 
   return false;
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  console.log("[Owlynn Bridge] Browser started. Connecting to backend...");
+  connect().catch(() => {});
 });
 
 chrome.runtime.onInstalled.addListener(() => {

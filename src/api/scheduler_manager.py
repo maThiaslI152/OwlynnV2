@@ -12,9 +12,9 @@ logger = logging.getLogger(__name__)
 # Falls back to SQLite if DATABASE_URL is not set (tests / local dev without Postgres).
 _DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///data/jobs.sqlite")
 # APScheduler requires a synchronous URL — strip the async driver prefix if present
-_JOBSTORE_URL = _DATABASE_URL.replace("postgresql+asyncpg://", "postgresql+psycopg://").replace(
-    "sqlite+aiosqlite://", "sqlite://"
-)
+_JOBSTORE_URL = _DATABASE_URL.replace(
+    "postgresql+asyncpg://", "postgresql+psycopg://"
+).replace("sqlite+aiosqlite://", "sqlite://")
 
 
 class JobScheduler:
@@ -39,7 +39,9 @@ class JobScheduler:
     def start(self):
         if not self.scheduler.running:
             self.scheduler.start()
-            logger.info("APScheduler started (jobstore: %s).", _JOBSTORE_URL.split("@")[-1])
+            logger.info(
+                "APScheduler started (jobstore: %s).", _JOBSTORE_URL.split("@")[-1]
+            )
 
     def shutdown(self):
         if self.scheduler.running:

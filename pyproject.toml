@@ -4,16 +4,18 @@ build-backend = "hatchling.build"
 
 [project]
 name = "owlynn"
-version = "0.2.0"
-description = "Owlynn Local Cowork Agent"
+version = "0.2.3"
+description = "Owlynn V2 — Autonomous Local & Frontier Security and Coding Agent"
 readme = "docs/README.md"
 requires-python = ">=3.11, <3.14"
 dependencies = [
-    "langgraph>=1.1.0",
+    "langgraph>=1.2.7,<2.0",
     "langchain>=0.3",
+    "langchain-core>=1.4.8,<2.0",
     "langchain-community>=0.3",
     "langchain-openai>=1.0",
-    "mcp>=1.0",
+    "mcp>=2.0.0",
+    "httpx2>=2.7.0",
     "mem0ai[nlp]>=1.0",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.34",
@@ -34,15 +36,14 @@ dependencies = [
     "beautifulsoup4>=4.12",
     "httpx>=0.24",
     "curl_cffi>=0.7",
-    "cryptography>=42.0",
-    "langgraph-checkpoint-redis>=0.3.6",
+    "cryptography>=50.0.0",
     "numpy>=1.26",
     "matplotlib>=3.8",
     "seaborn>=0.13",
     "plotly>=5.0",
     "Pillow>=10.0",
     "lxml>=5.0",
-    "crawl4ai",
+    "crawl4ai>=0.9.0",
     "sqlalchemy[asyncio]>=2.0",
     "asyncpg>=0.29",
     "alembic>=1.13",
@@ -55,12 +56,52 @@ dependencies = [
     "pgvector>=0.5.0",
 ]
 
+[project.optional-dependencies]
+docs = [
+    "docling>=2.0",
+    "PyMuPDF>=1.23",
+    "python-docx>=1.0",
+    "python-pptx>=0.6",
+    "openpyxl>=3.0",
+]
+browser = [
+    "playwright>=1.40",
+    "crawl4ai>=0.9.0",
+    "beautifulsoup4>=4.12",
+]
+viz = [
+    "matplotlib>=3.8",
+    "seaborn>=0.13",
+    "plotly>=5.0",
+]
+
 [tool.ruff]
 line-length = 88
+target-version = "py312"
+exclude = [
+    ".git",
+    ".venv",
+    ".hypothesis",
+    "alembic",
+    "build",
+    "dist",
+    "frontend-v2",
+    "scratch",
+    "scripts/archive",
+]
 
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-testpaths = ["tests"]
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = [
+    "E501",  # Line length handled by formatter
+    "E402",  # Module level import not at top of file (used for lazy-loading/patching)
+    "E741",  # Ambiguous variable name
+    "F841",  # Unused local variable
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/*" = ["F401", "E402"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]

@@ -9,12 +9,11 @@ sys.modules["mem0"] = MagicMock()
 import pytest
 
 from src.tools.skills import (
-    SkillLoader,
     SkillDefinition,
-    list_skills,
+    SkillLoader,
     _default_loader,
+    list_skills,
 )
-
 
 SKILL_GENERAL = """\
 ---

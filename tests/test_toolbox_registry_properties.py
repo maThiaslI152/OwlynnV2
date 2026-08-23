@@ -14,10 +14,10 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from src.agent.tool_sets import (
-    TOOLBOX_REGISTRY,
     ALWAYS_INCLUDED_TOOLS,
-    COMPLEX_TOOLS_WITH_WEB,
     COMPLEX_TOOLS_NO_WEB,
+    COMPLEX_TOOLS_WITH_WEB,
+    TOOLBOX_REGISTRY,
     resolve_tools,
 )
 from src.tools.ask_user import ask_user

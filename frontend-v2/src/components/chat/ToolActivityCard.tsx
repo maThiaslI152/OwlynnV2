@@ -7,7 +7,8 @@
  *  - Expand chevron for args snippet
  */
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
+import { Check, X, RotateCw, ChevronDown, ChevronRight } from 'lucide-react'
 
 export interface ToolActivitySnapshot {
   id: string
@@ -27,14 +28,14 @@ interface ToolActivityCardProps {
   onExportAudit?: () => void
 }
 
-function statusIcon(status: ToolActivitySnapshot['status']): string {
+function statusIcon(status: ToolActivitySnapshot['status']): ReactNode {
   switch (status) {
     case 'running':
-      return '⟳'
+      return <RotateCw size={12} className="spinning" />
     case 'success':
-      return '✓'
+      return <Check size={12} />
     case 'error':
-      return '✗'
+      return <X size={12} />
   }
 }
 
@@ -56,7 +57,7 @@ export function ToolActivityCard({ activity, onExportAudit }: ToolActivityCardPr
         {activity.duration != null && (
           <span className="tool-activity-duration">{(activity.duration / 1000).toFixed(1)}s</span>
         )}
-        <span className="tool-activity-chevron">{expanded ? '▾' : '▸'}</span>
+        <span className="tool-activity-chevron">{expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</span>
       </div>
       {expanded && (
         <div className="tool-activity-details">

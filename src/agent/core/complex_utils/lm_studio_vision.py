@@ -18,12 +18,14 @@ _LOAD_POLL_INTERVAL_S = 2.0
 
 def configured_vision_model_name() -> str:
     """OpenAI-compatible model id used in /v1/chat/completions."""
-    return str(config.get("models.vision.model_name") or config.get_small_model_name())
+    return config.get_vision_model_name()
 
 
 def configured_vision_lm_studio_key() -> str:
     """Native LM Studio catalog key for /api/v1/models/load."""
-    override = config.get("models.vision.lm_studio_model_key") or config.get("models.small.lm_studio_model_key")
+    override = config.get("models.vision.lm_studio_model_key") or config.get(
+        "models.main.lm_studio_model_key"
+    )
     if override:
         return str(override)
     return configured_vision_model_name()
@@ -98,6 +100,7 @@ async def ensure_vision_vlm_loaded() -> bool:
         return True
 
     from src.agent.model_swap import IS_PENTEST_SWAPPED
+
     if IS_PENTEST_SWAPPED:
         return False
 

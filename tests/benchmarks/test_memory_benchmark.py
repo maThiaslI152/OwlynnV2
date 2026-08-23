@@ -9,7 +9,7 @@ We mock those calls to measure pure node logic overhead.
 
 import asyncio
 import sys
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 sys.modules["mem0"] = MagicMock()
 
@@ -125,6 +125,11 @@ class TestMemoryInject:
                     "allowed_toolboxes": ["all"],
                 },
             ),
+            patch(
+                "src.agent.nodes.memory.get_memory_context_for_prompt",
+                new_callable=AsyncMock,
+                return_value="Topics context",
+            ),
             patch("src.agent.nodes.memory.MemoryContextCache") as mock_cache,
         ):
             mock_cache.get.return_value = (
@@ -139,6 +144,7 @@ class TestMemoryInject:
                 "messages": [HumanMessage(content="Hello")],
                 "thread_id": "bench-thread-2",
                 "project_id": "default",
+                "needs_memory_retrieval": True,
             }
 
             tracker = LatencyTracker()

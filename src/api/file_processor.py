@@ -19,12 +19,13 @@ The watcher runs in a background thread and notifies the frontend via a
 callback (typically a WebSocket broadcast) when processing completes.
 """
 
-import os
-import time
-import threading
 import logging
-from watchdog.observers import Observer
+import os
+import threading
+import time
+
 from watchdog.events import FileSystemEventHandler
+from watchdog.observers import Observer
 
 # Configure simple logging
 logging.basicConfig(
@@ -53,7 +54,7 @@ class FileWatcherHandler(FileSystemEventHandler):
             invoked after each file is processed (or on error).
     """
 
-    def __init__(self, workspace_dir, main_loop, on_processed_callback=None):
+    def __init__(self, workspace_dir, main_loop=None, on_processed_callback=None):
         self.workspace_dir = os.path.abspath(workspace_dir)
         self.processed_dir = os.path.join(self.workspace_dir, ".processed")
         os.makedirs(self.processed_dir, exist_ok=True)
@@ -262,11 +263,11 @@ class FileWatcherHandler(FileSystemEventHandler):
     def _get_docling_converter(self):
         """Lazy-initialise Docling for DOCX only. Returns None if unavailable."""
         try:
+            from docling.datamodel.base_models import InputFormat
             from docling.document_converter import (
                 DocumentConverter,
                 WordFormatOption,
             )
-            from docling.datamodel.base_models import InputFormat
         except ImportError:
             logger.warning(
                 "[Watcher] Docling not installed — falling back to python-docx for DOCX"
@@ -538,8 +539,10 @@ class FileWatcherHandler(FileSystemEventHandler):
                 f.write("# Configuration File\n\n")
                 for section in config.sections():
                     f.write(f"## [{section}]\n")
-                    for key, value in config.items(section):
-                        f.write(f"- **{key}**: {value}\n")
+                    f.writelines(
+                        f"- **{key}**: {value}\n"
+                        for key, value in config.items(section)
+                    )
                     f.write("\n")
         except Exception as e:
             logger.warning(f"[Watcher] Config parse error in {filepath}: {e}")
@@ -626,8 +629,7 @@ class FileWatcherHandler(FileSystemEventHandler):
                         cursor.execute(f'PRAGMA table_info("{table_name}")')
                         columns = cursor.fetchall()
                         f.write("**Columns:**\n")
-                        for col in columns:
-                            f.write(f"- {col[1]} ({col[2]})\n")
+                        f.writelines(f"- {col[1]} ({col[2]})\n" for col in columns)
 
                         # Get row count
                         cursor.execute(f'SELECT COUNT(*) FROM "{table_name}"')
@@ -638,8 +640,7 @@ class FileWatcherHandler(FileSystemEventHandler):
                         if count > 0:
                             f.write("**Sample Data:**\n```\n")
                             cursor.execute(f'SELECT * FROM "{table_name}" LIMIT 5')
-                            for row in cursor.fetchall():
-                                f.write(str(row) + "\n")
+                            f.writelines(str(row) + "\n" for row in cursor.fetchall())
                             f.write("```\n\n")
 
             conn.close()
@@ -797,6 +798,7 @@ class FileWatcherHandler(FileSystemEventHandler):
         """Extract text from EPUB ebooks."""
         try:
             import zipfile
+
             from bs4 import BeautifulSoup
 
             lines = [f"# EPUB: {os.path.basename(filepath)}\n"]

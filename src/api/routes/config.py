@@ -1,6 +1,7 @@
-from fastapi import APIRouter, HTTPException
-from src.config.config_loader import _DEFAULTS_PATH, config
 import yaml
+from fastapi import APIRouter
+
+from src.config.config_loader import _DEFAULTS_PATH, config
 
 router = APIRouter()
 

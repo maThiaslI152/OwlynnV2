@@ -181,11 +181,11 @@ TEST_PROMPTS: list[dict[str, Any]] = [
             "Argue both sides in detail."
         ),
         "expected_route": "complex",
-        # Any non-bypass source proves the MiniCPM5 classifier actually ran.
+        # Any non-bypass source proves the local Gemma 4 26B classifier actually ran.
         "expected_source": ["llm_classifier", "question_heuristic_override"],
         "timeout_s": COMPLEX_TIMEOUT_S,
         "min_response_chars": 60,
-        "pipeline_notes": "open-ended reasoning → MiniCPM5 classifier (no keyword bypass)",
+        "pipeline_notes": "open-ended reasoning → Gemma 4 26B classifier (no keyword bypass)",
     },
     {
         "id": "F9.1",
@@ -199,7 +199,7 @@ TEST_PROMPTS: list[dict[str, Any]] = [
         "skip_if": "vision_unavailable",
         "timeout_s": COMPLEX_TIMEOUT_S,
         "min_response_chars": 8,
-        "pipeline_notes": "image → complex route + vision task_category → Florence OCR → DeepSeek",
+        "pipeline_notes": "image → complex route + vision task_category → Baidu unlimited-ocr vision proxy → DeepSeek",
     },
     {
         "id": "M1.1",
@@ -235,7 +235,7 @@ TEST_PROMPTS: list[dict[str, Any]] = [
         "skip_if": "mem0_unavailable",
         "timeout_s": COMPLEX_TIMEOUT_S,
         "min_response_chars": 5,
-        "pipeline_notes": "new thread → memory_retrieve → Mem0/Qdrant",
+        "pipeline_notes": "new thread → memory_retrieve → PostgreSQL pgvector (1024-dim mxbai)",
     },
     {
         "id": "M4.1",
@@ -564,7 +564,26 @@ async def poll_api(
     return last
 
 
+async def ensure_run_token() -> str:
+    token = os.environ.get("OWLYNN_LOCAL_RUN_TOKEN", "")
+    if token:
+        return token
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            resp = await client.get(f"{API_URL}/api/local-run-token")
+            if resp.status_code == 200:
+                token = resp.json().get("token") or ""
+                if token:
+                    os.environ["OWLYNN_LOCAL_RUN_TOKEN"] = token
+                    print("[EVAL] Auto-loaded OWLYNN_LOCAL_RUN_TOKEN from backend")
+                    return token
+    except Exception as e:
+        print(f"[EVAL] Warning: Could not auto-load local run token: {e}")
+    return token
+
+
 async def fetch_runtime_profile() -> dict:
+    await ensure_run_token()
     async with httpx.AsyncClient(
         timeout=10.0,
         headers={"X-Owlynn-Run-Token": os.environ.get("OWLYNN_LOCAL_RUN_TOKEN", "")},
@@ -1103,13 +1122,13 @@ async def scrape_executed_tools(page: Page) -> list[str]:
 async def get_orchestration_data(page: Page) -> dict:
     try:
         model = await page.evaluate(
-            "() => document.querySelector('.model-badge')?.innerText || ''"
+            "() => document.querySelector('.sb-segment .sb-label')?.innerText || document.querySelector('.model-badge')?.innerText || ''"
         )
         route = await page.evaluate(
-            "() => document.querySelector('.route-badge')?.innerText || ''"
+            "() => document.querySelector('.sb-route')?.innerText || document.querySelector('.route-badge')?.innerText || ''"
         )
         confidence = await page.evaluate(
-            "() => document.querySelector('.orchestration-gauge-value')?.innerText || ''"
+            "() => document.querySelector('.sb-confidence')?.innerText || document.querySelector('.orchestration-gauge-value')?.innerText || ''"
         )
         classification_source = await page.evaluate(
             """() => {
@@ -1124,7 +1143,7 @@ async def get_orchestration_data(page: Page) -> dict:
             }"""
         )
         memory_saved = await page.evaluate(
-            "() => document.querySelector('.orchestration-memory-ok')?.innerText?.trim() || ''"
+            "() => (document.querySelector('.sb-segment[title*=\"Memory\"]') || document.querySelector('.orchestration-memory-ok')) ? 'Saved' : ''"
         )
         tools = await scrape_executed_tools(page)
         return {

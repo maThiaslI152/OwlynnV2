@@ -160,8 +160,8 @@ class TestStablePrefix:
 
 class TestLegacyRoutesAbsent:
     def test_graph_valid_complex_routes(self):
-        import inspect
         import importlib.util
+        import inspect
 
         spec = importlib.util.find_spec("src.agent.core.graph")
         assert spec is not None

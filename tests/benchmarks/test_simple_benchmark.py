@@ -17,16 +17,16 @@ from tests.benchmarks.conftest import (
     BENCH_CONCURRENCY,
     BENCH_ITERATIONS,
     BENCH_WARMUP,
+    SHORT_INPUTS,
     LatencyTracker,
     MockDelayLLM,
-    make_mock_llm,
     make_fail_llm,
+    make_mock_llm,
     make_simple_state,
     setup_benchmark_llms,
     teardown_benchmark_llms,
     time_async_call,
     time_concurrent,
-    SHORT_INPUTS,
 )
 from tests.benchmarks.report import BenchmarkEntry, record_entry
 

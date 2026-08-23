@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 _SCENARIOS_ROOT = Path(__file__).resolve().parents[2] / "scenarios"

@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from langchain_core.messages import BaseMessage
 from langchain_core.utils.function_calling import convert_to_openai_tool
@@ -33,11 +33,11 @@ async def invoke_cloud_chat(
     llm_client: Any,
     model_name: str,
     messages: list[BaseMessage],
-    tools: Optional[list] = None,
+    tools: list | None = None,
     max_tokens: int,
     thinking: CloudThinkingConfig,
     strict_tools: bool = True,
-    user_id: Optional[str] = None,
+    user_id: str | None = None,
 ) -> tuple[Any, dict[str, int]]:
     """
     Invoke DeepSeek chat completions with custom message serialization.

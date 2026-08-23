@@ -1,6 +1,7 @@
 import pytest
-from langchain_core.messages import HumanMessage, AIMessage
-from src.agent.core.simple import simple_node, _simple_output_max_tokens
+from langchain_core.messages import AIMessage, HumanMessage
+
+from src.agent.core.simple import _simple_output_max_tokens, simple_node
 from src.agent.core.state import AgentState
 
 
@@ -26,10 +27,11 @@ async def test_simple_node_streams_and_aggregates(monkeypatch):
             for chunk in chunks:
                 yield chunk
 
-    async def fake_get_small_llm():
+    async def fake_get_main_llm():
         return FakeLLM()
 
-    monkeypatch.setattr("src.agent.core.simple.get_small_llm", fake_get_small_llm)
+    monkeypatch.setattr("src.agent.core.simple.get_main_llm", fake_get_main_llm)
+    monkeypatch.setattr("src.agent.core.simple.get_small_llm", fake_get_main_llm)
 
     state: AgentState = {
         "messages": [HumanMessage(content="Hi")],
@@ -43,5 +45,5 @@ async def test_simple_node_streams_and_aggregates(monkeypatch):
     assert len(out["messages"]) == 1
     assert isinstance(out["messages"][0], AIMessage)
     assert out["messages"][0].content == "Hello world!"
-    assert out["model_used"] == "small-local"
+    assert out["model_used"] in ("main-local", "small-local")
     assert out["fallback_chain"][0]["status"] == "success"

@@ -6,9 +6,10 @@ priority ordering, all pattern categories, and edge cases.
 """
 
 import re
-import pytest
-from src.agent.cloud.anonymization import anonymize, deanonymize
 
+import pytest
+
+from src.agent.cloud.anonymization import anonymize, deanonymize
 
 # ── Edge cases ──────────────────────────────────────────────────────────────
 

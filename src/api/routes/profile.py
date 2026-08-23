@@ -1,14 +1,16 @@
 from fastapi import APIRouter
+
 from src.config.settings_constants import _LLM_SENSITIVE_FIELDS
 
 router = APIRouter()
-from src.agent.llm import LLMPool
 import logging
+
+from src.agent.llm import LLMPool
 
 logger = logging.getLogger(__name__)
 
-from src.memory.user_profile import get_profile, update_profile
 from src.memory.persona import get_persona, update_persona_field
+from src.memory.user_profile import get_profile, update_profile
 
 
 @router.get("/api/profile")

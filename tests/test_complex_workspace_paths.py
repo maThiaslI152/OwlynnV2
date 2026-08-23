@@ -5,13 +5,14 @@ from unittest.mock import MagicMock
 
 sys.modules["mem0"] = MagicMock()
 
-from src.agent.core.complex import (  # noqa: E402
+from langchain_core.messages import AIMessage, HumanMessage
+
+from src.agent.core.complex import (
     _looks_like_prose_tool_stall,
     _user_intent_needs_workspace_read,
     _workspace_paths_from_text,
 )
-from src.agent.core.complex_utils.formatter import latest_user_text  # noqa: E402
-from langchain_core.messages import AIMessage, HumanMessage  # noqa: E402
+from src.agent.core.complex_utils.formatter import latest_user_text
 
 
 def test_workspace_paths_backtick_injection():

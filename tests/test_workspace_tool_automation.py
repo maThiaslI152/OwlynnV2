@@ -20,9 +20,12 @@ from langchain_core.messages import AIMessage, HumanMessage
 sys.modules["mem0"] = MagicMock()
 
 
-from src.config.settings import get_project_workspace  # noqa: E402
-from src.tools.core_tools import read_workspace_file  # noqa: E402
-from src.tools.workspace_context import reset_active_project, set_active_project_for_run  # noqa: E402
+from src.config.settings import get_project_workspace
+from src.tools.core_tools import read_workspace_file
+from src.tools.workspace_context import (
+    reset_active_project,
+    set_active_project_for_run,
+)
 
 PROBE_NAME = "_owlynn_automation_workspace_probe_.txt"
 PROBE_TEXT = "Owlynn workspace tool probe — OK\nLine 2 for integration test.\n"
@@ -81,10 +84,11 @@ async def test_live_llm_can_bind_and_call_read_workspace(
     if os.getenv("RUN_LLM_INTEGRATION") != "1":
         pytest.skip("Set RUN_LLM_INTEGRATION=1 and start your local LLM server.")
 
-    from src.agent.llm import get_large_llm
-    from src.agent.tool_sets import COMPLEX_TOOLS_NO_WEB
-    from src.agent.lm_studio_compat import with_system_for_local_server
     from langchain_core.messages import SystemMessage
+
+    from src.agent.llm import get_large_llm
+    from src.agent.lm_studio_compat import with_system_for_local_server
+    from src.agent.tool_sets import COMPLEX_TOOLS_NO_WEB
 
     _root, rel = workspace_probe_file
     tok = set_active_project_for_run("default")

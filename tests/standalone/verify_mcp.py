@@ -5,8 +5,8 @@ import sys
 # Add project root to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
-from src.tools.mcp_client import mcp_manager, get_mcp_tools
 from src.config.settings import MCP_CONFIG_PATH
+from src.tools.mcp_client import get_mcp_tools, mcp_manager
 
 
 async def main():

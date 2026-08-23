@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import shlex
 
 
 async def capture_tmux_pane(
@@ -33,7 +32,7 @@ async def capture_tmux_pane(
     )
     try:
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         proc.kill()
         return "Error: tmux capture timed out."
 

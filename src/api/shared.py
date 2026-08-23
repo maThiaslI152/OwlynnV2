@@ -1,5 +1,6 @@
 import logging
 import re
+
 from langchain_core.messages import AIMessage, ToolMessage
 
 logger = logging.getLogger("src.api")
@@ -20,8 +21,8 @@ async def emit_cloud_usage_events(send_ws, *, turn_usage=None, model_used=None):
         build_cloud_usage_payload,
         get_cost_tracker,
     )
-    from src.memory.user_profile import get_profile
     from src.config.config_loader import config
+    from src.memory.user_profile import get_profile
 
     payload = build_cloud_usage_payload(turn_usage=turn_usage, model_used=model_used)
     await send_ws({"type": "cloud_usage", **payload})

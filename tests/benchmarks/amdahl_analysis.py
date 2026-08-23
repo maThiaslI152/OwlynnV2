@@ -71,7 +71,7 @@ LLM_DELAYS_MS = {
 }
 
 
-def load_report(path: Optional[Path] = None) -> dict:
+def load_report(path: Path | None = None) -> dict:
     """Load benchmark_report.json."""
     report_path = path or Path(__file__).parent / "benchmark_report.json"
     if not report_path.exists():

@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 # Stub mem0 before any project imports
 sys.modules["mem0"] = MagicMock()
 
-from src.agent.core.graph import after_memory_retrieve, summarize_gate, build_graph
+from src.agent.core.graph import after_memory_retrieve, build_graph, summarize_gate
 
 
 class TestSummarizeGate:

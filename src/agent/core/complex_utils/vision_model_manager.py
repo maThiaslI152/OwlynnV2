@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Optional
 
 from langchain_openai import ChatOpenAI
 
@@ -23,7 +22,7 @@ class VisionModelManager:
     """Dedicated vision VLM client (Gemma 4 E2B); never falls back to other models."""
 
     def __init__(self) -> None:
-        self._client: Optional[ChatOpenAI] = None
+        self._client: ChatOpenAI | None = None
         self._last_used: float = 0.0
         self._inflight: int = 0
         self._idle_seconds = float(config.get("cloud.vision_idle_unload_seconds", 300))
@@ -51,6 +50,8 @@ class VisionModelManager:
     async def acquire(self) -> ChatOpenAI:
         from src.agent.llm import LLMPool, _build_local_llm_client
 
+        if "vision" in LLMPool._test_overrides:
+            return LLMPool._test_overrides["vision"]
         if "medium" in LLMPool._test_overrides:
             return LLMPool._test_overrides["medium"]
 
@@ -76,6 +77,7 @@ class VisionModelManager:
                     max_tokens=int(config.get("cloud.vision_max_tokens", 2048)),
                     max_output_tokens=int(config.get("cloud.vision_max_tokens", 2048)),
                     timeout=120,
+                    model_slot="vision",
                 )
                 self._model_name = model_name
                 audit_info(

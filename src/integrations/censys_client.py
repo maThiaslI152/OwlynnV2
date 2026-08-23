@@ -1,5 +1,6 @@
-import httpx
 import os
+
+import httpx
 
 CENSYS_BASE = "https://search.censys.io/api/v2"
 

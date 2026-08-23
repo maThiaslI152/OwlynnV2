@@ -18,52 +18,68 @@ from langchain_core.messages import HumanMessage
 from langgraph.types import interrupt
 
 from src.agent.core.state import AgentState
-from src.agent.llm import get_small_llm
-from src.config.config_loader import config
-from src.memory.user_profile import get_profile
-from src.tools.skills import SkillMatcher, MatchResult, _default_loader as _skill_loader
+from src.agent.llm import get_main_llm
 
-from src.config.audit_log import audit_info, audit_debug, audit_warn
-from src.config.log_middleware import log_node
-
-# Re-export from decomposed modules for backward compatibility
-from src.agent.routing.resolver import (
-    estimate_token_budget,
-    _check_cloud_available,
-    _preferred_complex_route,
-    _resolve_complex_route,
-    _resolve_memory_gate,
-    _resolve_scenario_id,
-    _memory_gate_fields,
-    _build_router_metadata,
-    _knowledge_cache_likely_answers,
-    _check_travel_mode,
+get_small_llm = get_main_llm
+from src.agent.routing.classifier import (
+    parse_classification,
 )
 from src.agent.routing.deterministic import (
-    check_deterministic_bypasses,
-    _last_user_text,
     _has_image_content,
-    _needs_frontier_quality,
-    _user_wants_file_work,
-    _user_wants_data_viz,
-    _user_wants_screen_assist,
     _is_simple_informational_query,
-    _is_followup_continuation,
+    _last_user_text,
+    _user_wants_data_viz,
+    _user_wants_file_work,
+    _user_wants_screen_assist,
+    check_deterministic_bypasses,
 )
 from src.agent.routing.modes import (
-    augment_toolbox_for_scenario,
     apply_learning_mode,
+    augment_toolbox_for_scenario,
     handle_pentest_mode,
 )
 
+# Re-export from decomposed modules for backward compatibility
+from src.agent.routing.resolver import (
+    _build_router_metadata,
+    _check_cloud_available,
+    _check_travel_mode,
+    _memory_gate_fields,
+    _preferred_complex_route,
+    _resolve_complex_route,
+    estimate_token_budget,
+)
+from src.agent.routing.resolver import (
+    _needs_frontier_quality as _needs_frontier_quality,
+)
+from src.config.audit_log import audit_debug, audit_info
+from src.config.config_loader import config
+from src.config.log_middleware import log_node
+from src.memory.user_profile import get_profile
+from src.tools.skills import MatchResult, SkillMatcher
+from src.tools.skills import _default_loader as _skill_loader
+
+
+def parse_routing(
+    content: str,
+) -> tuple[str, float, list[str], str | None, bool, str | None]:
+    """Legacy tuple-unpacking helper for route parsing."""
+    classification = parse_classification(content)
+    return (
+        classification.route,
+        classification.confidence,
+        classification.toolbox,
+        None,
+        False,
+        None,
+    )
+
+
 import json
-import re
 import logging
+import re
 
 logger = logging.getLogger(__name__)
-
-
-
 
 
 def _build_low_confidence_router_choices(
@@ -545,6 +561,11 @@ async def router_node(state: AgentState) -> AgentState:
         route = "simple"
     elif decision == "browser_local":
         route = "browser_local"
+    elif (
+        decision.startswith("complex-")
+        and classification_source == "user_clarification"
+    ):
+        route = decision
     else:
         route, toolbox = _resolve_complex_route(
             user_text, state, toolbox, cloud_available=cloud_available
@@ -554,14 +575,16 @@ async def router_node(state: AgentState) -> AgentState:
     if route != "simple" and route != "browser_local" and _check_travel_mode():
         if cloud_available:
             route = "complex-cloud"
-            logger.info("[router] Travel Mode active: forced route to complex-cloud")
-            classification_source = "travel_mode_force_cloud"
-        else:
-            route = "complex-local"
             logger.info(
-                "[router] Travel Mode active but cloud missing: fallback to complex-local"
+                "[router] Eco-Mode/Travel Mode active: offloading to DeepSeek cloud"
             )
-            classification_source = "travel_mode_cloud_unavailable"
+            classification_source = "eco_mode_battery_cloud_offload"
+        else:
+            route = "complex-default"
+            logger.info(
+                "[router] Eco-Mode active but cloud unavailable: running on local main model"
+            )
+            classification_source = "eco_mode_local_main"
 
     # ── Apply mode-specific toolbox augmentation ─────────────────────────
     toolbox = augment_toolbox_for_scenario(toolbox, state.get("scenario_id"), user_text)
@@ -665,9 +688,9 @@ async def generate_chat_title_router_llm(
     ]
 
     try:
-        small_llm = await get_small_llm()
+        main_llm = await get_main_llm()
 
-        router_llm = small_llm.bind(
+        router_llm = main_llm.bind(
             temperature=float(config.get("chat_title.temperature", 0.2)),
             max_tokens=int(config.get("chat_title.max_tokens")),
         )

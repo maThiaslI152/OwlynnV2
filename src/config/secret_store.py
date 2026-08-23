@@ -159,8 +159,9 @@ def verify_deepseek_api_key(api_key: str) -> tuple[bool, str]:
         ``(False, "401 Unauthorized — invalid key")``.
     """
     import httpx
-    from src.memory.user_profile import get_profile
+
     from src.config.config_loader import config
+    from src.memory.user_profile import get_profile
 
     if not api_key or not api_key.strip():
         return False, "Empty API key"
@@ -238,7 +239,7 @@ def _write_secrets_env(key_name: str, api_key: str) -> None:
 def _clear_profile_key(key_name: str = "deepseek_api_key") -> None:
     """Clear the api key field from user profile."""
     try:
-        from src.memory.user_profile import get_profile, _save_profile
+        from src.memory.user_profile import _save_profile, get_profile
 
         profile = get_profile()
         if profile.get(key_name):
@@ -252,7 +253,7 @@ def _clear_profile_key(key_name: str = "deepseek_api_key") -> None:
 def _store_profile_key(api_key: str) -> None:
     """Store the deepseek_api_key in the user profile."""
     try:
-        from src.memory.user_profile import get_profile, _save_profile
+        from src.memory.user_profile import _save_profile, get_profile
 
         profile = get_profile()
         profile["deepseek_api_key"] = api_key

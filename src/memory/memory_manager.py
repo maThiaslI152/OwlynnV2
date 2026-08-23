@@ -8,16 +8,16 @@ The agent calls save_memory() to store, search_memories() to retrieve.
 
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 
-from sqlalchemy import select, delete, func
+from sqlalchemy import delete, func, select
 
-from src.config.audit_log import audit_info, audit_debug
+from src.config.audit_log import audit_debug, audit_info
 from src.config.config_loader import config
-from src.models.db import AsyncSessionLocal
 from src.memory.db_models import Memory
+from src.models.db import AsyncSessionLocal
 
 _MAX_MEMORIES = int(config.get("memory.max_facts", 200))
 _SEARCH_WINDOW = int(config.get("memory.search_window", 50))
@@ -47,28 +47,31 @@ async def save_memory(fact: str) -> str:
         )
         if existing.scalar_one_or_none() is not None:
             total = await session.scalar(select(func.count()).select_from(Memory))
-            audit_debug(
-                "memory.stm", "save_skipped_duplicate", total_count=total
-            )
+            audit_debug("memory.stm", "save_skipped_duplicate", total_count=total)
             return f"Memory already exists: '{fact}'"
 
         # Check current count for cap enforcement
         total_before = await session.scalar(select(func.count()).select_from(Memory))
 
-        new_mem = Memory(fact=fact, created_at=datetime.now(tz=timezone.utc))
+        new_mem = Memory(fact=fact, created_at=datetime.now(tz=UTC))
         session.add(new_mem)
         await session.flush()  # get auto-assigned id
 
         capped = False
-        if total_before >= _MAX_MEMORIES:
+        if total_before and total_before >= _MAX_MEMORIES:
             capped = True
             # Remove the oldest records to stay within the cap
             excess = total_before - _MAX_MEMORIES + 1
-            oldest_ids = (
-                await session.execute(
-                    select(Memory.id).order_by(Memory.id).limit(excess)
+            oldest_rows = (
+                (
+                    await session.execute(
+                        select(Memory).order_by(Memory.id).limit(excess)
+                    )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
+            oldest_ids = [m.id for m in oldest_rows]
             if oldest_ids:
                 await session.execute(delete(Memory).where(Memory.id.in_(oldest_ids)))
 
@@ -141,18 +144,14 @@ async def search_memories(query: str, top_k: int = 8) -> list[dict]:
 async def delete_memory(fact: str) -> bool:
     """Remove a specific fact from memories. Returns True if removed."""
     async with AsyncSessionLocal() as session:
-        result = await session.execute(
-            select(Memory).where(Memory.fact == fact)
-        )
+        result = await session.execute(select(Memory).where(Memory.fact == fact))
         target = result.scalar_one_or_none()
         if target is not None:
             before = await session.scalar(select(func.count()).select_from(Memory))
             await session.delete(target)
             await session.commit()
             after = before - 1
-            audit_info(
-                "memory.stm", "deleted", total_before=before, total_after=after
-            )
+            audit_info("memory.stm", "deleted", total_before=before, total_after=after)
             return True
 
     total = await _count_memories()

@@ -124,6 +124,15 @@ MODELS: list[ModelConfig] = [
         quant="Q4_K_M",
         is_vlm=False,
     ),
+    ModelConfig(
+        id="qwen3.6-27b-fable-fusion-711-uncensored-heretic-nm-dau-neo-max-mtp@iq2_m",
+        display_name="Qwen3.6 27B Fable Fusion IQ2_M",
+        params="27B",
+        arch="qwen36",
+        quant="IQ2_M",
+        is_vlm=False,
+        notes="27B abliterated/fusion model quantized at IQ2_M.",
+    ),
 ]
 
 # ── Prompt definitions ────────────────────────────────────────────────────

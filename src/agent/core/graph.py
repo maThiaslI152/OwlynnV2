@@ -3,28 +3,28 @@
 See docs/AGENT_FLOW.md for node-by-node flow and docs/EXTENDING_AGENT.md for extension points.
 """
 
-from langgraph.graph import StateGraph, END
-from src.agent.core.state import AgentState
-from src.agent.routing.router import router_node
-from src.agent.core.simple import simple_node
-from src.agent.nodes.browser_local import browser_local_node
+import logging
+
+from langgraph.graph import END, StateGraph
+
 from src.agent.core.complex import complex_llm_node, complex_tool_action_node
-from src.agent.nodes.security_proxy import security_proxy_node
-from src.agent.nodes.scope_clarify import scope_clarify_node
-from src.agent.nodes.plan_review import plan_review_node
+from src.agent.core.simple import simple_node
+from src.agent.core.state import AgentState
+from src.agent.nodes.browser_local import browser_local_node
+from src.agent.nodes.coherence import coherence_check_node
+from src.agent.nodes.coherence_retry import coherence_retry_node
 from src.agent.nodes.memory import (
     memory_inject_lite_node,
     memory_retrieve_node,
     memory_write_node,
 )
-from src.agent.nodes.summarize import auto_summarize_node
-from src.agent.nodes.coherence import coherence_check_node
-from src.agent.nodes.coherence_retry import coherence_retry_node
-from src.agent.pentest.executor import pentest_executor_node
 from src.agent.nodes.pentest_memory import pentest_memory_node
-
-
-import logging
+from src.agent.nodes.plan_review import plan_review_node
+from src.agent.nodes.scope_clarify import scope_clarify_node
+from src.agent.nodes.security_proxy import security_proxy_node
+from src.agent.nodes.summarize import auto_summarize_node
+from src.agent.pentest.executor import pentest_executor_node
+from src.agent.routing.router import router_node
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ from src.config.config_loader import config
 
 # ── Summarize gate: conditional edge after memory_retrieve ───────────
 
-_DEFAULT_CONTEXT_WINDOW = int(config.get("models.small.context_window", 65536))
+_DEFAULT_CONTEXT_WINDOW = config.get_main_model_context_window()
 _SUMMARIZE_THRESHOLD = float(config.get("summarization.threshold_ratio", 0.85))
 
 _COHERENCE_THRESHOLD = float(config.get("coherence.retry_threshold", 0.4))
@@ -389,11 +389,12 @@ def build_graph():
 
 # --- Init Agent Async Wrapper ---
 from langgraph.checkpoint.memory import MemorySaver
-from src.config.settings import MCP_CONFIG_PATH
-from src.tools.mcp_client import mcp_manager
-from src.config.secret_store import resolve_deepseek_api_key
+
 from src.agent.cloud.cloud_circuit_breaker import reset_circuit_breaker
 from src.agent.cloud.cloud_cost_tracker import reset_cost_tracker
+from src.config.secret_store import resolve_deepseek_api_key
+from src.config.settings import MCP_CONFIG_PATH
+from src.tools.mcp_client import mcp_manager
 
 
 async def _check_cloud_connectivity() -> dict:
@@ -496,7 +497,6 @@ async def init_agent(checkpointer=None):
         await mcp_manager.initialize(str(MCP_CONFIG_PATH))
     except Exception as e:
         logger.warning("Error suppressed: %s", e)
-        pass
 
     # Reset cloud subsystems for fresh session
     reset_circuit_breaker()
@@ -544,19 +544,29 @@ async def init_agent(checkpointer=None):
 
 async def _log_cloud_connectivity():
     """Log cloud connectivity status after startup."""
+    import os
+
+    if os.getenv("PYTEST_CURRENT_TEST"):
+        return
     status = await _check_cloud_connectivity()
     if status["available"] and status["key_valid"]:
         logger.info(
             "[cloud-check] DeepSeek V4 reachable — model=%s, key=valid",
             status.get("model", "unknown"),
         )
-    elif status["available"]:
-        logger.warning(
-            "[cloud-check] DeepSeek V4 reachable but key invalid: %s",
-            status.get("error", "unknown"),
-        )
     else:
-        logger.warning(
-            "[cloud-check] DeepSeek V4 unreachable: %s",
-            status.get("error", "unknown"),
-        )
+        from src.agent.cloud.cloud_circuit_breaker import get_circuit_breaker
+
+        cb = get_circuit_breaker()
+        cb.force_open(reason=status.get("error") or "cloud_unreachable")
+
+        if status["available"]:
+            logger.warning(
+                "[cloud-check] DeepSeek V4 reachable but key invalid: %s",
+                status.get("error", "unknown"),
+            )
+        else:
+            logger.warning(
+                "[cloud-check] DeepSeek V4 unreachable: %s",
+                status.get("error", "unknown"),
+            )

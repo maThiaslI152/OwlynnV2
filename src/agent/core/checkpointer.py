@@ -1,15 +1,15 @@
 import logging
-from typing import Optional
 
-from psycopg_pool import AsyncConnectionPool
-from psycopg.rows import dict_row
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from psycopg.rows import dict_row
+from psycopg_pool import AsyncConnectionPool
+
 from src.models.db import DATABASE_URL
 
 logger = logging.getLogger(__name__)
 
 # Global connection pool
-_pool: Optional[AsyncConnectionPool] = None
+_pool: AsyncConnectionPool | None = None
 
 
 def _get_psycopg_url() -> str:
@@ -25,6 +25,10 @@ def _get_pool() -> AsyncConnectionPool:
     global _pool
     if _pool is None:
         url = _get_psycopg_url()
+        if not url.startswith(("postgresql://", "postgres://")):
+            raise ValueError(
+                f"PostgresConnectionPool requires a postgresql:// URL, got: {url}"
+            )
         _pool = AsyncConnectionPool(
             conninfo=url,
             kwargs={"autocommit": True, "row_factory": dict_row},
@@ -38,6 +42,9 @@ async def get_postgres_saver() -> AsyncPostgresSaver:
     Returns an initialized AsyncPostgresSaver.
     Ensures that the connection pool is open and the .setup() tables are created.
     """
+    url = _get_psycopg_url()
+    if not url.startswith(("postgresql://", "postgres://")):
+        raise ValueError(f"PostgresSaver requires a postgresql:// URL, got: {url}")
     pool = _get_pool()
     checkpointer = AsyncPostgresSaver(pool)
 

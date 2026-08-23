@@ -22,7 +22,7 @@ from unittest.mock import AsyncMock, patch
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import pytest
-from hypothesis import given, settings, assume, HealthCheck
+from hypothesis import HealthCheck, assume, given, settings
 from hypothesis import strategies as st
 from langchain_core.messages import AIMessage, HumanMessage
 
@@ -30,7 +30,6 @@ from src.agent.nodes.summarize import (
     _SUMMARIZE_THRESHOLD,
     auto_summarize_node,
 )
-
 
 # ── Strategies ───────────────────────────────────────────────────────────
 
@@ -114,7 +113,7 @@ class TestAutoSummarizeTriggerThreshold:
     )
     @settings(max_examples=100, suppress_health_check=[HealthCheck.too_slow])
     @pytest.mark.asyncio
-    @patch("src.agent.nodes.summarize.get_small_llm")
+    @patch("src.agent.nodes.summarize.get_main_llm")
     async def test_triggers_when_above_threshold(
         self, mock_get_llm, context_window, fraction
     ):

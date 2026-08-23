@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { fetchWithAuth } from '../../lib/localRunToken'
 
@@ -133,11 +134,12 @@ export function DeckBrowserModal({ deckId, onClose }: DeckBrowserModalProps) {
                 border: 'none',
                 color: 'inherit',
                 cursor: 'pointer',
-                fontSize: 18,
                 padding: '4px 8px',
+                display: 'inline-flex',
+                alignItems: 'center',
               }}
             >
-              ✕
+              <X size={16} />
             </button>
           </div>
 

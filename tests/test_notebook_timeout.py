@@ -6,8 +6,9 @@ from unittest.mock import MagicMock
 sys.modules["mem0"] = MagicMock()
 
 import pytest
-from src.tools.notebook import notebook_run, notebook_reset, _reset_notebook
+
 from src.config.audit_log import set_thread_id
+from src.tools.notebook import _reset_notebook, notebook_reset, notebook_run
 
 
 @pytest.fixture(autouse=True)

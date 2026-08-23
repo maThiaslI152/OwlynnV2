@@ -6,9 +6,10 @@ Manages built-in and custom agent personalities, allowing the user to select
 tailored system behaviors, custom instructions, and restricted toolboxes.
 """
 
-import os
 import json
 import logging
+import os
+
 from src.config.settings import DATA_DIR
 
 logger = logging.getLogger(__name__)

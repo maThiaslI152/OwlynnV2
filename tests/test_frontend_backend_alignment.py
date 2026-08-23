@@ -14,12 +14,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from hypothesis import given, settings, HealthCheck
-from hypothesis import strategies as st
 from fastapi.testclient import TestClient
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
 
 from src.memory.user_profile import _DEFAULTS
-
 
 # ── Strategies ───────────────────────────────────────────────────────────
 
@@ -49,11 +48,10 @@ def isolated_profile(tmp_path):
         yield tmp_profile
 
 
-@pytest.fixture()
+@pytest.fixture(scope="module")
 def client():
     """
-    Create a TestClient that skips the lifespan (which initializes the
-    heavy LangGraph agent). We only need the REST endpoints.
+    Create a TestClient for REST endpoints.
     """
     from src.api.server import app
 

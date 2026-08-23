@@ -16,14 +16,16 @@ All file operations are sandboxed to the active project workspace via
 ``get_safe_workspace_path()``, which prevents path traversal attacks.
 """
 
+import inspect
+import logging
 import os
 import re
-from langchain_core.tools import tool
-from ..memory.memory_manager import search_memories
-from ..config.settings import WORKSPACE_DIR as _WORKSPACE_PATH
-from .workspace_context import tool_workspace_root
 
-import logging
+from langchain_core.tools import tool
+
+from ..config.settings import WORKSPACE_DIR as _WORKSPACE_PATH
+from ..memory.memory_manager import search_memories
+from .workspace_context import tool_workspace_root
 
 logger = logging.getLogger(__name__)
 BASE_WORKSPACE_DIR = str(_WORKSPACE_PATH.resolve())
@@ -50,8 +52,7 @@ def get_safe_workspace_path(filename: str) -> tuple[str, str | None]:
         )
 
     filename = filename.lstrip("/")
-    if filename.startswith("workspace/"):
-        filename = filename[len("workspace/") :]
+    filename = filename.removeprefix("workspace/")
     if filename.startswith("projects/"):
         workspace_root = BASE_WORKSPACE_DIR
     else:
@@ -268,8 +269,8 @@ def recall_memories(query: str) -> str:
     if get_active_scenario_id() == "pentest":
         from src.memory.pentest_engagement import (
             get_active_engagement,
-            list_findings,
             get_findings_summary,
+            list_findings,
         )
 
         eng = get_active_engagement()
@@ -288,6 +289,24 @@ def recall_memories(query: str) -> str:
         return "\n".join(lines)
 
     memories = search_memories(query, top_k=8)
+    if inspect.iscoroutine(memories):
+        try:
+            import asyncio
+
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+            if loop and loop.is_running():
+                import concurrent.futures
+
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    memories = pool.submit(asyncio.run, memories).result()
+            else:
+                memories = asyncio.run(memories)
+        except Exception:
+            memories = []
+
     if not memories:
         return "No relevant memories found."
     lines = ["Relevant memories:"]
@@ -315,9 +334,9 @@ def recall_all_memories(query: str = "", project_id: str = "", tags: str = "") -
         from src.memory.pentest_engagement import (
             get_active_engagement,
             get_engagement_context,
+            get_scope,
             list_findings,
             list_targets,
-            get_scope,
         )
 
         eng = get_active_engagement()
@@ -474,9 +493,10 @@ async def download_to_workspace(url: str, filename: str) -> str:
         filename: The name to save the file as in the workspace.
     """
     import urllib.request
+
     from src.api.routes.browser_extension import (
-        is_extension_connected,
         dispatch_extension_get_cookies,
+        is_extension_connected,
     )
     from src.tools.url_policy import url_fetch_blocked_reason
 

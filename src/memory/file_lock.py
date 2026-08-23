@@ -5,10 +5,9 @@ JSON file writes across async tasks and thread pools.
 
 import threading
 from pathlib import Path
-from typing import Dict
 
 # Global registry of locks keyed by absolute file path
-_locks: Dict[str, threading.RLock] = {}
+_locks: dict[str, threading.RLock] = {}
 _registry_lock = threading.Lock()
 
 

@@ -30,11 +30,9 @@ async def test_web_search_general_fallback_chain_mocked(monkeypatch):
 
     async def wttr(query: str, backend: str, news: bool):
         calls.append("wttr")
-        return None
 
     async def ddg_http(query: str, backend: str, news: bool, focus_query: str = ""):
         calls.append("ddg_http")
-        return None
 
     async def bing(query: str, backend: str, news: bool, focus_query: str = ""):
         calls.append("bing")
@@ -79,11 +77,9 @@ async def test_web_search_news_flow_mocked(monkeypatch):
 
     async def ddg_http(query: str, backend: str, news: bool, focus_query: str = ""):
         calls.append("ddg_http")
-        return None
 
     async def bing(query: str, backend: str, news: bool, focus_query: str = ""):
         calls.append("bing")
-        return None
 
     async def ddg_lite(query: str, backend: str, news: bool, focus_query: str = ""):
         calls.append("ddg_lite")

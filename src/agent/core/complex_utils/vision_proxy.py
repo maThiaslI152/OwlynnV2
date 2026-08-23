@@ -3,7 +3,7 @@ import copy
 import hashlib
 import logging
 import time
-from typing import Callable, Optional
+from collections.abc import Callable
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
@@ -33,7 +33,7 @@ def _bytes_cache_key(image_bytes: bytes) -> str:
     return hashlib.sha256(image_bytes[:65536]).hexdigest()[:24]
 
 
-def _get_cached_transcription(key: str) -> Optional[str]:
+def _get_cached_transcription(key: str) -> str | None:
     entry = _TRANSCRIPTION_CACHE.get(key)
     if not entry:
         return None
@@ -136,7 +136,7 @@ async def transcribe_crop(
 async def process_vision_messages(
     messages: list,
     *,
-    reanonymize: Optional[Callable[[str], tuple[str, dict]]] = None,
+    reanonymize: Callable[[str], tuple[str, dict]] | None = None,
 ) -> tuple[list, bool]:
     """
     Scan messages for ``image_url`` blocks and transcribe via local VLM.

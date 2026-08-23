@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { Monitor, PenTool, Search, Bot, Paperclip, Mic, MicOff } from 'lucide-react'
+import { Monitor, PenTool, Search, Bot, Paperclip, Mic, MicOff, ChevronUp, ChevronDown, X, Square, ArrowUp } from 'lucide-react'
 import { useDropzone } from 'react-dropzone'
 import { useAppStore } from '../../state/useAppStore'
 import {
@@ -362,7 +362,7 @@ export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitl
           <span className="persona-pill-icon">{getPersonaIcon(activePersona.id)}</span>
           <span className="persona-pill-name">{activePersona.name}</span>
           <span className="persona-pill-role">{activePersona.role}</span>
-          <span className="persona-pill-arrow">{dropdownOpen ? '▲' : '▼'}</span>
+          <span className="persona-pill-arrow">{dropdownOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}</span>
         </button>
 
         {dropdownOpen && personas.length > 0 && (
@@ -420,8 +420,9 @@ export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitl
                   className="attachment-remove" 
                   onClick={() => removeFile(idx)}
                   title="Remove file"
+                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
                 >
-                  ✕
+                  <X size={12} />
                 </button>
               </div>
             ))}
@@ -479,8 +480,9 @@ export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitl
               className="composer-send is-stop"
               onClick={onStop}
               title="Stop generation"
+              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
             >
-              ■
+              <Square size={14} style={{ fill: 'currentColor' }} />
             </button>
           ) : (
             <button
@@ -488,8 +490,9 @@ export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitl
               className="composer-send"
               disabled={disabled || (!value.trim() && attachedFiles.length === 0)}
               title="Send (Enter)"
+              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
             >
-              ↑
+              <ArrowUp size={18} />
             </button>
           )}
         </div>

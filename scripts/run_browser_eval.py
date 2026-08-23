@@ -253,13 +253,13 @@ async def wait_for_response(page, msg_count_before: int, timeout_s: int = 300) -
 async def get_orchestration_data(page) -> dict:
     try:
         model = await page.evaluate(
-            "() => { const el = document.querySelector('.model-badge'); return el ? el.innerText : ''; }"
+            "() => document.querySelector('.sb-segment .sb-label')?.innerText || document.querySelector('.model-badge')?.innerText || ''"
         )
         route = await page.evaluate(
-            "() => { const el = document.querySelector('.route-badge'); return el ? el.innerText : ''; }"
+            "() => document.querySelector('.sb-route')?.innerText || document.querySelector('.route-badge')?.innerText || ''"
         )
         confidence = await page.evaluate(
-            "() => { const el = document.querySelector('.orchestration-gauge-value'); return el ? el.innerText : ''; }"
+            "() => document.querySelector('.sb-confidence')?.innerText || document.querySelector('.orchestration-gauge-value')?.innerText || ''"
         )
         return {"model": model, "route": route, "confidence": confidence}
     except Exception as e:

@@ -62,10 +62,10 @@ class MacScreenAssistGateway:
         return None
 
     async def capture_desktop_screenshot(self) -> str | None:
+        import base64
+        import os
         import subprocess
         import tempfile
-        import os
-        import base64
 
         fd, path = tempfile.mkstemp(suffix=".jpg")
         os.close(fd)

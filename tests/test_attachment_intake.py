@@ -10,7 +10,6 @@ from src.api.attachment_intake import (
 )
 from src.api.shared import build_message_content
 
-
 PNG_BYTES = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
 )

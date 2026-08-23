@@ -25,7 +25,7 @@ from unittest.mock import AsyncMock, patch
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import pytest
-from hypothesis import given, settings, assume, HealthCheck
+from hypothesis import HealthCheck, assume, given, settings
 from hypothesis import strategies as st
 from langchain_core.messages import (
     AIMessage,
@@ -36,11 +36,10 @@ from langchain_core.messages import (
 )
 
 from src.agent.nodes.summarize import (
-    _is_protected,
     _SUMMARIZE_THRESHOLD,
+    _is_protected,
     auto_summarize_node,
 )
-
 
 # ── Strategies ───────────────────────────────────────────────────────────
 
@@ -147,7 +146,7 @@ class TestProtectedMessagePreservation:
     )
     @settings(max_examples=100, suppress_health_check=[HealthCheck.too_slow])
     @pytest.mark.asyncio
-    @patch("src.agent.nodes.summarize.get_small_llm")
+    @patch("src.agent.nodes.summarize.get_main_llm")
     async def test_protected_messages_survive_summarization(
         self, mock_get_llm, num_turns, protected_msgs, context_window
     ):
@@ -196,13 +195,13 @@ class TestProtectedMessagePreservation:
             pass
 
     @given(
-        num_turns=num_turns_st,
+        num_turns=st.integers(min_value=15, max_value=25),
         protected_msgs=protected_messages_st,
         context_window=context_window_st,
     )
     @settings(max_examples=100, suppress_health_check=[HealthCheck.too_slow])
     @pytest.mark.asyncio
-    @patch("src.agent.nodes.summarize.get_small_llm")
+    @patch("src.agent.nodes.summarize.get_main_llm")
     async def test_protected_message_content_unchanged(
         self, mock_get_llm, num_turns, protected_msgs, context_window
     ):

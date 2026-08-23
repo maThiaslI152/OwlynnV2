@@ -67,19 +67,22 @@ Python `StateGraph` with `AgentState` TypedDict.
 - Redis-backed checkpointing for persistence across restarts
 - Checkpoint system enables thread-level conversation history
 
-### ADR-0003: Cloud-Primary Model Architecture
+### ADR-0003: 4-Model Unified Taxonomy with Cloud Escalation
 
-Two-tier model system:
+4-tier model system:
 
 | Tier | Model | Context | Location |
 |------|-------|---------|----------|
-| Local Unified | `gemma-4-e2b-heretic-uncensored-mlx` | 65536 | Always local (routing, vision proxy, memory extraction) |
-| Cloud | `deepseek-v4-flash` | 1M | Primary complex |
+| Main Local | `gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m` | 32768 | Always local (routing, extraction, direct answers, local complex fallback, pentest mode) |
+| Vision | `baidu.unlimited-ocr` | 8192 | Local OCR / visual transcription proxy |
+| Embedding | `text-embedding-mxbai-embed-large-v1` (1024 dims) | 512 | Always local (PostgreSQL pgvector LTM, semantic cache, web RAG) |
+| Pentest | `gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m` | 32768 | Local isolated Pentest mode (zero-latency swap) |
+| Cloud | `deepseek-v4-flash` / `pro` | 1M | Primary complex cloud reasoning |
 
 **Consequences:**
 
-- `LLMPool` manages lifecycle — cloud pool + router + extraction, cleared on profile change
-- Model keys stored in runtime profile, changeable without server restart
+- `LLMPool` manages lifecycle (`main`, `vision`, `cloud`), centralized in `defaults.yaml`
+- Single source of truth for configuration without model swap latencies
 
 ### ADR-0004: WebSocket as Primary Transport
 

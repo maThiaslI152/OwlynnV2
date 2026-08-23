@@ -1,7 +1,7 @@
 {
   "name": "frontend-v2",
   "private": true,
-  "version": "0.1.7",
+  "version": "0.2.3",
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -10,7 +10,7 @@
     "test": "vitest run",
     "lint": "eslint .",
     "preview": "vite preview",
-    "generate:types": "cd .. && python scripts/generate_ws_types.py"
+    "generate:types": "cd .. && (.venv/bin/python scripts/generate_ws_types.py 2>/dev/null || python3 scripts/generate_ws_types.py 2>/dev/null || python scripts/generate_ws_types.py)"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.101.2",

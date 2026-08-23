@@ -1,7 +1,7 @@
 ---
 status: active
 category: guide
-last_updated: 2026-06-27
+last_updated: 2026-08-23
 owner: human
 ---
 
@@ -9,31 +9,40 @@ owner: human
 
 > **Purpose:** Guide for configuring and using LM Studio with Owlynn.
 
+## Models to Load
 
-## Models to Download
+Owlynn is standardized on the **Unified Local Architecture**:
 
-Owlynn uses a single **local unified model** (`gemma-4-e2b-heretic-uncensored-mlx`) which acts as the router, simple path executor, vision proxy VLM, background memory extraction tool, and cloud fallback for complex reasoning when DeepSeek V4 is unavailable.
+### 1. Main Local Model (Always Loaded — Unified Engine)
 
-### Local Unified Model (Always Loaded)
+- `gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m` — unified local engine handling routing classification, direct simple answers, chat titles, background memory extraction, local reasoning fallback, and offline pentest mode.
+- Config: `models.main` & `models.pentest` in [`defaults.yaml`](../../src/config/defaults.yaml)
+- **Important:** Set LM Studio `n_ctx` to 32768, `flash_attention: true`, and disable simple draft speculative decoding.
 
-- `gemma-4-e2b-heretic-uncensored-mlx` — handles routing, simple answers, chat titles, vision proxy (image transcription), background memory extraction, and cloud fallback. 4B params, 4-bit quantization, ~5 GB VRAM.
-- Config: `models.small` in [`defaults.yaml`](../../src/config/defaults.yaml)
-- **Important:** Set LM Studio `n_ctx` to 65536 or higher for this model.
+### 2. Vision Model (Lazy Loaded)
 
-### Embeddings (RAG / Memory Only)
+- `baidu.unlimited-ocr` — dedicated vision transcription and OCR proxy.
+- Config: `models.vision` in [`defaults.yaml`](../../src/config/defaults.yaml)
 
-- `text-embedding-nomic-embed-text-v1.5-embedding` — Qdrant vector search for **text documents only**
-- Chat images go through the unified local model vision proxy → DeepSeek text (no cloud image upload).
+### 3. Embedding Model (Always Loaded)
 
-### Legacy note
+- `text-embedding-mxbai-embed-large-v1` (1024 dims) — PostgreSQL pgvector (`memory_vectors`, `semantic_cache`, `engagement_vectors`) search and web RAG.
+- Config: `models.embedding` in [`defaults.yaml`](../../src/config/defaults.yaml)
 
-Older docs referenced separate vision/longctx model slots, Qwen 9B medium models, Florence-2/Gemma 4 E2B vision proxies, and Gemma variants. Current architecture is cloud-primary with a single unified local model (`gemma-4-e2b-heretic-uncensored-mlx`) and nomic embedding. Complex reasoning goes to DeepSeek V4 cloud, with local fallback when cloud is unavailable.
+### 4. Pentest Mode (Zero-Latency Switching)
+
+- Uses the active `gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m` (90% tool accuracy, 53 tok/s). Also supports `gemma-4-12b-coder-fable5-composer2.5-v1@q4_k_m`.
+- Config: `models.pentest` in [`defaults.yaml`](../../src/config/defaults.yaml)
+
+### Cloud Escalation
+
+- `DeepSeek V4` (`deepseek-v4-flash` default, `deepseek-v4-pro` optional) for heavy complex multi-step reasoning via cloud API.
 
 ## Jinja Template Issues — `No user query found in messages`
 
-LM Studio applies the model's **Jinja chat template** to the `/v1/chat/completions` payload. Some model templates (e.g., legacy Qwen 3.x variants no longer in use) expect a normal **user** role in the message list. Owlynn mitigates this in two ways:
+LM Studio applies the model's **Jinja chat template** to the `/v1/chat/completions` payload. Owlynn handles template compatibility via:
 
-1. **Router** uses a `HumanMessage` (not system-only) for routing.
+1. **Router** uses a `HumanMessage` for routing.
 2. **`lm_studio_fold_system`** (default **on** in profile defaults): system instructions are **prepended into the first user message** so the API sees a clear user turn. Disable in `data/user_profile.json` if your backend requires a separate system role:
 
    ```json
@@ -52,4 +61,4 @@ LM Studio applies the model's **Jinja chat template** to the `/v1/chat/completio
 
 ## Last updated
 
-2026-06-27 — Updated unified local model to Gemma 4 E2B; nomic embed scope clarified
+2026-08-22 — Standardized on 4-model taxonomy (Gemma 4 26B main, baidu.unlimited-ocr vision, MXBAI 1024-dim embedding, Gemma 4 12B Coder pentest).

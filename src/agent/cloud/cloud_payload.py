@@ -14,7 +14,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from langchain_core.messages import (
     AIMessage,
@@ -26,7 +26,6 @@ from langchain_core.messages import (
 
 from src.agent.cloud.anonymization import anonymize
 from src.agent.hitl.cloud_brief import build_cloud_brief, estimate_brief_tokens
-from src.agent.response_styles import style_instruction_for_prompt
 from src.config.audit_log import audit_debug
 from src.config.config_loader import config
 from src.memory.user_profile import get_profile
@@ -84,7 +83,7 @@ class CloudThinkingConfig:
     """Resolved thinking mode for a single cloud invocation."""
 
     thinking_enabled: bool
-    reasoning_effort: Optional[str] = None
+    reasoning_effort: str | None = None
     extra_body: dict = field(default_factory=dict)
 
 
@@ -97,7 +96,7 @@ class CloudPayload:
     system: SystemMessage
     messages: list[BaseMessage]
     prompt_messages: list[BaseMessage]
-    anon_mapping: Optional[dict[str, str]]
+    anon_mapping: dict[str, str] | None
     cloud_brief_tokens_est: int = 0
     anonymization_placeholders_count: int = 0
     vision_intake_mode: str = "text"
@@ -299,9 +298,7 @@ def resolve_cloud_thinking_config(
         # auto
         if mode == "tools_off" and not tool_active:
             thinking_enabled = False
-        elif profile.get("cloud_model_tier") == "pro":
-            thinking_enabled = True
-        elif tool_active or tools_bound:
+        elif profile.get("cloud_model_tier") == "pro" or tool_active or tools_bound:
             thinking_enabled = True
         else:
             user_text = _last_user_text(state)
@@ -314,7 +311,7 @@ def resolve_cloud_thinking_config(
     extra: dict[str, Any] = {
         "thinking": {"type": "enabled" if thinking_enabled else "disabled"}
     }
-    reasoning: Optional[str] = effort if thinking_enabled else None
+    reasoning: str | None = effort if thinking_enabled else None
     return CloudThinkingConfig(
         thinking_enabled=thinking_enabled,
         reasoning_effort=reasoning,
@@ -558,7 +555,7 @@ def _brief_cache_key(state: dict) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
-def _get_cached_brief(key: str) -> Optional[str]:
+def _get_cached_brief(key: str) -> str | None:
     entry = _BRIEF_CACHE.get(key)
     if not entry:
         return None
@@ -591,7 +588,7 @@ async def prepare_cloud_payload(
         Async callable ``(messages) -> (messages, ok)`` — typically ``process_vision_messages``.
     """
     profile = get_profile()
-    anon_mapping: Optional[dict[str, str]] = None
+    anon_mapping: dict[str, str] | None = None
     anon_ctx = {
         "name": profile.get("name", ""),
         "custom_sensitive_terms": profile.get("custom_sensitive_terms", []),
@@ -751,7 +748,7 @@ def _content_to_str(content: Any) -> str:
     return str(content or "")
 
 
-def _extract_reasoning_content(msg: Any) -> Optional[str]:
+def _extract_reasoning_content(msg: Any) -> str | None:
     if hasattr(msg, "reasoning_content") and msg.reasoning_content:
         return str(msg.reasoning_content)
     ak = getattr(msg, "additional_kwargs", None) or {}

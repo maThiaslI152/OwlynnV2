@@ -3,67 +3,72 @@
 See docs/TOOLS.md; implement tools in src/tools/ and register here.
 """
 
-from src.tools.web_tools import (
-    web_search,
-    fetch_webpage,
-    deep_research,
-    browser_background_fetch,
-)
+from src.tools.ask_user import ask_user
 from src.tools.core_tools import (
-    read_workspace_file,
-    write_workspace_file,
-    edit_workspace_file,
-    list_workspace_files,
     delete_workspace_file,
     download_to_workspace,
+    edit_workspace_file,
+    forget_memory,
+    list_workspace_files,
+    read_workspace_file,
+    recall_all_memories,
+    recall_memories,
+    write_workspace_file,
 )
-from src.tools.core_tools import recall_memories, recall_all_memories, forget_memory
-from src.tools.doc_generator import create_docx, create_xlsx, create_pptx, create_pdf
-from src.tools.notebook import notebook_run, notebook_reset, notebook_vars
-from src.tools.interactive_content import render_interactive_block
-from src.tools.ipynb_tools import read_ipynb, write_ipynb, export_ipynb_html
-from src.tools.todo import todo_add, todo_list, todo_complete, todo_update, todo_filter
-from src.tools.ask_user import ask_user
-from src.tools.skills import list_skills, invoke_skill
-from src.tools.study_tools import (
-    course_register,
-    course_list,
-    course_get,
-    course_workspace_create,
-    course_chat_create,
-    study_note_save,
-    study_note_search,
-    study_note_delete,
-    flashcard_deck_create,
-    flashcard_review,
-    flashcard_suggest,
-    flashcard_import,
-    flashcard_export,
-    quiz_session_start,
-    quiz_session_answer,
-    quiz_session_results,
-    mastery_record,
-    study_session_log,
-    study_weak_areas,
-    export_study_sheet,
-)
-from src.tools.rag_tools import search_workspace_docs
-from src.tools.screen_assist.tools import SCREEN_ASSIST_TOOLS
-from src.tools.pentest_tools import PENTEST_TOOLS
-from src.tools.pentest_network import PENTEST_NETWORK_TOOLS
-from src.tools.pentest_web import PENTEST_WEB_TOOLS
-from src.tools.pentest_vuln import PENTEST_VULN_TOOLS
-from src.tools.pentest_exploit import PENTEST_EXPLOIT_TOOLS
-from src.tools.pentest_post import PENTEST_POST_TOOLS
-from src.tools.pentest_osint import PENTEST_OSINT_TOOLS
-from src.tools.pentest_ad import PENTEST_AD_TOOLS
-from src.tools.pentest_password import PENTEST_PASSWORD_TOOLS
-from src.tools.pentest_cloud import PENTEST_CLOUD_TOOLS
-from src.tools.pentest_reporting import PENTEST_REPORTING_TOOLS
 from src.tools.data_connectors import (
     ingest_github_repo,
-    ingest_youtube_transcript,
     ingest_obsidian_vault,
+    ingest_youtube_transcript,
+)
+from src.tools.doc_generator import create_docx, create_pdf, create_pptx, create_xlsx
+from src.tools.interactive_content import render_interactive_block
+from src.tools.ipynb_tools import export_ipynb_html, read_ipynb, write_ipynb
+from src.tools.notebook import notebook_reset, notebook_run, notebook_vars
+from src.tools.pentest_ad import PENTEST_AD_TOOLS
+from src.tools.pentest_cloud import PENTEST_CLOUD_TOOLS
+from src.tools.pentest_exploit import PENTEST_EXPLOIT_TOOLS
+from src.tools.pentest_network import PENTEST_NETWORK_TOOLS
+from src.tools.pentest_osint import PENTEST_OSINT_TOOLS
+from src.tools.pentest_password import PENTEST_PASSWORD_TOOLS
+from src.tools.pentest_post import PENTEST_POST_TOOLS
+from src.tools.pentest_reporting import PENTEST_REPORTING_TOOLS
+from src.tools.pentest_tools import PENTEST_TOOLS
+from src.tools.pentest_vuln import PENTEST_VULN_TOOLS
+from src.tools.pentest_web import PENTEST_WEB_TOOLS
+from src.tools.rag_tools import search_workspace_docs
+from src.tools.screen_assist.tools import (
+    NORMAL_SCREEN_ASSIST_TOOLS,
+    SCREEN_ASSIST_TOOLS,
+)
+from src.tools.skills import invoke_skill, list_skills, skill_manage, skill_view
+from src.tools.study_tools import (
+    course_chat_create,
+    course_get,
+    course_list,
+    course_register,
+    course_workspace_create,
+    export_study_sheet,
+    flashcard_deck_create,
+    flashcard_export,
+    flashcard_import,
+    flashcard_review,
+    flashcard_suggest,
+    mastery_record,
+    quiz_session_answer,
+    quiz_session_results,
+    quiz_session_start,
+    study_note_delete,
+    study_note_save,
+    study_note_search,
+    study_session_log,
+    study_weak_areas,
+)
+from src.tools.todo import todo_add, todo_complete, todo_filter, todo_list, todo_update
+from src.tools.web_tools import (
+    browser_background_fetch,
+    deep_research,
+    fetch_webpage,
+    web_search,
 )
 
 # Full tool set with web search enabled
@@ -106,30 +111,11 @@ COMPLEX_TOOLS_WITH_WEB: list = [
     # Skills
     list_skills,
     invoke_skill,
+    skill_view,
+    skill_manage,
     render_interactive_block,
-    # Study PA
-    course_register,
-    course_list,
-    course_get,
-    course_workspace_create,
-    course_chat_create,
-    study_note_save,
-    study_note_search,
-    study_note_delete,
-    flashcard_deck_create,
-    flashcard_review,
-    flashcard_suggest,
-    flashcard_import,
-    flashcard_export,
-    quiz_session_start,
-    quiz_session_answer,
-    quiz_session_results,
-    mastery_record,
-    study_session_log,
-    study_weak_areas,
-    export_study_sheet,
-    # Screen assist / browser bridge
-    *SCREEN_ASSIST_TOOLS,
+    # Browser bridge (Kali tools are pentest-only — see TOOLBOX_REGISTRY.pentest)
+    *NORMAL_SCREEN_ASSIST_TOOLS,
     # HITL
     ask_user,
 ]
@@ -163,7 +149,15 @@ COMPLEX_TOOLS_NO_WEB: list = [
     todo_filter,
     list_skills,
     invoke_skill,
+    skill_view,
+    skill_manage,
     render_interactive_block,
+    *NORMAL_SCREEN_ASSIST_TOOLS,
+    ask_user,
+]
+
+# Dedicated Study Tools (Only active in Study mode or study toolbox)
+STUDY_TOOLS: list = [
     course_register,
     course_list,
     course_get,
@@ -184,9 +178,6 @@ COMPLEX_TOOLS_NO_WEB: list = [
     study_session_log,
     study_weak_areas,
     export_study_sheet,
-    # Screen assist / browser bridge
-    *SCREEN_ASSIST_TOOLS,
-    ask_user,
 ]
 
 
@@ -226,29 +217,7 @@ TOOLBOX_REGISTRY: dict[str, list] = {
         invoke_skill,
         render_interactive_block,
     ],
-    "study": [
-        course_register,
-        course_list,
-        course_get,
-        course_workspace_create,
-        course_chat_create,
-        study_note_save,
-        study_note_search,
-        study_note_delete,
-        flashcard_deck_create,
-        flashcard_review,
-        flashcard_suggest,
-        flashcard_import,
-        flashcard_export,
-        quiz_session_start,
-        quiz_session_answer,
-        quiz_session_results,
-        mastery_record,
-        study_session_log,
-        study_weak_areas,
-        export_study_sheet,
-        render_interactive_block,
-    ],
+    "study": list(STUDY_TOOLS),
     "memory": [
         recall_memories,
         recall_all_memories,
@@ -303,7 +272,15 @@ TOOLBOX_REGISTRY: dict[str, list] = {
     "mcp": [],
 }
 
+# Auto-register all tools into global ToolRegistry
+from src.tools.registry import registry
+
+for _tb_name, _tb_tools in TOOLBOX_REGISTRY.items():
+    for _tool in _tb_tools:
+        registry.register_tool_instance(_tool, toolbox=_tb_name)
+
 ALWAYS_INCLUDED_TOOLS: list = [ask_user]
+registry.register_tool_instance(ask_user, toolbox=["all", "default"])
 
 
 def should_include_mcp_tools(toolbox_names: list[str] | None) -> bool:

@@ -102,6 +102,5 @@ def _setup_audit_file_output() -> None:
         enabled = profile.get("audit_log_enabled", True)
     except Exception as e:
         logger.warning("Error suppressed: %s", e)
-        pass
     finally:
         configure_audit_log(channel_levels=channel_levels, enabled=enabled)

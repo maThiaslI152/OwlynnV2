@@ -89,17 +89,17 @@ def handle_pentest_mode(
     if state.get("scenario_id") != "pentest":
         return None
 
-    from src.config.config_loader import config as _cfg
     from src.agent.routing.pentest_classifier import (
         classify_pentest_query,
         should_route_to_cloud,
     )
     from src.agent.routing.resolver import (
-        _resolve_complex_route,
-        estimate_token_budget,
         _build_router_metadata,
         _memory_gate_fields,
+        _resolve_complex_route,
+        estimate_token_budget,
     )
+    from src.config.config_loader import config as _cfg
 
     cloud_proxy_enabled = _cfg.get("models.pentest.cloud_proxy.enabled", False)
     pentest_category = classify_pentest_query(user_text)

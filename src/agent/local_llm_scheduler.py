@@ -1,7 +1,7 @@
-"""Coordinate foreground vs background local medium-LLM usage.
+"""Coordinate foreground vs background local main LLM usage.
 
-Memory extraction uses Qwen (medium slot) in the background. Foreground agent
-paths (complex/simple local fallback) register active medium calls so extraction
+Memory extraction uses the main local model (google/gemma-4-26b-a4b-qat) in the background.
+Foreground agent paths (complex/simple local fallback) register active calls so extraction
 defers instead of contending for GPU/CPU on Apple Silicon unified memory.
 
 LM Studio does not expose per-request GPU throttling; defer-until-idle plus
@@ -26,12 +26,15 @@ logger = logging.getLogger(__name__)
 
 
 class LocalLLMScheduler:
-    """Tracks active graph runs and foreground medium-LLM calls."""
+    """Tracks active graph runs and foreground main-LLM calls."""
 
     _graph_runs: int = 0
-    _foreground_medium: int = 0
+    _foreground_main: int = 0
     _background_sem = asyncio.Semaphore(1)
     _lock = asyncio.Lock()
+
+    # Backward compatibility alias
+    _foreground_medium = _foreground_main
 
     @classmethod
     def graph_run_started(cls) -> None:
@@ -56,31 +59,37 @@ class LocalLLMScheduler:
         return cls._graph_runs
 
     @classmethod
-    async def foreground_medium_active(cls) -> bool:
+    async def foreground_main_active(cls) -> bool:
         async with cls._lock:
-            return cls._foreground_medium > 0
+            return cls._foreground_main > 0
+
+    foreground_medium_active = foreground_main_active
 
     @classmethod
     @asynccontextmanager
-    async def foreground_medium_slot(cls):
-        """Held while the agent invokes the local medium (Qwen) model."""
+    async def foreground_main_slot(cls):
+        """Held while the agent invokes the local main unified model."""
         async with cls._lock:
-            cls._foreground_medium += 1
+            cls._foreground_main += 1
         try:
             yield
         finally:
             async with cls._lock:
-                cls._foreground_medium = max(0, cls._foreground_medium - 1)
+                cls._foreground_main = max(0, cls._foreground_main - 1)
+
+    foreground_medium_slot = foreground_main_slot
 
     @classmethod
     @asynccontextmanager
-    async def background_medium_slot(cls):
-        """Exclusive slot for one background medium call (memory extraction)."""
+    async def background_main_slot(cls):
+        """Exclusive slot for one background main local model call (memory extraction)."""
         await cls._background_sem.acquire()
         try:
             yield
         finally:
             cls._background_sem.release()
+
+    background_medium_slot = background_main_slot
 
     @classmethod
     async def wait_for_background_window(cls) -> bool:
@@ -151,9 +160,12 @@ class _MediumLLMForegroundWrapper:
         return getattr(self._client, name)
 
 
-def wrap_medium_for_foreground(client: ChatOpenAI) -> ChatOpenAI:
-    """Return a client that registers foreground medium usage on invoke."""
+def wrap_main_for_foreground(client: ChatOpenAI) -> ChatOpenAI:
+    """Return a client that registers foreground main usage on invoke."""
     return _MediumLLMForegroundWrapper(client)  # type: ignore[return-value]
+
+
+wrap_medium_for_foreground = wrap_main_for_foreground
 
 
 def _apply_process_nice(delta: int) -> int | None:
@@ -178,14 +190,17 @@ def _restore_process_nice(prior: int | None, delta: int) -> None:
         pass
 
 
-async def invoke_medium_background(bound_llm: Any, messages: list) -> Any:
-    """Invoke medium LLM for memory extraction with deferral and lower CPU priority."""
+async def invoke_main_background(bound_llm: Any, messages: list) -> Any:
+    """Invoke main LLM for memory extraction with deferral and lower CPU priority."""
     await LocalLLMScheduler.wait_for_background_window()
     nice_delta = int(config.get("memory.extraction.process_nice", 10))
 
-    async with LocalLLMScheduler.background_medium_slot():
+    async with LocalLLMScheduler.background_main_slot():
         prior_nice = _apply_process_nice(nice_delta)
         try:
             return await bound_llm.ainvoke(messages)
         finally:
             _restore_process_nice(prior_nice, nice_delta)
+
+
+invoke_medium_background = invoke_main_background

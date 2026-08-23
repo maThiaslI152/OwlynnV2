@@ -12,74 +12,122 @@ export const DataConnectorsPanel: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center border-b border-gray-800 pb-2">
-        <h3 className="text-lg font-medium text-gray-200">Data Connectors</h3>
-        <span className="text-xs text-gray-500">Attach external knowledge sources</span>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '8px' }}>
+        <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>Data Connectors</h3>
+        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Attach external knowledge sources</span>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
         <button 
+          type="button"
           onClick={() => handleAddConnector('GitHub')}
-          className="flex items-center gap-3 p-4 bg-gray-950 border border-gray-800 rounded-xl hover:border-blue-500 hover:bg-gray-900 transition-colors text-left"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            padding: '14px',
+            background: 'var(--bg-surface, rgba(0,0,0,0.3))',
+            border: '1px solid var(--border-default)',
+            borderRadius: '10px',
+            textAlign: 'left',
+            cursor: 'pointer',
+            color: 'inherit',
+          }}
         >
-          <div className="bg-gray-800 p-2 rounded-lg text-gray-300">
-            <GitBranch size={20} />
+          <div style={{ background: 'rgba(255, 255, 255, 0.08)', padding: '8px', borderRadius: '8px', color: 'var(--text-secondary)', display: 'flex' }}>
+            <GitBranch size={18} />
           </div>
           <div>
-            <div className="text-sm font-medium text-gray-200">GitHub Repository</div>
-            <div className="text-xs text-gray-500">Sync code and issues</div>
+            <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>GitHub Repository</div>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Sync code and issues</div>
           </div>
         </button>
 
         <button 
+          type="button"
           onClick={() => handleAddConnector('Confluence')}
-          className="flex items-center gap-3 p-4 bg-gray-950 border border-gray-800 rounded-xl hover:border-blue-500 hover:bg-gray-900 transition-colors text-left"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            padding: '14px',
+            background: 'var(--bg-surface, rgba(0,0,0,0.3))',
+            border: '1px solid var(--border-default)',
+            borderRadius: '10px',
+            textAlign: 'left',
+            cursor: 'pointer',
+            color: 'inherit',
+          }}
         >
-          <div className="bg-gray-800 p-2 rounded-lg text-blue-400">
-            <FileText size={20} />
+          <div style={{ background: 'rgba(59, 130, 246, 0.15)', padding: '8px', borderRadius: '8px', color: '#60a5fa', display: 'flex' }}>
+            <FileText size={18} />
           </div>
           <div>
-            <div className="text-sm font-medium text-gray-200">Confluence</div>
-            <div className="text-xs text-gray-500">Sync wiki pages</div>
+            <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>Confluence</div>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Sync wiki pages</div>
           </div>
         </button>
 
         <button 
+          type="button"
           onClick={() => handleAddConnector('Web Scraper')}
-          className="flex items-center gap-3 p-4 bg-gray-950 border border-gray-800 rounded-xl hover:border-blue-500 hover:bg-gray-900 transition-colors text-left"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            padding: '14px',
+            background: 'var(--bg-surface, rgba(0,0,0,0.3))',
+            border: '1px solid var(--border-default)',
+            borderRadius: '10px',
+            textAlign: 'left',
+            cursor: 'pointer',
+            color: 'inherit',
+          }}
         >
-          <div className="bg-gray-800 p-2 rounded-lg text-green-400">
-            <Globe size={20} />
+          <div style={{ background: 'rgba(34, 197, 94, 0.15)', padding: '8px', borderRadius: '8px', color: '#4ade80', display: 'flex' }}>
+            <Globe size={18} />
           </div>
           <div>
-            <div className="text-sm font-medium text-gray-200">Web Scraper</div>
-            <div className="text-xs text-gray-500">Crawl websites</div>
+            <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>Web Scraper</div>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Crawl websites</div>
           </div>
         </button>
 
         <button 
+          type="button"
           onClick={() => handleAddConnector('Vector DB')}
-          className="flex items-center gap-3 p-4 bg-gray-950 border border-gray-800 rounded-xl hover:border-blue-500 hover:bg-gray-900 transition-colors text-left"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            padding: '14px',
+            background: 'var(--bg-surface, rgba(0,0,0,0.3))',
+            border: '1px solid var(--border-default)',
+            borderRadius: '10px',
+            textAlign: 'left',
+            cursor: 'pointer',
+            color: 'inherit',
+          }}
         >
-          <div className="bg-gray-800 p-2 rounded-lg text-purple-400">
-            <Database size={20} />
+          <div style={{ background: 'rgba(168, 85, 247, 0.15)', padding: '8px', borderRadius: '8px', color: '#c084fc', display: 'flex' }}>
+            <Database size={18} />
           </div>
           <div>
-            <div className="text-sm font-medium text-gray-200">Vector Database</div>
-            <div className="text-xs text-gray-500">Configure Qdrant/Milvus</div>
+            <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>Vector Database</div>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Configure Qdrant/Milvus</div>
           </div>
         </button>
       </div>
 
-      <div className="mt-8">
-        <h4 className="text-sm font-medium text-gray-400 mb-3">Active Connectors</h4>
+      <div style={{ marginTop: '16px' }}>
+        <h4 style={{ fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: '10px' }}>Active Connectors</h4>
         {connectors.length === 0 ? (
-          <div className="text-sm text-gray-600 text-center py-6 bg-gray-950 rounded-lg border border-gray-800 border-dashed">
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', padding: '24px', background: 'rgba(0, 0, 0, 0.2)', borderRadius: '8px', border: '1px dashed var(--border-subtle)' }}>
             No active connectors configured.
           </div>
         ) : (
-          <div className="space-y-2">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {/* List active connectors here */}
           </div>
         )}

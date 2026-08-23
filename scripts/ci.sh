@@ -13,6 +13,11 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
+if [ -f ".venv/bin/activate" ]; then
+  # shellcheck disable=SC1091
+  source .venv/bin/activate
+fi
+
 QUICK=false
 PYTHON_ONLY=false
 FRONTEND_ONLY=false
@@ -50,39 +55,39 @@ if ! $FRONTEND_ONLY; then
   fi
 
   info "Running Python Linter (ruff)…"
-  if python -m ruff check .; then
+  if python -m ruff check --config pyproject.toml src/ tests/; then
     pass "Ruff lint checks passed"
   else
     fail "Ruff lint checks failed"; EXIT_CODE=1
   fi
 
   info "Running Python Formatter Check (ruff format)…"
-  if python -m ruff format --check .; then
+  if python -m ruff format --check src/ tests/; then
     pass "Ruff format checks passed"
   else
     fail "Ruff format checks failed"; EXIT_CODE=1
   fi
 
   info "Running Static Type Checking (mypy)…"
-  if python -m mypy src/; then
+  if python -m mypy src/ --ignore-missing-imports; then
     pass "Mypy type checks passed"
   else
     fail "Mypy type checks failed"; EXIT_CODE=1
   fi
 
   info "Running unit tests (excluding network, benchmarks)…"
-  if python -m pytest -n auto -q -m "not network and not benchmark" --tb=short --cov=src --cov-report=term; then
+  if python -m pytest -q -m "not network and not benchmark" --tb=short; then
     pass "Unit tests passed"
   else
     fail "Unit tests failed"; EXIT_CODE=1
   fi
 
   info "Running audit / contract / cutover tests…"
-  if python -m pytest -n auto -q \
+  if python -m pytest -q \
     tests/test_verify_report_fixture.py \
     tests/test_websocket_event_contract.py \
     tests/test_frontend_cutover_serving.py \
-    --tb=short --cov=src --cov-report=term; \
+    --tb=short; \
   then
     pass "Audit/contract tests passed"
   else

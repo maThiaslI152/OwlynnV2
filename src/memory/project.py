@@ -4,14 +4,15 @@ Project Manager for the Local Cowork Agent, backed by PostgreSQL / SQLAlchemy.
 
 import logging
 import time
-from typing import Any, Dict, List, Optional
 import uuid
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
+
 from src.config.settings import get_project_workspace
 from src.models.db import AsyncSessionLocal
-from src.models.project import Project, Chat, KnowledgeFile
+from src.models.project import Chat, KnowledgeFile, Project
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +49,7 @@ class ProjectManager:
         instructions: str = "",
         category: str = "general",
         mode: str = "normal",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Create a new workspace project."""
         pid = str(uuid.uuid4())[:8]
         async with AsyncSessionLocal() as session:
@@ -65,7 +66,7 @@ class ProjectManager:
         get_project_workspace(pid)
         return await self.get_project(pid)
 
-    async def get_project(self, project_id: str) -> Optional[dict]:
+    async def get_project(self, project_id: str) -> dict | None:
         await self._ensure_default()
         async with AsyncSessionLocal() as session:
             stmt = (
@@ -79,7 +80,7 @@ class ProjectManager:
                 return None
             return self._to_dict(proj)
 
-    async def list_projects(self) -> List[dict]:
+    async def list_projects(self) -> list[dict]:
         await self._ensure_default()
         async with AsyncSessionLocal() as session:
             stmt = select(Project).options(
@@ -88,7 +89,7 @@ class ProjectManager:
             result = await session.execute(stmt)
             return [self._to_dict(p) for p in result.scalars().all()]
 
-    async def update_project(self, project_id: str, **kwargs) -> Optional[dict]:
+    async def update_project(self, project_id: str, **kwargs) -> dict | None:
         async with AsyncSessionLocal() as session:
             stmt = select(Project).filter_by(id=project_id)
             result = await session.execute(stmt)
@@ -250,17 +251,16 @@ class ProjectManager:
             await session.commit()
 
         try:
-            from src.memory.long_term import memory
+            from src.memory.long_term import _async_delete
 
-            if memory is not None:
-                memory.delete(
-                    user_id=f"project:{project_id}", metadata={"filename": name}
+            await _async_delete(
+                user_id=f"project:{project_id}", metadata={"filename": name}
+            )
+            for i in range(21):
+                await _async_delete(
+                    user_id=f"project:{project_id}",
+                    metadata={"filename": f"{name}#chunk{i}"},
                 )
-                for i in range(21):
-                    memory.delete(
-                        user_id=f"project:{project_id}",
-                        metadata={"filename": f"{name}#chunk{i}"},
-                    )
         except Exception as exc:
             logger.warning("Failed to remove knowledge vectors for %s: %s", name, exc)
 

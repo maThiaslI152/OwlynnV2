@@ -1,5 +1,9 @@
 
 
+import React from 'react'
+import { AlertTriangle, ShieldAlert, ArrowLeft } from 'lucide-react'
+import { useAppStore } from '../../state/useAppStore'
+
 interface ModeSwitchModalProps {
   targetMode: 'normal' | 'study' | 'pentest'
   currentMode: 'normal' | 'study' | 'pentest'
@@ -15,16 +19,16 @@ const overlayStyle: React.CSSProperties = {
   alignItems: 'center',
   justifyContent: 'center',
   zIndex: 9999,
-  backdropFilter: 'blur(4px)',
+  backdropFilter: 'blur(8px)',
 }
 
 const modalStyle: React.CSSProperties = {
-  background: '#1a1a2e',
+  background: 'var(--bg-elevated)',
   borderRadius: 12,
   padding: '28px 32px',
   maxWidth: 420,
   width: '90%',
-  border: '1px solid rgba(255,255,255,0.1)',
+  border: '1px solid var(--border-default)',
   boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
 }
 
@@ -40,15 +44,15 @@ const btnBase: React.CSSProperties = {
 
 const btnPrimary: React.CSSProperties = {
   ...btnBase,
-  background: '#e94560',
+  background: 'var(--accent)',
   color: '#fff',
 }
 
 const btnSecondary: React.CSSProperties = {
   ...btnBase,
   background: 'rgba(255,255,255,0.08)',
-  color: 'rgba(255,255,255,0.7)',
-  border: '1px solid rgba(255,255,255,0.1)',
+  color: 'var(--text-secondary)',
+  border: '1px solid var(--border-subtle)',
 }
 
 const spinnerStyle: React.CSSProperties = {
@@ -60,7 +64,6 @@ const spinnerStyle: React.CSSProperties = {
   animation: 'spin 0.8s linear infinite',
   margin: '0 auto 16px',
 }
-import { useAppStore } from '../../state/useAppStore'
 
 export function ModeSwitchConfirmation({
   targetMode,
@@ -74,20 +77,22 @@ export function ModeSwitchConfirmation({
     <div style={overlayStyle} onClick={onCancel}>
       <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
         <div style={{ textAlign: 'center', marginBottom: 20 }}>
-          <div style={{ fontSize: 28, marginBottom: 8 }}>
-            {isEntering ? '!' : '<'}
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8, color: 'var(--accent)' }}>
+            {isEntering ? <ShieldAlert size={32} /> : <ArrowLeft size={32} />}
           </div>
-          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>
+          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary)' }}>
             {isEntering ? 'Switch to Pentest Mode?' : 'Exit Pentest Mode?'}
           </div>
         </div>
 
-        <div style={{ fontSize: 12, lineHeight: 1.8, color: 'rgba(255,255,255,0.6)', marginBottom: 24 }}>
+        <div style={{ fontSize: 12, lineHeight: 1.8, color: 'var(--text-secondary)', marginBottom: 24 }}>
           {isEntering ? (
             <>
               {isEcoMode && (
-                <div style={{ color: '#e94560', fontWeight: 'bold', marginBottom: 8, padding: 8, background: 'rgba(233,69,96,0.1)', borderRadius: 6, border: '1px solid rgba(233,69,96,0.3)' }}>
-                  ⚠️ Warning: Mac is on battery (Eco-Mode active).
+                <div style={{ color: 'var(--amber)', fontWeight: 500, marginBottom: 8, padding: 8, background: 'var(--amber-bg)', borderRadius: 6, border: '1px solid var(--amber)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, marginBottom: 4 }}>
+                    <AlertTriangle size={14} /> Warning: Mac is on battery (Eco-Mode active)
+                  </div>
                   Running Kali VM and the Pentest Model is highly power intensive. 
                   Please connect to a power adapter to prevent performance degradation or battery drain.
                 </div>

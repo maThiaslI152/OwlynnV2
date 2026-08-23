@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { fetchWithAuth } from '../../lib/localRunToken'
-import { Volume2, VolumeX } from 'lucide-react'
+import { Volume2, VolumeX, Check, X, Circle } from 'lucide-react'
 import { useAppStore, type ActivityFeedItem } from '../../state/useAppStore'
 
 interface ActivityFeedProps {
@@ -78,9 +78,9 @@ export function ActivityFeed({ engagementId }: ActivityFeedProps) {
   const statusIcon = (status: string) => {
     switch (status) {
       case 'running': return <span className="feed-spinner" />
-      case 'success': return <span style={{ color: '#4caf50', fontSize: 12 }}>✓</span>
-      case 'error': return <span style={{ color: '#ef4444', fontSize: 12 }}>✗</span>
-      default: return <span style={{ opacity: 0.3 }}>○</span>
+      case 'success': return <span style={{ color: 'var(--green)', display: 'inline-flex', alignItems: 'center' }}><Check size={12} /></span>
+      case 'error': return <span style={{ color: 'var(--red)', display: 'inline-flex', alignItems: 'center' }}><X size={12} /></span>
+      default: return <span style={{ opacity: 0.3, display: 'inline-flex', alignItems: 'center' }}><Circle size={8} /></span>
     }
   }
 

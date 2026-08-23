@@ -28,8 +28,9 @@ def _get_master_key() -> bytes:
     if _cached_key:
         return _cached_key
 
-    from cryptography.fernet import Fernet
     import subprocess
+
+    from cryptography.fernet import Fernet
 
     service = "OwlynnPentest"
     account = "MasterKey"
@@ -108,24 +109,23 @@ async def encrypt_credentials(engagement_id: str, credentials: dict) -> None:
     plaintext = json.dumps(credentials, ensure_ascii=False).encode("utf-8")
     ciphertext = fernet.encrypt(plaintext)
 
-    async with AsyncSessionLocal() as session:
-        async with session.begin():
-            # Replace any existing credential row for this engagement.
-            stmt = select(PentestCredentials).where(
-                PentestCredentials.engagement_id == engagement_id
-            )
-            result = await session.execute(stmt)
-            existing = result.scalar_one_or_none()
+    async with AsyncSessionLocal() as session, session.begin():
+        # Replace any existing credential row for this engagement.
+        stmt = select(PentestCredentials).where(
+            PentestCredentials.engagement_id == engagement_id
+        )
+        result = await session.execute(stmt)
+        existing = result.scalar_one_or_none()
 
-            if existing is not None:
-                existing.data = ciphertext
-                session.add(existing)
-            else:
-                row = PentestCredentials(
-                    engagement_id=engagement_id,
-                    data=ciphertext,
-                )
-                session.add(row)
+        if existing is not None:
+            existing.data = ciphertext
+            session.add(existing)
+        else:
+            row = PentestCredentials(
+                engagement_id=engagement_id,
+                data=ciphertext,
+            )
+            session.add(row)
 
     logger.info("Encrypted credentials for engagement %s", engagement_id)
 

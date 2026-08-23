@@ -1,9 +1,9 @@
 """Tests for the secret store (Local env-backed API key storage)."""
 
-import sys
 import os
-from unittest.mock import MagicMock, patch
+import sys
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -71,7 +71,7 @@ class TestSecretStore:
             from src.config.secret_store import store_deepseek_api_key
 
             store_deepseek_api_key("sk-test-key-123")
-            mock_write.assert_called_once_with("sk-test-key-123")
+            mock_write.assert_called_once_with("DEEPSEEK_API_KEY", "sk-test-key-123")
             assert os.environ["DEEPSEEK_API_KEY"] == "sk-test-key-123"
 
     def test_delete_clears_secrets_env(self):
@@ -83,7 +83,7 @@ class TestSecretStore:
 
             os.environ["DEEPSEEK_API_KEY"] = "something"
             delete_deepseek_api_key()
-            mock_write.assert_called_once_with("")
+            mock_write.assert_called_once_with("DEEPSEEK_API_KEY", "")
             assert "DEEPSEEK_API_KEY" not in os.environ
 
     def test_verify_valid_key(self):

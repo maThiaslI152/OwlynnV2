@@ -146,7 +146,7 @@ async def active_browser_action(
             return f"Action '{action}' executed successfully."
         return f"Error: {res.get('error')}"
     except Exception as e:
-        return f"Error: {str(e)}"
+        return f"Error: {e!s}"
 
 
 @tool
@@ -161,8 +161,8 @@ async def capture_kali_terminal(window: str = "main", lines: int = 200) -> str:
     if not _enabled():
         return "Error: screen assist is disabled in configuration."
 
-    from src.tools.screen_assist.kali_ssh import capture_remote_tmux_pane
     from src.config.config_loader import config
+    from src.tools.screen_assist.kali_ssh import capture_remote_tmux_pane
 
     kali = config.get("screen_assist.kali", {})
     host = str(kali.get("host", "") or "").strip()
@@ -199,8 +199,8 @@ async def run_kali_command(
     if not _enabled():
         return "Error: screen assist is disabled in configuration."
 
-    from src.tools.screen_assist.kali_ssh import run_remote_kali_command
     from src.config.config_loader import config
+    from src.tools.screen_assist.kali_ssh import run_remote_kali_command
 
     kali = config.get("screen_assist.kali", {})
     host = str(kali.get("host", "") or "").strip()
@@ -290,7 +290,7 @@ async def host_browser_action(
             return f"Action '{action}' executed successfully."
         return f"Error: {res.get('error')}"
     except Exception as e:
-        return f"Error: {str(e)}"
+        return f"Error: {e!s}"
 
 
 @tool
@@ -358,8 +358,8 @@ async def send_kali_input(text: str, window: str = "main") -> str:
     if not _enabled():
         return "Error: screen assist is disabled in configuration."
 
-    from src.tools.screen_assist.kali_ssh import send_remote_kali_input
     from src.config.config_loader import config
+    from src.tools.screen_assist.kali_ssh import send_remote_kali_input
 
     kali = config.get("screen_assist.kali", {})
     host = str(kali.get("host", "") or "").strip()
@@ -391,8 +391,8 @@ async def kali_tmux_new_window(window_name: str) -> str:
     if not _enabled():
         return "Error: screen assist is disabled in configuration."
 
-    from src.tools.screen_assist.kali_ssh import create_remote_tmux_window
     from src.config.config_loader import config
+    from src.tools.screen_assist.kali_ssh import create_remote_tmux_window
 
     kali = config.get("screen_assist.kali", {})
     host = str(kali.get("host", "") or "").strip()
@@ -414,8 +414,8 @@ async def kali_tmux_list_windows() -> str:
     if not _enabled():
         return "Error: screen assist is disabled in configuration."
 
-    from src.tools.screen_assist.kali_ssh import list_remote_tmux_windows
     from src.config.config_loader import config
+    from src.tools.screen_assist.kali_ssh import list_remote_tmux_windows
 
     kali = config.get("screen_assist.kali", {})
     host = str(kali.get("host", "") or "").strip()
@@ -440,7 +440,6 @@ async def kali_reset_vm() -> str:
         return "Error: screen assist is disabled in configuration."
 
     from src.config.config_loader import config
-    import asyncio
 
     kali = config.get("screen_assist.kali", {})
     host = str(kali.get("host", "") or "").strip()
@@ -454,10 +453,10 @@ async def kali_reset_vm() -> str:
 
     cmd = "killall tmux; rm -rf /home/kali/*; tmux new-session -d -s main -n shell"
 
-    from src.tools.screen_assist.kali_ssh import _ssh_exec
-
     # Try to use Lima snapshots first
     import subprocess
+
+    from src.tools.screen_assist.kali_ssh import _ssh_exec
 
     vm_name = str(kali.get("vm_name", "owlynn-kali"))
 
@@ -492,19 +491,27 @@ async def kali_reset_vm() -> str:
     return "Successfully reset Kali VM to a clean state and created 'clean' snapshot for future resets."
 
 
-SCREEN_ASSIST_TOOLS = [
-    capture_local_terminal,
-    read_screen_element,
-    get_active_browser_context,
-    get_active_browser_screenshot,
-    capture_desktop_screenshot,
-    active_browser_action,
+KALI_SCREEN_ASSIST_TOOLS = [
     capture_kali_terminal,
     run_kali_command,
     send_kali_input,
     kali_tmux_new_window,
     kali_tmux_list_windows,
     kali_reset_vm,
+]
+
+NORMAL_SCREEN_ASSIST_TOOLS = [
+    capture_local_terminal,
+    read_screen_element,
+    get_active_browser_context,
+    get_active_browser_screenshot,
+    capture_desktop_screenshot,
+    active_browser_action,
     host_browser_action,
     upload_from_workspace,
+]
+
+SCREEN_ASSIST_TOOLS = [
+    *NORMAL_SCREEN_ASSIST_TOOLS,
+    *KALI_SCREEN_ASSIST_TOOLS,
 ]

@@ -25,8 +25,8 @@ The agent runs a unified local small tier for routing, vision proxying, and extr
 
 from __future__ import annotations
 
-import os
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -56,9 +56,24 @@ _ENV_OVERRIDE_MAP: dict[str, str] = {
     "STIRLING_PDF_TIMEOUT_SECONDS": "external_services.stirling_pdf.timeout_seconds",
     "STIRLING_PDF_OCR_LANGUAGES": "external_services.stirling_pdf.ocr_languages",
     "STIRLING_PDF_MIN_TEXT_CHARS": "external_services.stirling_pdf.min_text_chars",
-    # Small model
-    "SMALL_LLM_BASE_URL": "models.small.base_url",
-    "SMALL_LLM_MODEL_NAME": "models.small.model_name",
+    # Main local model (routing, fallback, local reasoning, extraction)
+    "MAIN_LLM_BASE_URL": "models.main.base_url",
+    "MAIN_LLM_MODEL_NAME": "models.main.model_name",
+    # Small model (backward compatibility alias for main)
+    "SMALL_LLM_BASE_URL": "models.main.base_url",
+    "SMALL_LLM_MODEL_NAME": "models.main.model_name",
+    # Local model provider (lm_studio / ollama)
+    "MODELS_PROVIDER": "models.provider",
+    # Vision proxy model
+    "VISION_LLM_BASE_URL": "models.vision.base_url",
+    "VISION_LLM_MODEL_NAME": "models.vision.model_name",
+    # Embedding model
+    "EMBEDDING_LLM_BASE_URL": "models.embedding.base_url",
+    "EMBEDDING_LLM_MODEL_NAME": "models.embedding.model_name",
+    "EMBEDDING_DIMS": "models.embedding.dims",
+    # Pentest model
+    "PENTEST_LLM_BASE_URL": "models.pentest.base_url",
+    "PENTEST_LLM_MODEL_NAME": "models.pentest.model_name",
     # Cloud model
     "CLOUD_LLM_BASE_URL": "models.cloud.base_url",
     "CLOUD_LLM_MODEL_NAME": "models.cloud.model_name",
@@ -87,8 +102,11 @@ _ENV_OVERRIDE_MAP: dict[str, str] = {
 # ── User profile key → config dot-path mapping ───────────────────────────────
 # Maps user_profile.json fields to the centralized config structure.
 _PROFILE_OVERRIDE_MAP: dict[str, str] = {
-    # LLM base URLs
-    "small_llm_base_url": "models.small.base_url",
+    # LLM base URLs & model names
+    "main_llm_base_url": "models.main.base_url",
+    "main_llm_model_name": "models.main.model_name",
+    "small_llm_base_url": "models.main.base_url",
+    "small_llm_model_name": "models.main.model_name",
     # Cloud
     "cloud_llm_base_url": "models.cloud.base_url",
     "cloud_llm_model_name": "models.cloud.model_name",
@@ -271,7 +289,7 @@ class ConfigLoader:
     def get(cls, dotpath: str, default: Any = None) -> Any:
         """Get a single config value by dot-path.
 
-        Example: ``config.get("models.small.model_name")``
+        Example: ``config.get("models.main.model_name")``
         """
         data = cls.get_config()
         val = cls._resolve_dotpath(data, dotpath)
@@ -286,31 +304,119 @@ class ConfigLoader:
     # ── Model name accessors — single source of truth for model selection ──
 
     @classmethod
-    def get_small_model_name(cls) -> str:
-        """Return the configured local model name (router, fallback, vision, extraction)."""
-        return cls.get("models.small.model_name", "gemma-4-e2b-heretic-uncensored-mlx")
+    def get_main_model_name(cls) -> str:
+        """Return the configured main local model name (router, fallback, local reasoning, extraction)."""
+        return (
+            cls.get("models.main.model_name")
+            or cls.get("models.small.model_name")
+            or "google/gemma-4-26b-a4b-qat"
+        )
 
     @classmethod
-    def get_cloud_model_name(cls) -> str:
-        """Return the configured cloud model name (DeepSeek flash tier)."""
-        return cls.get("models.cloud.model_name", "deepseek-v4-flash")
+    def get_small_model_name(cls) -> str:
+        """Backward-compatible alias for get_main_model_name()."""
+        return cls.get_main_model_name()
+
+    @classmethod
+    def get_complex_local_model_name(cls) -> str:
+        """Backward-compatible alias for get_main_model_name()."""
+        return cls.get_main_model_name()
+
+    @classmethod
+    def get_vision_model_name(cls) -> str:
+        """Return the configured vision transcription proxy model name."""
+        return cls.get("models.vision.model_name", "baidu.unlimited-ocr")
+
+    @classmethod
+    def get_cloud_model_name(cls, tier: str | None = None) -> str:
+        """Return the configured cloud model name (DeepSeek flash or pro tier)."""
+        if tier == "pro":
+            return cls.get("models.cloud.tiers.pro", "deepseek-v4-pro")
+        return (
+            cls.get("models.cloud.model_name")
+            or cls.get("models.cloud.tiers.flash")
+            or "deepseek-v4-flash"
+        )
 
     @classmethod
     def get_embedding_model_name(cls) -> str:
         """Return the configured embedding model name."""
         return cls.get(
             "models.embedding.model_name",
-            "text-embedding-nomic-embed-text-v1.5-embedding",
+            "text-embedding-mxbai-embed-large-v1",
+        )
+
+    @classmethod
+    def get_embedding_dimensions(cls) -> int:
+        """Return the vector embedding dimensions (e.g. 1024)."""
+        return int(
+            cls.get("models.embedding.dims")
+            or cls.get("models.embedding.dimensions")
+            or cls.get("qdrant.vector_size", 1024)
         )
 
     @classmethod
     def get_pentest_model_name(cls) -> str:
-        """Return the configured pentest model name (local-only, falls back to small if empty)."""
+        """Return the configured pentest model name (local-only, falls back to main if empty)."""
         pentest = cls.get("models.pentest.model_name", "")
         if pentest:
             return pentest
-        # Fall back to small model when no dedicated pentest model is configured
-        return cls.get_small_model_name()
+        return cls.get_main_model_name()
+
+    @classmethod
+    def get_models_provider(cls) -> str:
+        """Return the local models provider ("lm_studio" or "ollama")."""
+        return str(cls.get("models.provider", "lm_studio"))
+
+    @classmethod
+    def get_main_model_base_url(cls) -> str:
+        """Return the base URL for the main local model."""
+        provider = cls.get_models_provider()
+        default_base = (
+            "http://127.0.0.1:11434/v1"
+            if provider == "ollama"
+            else "http://127.0.0.1:1234/v1"
+        )
+        return str(
+            cls.get("models.main.base_url")
+            or cls.get("models.small.base_url")
+            or default_base
+        )
+
+    @classmethod
+    def get_main_model_context_window(cls) -> int:
+        """Return context window tokens for the main model."""
+        return int(
+            cls.get("models.main.context_window")
+            or cls.get("models.small.context_window", 65536)
+        )
+
+    @classmethod
+    def get_vision_model_base_url(cls) -> str:
+        """Return the base URL for the vision proxy model."""
+        return str(cls.get("models.vision.base_url") or cls.get_main_model_base_url())
+
+    @classmethod
+    def get_pentest_model_base_url(cls) -> str:
+        """Return the base URL for the pentest model."""
+        return str(cls.get("models.pentest.base_url") or cls.get_main_model_base_url())
+
+    @classmethod
+    def get_embedding_base_url(cls) -> str:
+        """Return the base URL for embeddings."""
+        return str(
+            cls.get("models.embedding.base_url") or cls.get_main_model_base_url()
+        )
+
+    @classmethod
+    def get_cloud_base_url(cls) -> str:
+        """Return the base URL for cloud LLM API."""
+        return str(cls.get("models.cloud.base_url", "https://api.deepseek.com/v1"))
+
+    @classmethod
+    def get_cloud_provider(cls) -> str:
+        """Return configured cloud provider (deepseek | openrouter)."""
+        return str(cls.get("models.cloud.provider", "deepseek"))
 
 
 # ── Module-level singleton for convenience ───────────────────────────────────
@@ -327,43 +433,42 @@ def get_model_config(tier: str, variant: str = "default") -> dict[str, Any]:
     """Return the full model config dict for a given tier.
 
     Args:
-        tier: ``"small"``, ``"cloud"``, or ``"embedding"``
+        tier: ``"main"``, ``"small"``, ``"vision"``, ``"pentest"``, ``"cloud"``, or ``"embedding"``
 
     Returns a dict with keys: model_name, base_url, temperature, max_tokens,
     max_output_tokens, timeout, context_window, extra_body, etc.
     """
+    if tier in ("small", "main"):
+        return config.get("models.main") or config.get("models.small") or {}
     return config.get(f"models.{tier}") or {}
 
 
 def get_m4_optimization() -> dict[str, Any]:
     """Return the M4 optimization dict (backward compat with M4_MAC_OPTIMIZATION)."""
     cfg = config.get_config()
+    main_cfg = (
+        cfg.get("models", {}).get("main") or cfg.get("models", {}).get("small") or {}
+    )
     return {
         "small_model": {
-            "max_tokens": cfg.get("models", {}).get("small", {}).get("max_tokens", 512),
-            "context_length": cfg.get("models", {})
-            .get("small", {})
-            .get("context_window", 4096),
-            "temperature": cfg.get("models", {})
-            .get("small", {})
-            .get("temperature", 0.1),
-            "timeout": cfg.get("models", {}).get("small", {}).get("timeout", 10),
+            "max_tokens": main_cfg.get("max_tokens", 8192),
+            "context_length": main_cfg.get("context_window", 65536),
+            "temperature": main_cfg.get("temperature", 0.1),
+            "timeout": main_cfg.get("timeout", 180),
         },
         "extraction_model": {
-            "model_name": cfg.get("models", {})
-            .get("small", {})
-            .get("model_name", "gemma-4-e2b-heretic-uncensored-mlx"),
-            "max_tokens": cfg.get("models", {})
-            .get("small", {})
+            "model_name": config.get_main_model_name(),
+            "max_tokens": cfg.get("memory", {})
+            .get("extraction", {})
             .get("max_tokens", 1024),
-            "temperature": cfg.get("models", {})
-            .get("small", {})
+            "temperature": cfg.get("memory", {})
+            .get("extraction", {})
             .get("temperature", 0.1),
-            "timeout": cfg.get("models", {}).get("small", {}).get("timeout", 120),
+            "timeout": main_cfg.get("timeout", 180),
         },
         "memory": {
             "max_facts": cfg.get("memory", {}).get("max_facts", 200),
-            "search_window": cfg.get("memory", {}).get("search_window_m4", 100),
+            "search_window": cfg.get("memory", {}).get("search_window_m4", 50),
             "cache_ttl": cfg.get("memory", {}).get("cache", {}).get("ttl", 300),
             "cache_cleanup": cfg.get("memory", {})
             .get("cache", {})
@@ -399,13 +504,19 @@ _REQUIRED_PATHS: list[str] = [
     "external_services.redis.url",
     "external_services.lm_studio.base_url",
     "external_services.lm_studio.management_url",
-    # Models — small
-    "models.small.base_url",
-    "models.small.model_name",
-    "models.small.temperature",
-    "models.small.max_tokens",
-    "models.small.context_window",
-    "models.small.timeout",
+    # Models — main (unified local model)
+    "models.main.base_url",
+    "models.main.model_name",
+    "models.main.temperature",
+    "models.main.max_tokens",
+    "models.main.context_window",
+    "models.main.timeout",
+    # Models — vision
+    "models.vision.base_url",
+    "models.vision.model_name",
+    # Models — pentest
+    "models.pentest.base_url",
+    "models.pentest.model_name",
     # Models — cloud
     "models.cloud.base_url",
     "models.cloud.model_name",

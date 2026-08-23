@@ -1,7 +1,6 @@
 /** App shell and WebSocket lifecycle. Event contract: docs/CHAT_PROTOCOL.md */
 /** App shell — WebSocket lifecycle and HITL resume. See docs/CHAT_PROTOCOL.md */
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { Globe } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { listen } from './lib/electronBridge'
 import { AppShell } from './components/layout/AppShell'
@@ -322,7 +321,7 @@ function App() {
         const status: string = Array.isArray(data) ? 'ok' : (data.status ?? 'ok')
 
         if (status === 'no_checkpoint_data') {
-          toast('Chat history unavailable — this conversation may have been created before persistent storage was enabled', { icon: '⚠️', duration: 5000 })
+          toast('Chat history unavailable — this conversation may have been created before persistent storage was enabled', { duration: 5000 })
         }
 
         for (const msg of history) {
@@ -415,7 +414,6 @@ function App() {
         if (disposed) return
         setConnection('reconnecting')
         toast(`Reconnecting... (${attempt}/${maxRetries})`, {
-          icon: '🔄',
           duration: 3000,
           id: 'ws-reconnecting',
         })
@@ -742,9 +740,6 @@ function App() {
               can_retry: (event as any).can_retry !== false,
             })
           }
-        } else if ((event as any).type === 'browser_launch_requested') {
-          toast('Extension disconnected. Launching Brave Browser...', { icon: <Globe size={16} /> })
-          void tauriBridge.launchBrowser()
         } else if (event.type === 'error') {
           const content = (event as any).content || 'An unexpected error occurred'
           toast.error(content)

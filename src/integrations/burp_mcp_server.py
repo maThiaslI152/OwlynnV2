@@ -1,5 +1,6 @@
-import os
 import json
+import os
+
 import httpx
 
 BURP_API_URL = os.environ.get("BURP_API_URL", "http://127.0.0.1:1337")

@@ -1,9 +1,9 @@
 """
-Simple Node — Fast answers via the small LLM (unified local model).
+Simple Node — Fast answers via the main local model.
 
 Handles greetings, small talk, and direct knowledge questions.
 Injects condensed memory context (topics/interests profile) without full past context
-to keep the prompt short for small models. Falls back to the large model if the small one fails.
+to keep the prompt concise.
 """
 
 import asyncio
@@ -11,14 +11,16 @@ import logging
 import re
 
 from langchain_core.messages import AIMessage, SystemMessage
-from src.agent.llm import get_small_llm
-from src.agent.response_styles import style_instruction_for_prompt
-from src.agent.lm_studio_compat import with_system_for_local_server
-from src.agent.core.state import AgentState
-from src.api.shared import _stringify_lc_message_content
 
-from src.config.log_middleware import log_node
+from src.agent.core.state import AgentState
+from src.agent.llm import get_main_llm
+
+get_small_llm = get_main_llm
+from src.agent.lm_studio_compat import with_system_for_local_server
+from src.agent.response_styles import style_instruction_for_prompt
+from src.api.shared import _stringify_lc_message_content
 from src.config.config_loader import get_model_config
+from src.config.log_middleware import log_node
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +38,7 @@ SIMPLE_PROMPT = (
 
 
 def _clean_response(text: str) -> str:
-    """Strip thinking tokens, reasoning artifacts, and self-descriptive preambles from small model output."""
+    """Strip thinking tokens, reasoning artifacts, and self-descriptive preambles from local model output."""
     if not text:
         return ""
     # Remove <think>...</think> blocks
@@ -97,9 +99,9 @@ def _extract_llm_text(chunk_or_message) -> str:
 
 
 def _simple_output_max_tokens(budget: int | None) -> int:
-    """Small models may fill reasoning_content and leave content empty below ~512 tokens."""
-    small_cfg = get_model_config("small")
-    floor = int(small_cfg.get("max_tokens") or 512)
+    """Ensure local models have enough token budget for full generation."""
+    main_cfg = get_model_config("main")
+    floor = int(main_cfg.get("max_tokens") or 512)
     return max(int(budget or 256), floor)
 
 
@@ -174,10 +176,10 @@ async def simple_node(state: AgentState) -> AgentState:
     messages = list(state.get("messages") or [])
     prompt = with_system_for_local_server(system, messages)
 
-    # Try small model, fall back to large on failure
+    # Direct response via main local model
     budget = state.get("token_budget") or 256
     output_tokens = _simple_output_max_tokens(budget)
-    small_extra = dict(get_model_config("small").get("extra_body") or {})
+    main_extra = dict(get_model_config("main").get("extra_body") or {})
     fallback_chain: list[dict] = []
     try:
         start_ts = asyncio.get_running_loop().time()
@@ -186,15 +188,15 @@ async def simple_node(state: AgentState) -> AgentState:
             llm.bind(
                 temperature=0.4,
                 max_tokens=output_tokens,
-                extra_body=small_extra,
+                extra_body=main_extra,
             ),
             prompt,
         )
         content = _clean_response(response_content)
-        model = "small-local"
+        model = "main-local"
         fallback_chain.append(
             {
-                "model": "small-local",
+                "model": "main-local",
                 "status": "success",
                 "reason": "simple_route",
                 "duration_ms": max(
@@ -205,14 +207,14 @@ async def simple_node(state: AgentState) -> AgentState:
     except Exception as e:
         fallback_chain.append(
             {
-                "model": "small-local",
+                "model": "main-local",
                 "status": "failed",
                 "reason": str(e)[:120],
                 "duration_ms": 0,
             }
         )
         logger.warning(
-            "[simple] Small model failed (%s), retrying once with lower temperature", e
+            "[simple] Main model failed (%s), retrying once with lower temperature", e
         )
         try:
             fb_start = asyncio.get_running_loop().time()
@@ -221,35 +223,37 @@ async def simple_node(state: AgentState) -> AgentState:
                 llm.bind(
                     temperature=0.1,
                     max_tokens=output_tokens,
-                    extra_body=small_extra,
+                    extra_body=main_extra,
                 ),
                 prompt,
             )
             content = _clean_response(response_content)
-            model = "small-local-retry"
+            model = "main-local-retry"
             fallback_chain.append(
                 {
-                    "model": "small-local-retry",
+                    "model": "main-local",
                     "status": "success",
-                    "reason": "fallback_simple_retry",
+                    "reason": "retry_lower_temp",
                     "duration_ms": max(
                         0, int((asyncio.get_running_loop().time() - fb_start) * 1000)
                     ),
                 }
             )
         except Exception as retry_err:
-            logger.warning("[simple] Retry also failed: %s", retry_err)
-            content = (
-                "Sorry, I could not process that request. Please try again or rephrase."
-            )
-            model = "small-local-failed"
             fallback_chain.append(
                 {
-                    "model": "small-local-failed",
+                    "model": "main-local",
                     "status": "failed",
-                    "reason": str(retry_err)[:120],
+                    "reason": f"retry_failed: {str(retry_err)[:100]}",
+                    "duration_ms": 0,
                 }
             )
+            logger.error("[simple] Retry also failed: %s", retry_err)
+            content = (
+                "I apologize, but I encountered an error generating a response. "
+                "Please try again."
+            )
+            model = "main-local-failed"
 
     return {
         "messages": [AIMessage(content=content)],

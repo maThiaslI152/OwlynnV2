@@ -1,8 +1,10 @@
 import os
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
-from src.tools.rag_tools import _keyword_search_local, search_workspace_docs
+
 from src.memory.project import project_manager
+from src.tools.rag_tools import _keyword_search_local, search_workspace_docs
 
 
 @pytest.fixture
@@ -80,8 +82,9 @@ async def test_search_workspace_docs_hybrid(mock_processed_dir):
 @pytest.mark.anyio
 async def test_api_directory_indexing_endpoint():
     """Test POST /api/projects/{project_id}/knowledge/directory endpoint logic."""
-    from src.api.routes.project import api_add_project_directory_knowledge
     from fastapi import HTTPException
+
+    from src.api.routes.project import api_add_project_directory_knowledge
 
     # 1. Missing directory path raises 400
     with pytest.raises(HTTPException) as exc:

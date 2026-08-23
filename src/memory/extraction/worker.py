@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import UTC
 from typing import Any
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -72,11 +73,16 @@ async def _consumer_loop() -> None:
     try:
         conn = await asyncpg.connect(raw_dsn)
         await conn.add_listener(_NOTIFY_CHANNEL, _on_notify)
-        logger.info("[memory.extract] PostgreSQL LISTEN started on channel '%s'", _NOTIFY_CHANNEL)
+        logger.info(
+            "[memory.extract] PostgreSQL LISTEN started on channel '%s'",
+            _NOTIFY_CHANNEL,
+        )
 
         while True:
             try:
-                from src.api.power_monitor import ECO_MODE  # type: ignore[import-untyped]
+                from src.api.power_monitor import (
+                    ECO_MODE,  # type: ignore[import-untyped]
+                )
 
                 if ECO_MODE:
                     await asyncio.sleep(60)
@@ -111,11 +117,10 @@ def _on_notify(connection: Any, pid: int, channel: str, payload: str) -> None:
 async def _drain_pending_jobs() -> None:
     """Claim and process all pending jobs using FOR UPDATE SKIP LOCKED."""
     from sqlalchemy import select, update
-    from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+    from src.agent.model_swap import IS_PENTEST_SWAPPED
     from src.memory.db_models import ExtractionJob
     from src.models.db import AsyncSessionLocal
-    from src.agent.model_swap import IS_PENTEST_SWAPPED
 
     if IS_PENTEST_SWAPPED:
         return
@@ -166,16 +171,18 @@ async def _drain_pending_jobs() -> None:
 
         # Update final status
         async with AsyncSessionLocal() as session:
-            from datetime import datetime, timezone
+            from datetime import datetime
 
             await session.execute(
                 update(ExtractionJob)
                 .where(ExtractionJob.id == job_id)
                 .values(
-                    status=status if status == "done" or job.retry_count + 1 >= _MAX_RETRIES else "pending",
+                    status=status
+                    if status == "done" or job.retry_count + 1 >= _MAX_RETRIES
+                    else "pending",
                     retry_count=job.retry_count + 1,
                     error=error,
-                    processed_at=datetime.now(timezone.utc),
+                    processed_at=datetime.now(UTC),
                 )
             )
             await session.commit()
@@ -205,7 +212,7 @@ async def process_extraction_job(payload: dict[str, Any]) -> None:
     mem0_uid = str(payload.get("mem0_uid", "owner"))
     project_id = payload.get("project_id", "default")
 
-    from src.agent.llm import get_extraction_llm, get_small_llm
+    from src.agent.llm import get_extraction_llm, get_main_llm
     from src.agent.local_llm_scheduler import invoke_medium_background
 
     messages_spec = build_extraction_messages(scrubbed, scenario_id)
@@ -229,7 +236,7 @@ async def process_extraction_job(payload: dict[str, Any]) -> None:
     from src.memory.long_term import LongTermMemory
 
     ltm = LongTermMemory()
-    small_llm = await get_small_llm()
+    main_llm = await get_main_llm()
     saved = 0
 
     for atom in atoms:
@@ -257,7 +264,7 @@ async def process_extraction_job(payload: dict[str, Any]) -> None:
                 "2. NEW - if it is completely new.\n"
                 "3. DELETE <ID> - if the new fact supersedes the old one."
             )
-            resp = await small_llm.ainvoke([HumanMessage(content=prompt)])
+            resp = await main_llm.ainvoke([HumanMessage(content=prompt)])
             decision = str(resp.content).strip()
 
             if decision.startswith("REDUNDANT"):
@@ -290,3 +297,31 @@ async def process_extraction_job(payload: dict[str, Any]) -> None:
         redactions=redactions,
         scenario_id=scenario_id or "",
     )
+
+    # Pass 2: Procedural Skill Learning (Hermes Pattern)
+    try:
+        import json
+        import re
+
+        from src.memory.extraction.prompts import build_skill_extraction_messages
+        from src.memory.skills_learner import _default_skill_learner
+
+        skill_spec = build_skill_extraction_messages(scrubbed, scenario_id)
+        skill_resp = await invoke_medium_background(
+            bound,
+            [
+                SystemMessage(content=skill_spec[0]["content"]),
+                HumanMessage(content=skill_spec[1]["content"]),
+            ],
+        )
+        skill_text = str(skill_resp.content or "").strip()
+        m = re.search(r"\{.*\}", skill_text, re.DOTALL)
+        if m:
+            skill_json = json.loads(m.group(0))
+            if skill_json.get("has_learning"):
+                res = _default_skill_learner.apply_learning(skill_json)
+                audit_info("memory.extract.skill_learning", result=res)
+    except Exception as exc:
+        logger.debug(
+            "[memory.extract] procedural skill extraction pass skipped: %s", exc
+        )

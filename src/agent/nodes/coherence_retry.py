@@ -7,9 +7,9 @@ nudge and replaces the last assistant message. Bounded by ``coherence.max_retrie
 in ``defaults.yaml`` (default: 1). Mirrors the synthesis-retry pattern in
 ``complex.py`` for web-search final-answer stalls.
 
-Cloud route uses ``_invoke_cloud_path`` directly; local route uses the medium
-LLM. Strict-cloud mode is respected — no silent fallback to local Qwen when
-``_coherence_retry_round`` counter to bound retries.
+Cloud route uses ``_invoke_cloud_path``; local routes use ``_invoke_local_path``
+with tools unbound. Strict-cloud mode is respected — no silent fallback to local
+when cloud is unavailable and strict mode is on.
 """
 
 import logging
@@ -18,19 +18,18 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage
 
-from src.agent.llm import get_cloud_llm, CloudUnavailableError
-from src.agent.core.state import AgentState
-from src.agent.core.complex import _invoke_cloud_path
+from src.agent.core.complex_executor import _invoke_cloud_path, _invoke_local_path
 from src.agent.core.complex_utils.formatter import (
     _strip_dsml_blocks,
     _strip_thinking_tags,
+    latest_user_text,
 )
-from src.agent.core.complex_utils.formatter import latest_user_text
-from src.memory.user_profile import get_profile
-
+from src.agent.core.state import AgentState
+from src.agent.llm import CloudUnavailableError, get_cloud_llm
 from src.config.audit_log import audit_info, audit_warn
 from src.config.config_loader import config
 from src.config.log_middleware import log_node
+from src.memory.user_profile import get_profile
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +69,7 @@ async def coherence_retry_node(state: AgentState) -> dict[str, Any]:
     """Retry the last assistant turn with a synthesis nudge.
 
     Reads the last user query + last AI response, builds a nudge that tells
-    the model to try again, invokes the same route (cloud or local medium),
+    the model to try again, invokes the same route (cloud or local main),
     and replaces the last assistant message in the thread.
     """
     settings = _coherence_retry_settings()
@@ -92,6 +91,7 @@ async def coherence_retry_node(state: AgentState) -> dict[str, Any]:
 
     thread_messages = messages + [retry_nudge]
     budget = settings["retry_budget"]
+    local_max_context = int(config.get("models.main.context_window", 16384))
 
     new_response: AIMessage | None = None
     fallback_chain_addition: list[dict] = []
@@ -117,35 +117,32 @@ async def coherence_retry_node(state: AgentState) -> dict[str, Any]:
                     "fallback_chain": fallback_chain_addition,
                     "coherence_retry_reason": "cloud_unavailable",
                 }
-            else:
-                try:
-                    new_response, new_api_tokens = await _invoke_cloud_path(
-                        llm=llm,
-                        prompt_messages=thread_messages,
-                        tools=None,
-                        budget=budget,
-                        state=state,
-                        profile=profile,
-                        mode="tools_off",
-                        tools_bound=False,
-                    )
-                except CloudUnavailableError as exc:
-                    logger.warning("[coherence_retry] Cloud invoke failed: %s", exc)
-                    return {
-                        "_coherence_retry_round": (
-                            state.get("_coherence_retry_round") or 0
-                        )
-                        + 1,
-                        "fallback_chain": fallback_chain_addition,
-                        "coherence_retry_reason": "cloud_unavailable",
-                    }
-        if new_response is None and route == "complex-cloud":
-            return {
-                "_coherence_retry_round": (state.get("_coherence_retry_round") or 0)
-                + 1,
-                "fallback_chain": fallback_chain_addition,
-                "coherence_retry_reason": "cloud_no_response",
-            }
+            try:
+                new_response, new_api_tokens = await _invoke_cloud_path(
+                    llm=llm,
+                    prompt_messages=thread_messages,
+                    tools=None,
+                    budget=budget,
+                    state=state,
+                    profile=profile,
+                    mode="tools_off",
+                    tools_bound=False,
+                )
+            except CloudUnavailableError as exc:
+                logger.warning("[coherence_retry] Cloud invoke failed: %s", exc)
+                return {
+                    "_coherence_retry_round": (state.get("_coherence_retry_round") or 0)
+                    + 1,
+                    "fallback_chain": fallback_chain_addition,
+                    "coherence_retry_reason": "cloud_unavailable",
+                }
+        elif route in {"complex-default", "main-local"}:
+            new_response, new_api_tokens = await _invoke_local_path(
+                prompt_messages=thread_messages,
+                tools=None,
+                budget=budget,
+                max_context=local_max_context,
+            )
     except Exception as exc:
         logger.warning("[coherence_retry] Retry invocation failed: %s", exc)
         audit_warn(
@@ -164,14 +161,12 @@ async def coherence_retry_node(state: AgentState) -> dict[str, Any]:
         return {
             "_coherence_retry_round": (state.get("_coherence_retry_round") or 0) + 1,
             "fallback_chain": fallback_chain_addition,
+            "coherence_retry_reason": "no_response",
         }
 
     raw = str(getattr(new_response, "content", "") or "")
     cleaned = _strip_dsml_blocks(_strip_thinking_tags(raw)).strip()
     if not cleaned:
-        # Stripper emptied the text but raw had content — keep the prose that
-        # survived the marker-split by taking the LAST segment (text after the
-        # final DSML/Qwen XML tag). Apply the full stripper again to that tail.
         for marker in (
             r"<[\s\uFF5C|]*DSML[\s\uFF5C|]*[a-z_]*[\s\uFF5C|]*>",
             r"<\s*tool_call\s*>",

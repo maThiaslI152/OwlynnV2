@@ -1,13 +1,14 @@
 import asyncio
 import logging
+
+from src.config.audit_log import set_thread_id
 from src.config.settings import normalize_project_id
 from src.tools.workspace_context import (
-    set_active_project_for_run,
     reset_active_project,
-    set_active_scenario_for_run,
     reset_active_scenario,
+    set_active_project_for_run,
+    set_active_scenario_for_run,
 )
-from src.config.audit_log import set_thread_id
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +113,7 @@ class GraphSession:
                 e,
                 exc_info=True,
             )
-            err_msg = {"type": "error", "content": f"Graph Execution Error: {str(e)}"}
+            err_msg = {"type": "error", "content": f"Graph Execution Error: {e!s}"}
             self.event_buffer.append((err_msg, correlation_id))
             for q in list(self.listeners):
                 await q.put((err_msg, correlation_id))
@@ -124,25 +125,32 @@ class GraphSession:
 
             # Verify checkpoint was persisted (non-blocking)
             try:
-                from src.agent.core.checkpointer import get_postgres_saver
+                from src.models.db import DATABASE_URL
 
-                async def _check_checkpoint():
-                    try:
-                        saver = await get_postgres_saver()
-                        config = {"configurable": {"thread_id": self.thread_id}}
-                        result = await saver.aget_tuple(config)
-                        if result is None:
+                if DATABASE_URL.startswith(
+                    ("postgres://", "postgresql://", "postgresql+asyncpg://")
+                ):
+                    from src.agent.core.checkpointer import get_postgres_saver
+
+                    async def _check_checkpoint():
+                        try:
+                            saver = await get_postgres_saver()
+                            config = {"configurable": {"thread_id": self.thread_id}}
+                            result = await saver.aget_tuple(config)
+                            if result is None:
+                                logger.warning(
+                                    "No checkpoint found for thread %s after graph run — "
+                                    "history may not persist across restarts",
+                                    self.thread_id,
+                                )
+                        except Exception as e:
                             logger.warning(
-                                "No checkpoint found for thread %s after graph run — "
-                                "history may not persist across restarts",
-                                self.thread_id,
+                                "Failed to verify postgres checkpoint: %s", e
                             )
-                    except Exception as e:
-                        logger.warning("Failed to verify postgres checkpoint: %s", e)
 
-                import asyncio as _asyncio
+                    import asyncio as _asyncio
 
-                _asyncio.ensure_future(_check_checkpoint())
+                    _asyncio.ensure_future(_check_checkpoint())
             except Exception:
                 pass  # best-effort, non-critical
 

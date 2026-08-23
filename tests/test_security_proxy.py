@@ -6,19 +6,19 @@ construction, and approval normalization logic.
 """
 
 import json
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from langchain_core.messages import AIMessage
 
 from src.agent.nodes.security_proxy import (
-    security_proxy_node,
-    _normalize_approval,
-    _tool_calls_from_last_message,
-    _is_sensitive_call,
-    _risk_meta_for_call,
     SENSITIVE_TOOLS,
+    _is_sensitive_call,
+    _normalize_approval,
+    _risk_meta_for_call,
+    _tool_calls_from_last_message,
+    security_proxy_node,
 )
-
 
 # ── Helper: build a minimal AgentState ──────────────────────────────────────
 

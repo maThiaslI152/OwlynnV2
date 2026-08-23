@@ -25,28 +25,26 @@ os.environ["OWLYNN_AUDIT_LOG_ENABLED"] = "0"
 os.environ.setdefault("OWLYNN_AUDIT_LOG_DIR", "")
 
 from src.config.audit_log import (
-    audit_event,
+    _DEFAULT_CHANNEL_LEVELS,
+    CHANNELS,
+    _channel_levels,
+    audit_context,
     audit_debug,
+    audit_event,
     audit_info,
     audit_warn,
-    audit_context,
-    set_thread_id,
+    configure_audit_log,
+    get_thread_id,
+    set_model,
     set_node,
     set_route,
-    set_model,
-    get_thread_id,
-    CHANNELS,
-    configure_audit_log,
-    _channel_levels,
-    _DEFAULT_CHANNEL_LEVELS,
+    set_thread_id,
 )
-
 from src.config.log_middleware import (
-    log_node,
-    log_model_attempt,
     log_hitl_event,
+    log_model_attempt,
+    log_node,
 )
-
 
 # ── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -172,9 +170,8 @@ class TestAuditContext:
         assert "session_id" not in entries[0]
 
     def test_nested_context_merges(self, captured_audit):
-        with audit_context(a=1):
-            with audit_context(b=2):
-                audit_event("system", "test", level=logging.INFO)
+        with audit_context(a=1), audit_context(b=2):
+            audit_event("system", "test", level=logging.INFO)
         entries = captured_audit()
         assert entries[0].get("a") == 1
         assert entries[0].get("b") == 2

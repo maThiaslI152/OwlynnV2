@@ -215,7 +215,6 @@ _CASUAL_HINTS = {
     "amazing",
     "wonderful",
     "brilliant",
-    "lol",
     "lmao",
     "rofl",
     "heh",
@@ -293,13 +292,6 @@ _CASUAL_HINTS = {
     "glad you're feeling splendid",
     "glad you're feeling fabulous",
     "glad you're feeling terrific",
-    "glad you're feeling fantastic",
-    "glad you're feeling wonderful",
-    "glad you're feeling excellent",
-    "glad you're feeling amazing",
-    "glad you're feeling awesome",
-    "glad you're feeling great",
-    "glad you're feeling good",
 }
 
 _PERSONAL_INFO_PATTERNS = re.compile(
@@ -416,7 +408,7 @@ def _is_casual_chatter(text: str) -> bool:
     return any(lower.startswith(hint) for hint in _CASUAL_HINTS)
 
 
-def _is_followup_continuation(text: str, state: "AgentState") -> bool:
+def _is_followup_continuation(text: str, state: AgentState) -> bool:
     """Detect short follow-up confirmations that should reuse the previous route.
 
     Conditions:
@@ -503,10 +495,9 @@ async def check_deterministic_bypasses(
     to fall through to the LLM classifier.
     """
     from src.agent.routing.resolver import (
-        _preferred_complex_route,
+        _build_router_metadata,
         _resolve_complex_route,
         estimate_token_budget,
-        _build_router_metadata,
     )
 
     user_text = _last_user_text(state)

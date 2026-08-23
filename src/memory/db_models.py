@@ -17,6 +17,7 @@ import datetime
 from typing import Any
 
 from sqlalchemy import (
+    JSON,
     BigInteger,
     Boolean,
     Column,
@@ -24,13 +25,13 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
-    JSON,
     LargeBinary,
     String,
     Text,
     func,
 )
 from sqlalchemy.orm import relationship
+
 from src.models.base import Base
 
 Base.__allow_unmapped__ = True
@@ -39,7 +40,10 @@ Base.__allow_unmapped__ = True
 try:
     from pgvector.sqlalchemy import Vector  # type: ignore[import-untyped]
 
-    VECTOR_TYPE = Vector(768)
+    from src.config.config_loader import config
+
+    _EMBED_DIMS = config.get_embedding_dimensions()
+    VECTOR_TYPE = Vector(_EMBED_DIMS)
 except ImportError:  # pragma: no cover
     from sqlalchemy import PickleType
 
@@ -83,7 +87,9 @@ class Topic(Base):
 
     __table_args__ = (
         # category+name is the natural key
-        __import__("sqlalchemy").UniqueConstraint("category", "name", name="uq_topic_cat_name"),
+        __import__("sqlalchemy").UniqueConstraint(
+            "category", "name", name="uq_topic_cat_name"
+        ),
     )
 
 
@@ -187,29 +193,34 @@ class PentestEngagement(Base):
     id: str = Column(String(64), primary_key=True)
     name: str = Column(Text)
     client: str = Column(Text)
-    phase: str = Column(String(32))   # scope/recon/exploit/report/completed
+    phase: str = Column(String(32))  # scope/recon/exploit/report/completed
     status: str = Column(String(32))  # active/paused/completed/archived
     description: str = Column(Text)
     assessor: str = Column(Text)
-    notes: str = Column(Text)                        # replaces notes.md
-    engagement_data: dict[str, Any] = Column(JSON, default=dict)  # replaces engagement_data.json
-    task_graph: dict[str, Any] = Column(JSON, default=dict)       # replaces task_graph.json
+    notes: str = Column(Text)  # replaces notes.md
+    engagement_data: dict[str, Any] = Column(
+        JSON, default=dict
+    )  # replaces engagement_data.json
+    task_graph: dict[str, Any] = Column(JSON, default=dict)  # replaces task_graph.json
     created_at: datetime.datetime = Column(DateTime(timezone=True))
     updated_at: datetime.datetime = Column(DateTime(timezone=True))
 
-    scope: "PentestScope" = relationship(
-        "PentestScope", back_populates="engagement", uselist=False, cascade="all, delete-orphan"
+    scope: PentestScope = relationship(
+        "PentestScope",
+        back_populates="engagement",
+        uselist=False,
+        cascade="all, delete-orphan",
     )
-    findings: list["PentestFinding"] = relationship(
+    findings: list[PentestFinding] = relationship(
         "PentestFinding", back_populates="engagement", cascade="all, delete-orphan"
     )
-    targets: list["PentestTarget"] = relationship(
+    targets: list[PentestTarget] = relationship(
         "PentestTarget", back_populates="engagement", cascade="all, delete-orphan"
     )
-    timeline: list["PentestTimeline"] = relationship(
+    timeline: list[PentestTimeline] = relationship(
         "PentestTimeline", back_populates="engagement", cascade="all, delete-orphan"
     )
-    credentials: list["PentestCredentials"] = relationship(
+    credentials: list[PentestCredentials] = relationship(
         "PentestCredentials", back_populates="engagement", cascade="all, delete-orphan"
     )
 
@@ -221,13 +232,17 @@ class PentestScope(Base):
 
     id: int = Column(Integer, primary_key=True, autoincrement=True)
     engagement_id: str = Column(
-        String(64), ForeignKey("pentest_engagements.id", ondelete="CASCADE"), nullable=False
+        String(64),
+        ForeignKey("pentest_engagements.id", ondelete="CASCADE"),
+        nullable=False,
     )
     targets: list[Any] = Column(JSON, default=list)
     exclusions: list[Any] = Column(JSON, default=list)
     rules_of_engagement: str = Column(Text)
 
-    engagement: "PentestEngagement" = relationship("PentestEngagement", back_populates="scope")
+    engagement: PentestEngagement = relationship(
+        "PentestEngagement", back_populates="scope"
+    )
 
 
 class PentestFinding(Base):
@@ -237,10 +252,12 @@ class PentestFinding(Base):
 
     id: str = Column(String(64), primary_key=True)
     engagement_id: str = Column(
-        String(64), ForeignKey("pentest_engagements.id", ondelete="CASCADE"), nullable=False
+        String(64),
+        ForeignKey("pentest_engagements.id", ondelete="CASCADE"),
+        nullable=False,
     )
     title: str = Column(Text)
-    severity: str = Column(String(16))   # critical/high/medium/low/info
+    severity: str = Column(String(16))  # critical/high/medium/low/info
     cvss: float = Column(Float)
     cwe: str = Column(String(32))
     cve: str = Column(String(32))
@@ -249,13 +266,15 @@ class PentestFinding(Base):
     description: str = Column(Text)
     remediation: str = Column(Text)
     phase: str = Column(String(32))
-    status: str = Column(String(32))    # suspected/confirmed/remediated/…
+    status: str = Column(String(32))  # suspected/confirmed/remediated/…
     tags: list[Any] = Column(JSON, default=list)
     evidence_refs: list[Any] = Column(JSON, default=list)
     discovered_at: datetime.datetime = Column(DateTime(timezone=True))
     retested_at: datetime.datetime = Column(DateTime(timezone=True))
 
-    engagement: "PentestEngagement" = relationship("PentestEngagement", back_populates="findings")
+    engagement: PentestEngagement = relationship(
+        "PentestEngagement", back_populates="findings"
+    )
 
 
 class PentestTarget(Base):
@@ -265,14 +284,18 @@ class PentestTarget(Base):
 
     id: int = Column(Integer, primary_key=True, autoincrement=True)
     engagement_id: str = Column(
-        String(64), ForeignKey("pentest_engagements.id", ondelete="CASCADE"), nullable=False
+        String(64),
+        ForeignKey("pentest_engagements.id", ondelete="CASCADE"),
+        nullable=False,
     )
     ip: str = Column(String(64))
     hostname: str = Column(Text)
     ports: list[Any] = Column(JSON, default=list)
     discovered_at: datetime.datetime = Column(DateTime(timezone=True))
 
-    engagement: "PentestEngagement" = relationship("PentestEngagement", back_populates="targets")
+    engagement: PentestEngagement = relationship(
+        "PentestEngagement", back_populates="targets"
+    )
 
 
 class PentestTimeline(Base):
@@ -282,7 +305,9 @@ class PentestTimeline(Base):
 
     id: str = Column(String(64), primary_key=True)
     engagement_id: str = Column(
-        String(64), ForeignKey("pentest_engagements.id", ondelete="CASCADE"), nullable=False
+        String(64),
+        ForeignKey("pentest_engagements.id", ondelete="CASCADE"),
+        nullable=False,
     )
     event_type: str = Column(String(64))
     summary: str = Column(Text)
@@ -291,7 +316,9 @@ class PentestTimeline(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
-    engagement: "PentestEngagement" = relationship("PentestEngagement", back_populates="timeline")
+    engagement: PentestEngagement = relationship(
+        "PentestEngagement", back_populates="timeline"
+    )
 
 
 class PentestCredentials(Base):
@@ -301,11 +328,13 @@ class PentestCredentials(Base):
 
     id: int = Column(Integer, primary_key=True, autoincrement=True)
     engagement_id: str = Column(
-        String(64), ForeignKey("pentest_engagements.id", ondelete="CASCADE"), nullable=False
+        String(64),
+        ForeignKey("pentest_engagements.id", ondelete="CASCADE"),
+        nullable=False,
     )
     data: bytes = Column(LargeBinary, nullable=False)  # Fernet-encrypted blob
 
-    engagement: "PentestEngagement" = relationship(
+    engagement: PentestEngagement = relationship(
         "PentestEngagement", back_populates="credentials"
     )
 
@@ -390,6 +419,53 @@ class SemanticCacheEntry(Base):
     prompt_scoped: str = Column(Text)
     response: str = Column(Text, nullable=False)
     embedding: Any = Column(VECTOR_TYPE)
+    created_at: datetime.datetime = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+# ---------------------------------------------------------------------------
+# Thought Graph / Mindmap
+# ---------------------------------------------------------------------------
+
+
+class ThoughtNode(Base):
+    """A node in the unified thought graph (replaces flat chat sessions)."""
+
+    __tablename__ = "thought_nodes"
+
+    id: str = Column(String(128), primary_key=True)  # LangGraph thread_id
+    title: str = Column(String(256), nullable=False, default="New Thought")
+    summary: str = Column(Text, default="")
+    mode: str = Column(String(32), default="normal", nullable=False)
+    scenario_id: str | None = Column(String(64), nullable=True)
+    engagement_id: str | None = Column(String(64), nullable=True)
+    course_id: str | None = Column(String(64), nullable=True)
+    status: str = Column(String(32), default="active", nullable=False)
+    tags: list[Any] = Column(JSON, default=list)
+    canvas_x: float | None = Column(Float, nullable=True)
+    canvas_y: float | None = Column(Float, nullable=True)
+    pinned: bool = Column(Boolean, default=False)
+    embedding: Any = Column(VECTOR_TYPE, nullable=True)
+    created_at: float = Column(Float, nullable=False)
+    last_active_at: float = Column(Float, nullable=False)
+
+
+class ThoughtEdge(Base):
+    """A directed semantic edge connecting two thought nodes."""
+
+    __tablename__ = "thought_edges"
+
+    id: int = Column(Integer, primary_key=True, autoincrement=True)
+    source_id: str = Column(
+        String(128), ForeignKey("thought_nodes.id", ondelete="CASCADE"), nullable=False
+    )
+    target_id: str = Column(
+        String(128), ForeignKey("thought_nodes.id", ondelete="CASCADE"), nullable=False
+    )
+    relation: str = Column(String(64), default="relates_to", nullable=False)
+    weight: float = Column(Float, default=1.0, nullable=False)
+    auto_generated: bool = Column(Boolean, default=True, nullable=False)
     created_at: datetime.datetime = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

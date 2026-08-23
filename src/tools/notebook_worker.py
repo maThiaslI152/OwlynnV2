@@ -1,11 +1,10 @@
-import sys
-import json
-import traceback
 import io
+import json
 import os
 import signal
-import threading
-from contextlib import redirect_stdout, redirect_stderr
+import sys
+import traceback
+from contextlib import redirect_stderr, redirect_stdout
 
 _globals = {}
 
@@ -168,6 +167,11 @@ def main():
                 workspace_dir = payload.get("workspace_dir", "")
 
                 _globals["WORKSPACE_DIR"] = workspace_dir
+                if workspace_dir and os.path.exists(workspace_dir):
+                    try:
+                        os.chdir(workspace_dir)
+                    except Exception:
+                        pass
 
                 stdout_buf = io.StringIO()
                 stderr_buf = io.StringIO()
@@ -213,7 +217,7 @@ def main():
         except Exception as e:
             try:
                 sys.stdout.write(
-                    json.dumps({"error": f"Worker internal error: {str(e)}"}) + "\n"
+                    json.dumps({"error": f"Worker internal error: {e!s}"}) + "\n"
                 )
                 sys.stdout.flush()
             except Exception:

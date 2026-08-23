@@ -8,25 +8,24 @@ Property-based tests for the Router node.
 """
 
 import sys
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 sys.modules["mem0"] = MagicMock()
 
 import pytest
-from hypothesis import given, settings, assume, HealthCheck
+from hypothesis import HealthCheck, assume, given, settings
 from hypothesis import strategies as st
 from langchain_core.messages import HumanMessage
 
+from src.agent.routing.classifier import parse_classification
 from src.agent.routing.router import (
-    estimate_token_budget,
     _has_image_content,
     _needs_frontier_quality,
     _resolve_complex_route,
     _toolbox_for_skill,
+    estimate_token_budget,
 )
-from src.agent.routing.classifier import parse_classification
 from src.tools.skills import SkillDefinition
-
 
 # ── Valid route set ──────────────────────────────────────────────────────
 VALID_ROUTES = {
@@ -106,24 +105,24 @@ class TestRouteDecisionDomain:
         route, _ = _resolve_complex_route(text, state, ["all"])
         assert route in VALID_COMPLEX_ROUTES, f"Invalid route: {route}"
 
-    def test_image_attachment_routes_to_cloud(self):
-        """Messages with image_url content blocks route to complex-cloud when cloud is on."""
+    def test_image_attachment_routes_to_local_default(self):
+        """Messages with image_url blocks route to complex-default by default (vision proxy)."""
         state = _make_image_state("What is in this picture?")
         route, _ = _resolve_complex_route(
             "What is in this picture?", state, ["all"], cloud_available=True
         )
-        assert route == "complex-cloud"
+        assert route == "complex-default"
 
     @given(text=user_text_st)
     @settings(max_examples=100, deadline=None)
-    def test_image_always_cloud_when_cloud_unavailable(self, text: str):
-        """Image + any text routes to complex-default when cloud is unavailable (local fallback)."""
+    def test_image_always_default_when_cloud_unavailable(self, text: str):
+        """Image + any text routes to complex-default when cloud is unavailable."""
         state = _make_image_state(text)
         route, _ = _resolve_complex_route(text, state, ["all"], cloud_available=False)
         assert route == "complex-default"
 
     def test_image_with_frontier_routes_cloud_for_vision_proxy(self):
-        """Image + frontier task routes to cloud so Qwen transcribes before DeepSeek."""
+        """Image + frontier task routes to cloud so vision proxy transcribes before DeepSeek."""
         state = _make_image_state(
             "Analyze this diagram and provide a formal proof of the theorem shown"
         )
@@ -135,26 +134,28 @@ class TestRouteDecisionDomain:
         )
         assert route == "complex-cloud"
 
-    def test_large_input_routes_to_cloud(self):
-        """Input exceeding 80% of Medium_Default context routes to complex-cloud."""
-        # 80% of 100000 context = 80000 tokens. With 4 chars/token and 4000 reserve:
-        # estimated_input = 4000 + (text_len // 4) > 80000
-        # text_len > (80000 - 4000) * 4 = 304000
-        text = "x" * 310000
-        state = _make_text_state(text)
-        route, _ = _resolve_complex_route(text, state, ["all"], cloud_available=True)
-        assert route == "complex-cloud", (
-            f"Large input should route to cloud, got {route}"
-        )
+    def test_travel_mode_routes_to_cloud(self):
+        """Travel mode (or battery power) routes complex tasks to cloud to save battery."""
+        with patch(
+            "src.agent.routing.resolver.get_profile", return_value={"travel_mode": True}
+        ):
+            state = _make_text_state("Refactor this python module")
+            route, _ = _resolve_complex_route(
+                "Refactor this python module", state, ["all"], cloud_available=True
+            )
+            assert route == "complex-cloud"
 
-    def test_very_large_input_routes_to_cloud(self):
-        """Input exceeding 80% of Medium_LongCtx context routes to complex-cloud."""
-        # 80% of 131072 = 104857.6 tokens. estimated_input = 4000 + (text_len // 4) > 104857
-        # text_len > (104857 - 4000) * 4 = 403428
-        text = "x" * 410000
-        state = _make_text_state(text)
-        route, _ = _resolve_complex_route(text, state, ["all"], cloud_available=True)
-        assert route == "complex-cloud"
+    def test_cloud_first_policy_routes_to_cloud(self):
+        """Explicit cloud_first routing mode routes complex tasks to cloud."""
+        with patch(
+            "src.agent.routing.resolver.get_profile",
+            return_value={"cloud_routing_mode": "cloud_first"},
+        ):
+            state = _make_text_state("Explain quantum computing")
+            route, _ = _resolve_complex_route(
+                "Explain quantum computing", state, ["all"], cloud_available=True
+            )
+            assert route == "complex-cloud"
 
     @given(
         text=st.text(
@@ -166,29 +167,12 @@ class TestRouteDecisionDomain:
         )
     )
     @settings(max_examples=100, deadline=None)
-    def test_short_text_routes_cloud_when_cloud_unavailable(self, text: str):
-        """Short text without frontier hints routes to complex-default when cloud is off (local fallback)."""
+    def test_short_text_routes_local_by_default(self, text: str):
+        """Short text without frontier hints routes to local main model (complex-default)."""
         assume(not _needs_frontier_quality(text))
         state = _make_text_state(text)
-        route, _ = _resolve_complex_route(text, state, ["all"], cloud_available=False)
+        route, _ = _resolve_complex_route(text, state, ["all"], cloud_available=True)
         assert route == "complex-default"
-
-    @given(
-        text=st.text(
-            min_size=1,
-            max_size=100,
-            alphabet=st.characters(
-                whitelist_categories=("L", "N", "Z"),
-            ),
-        )
-    )
-    @settings(max_examples=100, deadline=None)
-    def test_short_text_routes_cloud_when_available(self, text: str):
-        """Short text without frontier hints routes to complex-cloud when cloud is on."""
-        assume(not _needs_frontier_quality(text))
-        state = _make_text_state(text)
-        route, _ = _resolve_complex_route(text, state, ["all"], cloud_available=True)
-        assert route == "complex-cloud"
 
     def test_frontier_hints_route_to_cloud(self):
         """Text with frontier-quality indicators routes to complex-cloud."""

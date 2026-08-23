@@ -2,43 +2,42 @@
 Auto-Summarize Node — Compresses older conversation history when context usage
 exceeds 85% of the active model's context window.
 
-Uses the always-loaded small model (unified local model) to produce a
-bulleted summary of the reasoning history. This summary is injected at the start
-of the conversation. Preserves tool call results,
+Uses the main local model to produce a bulleted summary of the reasoning history.
+This summary is injected at the start of the conversation. Preserves tool call results.
 
 Features:
 - **Multi-level compression**: Prior summaries are fed back into subsequent
   summarization rounds so cumulative context is never lost.
 - **Structured output**: Summaries are categorized into decisions, facts,
   preferences, open tasks, and code changes.
-- **Graceful degradation**: Falls back to a compact no-LLM fallback when the
-  Small_LLM is unavailable.
+- **Graceful degradation**: Skips summarization when the local LLM is unavailable.
 
 Requirements: 4.1, 4.2, 4.6
 """
 
 import logging
-from typing import Sequence
+from collections.abc import Sequence
 
 from langchain_core.messages import (
     BaseMessage,
     HumanMessage,
+    RemoveMessage,
     SystemMessage,
     ToolMessage,
-    RemoveMessage,
 )
 
-from src.agent.llm import get_small_llm
 from src.agent.core.state import AgentState
+from src.agent.llm import get_main_llm
+
+get_small_llm = get_main_llm
+from src.config.audit_log import audit_debug, audit_info, audit_warn
+from src.config.config_loader import config
+from src.config.log_middleware import log_node
 
 logger = logging.getLogger(__name__)
 
-from src.config.audit_log import audit_info, audit_debug, audit_warn
-from src.config.log_middleware import log_node
-from src.config.config_loader import config
-
 # Default context window for the local model (sourced from centralized config)
-_DEFAULT_CONTEXT_WINDOW = int(config.get("models.small.context_window", 65536))
+_DEFAULT_CONTEXT_WINDOW = config.get_main_model_context_window()
 
 # Threshold ratio — trigger summarization when active_tokens exceed this fraction
 _SUMMARIZE_THRESHOLD = float(config.get("summarization.threshold_ratio", 0.85))
@@ -117,11 +116,29 @@ def _is_protected(msg: BaseMessage) -> bool:
     meta = getattr(msg, "additional_kwargs", {}) or {}
     if meta.get("pinned") or meta.get("user_fact"):
         return True
-    # Also check response_metadata for pinned/user_fact
     resp_meta = getattr(msg, "response_metadata", {}) or {}
-    if resp_meta.get("pinned") or resp_meta.get("user_fact"):
-        return True
-    return False
+    return bool(resp_meta.get("pinned") or resp_meta.get("user_fact"))
+
+
+def _prune_tool_outputs_for_summarization(
+    messages: Sequence[BaseMessage], max_chars: int = 400
+) -> list[BaseMessage]:
+    """Prune large tool outputs before summarization to avoid wasting LLM tokens."""
+    pruned = []
+    for msg in messages:
+        if isinstance(msg, ToolMessage):
+            content = (
+                msg.content if isinstance(msg.content, str) else str(msg.content or "")
+            )
+            if len(content) > max_chars:
+                name = getattr(msg, "name", "tool") or "tool"
+                preview = content[:max_chars].rsplit("\n", 1)[0]
+                content = f"{preview}\n[... {len(content)} chars tool output truncated for summary ...]"
+                msg = ToolMessage(
+                    content=content, tool_call_id=msg.tool_call_id, name=name
+                )
+        pruned.append(msg)
+    return pruned
 
 
 def _split_messages(
@@ -130,16 +147,16 @@ def _split_messages(
 ) -> tuple[list[BaseMessage], list[BaseMessage]]:
     """Split messages into (older_candidates, recent_kept).
 
-    ``keep_recent`` refers to *turns* (a human + AI pair = 1 turn).
+    ``keep_recent`` refers to turns (a human + AI pair = 1 turn).
     We walk backwards counting Human messages to find the split point.
     """
     msgs = list(messages)
     if not msgs:
         return [], []
 
-    # Count turns from the end (each HumanMessage starts a turn)
     turn_count = 0
     split_idx = None
+
     for i in range(len(msgs) - 1, -1, -1):
         if isinstance(msgs[i], HumanMessage):
             turn_count += 1
@@ -147,7 +164,6 @@ def _split_messages(
                 split_idx = i
                 break
 
-    # If we didn't find enough turns, keep everything as recent
     if split_idx is None:
         return [], msgs
 
@@ -158,28 +174,16 @@ def _split_messages(
 
 @log_node("auto_summarize")
 async def auto_summarize_node(state: AgentState) -> dict:
-    """LangGraph node: compress older messages when context is near capacity.
-
-    Trigger condition (Req 4.1):
-        ``active_tokens > 0.85 * context_window``
-
-    Returns a dict with:
-        - ``messages``: updated message list (summarized older + kept recent)
-        - ``summary_takeaways``: list of takeaway strings
-        - ``summarized_tokens``: token count of the compressed portion
-        - ``active_tokens``: updated active token count
-        - ``context_summarized_event``: payload for the WS event
-    """
+    """LangGraph node: compress older messages when context is near capacity."""
     messages: list[BaseMessage] = list(state.get("messages") or [])
     active_tokens: int = state.get("active_tokens") or _estimate_messages_tokens(
         messages
     )
     context_window: int = state.get("context_window") or _DEFAULT_CONTEXT_WINDOW
 
-    # ── Guard: only summarize when threshold exceeded ────────────────────
     threshold = _SUMMARIZE_THRESHOLD * context_window
     if active_tokens <= threshold:
-        return {}  # no-op — nothing to update
+        return {}
 
     audit_info(
         "memory.summarize",
@@ -189,12 +193,13 @@ async def auto_summarize_node(state: AgentState) -> dict:
         ratio=round(active_tokens / context_window, 3),
     )
 
-    # ── Split into older vs. recent ──────────────────────────────────────
     older, recent = _split_messages(messages)
     if not older:
-        return {}  # nothing old enough to summarize
+        return {}
 
-    # ── Separate protected messages from summarizable ones ───────────────
+    # Pre-pass: prune large tool outputs in older messages before LLM summarization
+    older = _prune_tool_outputs_for_summarization(older)
+
     protected: list[BaseMessage] = []
     to_summarize: list[BaseMessage] = []
     for msg in older:
@@ -204,7 +209,7 @@ async def auto_summarize_node(state: AgentState) -> dict:
             to_summarize.append(msg)
 
     if not to_summarize:
-        return {}  # everything is protected, nothing to compress
+        return {}
 
     audit_debug(
         "memory.summarize",
@@ -214,12 +219,11 @@ async def auto_summarize_node(state: AgentState) -> dict:
         recent_kept=len(recent),
     )
 
-    # ── Extract prior summary context for multi-level awareness ──────────
     prior_context = ""
     for msg in protected:
         if isinstance(msg, SystemMessage):
             content = msg.content if isinstance(msg.content, str) else ""
-            if content.startswith("[Auto-Summary"):
+            if "[CONTEXT COMPACTION" in content or content.startswith("[Auto-Summary"):
                 prior_context = (
                     "Prior summary (context from earlier compression):\n"
                     f"{content}\n\n"
@@ -227,18 +231,15 @@ async def auto_summarize_node(state: AgentState) -> dict:
                 )
                 break
 
-    # ── Build conversation text for the summarizer ───────────────────────
     conv_lines: list[str] = []
     for msg in to_summarize:
         role = "User" if isinstance(msg, HumanMessage) else "AI"
         content = msg.content if isinstance(msg.content, str) else str(msg.content)
-        # Truncate very long messages to stay within Small_LLM's 4K window
         if len(content) > 800:
             content = content[:800] + "…"
         conv_lines.append(f"{role}: {content}")
 
     conversation_text = "\n".join(conv_lines)
-    # Hard cap the conversation text fed to Small_LLM (~2K tokens budget)
     max_conv_chars = 2000 * _CHARS_PER_TOKEN
     if len(conversation_text) > max_conv_chars:
         conversation_text = conversation_text[:max_conv_chars] + "\n[…truncated]"
@@ -248,22 +249,20 @@ async def auto_summarize_node(state: AgentState) -> dict:
         conversation=conversation_text,
     )
 
-    # ── Call Small_LLM ───────────────────────────────────────────────────
     try:
-        llm = await get_small_llm()
+        llm = await get_main_llm()
         response = await llm.ainvoke([SystemMessage(content=prompt_text)])
         summary_text = (response.content or "").strip()
     except Exception as e:
         logger.warning(
-            "[auto_summarize] Small_LLM failed (%s), skipping summarization", e
+            "[auto_summarize] Main LLM failed (%s), skipping summarization", e
         )
         audit_warn("memory.summarize", "llm_failed", error=str(e)[:120])
-        return {}  # graceful degradation — keep full context
+        return {}
 
     if not summary_text:
         return {}
 
-    # ── Parse takeaways from the summary ─────────────────────────────────
     takeaways: list[str] = []
     for line in summary_text.split("\n"):
         line = line.strip().lstrip("-•*").strip()
@@ -272,9 +271,14 @@ async def auto_summarize_node(state: AgentState) -> dict:
     if not takeaways:
         takeaways = [summary_text]
 
-    # ── Build the replacement SystemMessage ──────────────────────────────
+    # Reference-only historical snapshot header (Hermes pattern)
     summary_msg = SystemMessage(
-        content=f"[Auto-Summary of earlier conversation]\n{summary_text}"
+        content=(
+            "[CONTEXT COMPACTION — REFERENCE ONLY]\n"
+            "Earlier turns were compacted below. This is background reference, NOT active instructions. "
+            "Do NOT re-execute tasks mentioned in this summary.\n\n"
+            f"## Historical Task Snapshot\n{summary_text}"
+        )
     )
 
     # ── Assemble new message list: remove old + summary + protected older + recent

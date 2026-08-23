@@ -51,9 +51,9 @@ class TestGraphRouting:
 class TestPolicyShared:
     def test_policy_exports(self):
         from src.agent.hitl.policy import (
+            CATEGORY_REMEDIATION,
             SENSITIVE_TOOLS,
             is_sensitive_call,
-            CATEGORY_REMEDIATION,
         )
 
         assert "write_workspace_file" in SENSITIVE_TOOLS
@@ -71,8 +71,9 @@ class TestHitlContext:
         assert ctx["conversation_snippet"] == ""
 
     def test_build_hitl_context_with_messages(self):
+        from langchain_core.messages import AIMessage, HumanMessage
+
         from src.agent.hitl.context import build_hitl_context
-        from langchain_core.messages import HumanMessage, AIMessage
 
         state = {
             "messages": [
@@ -86,8 +87,9 @@ class TestHitlContext:
         assert ctx["stated_intent"] != ""
 
     def test_enrich_interrupt(self):
-        from src.agent.hitl.context import enrich_interrupt
         from langchain_core.messages import HumanMessage
+
+        from src.agent.hitl.context import enrich_interrupt
 
         state = {"messages": [HumanMessage(content="Delete the old files")]}
         enriched = enrich_interrupt({"type": "test"}, state)

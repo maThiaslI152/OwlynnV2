@@ -1,5 +1,5 @@
-import os
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -62,9 +62,10 @@ class VectorLifecycleManager:
     @staticmethod
     async def index_processed_file(project_id: str, filename: str, text: str) -> int:
         """Centralized indexing path. De-duplicates previous chunks before indexing and skips identical files."""
-        from src.api.attachment_intake import is_vision_filename
         import hashlib
         import json
+
+        from src.api.attachment_intake import is_vision_filename
         from src.config.settings import get_project_workspace
 
         if is_vision_filename(filename):
@@ -111,8 +112,9 @@ class VectorLifecycleManager:
         await project_manager.remove_knowledge(project_id, filename)
 
         # 3. Index new chunks using Langchain Text Splitter
-        from src.config.config_loader import config
         from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+        from src.config.config_loader import config
 
         chunk_size = int(config.get("file_indexing.chunk_size", 1500))
         overlap = int(config.get("file_indexing.overlap", 200))

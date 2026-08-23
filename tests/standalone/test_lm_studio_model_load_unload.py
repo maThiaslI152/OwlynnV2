@@ -17,17 +17,20 @@ Models tested:
     liquid/lfm2-24b-a2b, zai-org/glm-4.6v-flash
 """
 
-import sys
 import os
+import sys
 import time
+
 import httpx
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
+from src.config.config_loader import config
+
 LM_STUDIO_BASE = os.getenv("LM_STUDIO_BASE_URL", "http://127.0.0.1:1234")
 MODELS_TO_TEST = [
-    "liquid/lfm2-24b-a2b",
-    "zai-org/glm-4.6v-flash",
+    config.get_main_model_name(),
+    config.get_pentest_model_name(),
 ]
 
 LOAD_TIMEOUT = 300  # seconds — large models can be slow

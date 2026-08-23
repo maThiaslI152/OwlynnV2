@@ -5,10 +5,9 @@ SSRF-safe URL validation for server-side HTTP fetches (fetch_webpage, etc.).
 from __future__ import annotations
 
 import ipaddress
+import logging
 import socket
 from urllib.parse import urlparse
-
-import logging
 
 logger = logging.getLogger(__name__)
 _BLOCKED_HOSTNAMES = frozenset(

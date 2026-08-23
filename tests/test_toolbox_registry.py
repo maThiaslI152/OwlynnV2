@@ -6,11 +6,11 @@ from unittest.mock import MagicMock
 sys.modules["mem0"] = MagicMock()
 
 from src.agent.tool_sets import (
-    TOOLBOX_REGISTRY,
     ALWAYS_INCLUDED_TOOLS,
-    resolve_tools,
-    COMPLEX_TOOLS_WITH_WEB,
     COMPLEX_TOOLS_NO_WEB,
+    COMPLEX_TOOLS_WITH_WEB,
+    TOOLBOX_REGISTRY,
+    resolve_tools,
 )
 from src.tools.ask_user import ask_user
 

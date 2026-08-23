@@ -6,7 +6,8 @@ from unittest.mock import MagicMock
 sys.modules["mem0"] = MagicMock()
 
 import pytest
-from src.tools.skills import SkillParam, SkillDefinition, ALLOWED_CATEGORIES
+
+from src.tools.skills import ALLOWED_CATEGORIES, SkillDefinition, SkillParam
 
 
 def _make_skill(**overrides) -> SkillDefinition:

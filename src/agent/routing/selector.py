@@ -10,7 +10,6 @@ from __future__ import annotations
 import logging
 
 from src.agent.routing.models import RouteClassification, TaskFeatures
-from src.config.config_loader import config
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +22,8 @@ def _check_cloud_available() -> bool:
     """
     try:
         from src.agent.cloud.cloud_circuit_breaker import get_circuit_breaker
-        from src.memory.user_profile import get_profile
         from src.config.secret_store import resolve_deepseek_api_key
+        from src.memory.user_profile import get_profile
 
         profile = get_profile()
         if not profile.get("cloud_escalation_enabled", True):

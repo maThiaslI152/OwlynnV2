@@ -29,12 +29,13 @@ import asyncio
 import functools
 import logging
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from src.config.audit_log import (
     audit_event,
-    set_node,
     set_model,
+    set_node,
 )
 
 logger = logging.getLogger(__name__)

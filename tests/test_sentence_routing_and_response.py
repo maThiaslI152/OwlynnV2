@@ -11,25 +11,24 @@ from src.agent.core.graph import build_graph
 from src.agent.core.state import AgentState
 from src.agent.llm import LLMPool
 
-
 SIMPLE_CASES = [
-    ("Hi there", "simple", "small-local", "SMALL: greeting"),
-    ("Hello, how are you?", "simple", "small-local", "SMALL: greeting"),
-    ("Thanks for your help!", "simple", "small-local", "SMALL: greeting"),
+    ("Hi there", "simple", "main-local", "SMALL: greeting"),
+    ("Hello, how are you?", "simple", "main-local", "SMALL: greeting"),
+    ("Thanks for your help!", "simple", "main-local", "SMALL: greeting"),
 ]
 
 COMPLEX_CASES = [
     (
         "Design a migration strategy from monolith to microservices with rollout phases.",
-        "complex-cloud",
-        "large-cloud",
-        "LARGE: architecture plan",
+        "complex-default",
+        "main-local",
+        "MAIN: architecture plan",
     ),
     (
         "Write and explain a Python quicksort implementation with complexity analysis.",
-        "complex-cloud",
-        "large-cloud",
-        "LARGE: architecture plan",
+        "complex-default",
+        "main-local",
+        "MAIN: architecture plan",
     ),
 ]
 
@@ -47,7 +46,7 @@ async def test_sentence_matrix_simple_route_and_response(
     mock_small_llm.bind = MagicMock(return_value=mock_small_llm)
     mock_small_llm.ainvoke.return_value = AIMessage(content=expected_reply)
 
-    LLMPool.set_test_overrides({"small": mock_small_llm})
+    LLMPool.set_test_overrides({"main": mock_small_llm, "small": mock_small_llm})
     try:
         app = build_graph().compile()
 
@@ -104,18 +103,26 @@ async def test_sentence_matrix_complex_route_and_response(
     mock_bound = AsyncMock()
     mock_bound.bind = MagicMock(return_value=mock_bound)
     mock_bound.ainvoke.return_value = AIMessage(content=expected_reply)
-    mock_large_base = MagicMock()
-    mock_large_base.bind = MagicMock(return_value=mock_bound)
-    mock_large_base.bind_tools = MagicMock(return_value=mock_bound)
+    mock_main_base = MagicMock()
+    mock_main_base.bind = MagicMock(return_value=mock_bound)
+    mock_main_base.bind_tools = MagicMock(return_value=mock_bound)
 
-    LLMPool.set_test_overrides({"small": mock_router_llm, "cloud": mock_large_base})
+    LLMPool.set_test_overrides(
+        {
+            "main": mock_main_base,
+            "small": mock_router_llm,
+            "fallback": mock_main_base,
+            "cloud": mock_main_base,
+        }
+    )
+    from src.agent.cloud.cloud_circuit_breaker import reset_circuit_breaker
+
+    reset_circuit_breaker()
     try:
         app = build_graph().compile()
 
         with (
-            patch(
-                "src.agent.routing.router._check_cloud_available", return_value=False
-            ),
+            patch("src.agent.routing.router._check_cloud_available", return_value=True),
             patch("src.agent.nodes.memory.get_profile", return_value={}),
             patch(
                 "src.agent.nodes.memory.get_persona_by_id",
@@ -144,6 +151,6 @@ async def test_sentence_matrix_complex_route_and_response(
     finally:
         LLMPool.clear_test_overrides()
 
-    assert result["route"] in (expected_route, "complex-default")
+    assert result["route"] == expected_route
     assert result["model_used"] == expected_model
     assert result["messages"][-1].content == expected_reply

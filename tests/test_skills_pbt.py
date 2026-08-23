@@ -14,19 +14,19 @@ from unittest.mock import MagicMock
 
 sys.modules["mem0"] = MagicMock()
 
-from hypothesis import given, settings, assume
+from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
 from src.tools.skills import (
-    _parse_front_matter,
-    _parse_skill_file,
+    ALLOWED_CATEGORIES,
     ChainPipeline,
     ChainStep,
     ContextInjector,
     SkillDefinition,
     SkillLoader,
     SkillParam,
-    ALLOWED_CATEGORIES,
+    _parse_front_matter,
+    _parse_skill_file,
 )
 
 # ---------------------------------------------------------------------------

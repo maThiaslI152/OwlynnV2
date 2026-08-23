@@ -5,18 +5,18 @@ Tests memory context building, cache behavior, Mem0 interaction,
 profile/persona injection, and conversation recording.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
 from datetime import datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from src.agent.nodes.memory import (
-    memory_inject_node,
-    memory_write_node,
-    format_memory_context,
     MemoryContextCache,
     _get_mem0_user_id,
+    format_memory_context,
+    memory_inject_node,
+    memory_write_node,
 )
-
 
 # ── Fixtures ────────────────────────────────────────────────────────────────
 

@@ -18,6 +18,9 @@ from tests.benchmarks.conftest import (
     BENCH_CONCURRENCY,
     BENCH_ITERATIONS,
     BENCH_WARMUP,
+    LARGE_INPUTS,
+    ROUTER_INPUTS,
+    SHORT_INPUTS,
     LatencyTracker,
     MockDelayLLM,
     ProfileBuilder,
@@ -27,9 +30,6 @@ from tests.benchmarks.conftest import (
     teardown_benchmark_llms,
     time_async_call,
     time_concurrent,
-    ROUTER_INPUTS,
-    SHORT_INPUTS,
-    LARGE_INPUTS,
 )
 from tests.benchmarks.report import BenchmarkEntry, record_entry
 
@@ -63,8 +63,8 @@ class TestRouterThroughput:
     )
     async def test_router_latency_by_input_size(self, input_text: str):
         """p50/p95/p99 latency for router_node at different input lengths."""
-        from src.agent.routing.router import router_node
         from src.agent.llm import LLMPool
+        from src.agent.routing.router import router_node
 
         mock_small = make_mock_llm(
             delay_ms=15,
@@ -253,7 +253,8 @@ class TestSkillMatcherLatency:
     @pytest.mark.asyncio
     async def test_skill_matcher_baseline_latency(self):
         """p50/p95/p99 latency for a single match_with_confidence call."""
-        from src.tools.skills import SkillMatcher, _default_loader as skill_loader
+        from src.tools.skills import SkillMatcher
+        from src.tools.skills import _default_loader as skill_loader
 
         matcher = SkillMatcher(skill_loader)
         tracker = LatencyTracker()

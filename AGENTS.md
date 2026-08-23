@@ -40,15 +40,16 @@
 | Change routing / model selection | [`docs/development/EXTENDING_AGENT.md`](docs/development/EXTENDING_AGENT.md) | `src/agent/nodes/router.py`, `src/agent/router/`, `src/config/defaults.yaml` |
 | Change LLM provider (LM Studio / Ollama) | — | `src/config/defaults.yaml`, `src/agent/llm.py` |
 | Change PDF intake / OCR | [`docs/guides/dev-startup.md`](docs/guides/dev-startup.md) | `src/pdf/intake.py`, `src/integrations/stirling_pdf.py`, `docker-compose.yml` |
-| Add or change a tool | [`docs/features/TOOLS.md`](docs/features/TOOLS.md) | `src/tools/`, `src/agent/tool_sets.py` |
+| Add or change a tool | [`docs/features/TOOLS.md`](docs/features/TOOLS.md) | `src/tools/`, `src/tools/registry.py`, `src/agent/tool_sets.py` |
 | Change WebSocket events | [`docs/development/CHAT_PROTOCOL.md`](docs/development/CHAT_PROTOCOL.md) | `src/api/ws/handler.py`, `frontend-v2/src/` |
 | Fix memory / context injection | [`docs/features/MEMORY.md`](docs/features/MEMORY.md) | `src/agent/nodes/memory.py`, `src/memory/` |
 | Tune semantic cache (threshold, TTL) | [`docs/features/SEMANTIC_CACHE.md`](docs/features/SEMANTIC_CACHE.md) | `src/memory/semantic_cache.py`, `src/api/ws/handler.py` |
+| Change context summarization / compaction | — | `src/agent/nodes/summarize.py` |
 | Change LangGraph checkpoints (PostgreSQL) | — | `src/agent/core/checkpointer.py` |
 | Change Redis memory / extraction queue | [`docs/architecture/REDIS_LIFECYCLE.md`](docs/architecture/REDIS_LIFECYCLE.md) | `src/memory/extraction/worker.py` |
 | Change HITL / approvals | [`docs/HITL.md`](docs/HITL.md) | `src/agent/hitl/`, `src/agent/nodes/{scope_clarify,plan_review,security_proxy}.py` |
 | Debug a symptom | [`docs/debugging/README.md`](docs/debugging/README.md) | Follow symptom → file table |
-| Change cloud / anonymization | [`docs/architecture/CLOUD-LLM-ARCHITECTURE.md`](docs/architecture/CLOUD-LLM-ARCHITECTURE.md) | `src/agent/nodes/complex.py`, `src/agent/nodes/complex_utils/` |
+| Change cloud / complex reasoning / anonymization | [`docs/architecture/CLOUD-LLM-ARCHITECTURE.md`](docs/architecture/CLOUD-LLM-ARCHITECTURE.md) | `src/agent/core/complex.py`, `src/agent/core/complex_prompt.py`, `src/agent/core/complex_executor.py`, `src/agent/core/complex_tool_action.py`, `src/agent/cloud/` |
 | Change Eco-Mode / battery throttling | — | `src/api/power_monitor.py`, `src/agent/routing/router.py`, `src/api/ws/handler.py` |
 | Change idle resource management (LLM unload, StirlingPDF) | — | `src/api/idle_manager.py`, `src/api/server.py`, `src/api/ws/handler.py`, `src/pdf/intake.py` |
 | Run or configure the app | [`docs/guides/dev-startup.md`](docs/guides/dev-startup.md) | `start.sh`, `setup.sh`, `.env` |
@@ -79,37 +80,40 @@
 | Change chat export API | — | `src/api/routes/export.py` |
 | Change tool reranking | — | `src/agent/tool_reranker.py`, `src/agent/core/complex.py` |
 | Change data connectors | — | `src/tools/data_connectors.py` |
+| Change Thought Graph / Mindmap Canvas | — | `src/memory/thought_graph.py`, `src/api/routes/thought_graph.py`, `frontend-v2/src/components/mindmap/MindmapCanvas.tsx` |
 
 ## Mode System
 
 Owlynn has three modes that change the UI, tools, and system prompt:
 
-| Mode | Response Style | Scenario | Sidebar | Right Panel |
-|------|---------------|----------|---------|-------------|
-| **Normal** | User choice | Auto-detected | Standard projects/chats | Orchestration, cloud usage |
-| **Study** | `learning` (forced) | `study` (forced) | Courses, exam countdown, study progress | Study progress, weak areas |
-| **Pentest** | `concise` (forced) | `pentest` (forced) | Scope & constraints panel | (MVP: sidebar only) |
+| Mode | Response Style | Scenario | Canvas Renderer | Header / Status |
+|------|---------------|----------|-----------------|-----------------|
+| **Normal** | User choice | Auto-detected | **Coggle Organic Mindmap** (curved pastel bezier branches) | Mode pills in `MacMenuBar`, System/Brave in `StatusBar` |
+| **Study** | `learning` (forced) | `study` (forced) | **Mastery Knowledge Tree** (Coggle-style progress branches) | Mode pills in `MacMenuBar`, Study countdown & stats |
+| **Pentest** | `concise` (forced) | `pentest` (forced) | **Autodesk Maya Hypershade / Blueprint Node Editor** (CAD grid, pin ports, module blocks) | Mode pills in `MacMenuBar`, Scope & attack graph |
 
-- Mode is persisted per-project in PostgreSQL (`ProjectModel.mode` field)
-- Mode switcher is in the left sidebar top
+- Mode is persisted per-project/node in PostgreSQL (`ThoughtNode.mode` and `ProjectModel.mode`)
+- Mode switcher is centered in top `MacMenuBar.tsx` (`[ ✨ Normal ] [ 🎓 Study ] [ 🛡️ Pentest ]`)
 - Mode → WS payload: frontend sends `scenario_id` to backend
 - Backend maps `scenario_id` to forced response_style and scenario injection
-- `src/memory/project.py`: `_PROJECT_WRITABLE_FIELDS` includes `mode`
+- `src/memory/thought_graph.py`: Persistent `ThoughtNode` and `ThoughtEdge` with live auto-seeding
 
-## Pentest Mode — Local-Only with Cloud Proxy
+## Unified Local Model Architecture & Pentest Mode
 
-Cloud APIs (DeepSeek, OpenAI, etc.) refuse security/pentest content. Pentest mode uses the local model by default. **Non-sensitive queries** (CVE lookups, methodology) can be routed to cloud via the proxy.
+Cloud APIs (DeepSeek, OpenAI, etc.) refuse security/pentest content. Owlynn uses a **Unified Local Model Architecture** with `gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m` serving as the single local engine for routing, simple chat, memory extraction, and pentest mode, enabling **zero-latency mode switching**. **Non-sensitive queries** (CVE lookups, methodology) can be routed to cloud via the proxy.
 
-- Config: `models.pentest` in `defaults.yaml` — set `model_name` to a dedicated pentest model
-- Falls back to `models.small` (Qwen3 VL 4B) if no pentest model configured
-- Accessor: `ConfigLoader.get_pentest_model_name()`
+- Config: `models.main` & `models.pentest` in `defaults.yaml`
+- Accessor: `ConfigLoader.get_main_model_name()`, `ConfigLoader.get_pentest_model_name()`
 - Pentest mode forces `scenario_id="pentest"` and `response_style="concise"`
 - Router returns `complex-default` (not `complex-cloud`) for pentest
 - **Cloud proxy**: `models.pentest.cloud_proxy.enabled` routes public knowledge queries to cloud
-- **Pentest model**: Gemma 4 12B Coder Q4 (`gemma-4-12b-coder-fable5-composer2.5-v1@q4_k_m`)
-  - Winner of pentest benchmark (84.1% overall, 41 tok/s)
+- **Unified Model**: Gemma 4 12B Agentic Q4 (`gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m`)
+  - **Tool Use Accuracy**: 90%
+  - **Speed**: 53 tok/s
+  - **Pentest Benchmark Score**: 82.0% overall (94% command generation)
+  - Also supports Gemma 4 12B Coder Q4 (84.1% overall, 41 tok/s)
   - Benchmark: `scripts/bench_pentest_models.py`
-  - Results: `docs/evaluations/pentest-model-benchmark-2026-06-28.md`
+  - Results: `docs/evaluations/pentest-model-benchmark-2026-08-23.md`
 
 ### Pentest Tools (67 total)
 
@@ -252,14 +256,27 @@ When generating cache keys for chat histories or context gatekeepers (e.g., in `
 
 ### Electron Build Workflow
 - **Clean Build Directories:** Before running `npm run build` or `vite build` for the frontend, manually delete the `dist` directory (`rm -rf dist`) to prevent `ENOTEMPTY` errors.
-- **Applying Changes:** Backend Python changes require an app restart. Frontend or manifest changes require a full `npm run build` to be packaged into the `.app` bundle.
+### KV Cache & Prompt Stability (2026-08-22)
+- **Prompt Caching is Sacred**: Keep system prompts byte-stable by strictly separating static templates from volatile runtime state.
+- **Deterministic Tool Ordering**: Always sort tool definitions alphabetically before binding to LLM clients.
+- **Zero Synthetic Human Injections**: Never inject synthetic `HumanMessage` prompts into conversation history mid-turn. Instead, embed tool recovery guidance directly into the corresponding `ToolMessage` to preserve strict role alternation and prevent KV cache invalidation.
 
 ## Related
 
 - [`docs/README.md`](docs/README.md) — full documentation map
 - [`docs/INDEX.md`](docs/INDEX.md) — machine-readable manifest (filter by `audience`)
 
-P26-07-14 — Frontier Eval & WebSocket Stability Fixes: Patched App.tsx to clean up stale streaming states on dropped connections. Updated src/api/ws/handler.py to emit chunk/assistant.message for semantic cache hits, fixing invisible UI responses. Added ws_idle fallback timeout to scripts/run_local_frontier_eval.py. Restored benchmark to 91.32%. Changelog at docs/changes/frontier-eval-stability/CHANGELOG.md.
+2026-08-23 — Offline HTML/Chart.js Local Visualization (v0.2.3): Vendored Chart.js 4.4.1 at `/vendor/chart.umd.min.js` for offline workspace HTML charts via `write_workspace_file` (no CDN, no `notebook_run` for simple comparisons). Added `html_comparison_chart` skill, local prompt guidance, WS `chart_artifact` auto-embed on `.html` writes, and E2E Step E update. Changelog at docs/changes/offline-html-chartjs/CHANGELOG.md.
+2026-08-23 — Mindmap Viewport Automation, Internet Search & Graph Generation E2E: Automated browser E2E testing via Playwright in Brave (`scratch/test_mindmap_search_graph_e2e.py`). Validated Mindmap Canvas interactive viewport controls (zoom in/out, pan, fit-to-window), live internet search conversation with autonomous `web_search` execution, matplotlib data visualization graph synthesis, and Thought Graph node synchronization with active glowing highlight (21 nodes in database). Preserved 14 visual screenshots in `assets/mindmap_e2e_screenshots/`. Changelog at docs/changes/mindmap-browser-e2e-automation/CHANGELOG.md and evaluation report at docs/evaluations/mindmap-browser-e2e-2026-08-23.md.
+2026-08-23 — Test Suite Modernization & Unified Architecture Alignment: Modernized test suite across unit, contract, property-based, benchmark, and frontend test suites. Updated LLM pool tests, WebSocket model updates, auto-summarization and coherence property tests to patch `get_main_llm()` directly without unmocked network hangs. Aligned model provenance badge tests (`main-local`, `large-cloud`, `main-local-fallback`, `pentest-local`), cleaned dead state keys (`current_medium_model`), updated benchmark suites, and added Vitest coverage for `cloud_routing_mode` selector. Verified 100% passing CI (1,068 Python unit/property tests, 22 contract/audit tests, 131 Vitest tests, Ruff lint/format, and Mypy). Changelog at docs/changes/test-suite-modernization/CHANGELOG.md.
+2026-08-23 — Unified Local-First Architecture & Cloud Battery Offload: Refactored system to treat unified local model (`models.main`) as primary execution engine across all standard workflows (simple chat, summarization, extraction, complex planning, and coherence checks). Added tri-state `cloud_routing_mode` (`auto`, `local_only`, `cloud_first`) with battery-aware Eco-Mode offloading to DeepSeek API on battery power. Verified 100% passing CI (1,062 Python tests, 22 contract/audit tests, 130 Vitest tests). Changelog at docs/changes/unified-local-first-battery-cloud/CHANGELOG.md.
+2026-08-23 — Unified Architecture & Dead Code Cleanup: Removed dead code and legacy artifacts from the former split small-complex model architecture. Unified configuration dotpaths (`models.main.*`, `models.vision.*`, `models.pentest.*`, `models.cloud.*`, `models.embedding.*`), modernized `LocalLLMScheduler` primitives (`_foreground_main`, `wrap_main_for_foreground`, `invoke_main_background`), streamlined `src/api/routes/settings.py` model resolvers, and pruned dead `COMPLEX_PROMPT` templates. Verified with 100% passing CI (1,063 Python tests, 130 Vitest tests). Changelog at docs/changes/unified-architecture-deadcode-cleanup/CHANGELOG.md.
+2026-08-23 — Thought Graph Topic Branching, MCP Resilience & Sandbox Path Resolution (v0.2.2): Calibrated Thought Graph cosine similarity threshold to 0.64 with semantic relation tags (merges_with/branches_from/relates_to) and lazy embedding backfills. Synchronized LLM router chat titles with PostgreSQL `ThoughtNode.title` and added explicit `branches_to` parent linking. Removed `sequential-thinking` MCP extension from `mcp_config.json` to eliminate redundant 4-step loops and latency, and enforced strict document generation discipline in `complex_prompt.py`. Hardened notebook worker with `os.chdir(workspace_dir)` and expanded regex path rewriting for `savefig`, `to_csv`, and `to_excel` to resolve workspace project files. Verified with Playwright E2E test suite and 130 Vitest tests. Changelog at docs/changes/mindmap-branching-tool-resilience/CHANGELOG.md.
+2026-08-23 — Thought Graph & Mindmap Canvas UI Architecture: Replaced legacy left sidebar with a unified full-width Thought Graph canvas engine (`src/memory/thought_graph.py`, `/api/graph/*`). Implemented Coggle-style organic mindmap with glowing pastel bezier branches for Normal/Study modes and Autodesk Maya Hypershade / Blueprint Node Editor with CAD grid and input/output pins for Pentest mode. Migrated mode switcher pills to top `MacMenuBar` center, added real-time Brave extension status pill and system health popover in `StatusBar`. Verified 100% passing CI (1,063 Python tests, 130 Vitest tests). Changelog at docs/changes/thought-graph-mindmap-ui/CHANGELOG.md.
+2026-08-23 — Unified Gemma 4 12B Agentic Local Architecture & Speculative Decoding Safeguards: Consolidated local model roles (routing, extraction, simple responses, complex local fallback, pentest mode) to `gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m` (90% tool accuracy, 53 tok/s, 0ms mode switching). Hardened LM Studio model swap with explicit speculative draft disablement (`speculative_draft_simple: False`) to prevent MTP sequence position mismatch crashes (`decode() failed`). Enforced deterministic alphabetical tool sorting before binding in pentest executor. Verified 100% passing CI (1,063 Python tests, 131 Vitest tests). Changelog at docs/changes/unified-12b-agentic-optimization/CHANGELOG.md.
+2026-08-22 — Unified Local Model, MXBAI 1024-dim Embedding & Vision Proxy: Consolidated local model roles (router, extraction, simple responses, complex local) to `google/gemma-4-26b-a4b-qat`. Configured `baidu.unlimited-ocr` as dedicated vision transcription proxy. Upgraded embedding pipeline to `text-embedding-mxbai-embed-large-v1` (1024 dims) with PostgreSQL pgvector migration `b2c3d4e5f6a7_update_embedding_dims_1024.py` altering `memory_vectors`, `engagement_vectors`, and `semantic_cache` to `vector(1024)`. Verified 1,059 Python tests and 131 frontend Vitest tests pass 100%. Changelog at docs/changes/model-consolidation-mxbai-vision/CHANGELOG.md.
+2026-08-22 — Modernize Backbone, Architecture & Full CI Green: Decomposed `complex.py` monolith into modular coordinator, prompt builder (`complex_prompt.py`), executor (`complex_executor.py`), and tool action nodes (`complex_tool_action.py`). Upgraded summarization with tool output pre-pruning and reference-only snapshot headers. Implemented dynamic `ToolRegistry` with service gating (`check_fn`), fine-grained cloud error classifier with jittered backoff, and pruned dead dependencies. Hardened CI test harness eliminating Starlette/AnyIO WebSocket portal deadlocks, main-thread asyncio deadlocks in `long_term.py`, and SQLite PostgreSQL checkpointer guards, achieving 100% passing CI (1,064 unit/property tests, 131 vitest tests, Electron build). Changelog at docs/changes/backbone-modernization/CHANGELOG.md.
+2026-07-14 — Frontier Eval & WebSocket Stability Fixes: Patched App.tsx to clean up stale streaming states on dropped connections. Updated src/api/ws/handler.py to emit chunk/assistant.message for semantic cache hits, fixing invisible UI responses. Added ws_idle fallback timeout to scripts/run_local_frontier_eval.py. Restored benchmark to 91.32%. Changelog at docs/changes/frontier-eval-stability/CHANGELOG.md.
 2026-07-12 — Pentest V4 Orchestration: Implemented phase-based pipeline orchestrator (`PipelineOrchestrator`), automated context truncation (`pentest_memory_node`), strict BFS/DFS methodology in `domain_prompts`, refactored `generate_pdf_report` for HTML-to-PDF rendering via StirlingPDF, and updated `poc_generator` to use LLM. Fixed frontend test imports. Changelog at docs/changes/pentest-v4-orchestration/CHANGELOG.md.
 2026-07-12 — Frontend V2 Architecture & Tailwind Migration: Restructured React components into domain directories, integrated Tailwind CSS v4, replaced drag-and-drop with react-dropzone, built Data Connectors UI, added central ModalManager using Zustand and framer-motion, and implemented Voice Interaction (SpeechRecognition and TTS). Changelog at docs/changes/frontend-v2-architecture/CHANGELOG.md.
 2026-07-10 — Phase 1 and 4 Roadmap Completion: Fixed HITL bypass, macOS Keychain for Fernet, Observer/Reflector 2-phase LLM pipeline, semantic tool reranking via Nomic, data connectors, APScheduler background jobs, Settings/Citations UI, Chat export. Changelog at docs/changes/phase-1-4-roadmap/CHANGELOG.md.
@@ -272,5 +289,5 @@ P26-07-14 — Frontier Eval & WebSocket Stability Fixes: Patched App.tsx to clea
 2026-07-07 — Electron app packaging: .app with splash screen, backend spawning, tray, close-to-background, version display (v0.1.0). Atomic writes for user_profile.json and secrets.env. Browser extension bundled in .app Resources. Release guide at docs/guides/app-release.md. Task routing table updated with "Package Electron app" row.
 2026-07-07 — Security hardening: execution policy default changed to require_approval; /v1/chat/completions auth enforced; notebook sandbox hardened; SSRF protection on downloads; prompt injection boundaries on web fetches and memory writes; destructive command blocking in scope guard. Task routing table updated with semantic cache and Redis lifecycle rows.
 2026-07-04 — Frontend UI overhaul (glassmorphic dropdowns, accessible memory management) and critical bug fixes for WebSocket chunk streaming overhead / infinite loop in markdown parser. Frontier eval passes at 96.32%.
-2026-07-02 — Production-readiness audit: PostgreSQL replaces `projects.json` for mode persistence; mode routing table updated to `modesSlice.ts`; task routing table updated to reference sliced store.
 2026-07-10 — Phase 6: Migrated LangGraph checkpointer from Redis to PostgreSQL (`AsyncPostgresSaver` in `checkpointer.py`). Removed `_evict_stale_checkpoints` as state persistence is now native to Postgres. Semantic Cache and Extraction queue remain on Redis.
+2026-08-22 — Autonomous Learning Loop, Hierarchical Skills & Advanced MCP: Implemented dual-channel extraction (declarative facts + procedural skill synthesis via `SkillLearnerEngine`), updated `SkillLoader` to support folder-based `agentskills.io` packages (`SKILL.md`, `references/`, `templates/`, `scripts/`) and added `skill_view`/`skill_manage` tools. Enhanced `MCPClientManager` with dynamic Pydantic schema generation, schema caching, and multi-transport support.

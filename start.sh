@@ -36,7 +36,7 @@ _cleanup() {
     fi
     echo "Done."
 }
-trap _cleanup EXIT
+trap _cleanup INT TERM
 
 echo ""
 echo "══════════════════════════════"
@@ -123,11 +123,12 @@ else
         --ws-max-size 16777216 \
         --no-access-log &
 fi
-_PIDS+=("$!")
+_BACKEND_PID=$!
+_PIDS+=("$_BACKEND_PID")
 echo "      Waiting for backend & LLMs to warm up (this may take up to 3 minutes)..."
 for i in $(seq 1 180); do
     if curl -sf http://127.0.0.1:8000/api/health 2>/dev/null | grep -q ready; then
-        echo "      Backend & LLMs ready (PID $!)."
+        echo "      Backend & LLMs ready (PID $_BACKEND_PID)."
         break
     fi
     sleep 1
@@ -138,6 +139,32 @@ if [ -d "frontend-v2" ]; then
     (cd frontend-v2 && npm run dev >/dev/null 2>&1) &
     _PIDS+=("$!")
     echo "      Electron app launching (PID $!)."
+
+    # Launch Brave Browser with Owlynn Extension loaded
+    _BRAVE_CANDIDATES=(
+        "/Volumes/KNV3_1TB/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"
+        "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"
+        "${HOME}/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"
+    )
+
+    _BRAVE_BIN=""
+    for _b in "${_BRAVE_CANDIDATES[@]}"; do
+        if [ -f "$_b" ]; then
+            _BRAVE_BIN="$_b"
+            break
+        fi
+    done
+
+    _EXT_DIR="$(pwd)/browser-extension"
+    if [ -n "$_BRAVE_BIN" ] && [ -d "$_EXT_DIR" ]; then
+        echo "      Launching Brave Browser with Owlynn extension..."
+        "$_BRAVE_BIN" --load-extension="$_EXT_DIR" >/dev/null 2>&1 &
+        _PIDS+=("$!")
+    elif command -v open &>/dev/null && [ -d "/Applications/Brave Browser.app" ]; then
+        echo "      Launching Brave Browser..."
+        open -a "Brave Browser" 2>/dev/null || true
+    fi
+
     echo ""
     echo "── Owlynn running ──"
     echo "   API:     http://127.0.0.1:8000"
@@ -162,4 +189,6 @@ else
     echo ""
 fi
 
-wait
+while kill -0 "$_BACKEND_PID" 2>/dev/null; do
+    sleep 2
+done

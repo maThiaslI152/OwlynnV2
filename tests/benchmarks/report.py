@@ -90,7 +90,7 @@ def record_entry(entry: BenchmarkEntry) -> None:
         _entries[key] = entry
 
 
-def get_entries(category: Optional[str] = None) -> list[BenchmarkEntry]:
+def get_entries(category: str | None = None) -> list[BenchmarkEntry]:
     """Get collected entries, optionally filtered by category."""
     entries = list(_entries.values())
     if category:
@@ -98,7 +98,7 @@ def get_entries(category: Optional[str] = None) -> list[BenchmarkEntry]:
     return sorted(entries, key=lambda e: e.name)
 
 
-def write_report(path: Optional[Path] = None) -> Path:
+def write_report(path: Path | None = None) -> Path:
     """Write collected entries as JSON and return the output path."""
     report_path = path or _DEFAULT_REPORT_PATH
     entries = get_entries()
@@ -112,7 +112,7 @@ def write_report(path: Optional[Path] = None) -> Path:
     return report_path
 
 
-def print_summary(entries: Optional[list[BenchmarkEntry]] = None) -> None:
+def print_summary(entries: list[BenchmarkEntry] | None = None) -> None:
     """Print a human-readable summary to stdout."""
     entries = entries or get_entries()
     if not entries:

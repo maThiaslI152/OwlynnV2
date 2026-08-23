@@ -1,13 +1,14 @@
 """Tests for the todo tool."""
 
-import sys
 import json
+import sys
 from unittest.mock import MagicMock
 
 sys.modules["mem0"] = MagicMock()
 
 import pytest
-from src.tools.todo import todo_add, todo_list, todo_complete, _TODO_PATH
+
+from src.tools.todo import _TODO_PATH, todo_add, todo_complete, todo_list
 
 
 @pytest.fixture(autouse=True)

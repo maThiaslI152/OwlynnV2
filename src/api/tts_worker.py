@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from queue import Queue
 from threading import Thread
@@ -32,14 +31,10 @@ class TTSWorker:
             self.queue.put(text.strip())
 
     def _run(self):
-        # Attempt to load Kokoro model here if available
-        # Fallback to simple logging if not available
-        try:
-            import kokoro
+        import importlib.util
 
-            has_kokoro = True
-        except ImportError:
-            has_kokoro = False
+        has_kokoro = importlib.util.find_spec("kokoro") is not None
+        if not has_kokoro:
             logger.info("Kokoro-82M not installed. TTS will run in logging-only mode.")
 
         while self.is_running:

@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from src.agent.routing.modes import (
-    augment_toolbox_for_scenario,
     _user_wants_screen_assist,
+    augment_toolbox_for_scenario,
 )
 from src.agent.tool_sets import TOOLBOX_REGISTRY, resolve_tools
 from src.tools.screen_assist.gateway import MacScreenAssistGateway

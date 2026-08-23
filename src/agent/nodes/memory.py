@@ -14,15 +14,15 @@ Memory scoping:
 - Default project uses the user's profile name or ``"owner"`` (shared global).
 """
 
-from src.agent.core.state import AgentState
-from src.memory.user_profile import get_profile
-from src.memory.persona_manager import get_persona_by_id
-from src.config.config_loader import config
 import asyncio
-import re
 import logging
+import re
 from datetime import datetime, timedelta
-from typing import Optional
+
+from src.agent.core.state import AgentState
+from src.config.config_loader import config
+from src.memory.persona_manager import get_persona_by_id
+from src.memory.user_profile import get_profile
 
 logger = logging.getLogger(__name__)
 
@@ -31,10 +31,12 @@ from src.config.log_middleware import log_node
 
 # Import enhanced personal assistant memory system
 from src.memory.personal_assistant import (
+    MemoryEnricher as MemoryEnricher,
+)
+from src.memory.personal_assistant import (
     TopicExtractor,
-    MemoryEnricher,
-    record_conversation,
     get_memory_context_for_prompt,
+    record_conversation,
 )
 
 
@@ -62,7 +64,6 @@ def _get_mem0_user_id(state: dict) -> str:
             return name
     except Exception as e:
         logger.warning("Error suppressed: %s", e)
-        pass
     return "owner"
 
 
@@ -161,7 +162,7 @@ async def _build_memory_context_async(
     mem0_uid = _get_mem0_user_id(state)
 
     from src.memory.educator import (
-        fetch_study_struggle_memories,
+        afetch_study_struggle_memories,
         is_struggle_recall_query,
         prioritize_study_memories,
     )
@@ -169,10 +170,12 @@ async def _build_memory_context_async(
     results = []
     if vector_search and memory is not None:
         try:
-            results_dict = await asyncio.to_thread(
-                lambda: memory.search(
+            results_dict = (
+                await memory.asearch(
                     user_message, filters={"user_id": mem0_uid}, limit=5
                 )
+                if hasattr(memory, "asearch")
+                else memory.search(user_message, filters={"user_id": mem0_uid}, limit=5)
             )
             results = (
                 results_dict.get("results", [])
@@ -184,10 +187,8 @@ async def _build_memory_context_async(
 
         if is_struggle_recall_query(user_message):
             try:
-                study_hits = await asyncio.to_thread(
-                    lambda: fetch_study_struggle_memories(
-                        memory, mem0_uid, user_message
-                    )
+                study_hits = await afetch_study_struggle_memories(
+                    memory, mem0_uid, user_message
                 )
                 if study_hits:
                     results = prioritize_study_memories([*study_hits, *results])
@@ -204,9 +205,12 @@ async def _build_memory_context_async(
                         global_uid = n
                 except Exception as e:
                     logger.warning("Error suppressed: %s", e)
-                    pass
-                global_dict = await asyncio.to_thread(
-                    lambda: memory.search(
+                global_dict = (
+                    await memory.asearch(
+                        user_message, filters={"user_id": global_uid}, limit=3
+                    )
+                    if hasattr(memory, "asearch")
+                    else memory.search(
                         user_message, filters={"user_id": global_uid}, limit=3
                     )
                 )
@@ -220,7 +224,11 @@ async def _build_memory_context_async(
                 logger.warning("[mem0] global search failed: %s", e)
 
     profile = get_profile()
-    enhanced_context = await get_memory_context_for_prompt()
+    try:
+        enhanced_context = await get_memory_context_for_prompt()
+    except Exception as e:
+        logger.warning("[memory] Failed to get memory context for prompt: %s", e)
+        enhanced_context = ""
 
     project_instructions = ""
     if project_id and project_id != "default":
@@ -341,9 +349,9 @@ async def memory_inject_lite_node(state: AgentState) -> AgentState:
             get_engagement_context,
         )
 
-        eng = get_active_engagement()
+        eng = await get_active_engagement()
         if eng:
-            memory_context = get_engagement_context(eng["id"])
+            memory_context = await get_engagement_context(eng["id"])
         else:
             memory_context = (
                 "No active engagement. Use engagement_create to start a new pentest."
@@ -412,10 +420,10 @@ async def memory_retrieve_node(state: AgentState) -> AgentState:
             get_findings_summary,
         )
 
-        eng = get_active_engagement()
+        eng = await get_active_engagement()
         if eng:
-            engagement_context = get_engagement_context(eng["id"])
-            f_summary = get_findings_summary(eng["id"])
+            engagement_context = await get_engagement_context(eng["id"])
+            f_summary = await get_findings_summary(eng["id"])
             # Include playbook + constraints alongside engagement context
             merged = engagement_context
             if scenario_block:
@@ -424,7 +432,7 @@ async def memory_retrieve_node(state: AgentState) -> AgentState:
             if f_summary["total"] > 0:
                 from src.memory.pentest_engagement import list_findings
 
-                findings = list_findings(eng["id"])
+                findings = await list_findings(eng["id"])
                 finding_lines = []
                 for f in findings[:20]:  # Cap at 20 findings
                     sev = f.get("severity", "info").upper()
@@ -461,7 +469,7 @@ async def memory_retrieve_node(state: AgentState) -> AgentState:
         needs = route.startswith("complex")
 
     from src.memory.educator import (
-        fetch_study_struggle_memories,
+        afetch_study_struggle_memories,
         format_struggle_recall_block,
         is_struggle_recall_query,
     )
@@ -510,10 +518,8 @@ async def memory_retrieve_node(state: AgentState) -> AgentState:
         mem0_uid = _get_mem0_user_id(state)
         if mem0_memory is not None:
             try:
-                study_hits = await asyncio.to_thread(
-                    lambda: fetch_study_struggle_memories(
-                        mem0_memory, mem0_uid, user_message
-                    )
+                study_hits = await afetch_study_struggle_memories(
+                    mem0_memory, mem0_uid, user_message
                 )
                 struggle_block = format_struggle_recall_block(study_hits)
             except Exception as e:
@@ -701,10 +707,14 @@ async def _is_semantically_similar(memory, new_text: str, user_id: str) -> bool:
     if mem0_memory is None:
         return False
     try:
-        results_dict = await asyncio.to_thread(
-            lambda: mem0_memory.search(
+        results_dict = (
+            await mem0_memory.asearch(
                 new_text[:200], filters={"user_id": user_id}, limit=3
-            ),
+            )
+            if hasattr(mem0_memory, "asearch")
+            else mem0_memory.search(
+                new_text[:200], filters={"user_id": user_id}, limit=3
+            )
         )
         results = (
             results_dict.get("results", [])
@@ -720,7 +730,6 @@ async def _is_semantically_similar(memory, new_text: str, user_id: str) -> bool:
                     return True
     except Exception as e:
         logger.warning("Error suppressed: %s", e)
-        pass
     return False
 
 
@@ -758,10 +767,11 @@ async def _evaluate_and_cache_knowledge(
         return
 
     try:
-        from src.agent.llm import get_small_llm
         from langchain_core.messages import HumanMessage
 
-        small_llm = await get_small_llm()
+        from src.agent.llm import get_main_llm
+
+        main_llm = await get_main_llm()
         evaluator_prompt = f"""Evaluate the following web search interaction:
 User asked: {last_human}
 AI answered: {last_ai}
@@ -772,7 +782,7 @@ If it is valuable technical knowledge to keep, reply with a concise synthesized 
 
 Response:"""
 
-        response = await small_llm.ainvoke([HumanMessage(content=evaluator_prompt)])
+        response = await main_llm.ainvoke([HumanMessage(content=evaluator_prompt)])
         content = response.content.strip()
 
         if content and not content.upper().startswith("DISCARD"):
@@ -846,7 +856,7 @@ async def memory_write_node(state: AgentState) -> AgentState:
                 log_event,
             )
 
-            eng = get_active_engagement()
+            eng = await get_active_engagement()
             if eng:
                 human_preview = str(last_human)[:200]
                 await log_event(
@@ -904,7 +914,6 @@ async def memory_write_node(state: AgentState) -> AgentState:
         logger.warning("[Memory] Failed to record conversation: %s", e)
 
     # Save enriched facts to long-term memory
-    from src.memory.long_term import memory
     from src.memory.educator import (
         build_mastery_atom,
         build_misconception_atom,
@@ -912,6 +921,7 @@ async def memory_write_node(state: AgentState) -> AgentState:
         is_study_mastery,
         resolve_study_scenario,
     )
+    from src.memory.long_term import memory
 
     mem0_uid = _get_mem0_user_id(state)
     response_style = state.get("response_style")
@@ -1022,5 +1032,33 @@ async def memory_write_node(state: AgentState) -> AgentState:
 
         # Knowledge Cache evaluation (runs concurrently or sequentially here)
         await _evaluate_and_cache_knowledge(messages, mem0_uid, memory)
+
+        # Auto-Cartographer: update thought node summary & link to related graph nodes
+        try:
+            from src.memory.thought_graph import thought_graph_manager
+
+            summary_snippet = (
+                f"User: {str(last_human)[:120]} | AI: {str(last_ai)[:200]}"
+            )
+            node_mode = (
+                "pentest"
+                if state.get("scenario_id") == "pentest"
+                else ("study" if study_scenario else (state.get("mode") or "normal"))
+            )
+            await thought_graph_manager.get_or_create_node(
+                node_id=thread_id,
+                mode=node_mode,
+                scenario_id=state.get("scenario_id"),
+                engagement_id=state.get("engagement_id"),
+                course_id=state.get("course_id"),
+            )
+            asyncio.create_task(
+                thought_graph_manager.auto_link_node(
+                    node_id=thread_id,
+                    summary_text=summary_snippet,
+                )
+            )
+        except Exception as e:
+            logger.debug("[AutoCartographer] Failed to link thought node: %s", e)
 
     return {"memory_invalidated": True}

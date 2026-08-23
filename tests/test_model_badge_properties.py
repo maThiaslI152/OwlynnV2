@@ -6,9 +6,8 @@ Property-based tests for model badge color mapping.
 """
 
 import pytest
-from hypothesis import given, settings, assume
+from hypothesis import assume, given, settings
 from hypothesis import strategies as st
-
 
 # ── Python equivalent of frontend getModelBadgeClass ─────────────────────
 
@@ -22,6 +21,7 @@ def get_model_badge_class(model: str | None) -> str:
       - contains 'fallback' → 'model-badge-fallback' (orange)
       - starts with 'large' or 'cloud' → 'model-badge-cloud' (purple)
       - starts with 'medium' → 'model-badge-medium' (blue)
+      - starts with 'main' or 'pentest' or 'small' → 'model-badge-small' (gray)
       - default           → 'model-badge-small'  (gray)
     """
     if not model:
@@ -49,10 +49,13 @@ VALID_BADGE_CLASSES = set(BADGE_COLORS.keys())
 # ── Known model_used values from the system ──────────────────────────────
 
 KNOWN_MODELS = [
+    "main-local",
     "small-local",
     "large-cloud",
+    "main-local-fallback",
     "small-local-fallback",
     "large-cloud-fallback",
+    "pentest-local",
 ]
 
 # ── Strategies ───────────────────────────────────────────────────────────

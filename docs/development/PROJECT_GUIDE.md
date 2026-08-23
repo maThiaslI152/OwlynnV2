@@ -2,7 +2,7 @@
 status: active
 category: reference
 audience: agent
-last_updated: 2026-07-12
+last_updated: 2026-08-23
 owner: ai-agent
 ---
 
@@ -10,7 +10,7 @@ owner: ai-agent
 
 > **Purpose:** Canonical file map for AI agents. Use this to locate source files, contracts, and tests before making changes.
 
-Related: [`architecture/overview.md`](architecture/overview.md) (system shape), [`STATUS.md`](STATUS.md) (bugs/risks), [`ADR.md`](ADR.md) (decisions).
+Related: [`architecture/overview.md`](../architecture/overview.md) (system shape), [`STATUS.md`](../STATUS.md) (bugs/risks), [`ADR.md`](../ADR.md) (decisions).
 
 ## Root directory (what belongs here)
 
@@ -34,33 +34,35 @@ Do **not** add new `.py` test or patch scripts at repo root.
 
 | File | Role |
 |------|------|
-| `src/agent/nodes/router.py` | `router_node()` — classification, keyword bypass, HITL clarification |
-| `src/agent/router/classifier.py` | LLM JSON routing classifier |
-| `src/agent/router/budget.py` | Token budget tiers and input reserves |
-| `src/agent/router/selector.py` | Model/toolbox selection |
+| `src/agent/routing/router.py` | `router_node()` — classification, keyword bypass, HITL clarification |
+| `src/agent/routing/classifier.py` | LLM JSON routing classifier |
+| `src/agent/routing/budget.py` | Token budget tiers and input reserves |
+| `src/agent/routing/selector.py` | Model/toolbox selection |
 | `src/agent/llm.py` | `LLMPool` singleton — router + extraction + cloud slots |
-| `src/agent/nodes/simple.py` | Fast simple-path answers (no tools) |
-| `src/agent/nodes/complex.py` | Tool-calling cycle, local + cloud paths |
-| `src/agent/nodes/complex_utils/cloud_payload.py` | Cloud prompt layers, anonymization, tool-arg compaction on replay (BUG-27) |
-| `src/agent/nodes/complex_utils/vision_qwen3vl.py` | Qwen3-VL output parser |
-| `src/agent/nodes/complex_utils/vision_*.py` | Vision proxy for cloud image path (Qwen3-VL default) |
-| `src/agent/nodes/complex_utils/lm_studio_vision.py` | LM Studio auto-load for vision VLM (bypassed for Ollama) |
-| `src/tools/mcp_client.py` | MCP stdio client; tools merged via `merge_mcp_tools()` |
+| `src/agent/core/simple.py` | Fast simple-path answers (no tools) |
+| `src/agent/core/complex.py` | Thin coordinator facade (`complex_llm_node()`, `complex_tool_action_node()`) |
+| `src/agent/core/complex_prompt.py` | Stable/volatile prompt layering, deterministic tool sorting |
+| `src/agent/core/complex_executor.py` | Cloud & fallback invocation, cutoff continuation |
+| `src/agent/core/complex_tool_action.py` | Parallel tool dispatch, output bounding, ToolMessage hint enrichment |
+| `src/agent/cloud/cloud_payload.py` | Cloud prompt layers, anonymization, tool-arg compaction on replay (BUG-27) |
+| `src/agent/cloud/error_classifier.py` | Fine-grained API error categorization and jittered exponential backoff |
+| `src/tools/registry.py` | Dynamic `ToolRegistry` with service prerequisite gating (`check_fn`) |
+| `src/tools/mcp_client.py` | MCP stdio client; dynamic Pydantic schema generation |
 | `mcp_config.json` | MCP server manifests (see `mcp_config.json.example`) |
 | `src/config/defaults.yaml` | Model names, routing, `mcp.*`, `startup.preload` (source of truth) |
 | `tests/test_router_properties.py` | Router property tests |
 | `tests/test_router_web_intent.py` | Web-intent forcing tests |
 | `tests/test_llm_pool.py` | LLM pool tests |
 
-**Current models** (`defaults.yaml`): Unified local model `gemma-4-e2b-heretic-uncensored-mlx` (router, vision proxy, and memory extraction), complex cloud `deepseek-v4-flash`. Startup preloads local unified model + embedding.
+**Current models** (`defaults.yaml`): 4-model taxonomy — Main unified local model `gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m` (routing, direct answers, extraction, local complex reasoning, pentest mode), Vision proxy `baidu.unlimited-ocr`, Embedding `text-embedding-mxbai-embed-large-v1` (1024 dims), and complex cloud `deepseek-v4-flash`. Startup preloads local main model + embedding.
 
 ## Complex / cloud path
 
 | File | Role |
 |------|------|
-| `src/agent/nodes/complex.py` | `complex_llm_node()`, `complex_tool_action_node()`, `_resolve_complex_tools()` |
-| `src/agent/nodes/complex_utils/cloud_payload.py` | Brief gate, PII scrub, cache metrics, completed write arg compaction |
-| `src/agent/nodes/complex_utils/cloud_invoke.py` | Raw API invoke + retries |
+| `src/agent/core/complex.py` | `complex_llm_node()`, `complex_tool_action_node()` facade |
+| `src/agent/cloud/cloud_payload.py` | Brief gate, PII scrub, cache metrics, completed write arg compaction |
+| `src/agent/cloud/cloud_invoke.py` | Raw API invoke + retries |
 | `src/agent/anonymization.py` | PII scrubbing for cloud escalation |
 | `tests/test_complex_node_properties.py` | Complex node behavior |
 | `tests/test_anonymization*.py` | Anonymization leak tests |
@@ -123,9 +125,13 @@ Do **not** add new `.py` test or patch scripts at repo root.
 | `src/agent/nodes/memory.py` | `memory_inject_lite`, `memory_retrieve`, `memory_write` |
 | `src/models/` | PostgreSQL SQLAlchemy models (Project, Chat) |
 | `src/memory/` | STM/LTM/personal managers, Mem0/Qdrant, PostgreSQL managers |
+| `src/memory/thought_graph.py` | `ThoughtNode` & `ThoughtEdge` graph models, auto-seeding, relations |
+| `src/api/routes/thought_graph.py` | `/api/graph` REST API routes (data, nodes, edges) |
+| `frontend-v2/src/components/mindmap/MindmapCanvas.tsx` | Coggle Organic Mindmap & Autodesk Maya Hypershade Node Editor |
 | `data/topics.json` | Personal topic decay (runtime data) |
 | `docs/features/MEMORY.md` | Memory tier contract |
 | `tests/test_memory_nodes.py` | Memory node tests |
+| `tests/test_thought_graph.py` | Thought graph database and API tests |
 | `tests/test_memory_retrieve_gate.py` | Gated retrieval tests |
 
 ## Tools
@@ -259,4 +265,4 @@ START → memory_inject_lite → router → memory_retrieve → auto_summarize? 
 
 ## Last updated
 
-2026-06-18 — strict-cloud BUG-27..29; eval harness + cloud_payload compaction
+2026-08-23 — Thought Graph & Mindmap Canvas UI Architecture (Coggle organic mindmap, Autodesk Maya hypershade node editor, full-width canvas, MacMenuBar mode switcher, real-time Brave status).

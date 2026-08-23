@@ -6,7 +6,6 @@ import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
 
 from src.config.config_loader import config
 
@@ -47,6 +46,7 @@ def _is_allowed_extension_origin(origin: str) -> bool:
         origin.startswith("chrome-extension://")
         or origin.startswith("moz-extension://")
         or origin == ""  # Non-browser clients (CLI, etc.)
+        or origin == "null"  # Sandboxed extension service worker
     )
 
 
@@ -99,7 +99,8 @@ def push_extension_ui_status(action: str, value: str = "") -> None:
 
 def _broadcast_page_context(payload: dict) -> None:
     """Push user-initiated page context to all chat WebSocket clients."""
-    from src.api.shared import connected_websockets, logger as shared_logger
+    from src.api.shared import connected_websockets
+    from src.api.shared import logger as shared_logger
 
     url = str(payload.get("url") or "")
     title = str(payload.get("title") or "")
@@ -373,7 +374,7 @@ async def websocket_endpoint(websocket: WebSocket):
             await websocket.close(code=4001, reason="Authentication failed")
             return
         logger.info("Browser extension authenticated successfully")
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.warning("Browser extension auth timeout — no auth message received")
         try:
             await websocket.close(code=4001, reason="Authentication timeout")

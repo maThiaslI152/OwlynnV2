@@ -14,10 +14,10 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 sys.modules["mem0"] = MagicMock()
 
 from src.memory.persona_manager import (
-    list_personas,
-    get_persona_by_id,
-    save_custom_persona,
     PERSONAS_DIR,
+    get_persona_by_id,
+    list_personas,
+    save_custom_persona,
 )
 
 

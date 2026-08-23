@@ -40,7 +40,7 @@ def main():
         os.remove(csv_path)
         # Leave processed file for inspection if needed, or remove
         os.remove(processed_file)
-    except:
+    except Exception:
         pass
 
 

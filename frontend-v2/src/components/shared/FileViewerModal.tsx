@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { FileText } from 'lucide-react'
+import { FileText, X, ExternalLink } from 'lucide-react'
 
 interface FileViewerModalProps {
   filename: string
@@ -68,26 +68,27 @@ export function FileViewerModal({ filename, projectId, onClose }: FileViewerModa
           }}
         >
           <span style={{ fontSize: 14, fontWeight: 600, color: '#e0e0e0' }}>{filename}</span>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
             <a
               href={fileUrl}
               target="_blank"
               rel="noopener noreferrer"
-              style={{ fontSize: 12, color: '#e94560', textDecoration: 'none' }}
+              style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}
             >
-              Open in browser ↗
+              Open in browser <ExternalLink size={12} />
             </a>
             <button
               onClick={onClose}
               style={{
                 background: 'none',
                 border: 'none',
-                color: '#888',
+                color: 'var(--text-muted)',
                 cursor: 'pointer',
-                fontSize: 16,
+                display: 'inline-flex',
+                alignItems: 'center',
               }}
             >
-              ✕
+              <X size={16} />
             </button>
           </div>
         </div>

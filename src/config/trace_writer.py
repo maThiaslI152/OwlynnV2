@@ -15,9 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
-import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -43,7 +41,7 @@ class TraceWriter:
         return self._dir
 
     def _ts(self) -> str:
-        return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+        return datetime.now(UTC).isoformat(timespec="milliseconds")
 
     def write(self, thread_id: str, record: dict[str, Any]) -> None:
         """Append a single trace record to the thread's JSONL file."""

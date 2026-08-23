@@ -1,8 +1,8 @@
 """
 Route classifier for the Multi-LLM Router.
 
-Uses the Small LLM to classify tasks into routing categories with a
-confidence score. Falls back to safe defaults on any failure.
+Uses the Main Local LLM to classify tasks into routing categories with a
+confidence score. Defaults to safe local execution on any failure.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import json
 import logging
 import re
 
-from src.agent.routing.models import RouteClassification, TaskFeatures, VALID_ROUTES
+from src.agent.routing.models import VALID_ROUTES, RouteClassification, TaskFeatures
 from src.config.config_loader import config
 
 logger = logging.getLogger(__name__)
@@ -115,24 +115,28 @@ class RouteClassifier:
         features: TaskFeatures,
         current_variant: str | None,
         *,
+        main_llm=None,
         small_llm=None,
     ) -> RouteClassification:
-        """Invoke Small LLM with a structured prompt and return a classification.
+        """Invoke Main local LLM with a structured prompt and return a classification.
 
         On any LLM failure or parse error the method returns safe defaults
         (``route="complex-default"``, ``confidence=0.5``, ``toolbox=["all"]``).
 
         Parameters
         ----------
+        main_llm:
+            Optional pre-resolved Main LLM instance. When ``None`` the
+            classifier fetches one via ``get_main_llm()``.
         small_llm:
-            Optional pre-resolved Small LLM instance.  When ``None`` the
-            classifier fetches one via ``get_small_llm()``.
+            Deprecated alias for main_llm.
         """
         try:
-            if small_llm is None:
-                from src.agent.llm import get_small_llm
+            resolved_llm = main_llm or small_llm
+            if resolved_llm is None:
+                from src.agent.llm import get_main_llm
 
-                small_llm = await get_small_llm()
+                resolved_llm = await get_main_llm()
 
             prompt = _CLASSIFY_PROMPT.format(
                 current_variant=current_variant or "none",
@@ -148,7 +152,7 @@ class RouteClassifier:
                 user_input=json.dumps(user_text[:_MAX_INPUT_CHARS]),
             )
 
-            router_llm = small_llm.bind(
+            router_llm = resolved_llm.bind(
                 temperature=0.05, max_tokens=int(config.get("router_llm.max_tokens"))
             )
 

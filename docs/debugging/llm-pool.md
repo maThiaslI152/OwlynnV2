@@ -20,14 +20,14 @@ owner: human
 | `model_not_found` in response | Model not loaded in LM Studio | `curl http://127.0.0.1:1234/v1/models \| jq '.data[].id'` | Load model in LM Studio or update profile model keys |
 | Small LLM response is garbage | Wrong model loaded or token limit | Check response content, compare with expected model | Verify `small_llm_model_name` in profile matches loaded model |
 | Swap hangs (>120s) | LM Studio native API unresponsive | `curl http://127.0.0.1:1234/api/v1/models` (native API) | Restart LM Studio; check `docker stats` for memory pressure |
-| Model not found | Name mismatch vs LM Studio | Check `defaults.yaml` `models.small` name | Load `gemma-4-e2b-heretic-uncensored-mlx` in LM Studio |
+| Model not found | Name mismatch vs LM Studio | Check `defaults.yaml` `models.main` name | Load `gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m` in LM Studio |
 | Request timeout | M4 slow inference | Check `models.*.timeout` in defaults.yaml | Reduce context window or use AC power |
-| DeepSeek API 401 | Invalid or missing API key | `echo $DEEPSEEK_API_KEY` | Set `DEEPSEEK_API_KEY` env var or in User_Profile |
+| DeepSeek API 401 | Invalid or missing API key | `echo $DEEPSEEK_API_KEY` | Set `DEEPSEEK_API_KEY` env var or in secrets.env |
 | DeepSeek API 403 | Account quota exceeded or disabled | Check DeepSeek dashboard | Top up quota or disable cloud escalation |
 | DeepSeek API 429 | Rate limited | Response includes `Retry-After` header | Wait and retry; system auto-retries after 2s |
 | Token budget exceeded mid-response | Response longer than allocated | Check `token_budget_update` WS event | Increase budget in router or reduce response length |
 | Context window overflow (prompt too long) | Too many messages/tools in context | Check `active_tokens` in state | Reduce conversation length or force summarization |
-| OOM / swap thrashing | VRAM limits exceeded in LM Studio | `memory_pressure`, `vm_stat` | Ensure only the unified model and nomic embeddings are loaded |
+| OOM / swap thrashing | VRAM limits exceeded in LM Studio | `memory_pressure`, `vm_stat` | Ensure only the 4-model taxonomy instances are loaded |
 
 ## Diagnostic Commands
 

@@ -1,12 +1,24 @@
 import asyncio
-import subprocess
 import logging
+
 from src.api.shared import connected_websockets
 
 logger = logging.getLogger(__name__)
 
 # Global Eco-Mode flag
 ECO_MODE = False
+
+
+def is_eco_mode_active() -> bool:
+    """Return whether the machine is currently running on battery power (Eco-Mode)."""
+    return ECO_MODE
+
+
+def should_use_cloud_for_power() -> bool:
+    """Check if Eco-Mode is active and cloud is configured to save battery power."""
+    from src.config.secret_store import resolve_deepseek_api_key
+
+    return bool(ECO_MODE and resolve_deepseek_api_key())
 
 
 async def is_on_battery() -> bool:

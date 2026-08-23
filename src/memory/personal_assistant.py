@@ -12,21 +12,20 @@ Features:
 - Cross-conversation memory enrichment
 """
 
+import asyncio
 import logging
 import math
 import re
-import asyncio
-from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Tuple
+from datetime import UTC, datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
-from sqlalchemy import select, delete
+from sqlalchemy import delete, select
 
-from src.config.audit_log import audit_info, audit_debug
+from src.config.audit_log import audit_debug, audit_info
 from src.config.config_loader import config
+from src.memory.db_models import Conversation, Interest, Topic
 from src.models.db import AsyncSessionLocal
-from src.memory.db_models import Topic, Interest, Conversation
 
 # Decay constants (sourced from centralized config)
 TOPIC_HALF_LIFE_DAYS = int(config.get("memory.decay.topic_half_life_days", 14))
@@ -111,8 +110,8 @@ class TopicExtractor:
     }
 
     @staticmethod
-    def extract_topics(text: str) -> Dict[str, List[str]]:
-        topics: Dict[str, List[str]] = {}
+    def extract_topics(text: str) -> dict[str, list[str]]:
+        topics: dict[str, list[str]] = {}
         text_lower = text.lower()
         for category, patterns in TopicExtractor.TOPIC_PATTERNS.items():
             matches: set[str] = set()
@@ -124,7 +123,7 @@ class TopicExtractor:
         return topics
 
     @staticmethod
-    def extract_interests(text: str) -> Dict[str, bool]:
+    def extract_interests(text: str) -> dict[str, bool]:
         text_lower = text.lower()
         return {
             interest: True
@@ -138,7 +137,7 @@ class TopicExtractor:
 
 class ConversationSummary:
     @staticmethod
-    def create_summary(messages: List[Dict], _user_name: str = "User") -> Dict:
+    def create_summary(messages: list[dict], _user_name: str = "User") -> dict:
         if not messages:
             return {}
         user_msgs = [m["content"] for m in messages if m.get("role") == "user"]
@@ -147,7 +146,7 @@ class ConversationSummary:
         topics = TopicExtractor.extract_topics(all_text)
         interests = TopicExtractor.extract_interests(all_text)
         return {
-            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+            "timestamp": datetime.now(tz=UTC).isoformat(),
             "message_count": len(messages),
             "user_messages": len(user_msgs),
             "topics": topics,
@@ -159,7 +158,7 @@ class ConversationSummary:
         }
 
     @staticmethod
-    def _generate_text_summary(user_msgs: List[str], ai_msgs: List[str]) -> str:
+    def _generate_text_summary(user_msgs: list[str], ai_msgs: list[str]) -> str:
         if not user_msgs:
             return ""
         first_q = user_msgs[0][:100]
@@ -175,11 +174,11 @@ class ConversationSummary:
 class MemoryEnricher:
     @staticmethod
     def enrich_memory(
-        fact: str, topics: Dict[str, List[str]], interests: Dict[str, bool]
-    ) -> Dict:
+        fact: str, topics: dict[str, list[str]], interests: dict[str, bool]
+    ) -> dict:
         return {
             "fact": fact,
-            "created_at": datetime.now(tz=timezone.utc).isoformat(),
+            "created_at": datetime.now(tz=UTC).isoformat(),
             "topics": topics,
             "interests": interests,
             "relevance_score": 1.0,
@@ -188,8 +187,8 @@ class MemoryEnricher:
         }
 
     @staticmethod
-    def calculate_relevance(memory: Dict) -> float:
-        created = memory.get("created_at", datetime.now(tz=timezone.utc).isoformat())
+    def calculate_relevance(memory: dict) -> float:
+        created = memory.get("created_at", datetime.now(tz=UTC).isoformat())
         base_decay = _time_decay(created, TOPIC_HALF_LIFE_DAYS)
         ref_boost = 1 + (memory.get("reference_count", 0) * 0.15)
         return base_decay * ref_boost
@@ -198,23 +197,31 @@ class MemoryEnricher:
 # ── Topic & Interest Tracking ────────────────────────────────────────────────
 
 
-async def load_topics() -> Dict[str, List[Dict]]:
+async def load_topics() -> dict[str, list[dict]]:
     """Load all topics from the database, grouped by category."""
-    async with AsyncSessionLocal() as session:
-        result = await session.execute(select(Topic))
-        rows = result.scalars().all()
+    try:
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(select(Topic))
+            rows = result.scalars().all()
 
-    grouped: Dict[str, List[Dict]] = {}
-    for t in rows:
-        entry = {
-            "name": t.name,
-            "occurrences": t.occurrences,
-            "first_mentioned": t.first_mentioned.isoformat() if t.first_mentioned else "",
-            "last_mentioned": t.last_mentioned.isoformat() if t.last_mentioned else "",
-            "strength": t.strength,
-        }
-        grouped.setdefault(t.category, []).append(entry)
-    return grouped
+        grouped: dict[str, list[dict]] = {}
+        for t in rows:
+            entry = {
+                "name": t.name,
+                "occurrences": t.occurrences,
+                "first_mentioned": t.first_mentioned.isoformat()
+                if t.first_mentioned
+                else "",
+                "last_mentioned": t.last_mentioned.isoformat()
+                if t.last_mentioned
+                else "",
+                "strength": t.strength,
+            }
+            grouped.setdefault(t.category, []).append(entry)
+        return grouped
+    except Exception as e:
+        logger.warning("[personal_assistant] Failed to load topics from DB: %s", e)
+        return {}
 
 
 _topic_lock = asyncio.Lock()
@@ -222,14 +229,17 @@ _topic_lock = asyncio.Lock()
 
 async def track_topic(category: str, topic: str, strength: float = 1.0) -> None:
     """Upsert a topic observation into the database with concurrency retry."""
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     from sqlalchemy.exc import IntegrityError
+
     async with _topic_lock:
         for attempt in range(5):
             async with AsyncSessionLocal() as session:
                 try:
                     result = await session.execute(
-                        select(Topic).where(Topic.category == category, Topic.name == topic).with_for_update()
+                        select(Topic)
+                        .where(Topic.category == category, Topic.name == topic)
+                        .with_for_update()
                     )
                     existing = result.scalar_one_or_none()
 
@@ -274,29 +284,35 @@ async def track_topic(category: str, topic: str, strength: float = 1.0) -> None:
                     await asyncio.sleep(0.01 * (attempt + 1))
 
 
-async def load_interests() -> Dict[str, Dict]:
+async def load_interests() -> dict[str, dict]:
     """Load all interests from the database."""
-    async with AsyncSessionLocal() as session:
-        result = await session.execute(select(Interest))
-        rows = result.scalars().all()
+    try:
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(select(Interest))
+            rows = result.scalars().all()
 
-    return {
-        i.name: {
-            "count": i.count,
-            "first_observed": i.first_observed.isoformat() if i.first_observed else "",
-            "last_observed": i.last_observed.isoformat() if i.last_observed else "",
-            "strength": i.strength,
+        return {
+            i.name: {
+                "count": i.count,
+                "first_observed": i.first_observed.isoformat()
+                if i.first_observed
+                else "",
+                "last_observed": i.last_observed.isoformat() if i.last_observed else "",
+                "strength": i.strength,
+            }
+            for i in rows
         }
-        for i in rows
-    }
+    except Exception as e:
+        logger.warning("[personal_assistant] Failed to load interests from DB: %s", e)
+        return {}
 
 
 _interest_lock = asyncio.Lock()
 
 
-async def update_interests(extracted_interests: Dict[str, bool]) -> None:
+async def update_interests(extracted_interests: dict[str, bool]) -> None:
     """Upsert interest observations into the database with concurrency retry."""
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     from sqlalchemy.exc import IntegrityError
 
     async with _interest_lock:
@@ -308,7 +324,9 @@ async def update_interests(extracted_interests: Dict[str, bool]) -> None:
                 async with AsyncSessionLocal() as session:
                     try:
                         result = await session.execute(
-                            select(Interest).where(Interest.name == interest_name).with_for_update()
+                            select(Interest)
+                            .where(Interest.name == interest_name)
+                            .with_for_update()
                         )
                         existing = result.scalar_one_or_none()
 
@@ -323,7 +341,10 @@ async def update_interests(extracted_interests: Dict[str, bool]) -> None:
                                 )
                             )
                             audit_debug(
-                                "memory.topics", "interest_extracted", interest=interest_name, count=1
+                                "memory.topics",
+                                "interest_extracted",
+                                interest=interest_name,
+                                count=1,
                             )
                         else:
                             existing.count += 1
@@ -349,30 +370,36 @@ async def update_interests(extracted_interests: Dict[str, bool]) -> None:
 # ── Conversation Tracking ────────────────────────────────────────────────────
 
 
-async def load_conversations_history(limit: Optional[int] = None) -> List[Dict]:
+async def load_conversations_history(limit: int | None = None) -> list[dict]:
     """Load conversation records from the database, ordered oldest-first."""
-    async with AsyncSessionLocal() as session:
-        stmt = select(Conversation).order_by(Conversation.recorded_at)
-        if limit and limit > 0:
-            # Fetch last N by ordering desc then reversing in Python
-            stmt = (
-                select(Conversation)
-                .order_by(Conversation.recorded_at.desc())
-                .limit(limit)
-            )
-            result = await session.execute(stmt)
-            rows = list(reversed(result.scalars().all()))
-        else:
-            result = await session.execute(stmt)
-            rows = result.scalars().all()
+    try:
+        async with AsyncSessionLocal() as session:
+            stmt = select(Conversation).order_by(Conversation.recorded_at)
+            if limit and limit > 0:
+                # Fetch last N by ordering desc then reversing in Python
+                stmt = (
+                    select(Conversation)
+                    .order_by(Conversation.recorded_at.desc())
+                    .limit(limit)
+                )
+                result = await session.execute(stmt)
+                rows = list(reversed(result.scalars().all()))
+            else:
+                result = await session.execute(stmt)
+                rows = result.scalars().all()
 
-    return [_conv_to_dict(c) for c in rows]
+        return [_conv_to_dict(c) for c in rows]
+    except Exception as e:
+        logger.warning(
+            "[personal_assistant] Failed to load conversation history from DB: %s", e
+        )
+        return []
 
 
-async def record_conversation(messages: List[Dict], session_id: str = None) -> Dict:
+async def record_conversation(messages: list[dict], session_id: str = None) -> dict:
     """Summarise and persist a completed conversation. Returns the summary dict."""
     summary = ConversationSummary.create_summary(messages)
-    summary["session_id"] = session_id or f"session_{datetime.now(tz=timezone.utc).timestamp()}"
+    summary["session_id"] = session_id or f"session_{datetime.now(tz=UTC).timestamp()}"
 
     async with AsyncSessionLocal() as db_session:
         # Keep only last 100 conversations — delete oldest if over limit
@@ -395,7 +422,7 @@ async def record_conversation(messages: List[Dict], session_id: str = None) -> D
                 interests=summary.get("interests", {}),
                 key_questions=summary.get("key_questions", []),
                 summary_text=summary.get("summary_text", ""),
-                recorded_at=datetime.now(tz=timezone.utc),
+                recorded_at=datetime.now(tz=UTC),
             )
         )
         await db_session.commit()
@@ -435,10 +462,10 @@ def _score_interest(data: dict) -> float:
     return base_strength * recency * count_factor
 
 
-async def get_current_focus(limit: int = 3) -> List[Tuple[str, str, float]]:
+async def get_current_focus(limit: int = 3) -> list[tuple[str, str, float]]:
     """Detect what the user is CURRENTLY focused on (last FOCUS_WINDOW_DAYS)."""
     topics = await load_topics()
-    cutoff = datetime.now(tz=timezone.utc) - timedelta(days=FOCUS_WINDOW_DAYS)
+    cutoff = datetime.now(tz=UTC) - timedelta(days=FOCUS_WINDOW_DAYS)
     focus_items = []
     for category, topic_list in topics.items():
         for topic in topic_list:
@@ -446,7 +473,7 @@ async def get_current_focus(limit: int = 3) -> List[Tuple[str, str, float]]:
                 last_dt = datetime.fromisoformat(topic.get("last_mentioned", ""))
                 # Normalise to UTC-aware for comparison
                 if last_dt.tzinfo is None:
-                    last_dt = last_dt.replace(tzinfo=timezone.utc)
+                    last_dt = last_dt.replace(tzinfo=UTC)
             except (ValueError, TypeError):
                 continue
             if last_dt >= cutoff:
@@ -455,7 +482,7 @@ async def get_current_focus(limit: int = 3) -> List[Tuple[str, str, float]]:
     return focus_items[:limit]
 
 
-async def get_relevant_topics(limit: int = 5) -> List[Tuple[str, str]]:
+async def get_relevant_topics(limit: int = 5) -> list[tuple[str, str]]:
     """Get most relevant topics with time decay applied."""
     topics = await load_topics()
     all_topics = []
@@ -468,18 +495,18 @@ async def get_relevant_topics(limit: int = 5) -> List[Tuple[str, str]]:
     return [(cat, name) for cat, name, _ in all_topics[:limit]]
 
 
-async def get_fading_topics(limit: int = 3) -> List[Tuple[str, str, int]]:
+async def get_fading_topics(limit: int = 3) -> list[tuple[str, str, int]]:
     """Get topics that used to be active but are fading."""
     topics = await load_topics()
-    cutoff_recent = datetime.now(tz=timezone.utc) - timedelta(days=FOCUS_WINDOW_DAYS)
-    cutoff_old = datetime.now(tz=timezone.utc) - timedelta(days=60)
+    cutoff_recent = datetime.now(tz=UTC) - timedelta(days=FOCUS_WINDOW_DAYS)
+    cutoff_old = datetime.now(tz=UTC) - timedelta(days=60)
     fading = []
     for category, topic_list in topics.items():
         for topic in topic_list:
             try:
                 last_dt = datetime.fromisoformat(topic.get("last_mentioned", ""))
                 if last_dt.tzinfo is None:
-                    last_dt = last_dt.replace(tzinfo=timezone.utc)
+                    last_dt = last_dt.replace(tzinfo=UTC)
             except (ValueError, TypeError):
                 continue
             if (
@@ -487,7 +514,11 @@ async def get_fading_topics(limit: int = 3) -> List[Tuple[str, str, int]]:
                 and topic.get("occurrences", 0) >= 3
             ):
                 fading.append(
-                    (category, topic["name"], (datetime.now(tz=timezone.utc) - last_dt).days)
+                    (
+                        category,
+                        topic["name"],
+                        (datetime.now(tz=UTC) - last_dt).days,
+                    )
                 )
     fading.sort(key=lambda x: x[2])
     return fading[:limit]
@@ -520,7 +551,7 @@ async def get_user_interests_summary() -> str:
 async def get_recent_conversation_summary(days: int = 7) -> str:
     """Get tiered summary of recent conversations."""
     history = await load_conversations_history()
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     today_cutoff = now - timedelta(days=1)
     week_cutoff = now - timedelta(days=days)
 
@@ -531,7 +562,7 @@ async def get_recent_conversation_summary(days: int = 7) -> str:
         try:
             conv_time = datetime.fromisoformat(conv.get("timestamp", ""))
             if conv_time.tzinfo is None:
-                conv_time = conv_time.replace(tzinfo=timezone.utc)
+                conv_time = conv_time.replace(tzinfo=UTC)
         except (ValueError, TypeError):
             continue
         if conv_time < week_cutoff:
@@ -601,7 +632,7 @@ async def get_memory_context_for_prompt() -> str:
 # ── Internal helpers ─────────────────────────────────────────────────────────
 
 
-def _conv_to_dict(c: Conversation) -> Dict:
+def _conv_to_dict(c: Conversation) -> dict:
     """Convert a Conversation ORM row to the legacy summary dict format."""
     return {
         "session_id": c.session_id,

@@ -1,14 +1,16 @@
+import logging
 import secrets as _secrets
 
 from fastapi import APIRouter, HTTPException, Request
-import logging
+
 from src.api.shared import _stringify_lc_message_content
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-from langchain_core.messages import HumanMessage, AIMessage
 import time
 import uuid
+
+from langchain_core.messages import AIMessage, HumanMessage
 
 
 def _verify_openai_token(request: Request) -> None:
@@ -35,15 +37,16 @@ async def api_openai_chat_completions(body: dict, request: Request):
     """OpenAI-compatible local API completions endpoint."""
     _verify_openai_token(request)
 
-    from langchain_core.messages import SystemMessage
     from fastapi.responses import StreamingResponse
+    from langchain_core.messages import SystemMessage
+
     from src.api.server import openai_stream_generator
 
     # Extract request params
     messages = body.get("messages", [])
     from src.config.config_loader import config
 
-    model = body.get("model") or config.get_small_model_name()
+    model = body.get("model") or config.get_main_model_name()
     stream = bool(body.get("stream", False))
     project_id = body.get("project_id", "default")
     persona_id = body.get("persona_id", "default")
@@ -92,7 +95,7 @@ async def api_openai_chat_completions(body: dict, request: Request):
 
         # Extract assistant response
         assistant_content = ""
-        if "messages" in output and output["messages"]:
+        if output.get("messages"):
             # Find the last AIMessage
             for msg in reversed(output["messages"]):
                 if isinstance(msg, AIMessage):

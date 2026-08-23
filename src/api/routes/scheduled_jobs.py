@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel
-from typing import List, Optional
 import logging
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+
 from src.api.scheduler_manager import scheduler_manager
 
 logger = logging.getLogger(__name__)
@@ -13,16 +14,16 @@ class JobCreate(BaseModel):
     id: str
     cron_expression: str
     task_prompt: str
-    tool_subsets: Optional[List[str]] = None
+    tool_subsets: list[str] | None = None
 
 
 class JobResponse(BaseModel):
     id: str
-    next_run_time: Optional[str]
-    cron_expression: Optional[str]
+    next_run_time: str | None
+    cron_expression: str | None
 
 
-async def execute_agent_job(task_prompt: str, tool_subsets: Optional[List[str]] = None):
+async def execute_agent_job(task_prompt: str, tool_subsets: list[str] | None = None):
     """Background task executed by APScheduler"""
     logger.info(f"Executing scheduled agent job with prompt: {task_prompt}")
     from src.agent.core.graph import build_graph
@@ -74,7 +75,7 @@ async def create_job(job: JobCreate):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/", response_model=List[JobResponse])
+@router.get("/", response_model=list[JobResponse])
 async def list_jobs():
     jobs = scheduler_manager.scheduler.get_jobs()
     return [

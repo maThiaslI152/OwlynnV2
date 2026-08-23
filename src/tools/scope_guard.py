@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import logging
 import re
-from urllib.parse import urlparse
 
 from src.memory.pentest_engagement import get_active_engagement, validate_target
 
@@ -80,7 +79,7 @@ def _extract_from_text(text: str) -> list[str]:
     return targets
 
 
-def check_scope(engagement_id: str, targets: list[str]) -> tuple[bool, str]:
+async def check_scope(engagement_id: str, targets: list[str]) -> tuple[bool, str]:
     """Validate targets against engagement scope.
 
     Returns (allowed, reason).
@@ -91,14 +90,14 @@ def check_scope(engagement_id: str, targets: list[str]) -> tuple[bool, str]:
         return True, "No targets to validate"
 
     for target in targets:
-        allowed, reason = validate_target(engagement_id, target)
+        allowed, reason = await validate_target(engagement_id, target)
         if not allowed:
             return False, reason
 
     return True, "All targets in scope"
 
 
-def guard_tool_call(tool_name: str, args: dict) -> tuple[bool, str]:
+async def guard_tool_call(tool_name: str, args: dict) -> tuple[bool, str]:
     """Main entry point: check if a tool call's targets are in scope.
 
     Returns (allowed, reason).
@@ -113,7 +112,7 @@ def guard_tool_call(tool_name: str, args: dict) -> tuple[bool, str]:
             "This command can cause irreversible damage and is blocked by policy."
         )
 
-    eng = get_active_engagement()
+    eng = await get_active_engagement()
     if not eng:
         return True, "No active engagement (non-pentest mode)"
 
@@ -121,4 +120,4 @@ def guard_tool_call(tool_name: str, args: dict) -> tuple[bool, str]:
     if not targets:
         return True, "No extractable targets in tool args"
 
-    return check_scope(eng["id"], targets)
+    return await check_scope(eng["id"], targets)

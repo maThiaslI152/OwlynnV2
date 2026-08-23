@@ -10,7 +10,7 @@ All tests use MockDelayLLM — no actual LLM server required.
 
 import asyncio
 import sys
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 sys.modules["mem0"] = MagicMock()
 
@@ -24,8 +24,8 @@ from tests.benchmarks.conftest import (
     LatencyTracker,
     MockDelayLLM,
     ProfileBuilder,
-    make_mock_llm,
     make_complex_state,
+    make_mock_llm,
     setup_benchmark_llms,
     teardown_benchmark_llms,
     time_async_call,
@@ -131,8 +131,8 @@ class TestFallbackChainCoverage:
     @pytest.mark.asyncio
     async def test_cloud_fallback_on_unavailable(self):
         """Cloud route falls back to medium-default when CloudUnavailableError raised."""
-        from src.agent.llm import CloudUnavailableError
         from src.agent.core.complex import complex_llm_node
+        from src.agent.llm import CloudUnavailableError
 
         mock_medium = make_mock_llm(delay_ms=80, content="Fallback response")
 
@@ -456,9 +456,10 @@ class TestGraphE2ELatency:
     )
     async def test_graph_e2e_per_route(self, route: str, model_delay: int):
         """End-to-end graph invocation per route."""
-        from langgraph.checkpoint.memory import MemorySaver
-        from src.agent.core.graph import build_graph
         from langchain_core.messages import HumanMessage
+        from langgraph.checkpoint.memory import MemorySaver
+
+        from src.agent.core.graph import build_graph
 
         mock_llm = make_mock_llm(
             delay_ms=model_delay,

@@ -87,13 +87,14 @@ Report is written to `docs/evaluations/extension-eval-<date>.md`.
 ---
 
 
-## Architecture assumptions (2026-06-11)
+## Architecture assumptions (2026-08-22)
 
 ```text
 memory_inject_lite → router → memory_retrieve → auto_summarize?
   → simple | scope_clarify → complex_llm → tool_action (loops) → memory_write
-Routes: simple | complex-default (local Qwen) | complex-cloud (DeepSeek) | vision | vision_cloud
-UI: ToolActivityCard + HitlPromptCard interleaved in `.messages` timeline
+Routes: simple | complex-default (local Gemma 4 12B Agentic) | complex-cloud (DeepSeek V4) | vision | vision_cloud
+UI: StatusBar (26px minimal bottom bar) + ToolActivityCard + HitlPromptCard interleaved in `.messages` timeline
+Models: Unified Local (`gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m`), Vision Proxy (`baidu.unlimited-ocr`), Embeddings (`text-embedding-mxbai-embed-large-v1` 1024-dim pgvector)
 ```
 
 ### Pipeline diagram
@@ -120,11 +121,13 @@ flowchart TD
     complex --> memwrite
   end
   subgraph ui [Browser eval observes]
-    orch[OrchestrationPanel route/model badges]
+    sb[StatusBar model/route/confidence]
+    orch[OrchestrationPanel popover details]
     toolcard[ToolActivityCard in chat]
     hitl[HitlPromptCard pending]
     composer[Composer stop vs send]
   end
+  router --> sb
   router --> orch
   tools --> toolcard
   plan --> hitl
@@ -136,12 +139,12 @@ flowchart TD
 
 | Graph stage | WS event | UI element |
 |-------------|----------|------------|
-| Router decision | `router_info` | `.route-badge`, `.orchestration-gauge-value`, Source row |
-| Model selection | `model_info` | `.model-badge` |
+| Router decision | `router_info` | `.sb-route`, `.route-badge`, `.sb-confidence`, `.orchestration-gauge-value`, Source row |
+| Model selection | `model_info` | `.sb-label`, `.model-badge` |
 | Tool execution | `tool_execution` | `.tool-activity-card`, `.tool-activity-name code` |
 | HITL | `interrupt` | `.hitl-prompt-card.hitl-pending`, `.hitl-btn-approve` |
-| Graph running | `status: reasoning` | `.composer-stop`, `.tool-activity-running`, `.streaming-cursor` |
-| Memory write | `memory_updated` | `.orchestration-memory-ok` ("Saved") |
+| Graph running | `status: reasoning` | `.composer-send.is-stop`, `.tool-activity-running`, `.streaming-cursor` |
+| Memory write | `memory_updated` | `.status-bar [title*="Memory"]`, `.orchestration-memory-ok` ("Saved") |
 | Context compress | `context_summarized` | `.orchestration-compression` |
 | File watcher | `file_status` | (backend only; assert via `/api/files` + `.processed/`) |
 
@@ -159,7 +162,7 @@ flowchart TD
 
 A turn is **complete** when all of:
 
-1. No `.composer-stop` (graph not running)
+1. No `.composer-send.is-stop` (graph not running)
 2. No `.hitl-prompt-card.hitl-pending`
 3. No `.tool-activity-running`
 4. No `.streaming-cursor`
@@ -181,11 +184,11 @@ HITL is resolved in-loop: scope → first `.hitl-choice-btn` + approve; plan/sec
 | F6.1 | Conversation recall | `complex-cloud` | Tokyo/tokyo_weather.txt in answer |
 | F7.1 | Frontier quality | `complex-cloud` | `model_tier == flash` (frontier hints do **not** auto-escalate tier) |
 | F7.2 | Pro tier path | `complex-cloud` | `model_tier == pro` after profile bump |
-| F8.1 | Router LLM | `complex-cloud` | `classification_source == llm_classifier` |
-| F9.1 | Vision OCR | `vision_cloud` | OCR marker in answer |
+| F8.1 | Router LLM | `complex-cloud` | `classification_source == llm_classifier` (Gemma 4 26B) |
+| F9.1 | Vision OCR | `vision_cloud` | OCR marker in answer (`baidu.unlimited-ocr`) |
 | M1.1 | Memory seed | `complex-cloud` | WS `memory_updated` |
 | M1.2 | Session recall | `complex-cloud` | codeword ZEBRA-42 |
-| M2.1 | LTM cross-thread | `complex-cloud` | codeword in new chat (skipped if Mem0 down) |
+| M2.1 | LTM cross-thread | `complex-cloud` | codeword in new chat (PostgreSQL pgvector 1024-dim) |
 | M4.1 | Retrieval gate | `simple` | no `memory_updated` |
 | W1.1 | File watcher | `complex-cloud` | `read_workspace_file`, `.processed/` |
 | FF1–FF4 | Formats pdf/docx/xlsx/csv | `complex-cloud` | marker string in answer |

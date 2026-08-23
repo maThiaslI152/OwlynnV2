@@ -1,28 +1,29 @@
-import { useEffect, useRef, useState, useCallback, type ReactNode } from 'react'
-import { MessageSquare, Settings, Circle, Calendar, NotebookPen, Flame, Layers } from 'lucide-react'
+import { useEffect, useRef, useState, useCallback, useMemo, type ReactNode } from 'react'
+import {
+  MessageSquare,
+  Settings,
+  Info,
+  Network,
+  LayoutGrid,
+  Sparkles,
+  GraduationCap,
+  Shield,
+} from 'lucide-react'
 import toast from 'react-hot-toast'
 // @ts-expect-error - vitest requires the default import to resolve named exports correctly
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
 import type { Options } from 'rehype-sanitize'
 import { Composer } from '../chat/Composer'
-import { ProjectKnowledgePanel } from '../shared/ProjectKnowledgePanel'
+import { MindmapCanvas, type GraphNode } from '../mindmap/MindmapCanvas'
 import { MacMenuBar } from './MacMenuBar'
+import { StatusBar } from './StatusBar'
 import { HitlPromptCard, type HitlPromptViewModel } from '../chat/HitlPromptCard'
 import { ToolActivityCard } from '../chat/ToolActivityCard'
-import { ModeSwitcher } from './ModeSwitcher'
-import { PentestToolsPanel } from '../pentest/PentestToolsPanel'
 import { StudyDashboard } from '../study/StudyDashboard'
 import { motion } from 'framer-motion'
 import { ModeSwitchConfirmation, PentestLoadingOverlay } from '../shared/ModeSwitchModal'
-import { StudyProgressPanel } from '../study/StudyProgressPanel'
-import { StudyAnalytics } from '../study/StudyAnalytics'
-import { StudyNotesSearch } from '../study/StudyNotesSearch'
 import { PentestDashboard } from '../pentest/PentestDashboard'
-import { EngagementSelector } from '../pentest/EngagementSelector'
-import { PentestScopePanel } from '../pentest/PentestScopePanel'
-import { PhaseTracker } from '../pentest/PhaseTracker'
-import { QuickStats } from '../shared/QuickStats'
 import type { InterruptChoice } from '../../state/useAppStore'
 
 import type { ConversationItem, ConversationToolActivity, ConversationHitlPrompt, ConversationChartEmbed } from '../../appEventHandlers'
@@ -357,70 +358,20 @@ const SUGGESTIONS = [
   'Run a quick system check',
 ]
 
-function RenameInput({
-  initialName,
-  onSave,
-  onCancel,
-}: {
-  initialName: string
-  onSave: (name: string) => void
-  onCancel: () => void
-}) {
-  const [value, setValue] = useState(initialName)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    inputRef.current?.focus()
-    inputRef.current?.select()
-  }, [])
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      const trimmed = value.trim()
-      if (trimmed) onSave(trimmed)
-    } else if (e.key === 'Escape') {
-      onCancel()
-    }
-  }
-
-  return (
-    <input
-      ref={inputRef}
-      type="text"
-      className="chat-rename-input"
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onKeyDown={handleKeyDown}
-      onBlur={() => {
-        const trimmed = value.trim()
-        if (trimmed) onSave(trimmed)
-        else onCancel()
-      }}
-    />
-  )
-}
-
 export function AppShell({
   onSend,
   projects,
   activeProjectId,
-  activeChatId,
   currentThreadId,
   onSwitchProject,
   onRefreshProjects,
   onCreateProject,
-  onEditProject,
-  onDeleteProject,
   onHitlApprove,
   onHitlDecline,
   onHitlSelectChoice,
   onHitlSkip,
-  onNewChat,
   onSelectChat,
-  onDeleteChat,
-  onRenameChat,
   onStop,
-  examCountdown,
   activeMode = 'normal',
   onModeChange,
 }: AppShellProps) {
@@ -437,54 +388,52 @@ export function AppShell({
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const [streamActive, setStreamActive] = useState(false)
   const isStreamingRef = useRef(false)
-  const [renamingChatId, setRenamingChatId] = useState<string | null>(null)
-  const [renamingProjectId, setRenamingProjectId] = useState<string | null>(null)
-  const [creatingProject, setCreatingProject] = useState(false)
   const [safeModePopoverOpen, setSafeModePopoverOpen] = useState(false)
   const attachWorkspaceFileRef = useRef<(file: AttachedFile) => void>(() => {})
   const [modeSwitchPending, setModeSwitchPending] = useState<'normal' | 'study' | 'pentest' | null>(null)
   const [pentestLoading, setPentestLoading] = useState(false)
   const [pentestLoadingStatus, setPentestLoadingStatus] = useState('')
+  const [viewLayout, setViewLayout] = useState<'chat' | 'mindmap' | 'split'>('split')
+  const [activeBranchTitle, setActiveBranchTitle] = useState<string>('')
 
-  const [searchQuery, setSearchQuery] = useState('')
-  const [isSearching, setIsSearching] = useState(false)
-  const [searchResults, setSearchResults] = useState<ProjectChat[] | null>(null)
-  const [showAnalytics, setShowAnalytics] = useState(false)
+  const activeBranchDisplayTitle = useMemo(() => {
+    if (activeBranchTitle) return activeBranchTitle
+    const project = projects.find((p) => p.id === activeProjectId)
+    const chat = project?.chats?.find((c) => c.id === currentThreadId)
+    return chat?.name || 'Active Branch'
+  }, [activeBranchTitle, projects, activeProjectId, currentThreadId])
 
   useEffect(() => {
-    if (!searchQuery.trim()) {
-      setSearchResults(null)
-      setIsSearching(false)
-      return
+    const project = projects.find((p) => p.id === activeProjectId)
+    const chat = project?.chats?.find((c) => c.id === currentThreadId)
+    if (chat?.name) {
+      setActiveBranchTitle(chat.name)
     }
-    
-    setIsSearching(true)
-    const timeout = setTimeout(async () => {
-      try {
-        const resp = await fetchWithAuth(`/api/projects/${activeProjectId}/chats/search?q=${encodeURIComponent(searchQuery)}`)
-        if (resp.ok) {
-          const data = await resp.json()
-          if (data.status === 'ok') setSearchResults(data.results)
-        }
-      } finally {
-        setIsSearching(false)
-      }
-    }, 400)
-    return () => clearTimeout(timeout)
-  }, [searchQuery, activeProjectId])
+  }, [currentThreadId, projects, activeProjectId])
 
-  const handlePinToggle = async (chatId: string, pinned: boolean) => {
-    try {
-      await fetchWithAuth(`/api/projects/${activeProjectId}/chats/${chatId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pinned: !pinned })
-      })
-      onRefreshProjects()
-    } catch (e) {
-      toast.error('Failed to update chat pin status')
-    }
-  }
+  const ensureGraphChatRegistered = useCallback(
+    async (node: GraphNode) => {
+      if (activeMode === 'pentest') return
+      const project = projects.find((p) => p.id === activeProjectId)
+      const exists = project?.chats?.some((c) => c.id === node.id)
+      if (exists) return
+      try {
+        const res = await fetchWithAuth(
+          `/api/projects/${encodeURIComponent(activeProjectId)}/chats`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: node.id, name: node.title || 'New Chat' }),
+          },
+        )
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        onRefreshProjects?.()
+      } catch {
+        toast.error('Failed to register branch in workspace')
+      }
+    },
+    [activeMode, activeProjectId, projects, onRefreshProjects],
+  )
 
   // Mode switch with confirmation modal (only for pentest transitions)
   const handleModeSwitchRequest = useCallback((mode: 'normal' | 'study' | 'pentest') => {
@@ -497,6 +446,23 @@ export function AppShell({
       onModeChange?.(mode)
     }
   }, [activeMode, onModeChange])
+
+  const handleSelectGraphNode = useCallback(
+    (node: GraphNode) => {
+      if (node.id === currentThreadId) return
+
+      const nodeMode = (node.mode || 'normal') as 'normal' | 'study' | 'pentest'
+      if (nodeMode !== activeMode) {
+        handleModeSwitchRequest(nodeMode)
+      }
+
+      void ensureGraphChatRegistered(node)
+      setActiveBranchTitle(node.title || 'Thought')
+      onSelectChat(node.id)
+      toast.success(`Switched to "${node.title || 'Thought'}"`)
+    },
+    [activeMode, currentThreadId, handleModeSwitchRequest, ensureGraphChatRegistered, onSelectChat],
+  )
 
   const handleModeSwitchConfirm = useCallback(async () => {
     if (!modeSwitchPending || !onModeChange) return
@@ -628,11 +594,9 @@ export function AppShell({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [safeModePopoverOpen])
 
-  const activeProject = projects.find((p) => p.id === activeProjectId)
   const searchParams = new URLSearchParams(window.location.search)
   const isSidebarMode = searchParams.get('mode') === 'sidebar'
   const isCompact = (windowMode === 'compact' || isSidebarMode) && activeMode === 'normal'
-  const projectChats = activeProject?.chats ?? []
   const showDragStrip = isTauriRuntime()
 
   return (
@@ -640,414 +604,17 @@ export function AppShell({
       <MacMenuBar 
         isCompact={isCompact} 
         onToggleMode={() => handleToggleMode(isCompact ? 'full' : 'compact')} 
+        activeMode={activeMode}
+        onModeChange={handleModeSwitchRequest}
       />
-      <div className={`app-shell ${isCompact ? 'app-shell-compact' : ''}`}>
-        {/* ── Left Panel (hidden in compact) ── */}
-      {!isCompact && (
-        <motion.aside 
-          className="panel left-panel glass-panel"
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.3 }}
-        >
-          {showDragStrip && <div className="window-drag-strip" data-tauri-drag-region />}
-
-          {/* ── Mode Switcher ── */}
-          {onModeChange && (
-            <div style={{ padding: '8px 10px 4px' }}>
-              <ModeSwitcher activeMode={activeMode} onModeChange={handleModeSwitchRequest} />
-            </div>
-          )}
-
-
-
-          {activeMode !== 'pentest' && (
-          <details className="sidebar-accordion" open>
-            <summary>
-              Workspace
-              <div className="workspace-header-actions" onClick={e => e.stopPropagation()}>
-                <button
-                  type="button"
-                  className="workspace-refresh"
-                  onClick={() => setCreatingProject(true)}
-                  title="New workspace"
-                >
-                  + New
-                </button>
-                <button type="button" className="workspace-refresh" onClick={onRefreshProjects}>
-                  Refresh
-                </button>
-              </div>
-            </summary>
-            <div className="sidebar-accordion-content">
-              <p className="workspace-meta">
-                Active: <strong>{activeProject?.name || activeProjectId}</strong>
-              </p>
-              <p className="workspace-meta">
-                Thread: <code>{currentThreadId.length > 16 ? currentThreadId.slice(0, 16) + '…' : currentThreadId}</code>
-              </p>
-              <div className="workspace-project-list">
-                {creatingProject && (
-                  <div className="workspace-project-item workspace-project-item-active">
-                    <span className="project-icon">+</span>
-                    <RenameInput
-                      initialName="New Workspace"
-                      onSave={(newName) => {
-                        onCreateProject(newName)
-                        setCreatingProject(false)
-                      }}
-                      onCancel={() => setCreatingProject(false)}
-                    />
-                  </div>
-                )}
-                {projects.filter(p => {
-                  if (activeMode === 'study') return p.mode === 'study'
-                  return !p.mode || p.mode === 'normal'
-                }).map((project) => (
-                  <div
-                    key={project.id}
-                    className={`workspace-project-item${
-                      project.id === activeProjectId ? ' workspace-project-item-active' : ''
-                    }`}
-                    onClick={() => {
-                      if (renamingProjectId !== project.id) {
-                        onSwitchProject(project.id)
-                      }
-                    }}
-                  >
-                    <span className="project-icon">{project.name?.charAt(0)?.toUpperCase() || '?'}</span>
-                    {renamingProjectId === project.id ? (
-                      <RenameInput
-                        initialName={project.name}
-                        onSave={(newName) => {
-                          onEditProject(project.id, newName)
-                          setRenamingProjectId(null)
-                        }}
-                        onCancel={() => setRenamingProjectId(null)}
-                      />
-                    ) : (
-                      <>
-                        <span className="project-name" title={project.name}>
-                          {project.name}
-                        </span>
-                        {project.id !== 'default' && (
-                          <span className="chat-list-item-actions">
-                            <button
-                              type="button"
-                              className="chat-list-action"
-                              title="Rename workspace"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setRenamingProjectId(project.id)
-                              }}
-                            >
-                              ✎
-                            </button>
-                            <button
-                              type="button"
-                              className="chat-list-action chat-list-action-delete"
-                              title="Delete workspace"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                if (confirm('Delete this workspace? This cannot be undone.')) {
-                                  onDeleteProject(project.id)
-                                }
-                              }}
-                            >
-                              ✕
-                            </button>
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </details>
-          )}
-
-          {activeMode !== 'pentest' && (
-          <>
-          {/* ── Chat List ── */}
-          <details className="sidebar-accordion" open>
-            <summary>
-              Chats
-              <div className="workspace-header-actions" onClick={e => e.stopPropagation()}>
-                <button type="button" className="workspace-refresh" onClick={onNewChat} title="New chat">
-                  + New
-                </button>
-              </div>
-            </summary>
-            <div className="sidebar-accordion-content">
-              <div className="chat-search-container">
-                <input
-                  type="text"
-                  placeholder="Search chats..."
-                  className="chat-search-input"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-                {isSearching && <span className="chat-search-spinner" />}
-              </div>
-              <div className="chat-list">
-                {(() => {
-                  const chatsToRender = searchResults !== null ? searchResults : projectChats;
-                  if (chatsToRender.length === 0) {
-                    return <p className="chat-list-empty">{searchQuery ? 'No chats found.' : 'No chats yet. Start a new conversation.'}</p>
-                  }
-
-                  const now = new Date()
-                  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
-                  const startOfYesterday = startOfToday - 86400000
-                  const startOfWeek = startOfToday - 86400000 * 7
-
-                  const groups = {
-                    Pinned: [] as ProjectChat[],
-                    Today: [] as ProjectChat[],
-                    Yesterday: [] as ProjectChat[],
-                    'This Week': [] as ProjectChat[],
-                    Older: [] as ProjectChat[]
-                  }
-
-                  chatsToRender.forEach((chat: any) => {
-                    if (chat.pinned) {
-                      groups.Pinned.push(chat)
-                      return
-                    }
-                    const ts = chat.created_at * 1000
-                    if (ts >= startOfToday) {
-                      groups.Today.push(chat)
-                    } else if (ts >= startOfYesterday) {
-                      groups.Yesterday.push(chat)
-                    } else if (ts >= startOfWeek) {
-                      groups['This Week'].push(chat)
-                    } else {
-                      groups.Older.push(chat)
-                    }
-                  })
-
-                  const renderGroup = (title: string, list: ProjectChat[]) => {
-                    if (list.length === 0) return null
-                    return (
-                      <div key={title} className="chat-list-group">
-                        <div className="chat-list-group-title">{title}</div>
-                        {list.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0)).map((chat: any) => (
-                          <div
-                            key={chat.id}
-                            className={`chat-list-item${chat.id === activeChatId ? ' chat-list-item-active' : ''}`}
-                            onClick={() => {
-                              if (renamingChatId !== chat.id) {
-                                onSelectChat(chat.id)
-                              }
-                            }}
-                          >
-                            {renamingChatId === chat.id ? (
-                              <RenameInput
-                                initialName={chat.name}
-                                onSave={(newName) => {
-                                  onRenameChat(chat.id, newName)
-                                  setRenamingChatId(null)
-                                }}
-                                onCancel={() => setRenamingChatId(null)}
-                              />
-                            ) : (
-                              <>
-                                <span className="chat-list-item-name" title={chat.name}>
-                                  {chat.name}
-                                  {chat.has_checkpoint === false && (
-                                    <span className="chat-list-item-legacy" title="History unavailable — created before persistent storage">⚠️</span>
-                                  )}
-                                </span>
-                                <span className="chat-list-item-actions">
-                                  <button
-                                    type="button"
-                                    className={`chat-list-action ${chat.pinned ? 'pinned-active' : ''}`}
-                                    title={chat.pinned ? "Unpin chat" : "Pin chat"}
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      handlePinToggle(chat.id, !!chat.pinned)
-                                    }}
-                                  >
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill={chat.pinned ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="17" x2="12" y2="22"></line><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.68V6a3 3 0 0 0-3-3 3 3 0 0 0-3 3v4.68a2 2 0 0 1-1.11 1.87l-1.78.89A2 2 0 0 0 5 15.24Z"></path></svg>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="chat-list-action"
-                                    title="Rename"
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      setRenamingChatId(chat.id)
-                                    }}
-                                  >
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="chat-list-action chat-list-action-delete"
-                                    title="Delete"
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      if (confirm('Delete this chat? This cannot be undone.')) {
-                                        onDeleteChat(chat.id)
-                                      }
-                                    }}
-                                  >
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-                                  </button>
-                                </span>
-                              </>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )
-                  }
-
-                  return (
-                    <>
-                      {renderGroup('Pinned', groups.Pinned)}
-                      {renderGroup('Today', groups.Today)}
-                      {renderGroup('Yesterday', groups.Yesterday)}
-                      {renderGroup('This Week', groups['This Week'])}
-                      {renderGroup('Older', groups.Older)}
-                    </>
-                  )
-                })()}
-              </div>
-            </div>
-          </details>
-
-          {/* ── Knowledge ── */}
-          <details className="sidebar-accordion" open>
-            <summary>Knowledge</summary>
-            <div className="sidebar-accordion-content">
-              <ProjectKnowledgePanel
-                activeProjectId={activeProjectId}
-                onAttachToComposer={(file) => attachWorkspaceFileRef.current(file)}
-              />
-            </div>
-          </details>
-          </>
-          )}
-
-          {/* ── Exam Countdown ── */}
-          {activeMode !== 'pentest' && examCountdown && examCountdown.length > 0 && (
-            <details className="sidebar-accordion" open>
-              <summary>Upcoming Exams</summary>
-              <div className="sidebar-accordion-content">
-                {examCountdown.map((exam) => (
-                  <div key={exam.course_id} style={{
-                    padding: '8px 10px',
-                    marginBottom: 6,
-                    borderRadius: 8,
-                    background: 'rgba(255,255,255,0.03)',
-                    border: '1px solid rgba(255,255,255,0.06)',
-                  }}>
-                    <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>
-                      {exam.name}
-                    </div>
-                    <div style={{ fontSize: 12, opacity: 0.7, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>{exam.days_until <= 0 ? <><Circle fill="currentColor" size={12} color="#ef4444" /> Today!</> : <><Calendar size={12} /> {exam.days_until} day{exam.days_until !== 1 ? 's' : ''}</>}</span>
-                      {exam.pending_todos > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><NotebookPen size={12} /> {exam.pending_todos} todo{exam.pending_todos !== 1 ? 's' : ''}</span>}
-                      {exam.current_streak > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Flame size={12} color="#fb923c" /> {exam.current_streak}d streak</span>}
-                    </div>
-                    {exam.total_cards > 0 && (
-                      <div style={{ fontSize: 11, opacity: 0.5, marginTop: 3, display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <Layers size={12} /> {exam.due_cards}/{exam.total_cards} cards due
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </details>
-          )}
-
-          {/* ── Mode-Specific Sidebar Sections ── */}
-          {activeMode === 'study' && (
-            <button 
-              className="glass-card" 
-              style={{ width: '100%', marginBottom: '16px', padding: '12px', background: 'var(--accent)', color: 'black', border: 'none', cursor: 'pointer', fontWeight: '600', borderRadius: '8px' }}
-              onClick={() => useAppStore.getState().setStudyView('dashboard')}
-            >
-              ← Subjects Dashboard
-            </button>
-          )}
-
-          {activeMode === 'study' && (
-            <details className="sidebar-accordion" open>
-              <summary style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span>Study Progress</span>
-                <button
-                  onClick={(e) => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    setShowAnalytics(!showAnalytics)
-                  }}
-                  style={{
-                    background: 'none',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    borderRadius: '4px',
-                    color: 'rgba(255,255,255,0.6)',
-                    fontSize: '10px',
-                    padding: '2px 6px',
-                    cursor: 'pointer',
-                  }}
-                  title={showAnalytics ? 'Show progress' : 'Show analytics'}
-                >
-                  {showAnalytics ? 'Progress' : 'Analytics'}
-                </button>
-              </summary>
-              <div className="sidebar-accordion-content">
-                {showAnalytics ? <StudyAnalytics /> : <StudyProgressPanel />}
-              </div>
-            </details>
-          )}
-
-          {activeMode === 'study' && (
-            <details className="sidebar-accordion" open>
-              <summary>Study Notes</summary>
-              <div className="sidebar-accordion-content">
-                <StudyNotesSearch />
-              </div>
-            </details>
-          )}
-
-          {activeMode === 'pentest' && (
-            <>
-              <EngagementSelector />
-              <PhaseTracker />
-              <QuickStats />
-              <PentestScopePanel />
-              <details className="sidebar-accordion" open>
-                <summary>Infrastructure</summary>
-                <div className="sidebar-accordion-content">
-                  <PentestToolsPanel />
-                </div>
-              </details>
-            </>
-          )}
-
-          {/* Version footer */}
-          <div style={{
-            marginTop: 'auto',
-            padding: '12px 14px',
-            borderTop: '1px solid rgba(255,255,255,0.06)',
-            fontSize: 11,
-            color: 'rgba(255,255,255,0.3)',
-            textAlign: 'center',
-            flexShrink: 0,
-          }}>
-            Owlynn v{__APP_VERSION__}
-          </div>
-        </motion.aside>
-      )}
+      <div className={`app-shell ${isCompact ? 'app-shell-compact' : ''}`} style={{ flex: 1, display: 'flex', width: '100%', height: '100%', overflow: 'hidden' }}>
 
       {activeMode === 'pentest' ? (
         <motion.main 
           className="panel pentest-dashboard glass-panel"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
+          style={{ flex: 1, width: '100%', height: '100%' }}
         >
           <PentestDashboard 
             onSend={onSend} 
@@ -1060,6 +627,7 @@ export function AppShell({
           className="panel center-panel glass-panel"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
+          style={{ flex: 1, width: '100%', height: '100%' }}
         >
           <StudyDashboard 
             projects={projects}
@@ -1070,15 +638,150 @@ export function AppShell({
         </motion.main>
       ) : (
       <motion.main 
-        className={`panel center-panel glass-panel${isCompact ? ' center-panel-compact' : ''}`}
+        className={`panel center-panel glass-panel${isCompact ? ' center-panel-compact' : ''} flex flex-col`}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
+        style={{ padding: 0, overflow: 'hidden', flex: 1, width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}
       >
         {showDragStrip && <div className="window-drag-strip" data-tauri-drag-region />}
 
-        {operatorNote ? <p className="operator-note">ⓘ {operatorNote}</p> : null}
-        <div className="messages-container" ref={messagesContainerRef} onScroll={handleScroll}>
-          <div className="messages">
+        {/* ── View Layout Switcher Bar ── */}
+        {!isCompact && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '6px 14px',
+              borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+              background: 'rgba(13, 26, 45, 0.6)',
+              backdropFilter: 'blur(8px)',
+              flexShrink: 0,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(0, 0, 0, 0.3)', padding: 3, borderRadius: 8 }}>
+              <button
+                type="button"
+                onClick={() => setViewLayout('chat')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  padding: '3px 9px',
+                  fontSize: 11,
+                  fontWeight: viewLayout === 'chat' ? 600 : 400,
+                  borderRadius: 6,
+                  background: viewLayout === 'chat' ? 'rgba(56, 189, 248, 0.25)' : 'transparent',
+                  color: viewLayout === 'chat' ? '#38bdf8' : '#94a3b8',
+                  border: viewLayout === 'chat' ? '1px solid rgba(56, 189, 248, 0.4)' : 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                <MessageSquare size={12} /> Chat
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewLayout('split')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  padding: '3px 9px',
+                  fontSize: 11,
+                  fontWeight: viewLayout === 'split' ? 600 : 400,
+                  borderRadius: 6,
+                  background: viewLayout === 'split' ? 'rgba(56, 189, 248, 0.25)' : 'transparent',
+                  color: viewLayout === 'split' ? '#38bdf8' : '#94a3b8',
+                  border: viewLayout === 'split' ? '1px solid rgba(56, 189, 248, 0.4)' : 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                <LayoutGrid size={12} /> Split Graph
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewLayout('mindmap')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  padding: '3px 9px',
+                  fontSize: 11,
+                  fontWeight: viewLayout === 'mindmap' ? 600 : 400,
+                  borderRadius: 6,
+                  background: viewLayout === 'mindmap' ? 'rgba(56, 189, 248, 0.25)' : 'transparent',
+                  color: viewLayout === 'mindmap' ? '#38bdf8' : '#94a3b8',
+                  border: viewLayout === 'mindmap' ? '1px solid rgba(56, 189, 248, 0.4)' : 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                <Network size={12} /> Mindmap
+              </button>
+            </div>
+            <div style={{ fontSize: 11, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 6 }}>
+              {(activeMode as string) === 'pentest' ? (
+                <><Shield size={12} style={{ color: '#f43f5e' }} /> Attack Graph Canvas</>
+              ) : activeMode === 'study' ? (
+                <><GraduationCap size={12} style={{ color: '#c084fc' }} /> Mastery Knowledge Tree</>
+              ) : (
+                <><Sparkles size={12} style={{ color: '#38bdf8' }} /> Thought Constellation</>
+              )}
+            </div>
+          </div>
+        )}
+
+        {viewLayout === 'mindmap' ? (
+          <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%' }}>
+            <MindmapCanvas
+              activeNodeId={currentThreadId}
+              activeMode={activeMode}
+              onSelectNode={handleSelectGraphNode}
+            />
+            {currentThreadId && (
+              <div
+                data-testid="active-branch"
+                data-node-id={currentThreadId}
+                style={{
+                  position: 'absolute',
+                  bottom: 48,
+                  left: 216,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '4px 10px',
+                  background: 'rgba(13, 26, 45, 0.9)',
+                  border: '1px solid rgba(56, 189, 248, 0.25)',
+                  borderRadius: 8,
+                  fontSize: 11,
+                  color: '#94a3b8',
+                  backdropFilter: 'blur(8px)',
+                  zIndex: 10,
+                  pointerEvents: 'none',
+                }}
+              >
+                <Network size={11} style={{ color: '#38bdf8' }} />
+                <span>
+                  Active Branch:{' '}
+                  <strong style={{ color: '#f1f5f9' }}>{activeBranchDisplayTitle}</strong>
+                </span>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ flex: 1, display: 'flex', width: '100%', height: '100%', overflow: 'hidden' }}>
+            {viewLayout === 'split' && !isCompact && (
+              <div style={{ width: '48%', height: '100%', borderRight: '1px solid rgba(255, 255, 255, 0.06)', position: 'relative' }}>
+                <MindmapCanvas
+                  activeNodeId={currentThreadId}
+                  activeMode={activeMode}
+                  onSelectNode={handleSelectGraphNode}
+                />
+              </div>
+            )}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+              {operatorNote ? <p className="operator-note" style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '8px 16px 0' }}><Info size={14} /> {operatorNote}</p> : null}
+              <div className="messages-container" ref={messagesContainerRef} onScroll={handleScroll}>
+                <div className="messages">
             {/* Build unified timeline: messages + conversation items interleaved by time */}
             {(() => {
               const displayMessages = messages.filter((m) => {
@@ -1288,6 +991,34 @@ export function AppShell({
             </span>
           </div>
         )}
+        {/* Active Thought Topic Pill in Split mode */}
+        {viewLayout === 'split' && currentThreadId && (
+          <div
+            data-testid="active-branch"
+            data-node-id={currentThreadId}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '3px 10px',
+              margin: '0 16px 4px',
+              background: 'rgba(13, 26, 45, 0.65)',
+              border: '1px solid rgba(56, 189, 248, 0.2)',
+              borderRadius: 6,
+              fontSize: 11,
+              color: '#94a3b8',
+            }}
+          >
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Network size={11} style={{ color: '#38bdf8' }} />
+              <span>
+                Active Branch:{' '}
+                <strong style={{ color: '#f1f5f9' }}>{activeBranchDisplayTitle}</strong>
+              </span>
+            </span>
+            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Mindmap Linked</span>
+          </div>
+        )}
         <Composer
           onSend={onSend}
           disabled={connectionState !== 'connected'}
@@ -1299,9 +1030,15 @@ export function AppShell({
             attachWorkspaceFileRef.current = attach
           }}
         />
+            </div>
+          </div>
+        )}
       </motion.main>
       )}
     </div>
+
+      {/* ── Minimal Bottom Status Bar ── */}
+      <StatusBar />
 
       {/* ── Mode Switch Confirmation Modal ── */}
       {modeSwitchPending && (

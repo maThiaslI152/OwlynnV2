@@ -5,13 +5,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src.api.routes.browser_extension import (
+    _auth_token,
     active_connections,
     dispatch_extension_get_active_tab,
     dispatch_extension_search,
     format_active_tab_context,
     is_extension_connected,
     pending_requests,
-    _auth_token,
 )
 from src.api.server import app
 from src.tools.web_tools import web_search
@@ -60,11 +60,13 @@ def test_ws_origin_restrictions():
     # Disallowed origin should be rejected with 403 (Forbidden)
     from fastapi.websockets import WebSocketDisconnect
 
-    with pytest.raises(WebSocketDisconnect) as exc_info:
-        with client.websocket_connect(
+    with (
+        pytest.raises(WebSocketDisconnect) as exc_info,
+        client.websocket_connect(
             "/api/browser_extension/ws", headers={"origin": "https://evil.com"}
-        ):
-            pass
+        ),
+    ):
+        pass
     assert exc_info.value.code == 4003
 
     # Allowed origin should connect
@@ -172,29 +174,30 @@ async def test_dispatch_extension_get_active_tab_success():
 
 
 def test_page_context_push_broadcasts_to_chat_clients():
+    from src.api import shared
     from src.api.routes import browser_extension as be_mod
-
-    import src.api.shared as shared
 
     active_connections.clear()
     mock_chat_ws = AsyncMock()
     shared.connected_websockets.add(mock_chat_ws)
     mock_loop = MagicMock()
 
-    with patch.object(app.state, "loop", mock_loop, create=True):
-        with patch(
+    with (
+        patch.object(app.state, "loop", mock_loop, create=True),
+        patch(
             "src.api.routes.browser_extension.asyncio.run_coroutine_threadsafe"
-        ) as mock_run:
-            be_mod._broadcast_page_context(
-                {
-                    "url": "https://example.com",
-                    "title": "Example",
-                    "text": "Page body",
-                    "selection": "sel",
-                }
-            )
-            assert mock_run.called
-            assert mock_run.call_count == 1
+        ) as mock_run,
+    ):
+        be_mod._broadcast_page_context(
+            {
+                "url": "https://example.com",
+                "title": "Example",
+                "text": "Page body",
+                "selection": "sel",
+            }
+        )
+        assert mock_run.called
+        assert mock_run.call_count == 1
 
     shared.connected_websockets.discard(mock_chat_ws)
 
@@ -210,9 +213,20 @@ async def test_extension_search_fails_gracefully_when_offline():
 
     with (
         patch("src.tools.web_tools._web_search_wttr_in", return_value=None),
-        patch("src.tools.web_tools._web_search_curl_cffi") as mock_curl,
+        patch(
+            "src.tools.web_tools._web_search_curl_cffi",
+            new=AsyncMock(
+                return_value=(None, SearchAttempt("tier1", "curl_cffi", "empty"))
+            ),
+        ) as mock_curl,
+        patch("src.tools.web_tools._get_ddgs_class", return_value=None),
+        patch(
+            "src.tools.web_tools._web_search_httpx_ddg_html",
+            new=AsyncMock(
+                return_value=(None, SearchAttempt("tier3", "ddg_html", "empty"))
+            ),
+        ),
     ):
-        mock_curl.return_value = (None, SearchAttempt("tier1", "curl_cffi", "empty"))
         await web_search.ainvoke({"query": "python programming", "backend": "auto"})
         mock_curl.assert_called()
 

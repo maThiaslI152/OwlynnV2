@@ -6,19 +6,15 @@ to natively interact with the browser extension tools. Hands off to cloud
 if reasoning tasks become too complex or after maximum browser turns.
 """
 
-import json
 import logging
-import asyncio
 
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage
-from src.agent.llm import get_small_llm
-from src.agent.core.state import AgentState
-from src.tools.screen_assist.tools import SCREEN_ASSIST_TOOLS
-from src.tools.web_tools import fetch_webpage, web_search
-from src.api.shared import _stringify_lc_message_content
-
-from src.config.log_middleware import log_node
+from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 from langchain_core.tools import tool
+
+from src.agent.core.state import AgentState
+from src.agent.llm import get_main_llm
+from src.config.log_middleware import log_node
+from src.tools.screen_assist.tools import SCREEN_ASSIST_TOOLS
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +82,7 @@ async def browser_local_node(state: AgentState) -> dict:
         }
 
     # Bind tools to local model
-    llm = await get_small_llm()
+    llm = await get_main_llm()
     llm_with_tools = llm.bind_tools(LOCAL_BROWSER_TOOLS)
 
     # Prepare messages

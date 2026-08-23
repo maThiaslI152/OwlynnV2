@@ -5,7 +5,9 @@ Mirrors Cowork's Todo tool for tracking work items across sessions.
 
 import json
 import time
+
 from langchain_core.tools import tool
+
 from src.config.settings import DATA_DIR
 
 _TODO_PATH = DATA_DIR / "todos.json"

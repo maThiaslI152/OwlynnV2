@@ -79,5 +79,6 @@ export const electronBridge = {
   hideToTray: () => invokeOrResult<string>('hide_to_tray'),
   getBrowserExtensionPath: () => invokeOrResult<string>('get_extension_path'),
   openExtensionFolder: () => invokeOrResult<string>('open_extension_folder'),
+  quitApp: () => invokeOrResult<string>('quit_app'),
   convertFileSrc,
 }

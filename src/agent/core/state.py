@@ -6,11 +6,12 @@ conversation history, execution mode, and other contextual flags.
 """
 
 import operator
-from typing import Annotated, TypedDict, Sequence
-from langchain_core.messages import BaseMessage
+from collections.abc import Sequence
+from typing import Annotated, TypedDict
 
+from langchain_core.messages import BaseMessage
 from langgraph.channels.delta import DeltaChannel
-from langgraph.graph.message import add_messages, _messages_delta_reducer
+from langgraph.graph.message import _messages_delta_reducer
 
 
 class AgentState(TypedDict):

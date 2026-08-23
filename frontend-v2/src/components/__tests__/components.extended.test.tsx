@@ -366,8 +366,9 @@ describe('AppShell', () => {
 
   it('renders all panel sections', () => {
     render(<AppShell {...defaultProps} />)
-    // Section headers now include icon prefixes
-    expect(screen.getAllByText((content) => content.includes('Knowledge')).length).toBeGreaterThan(0)
+    expect(screen.getByText('Normal')).toBeTruthy()
+    expect(screen.getByText('Study')).toBeTruthy()
+    expect(screen.getByText('Pentest')).toBeTruthy()
   })
 
   it('renders composer', () => {
@@ -387,32 +388,17 @@ describe('AppShell', () => {
     expect(defaultProps.onSend).toHaveBeenCalledWith('Test message', undefined)
   })
 
-  it('renders the project list', () => {
+  it('renders mode switch pills in menu bar', () => {
     render(<AppShell {...defaultProps} />)
-    // May find multiple elements with "Default" (active project + list item)
-    expect(screen.getAllByText('Default').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByText('Project One')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Normal/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Study/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Pentest/i })).toBeTruthy()
   })
 
-  it('creates workspace through inline input flow', () => {
-    const onCreateProject = vi.fn()
-    render(<AppShell {...defaultProps} onCreateProject={onCreateProject} />)
-
-    const newButtons = screen.getAllByRole('button', { name: '+ New' })
-    fireEvent.click(newButtons[0])
-
-    const input = screen.getByDisplayValue('New Workspace')
-    fireEvent.change(input, { target: { value: '  Inline Created Project  ' } })
-    fireEvent.keyDown(input, { key: 'Enter' })
-
-    expect(onCreateProject).toHaveBeenCalledWith('Inline Created Project')
-    expect(screen.queryByDisplayValue('Inline Created Project')).toBeNull()
-  })
-
-  it('sidebar does not render Tool Execution or Action Proposals panels', () => {
+  it('renders mindmap layout switch buttons', () => {
     render(<AppShell {...defaultProps} />)
-    expect(screen.queryByText((content) => content.includes('Tool Execution'))).toBeNull()
-    expect(screen.queryByText((content) => content.includes('Action Proposals'))).toBeNull()
+    expect(screen.getByRole('button', { name: /Split Graph/i })).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: /Mindmap/i }).length).toBeGreaterThan(0)
   })
 
   it('renders image attachment thumbnail in user message bubble', () => {

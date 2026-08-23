@@ -7,9 +7,9 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #0a0a0f;
-      color: rgba(255, 255, 255, 0.8);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: rgba(10, 16, 28, 0.96);
+      color: #e8f5ff;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -17,45 +17,71 @@
       overflow: hidden;
       -webkit-app-region: drag;
       user-select: none;
+      border: 1px solid rgba(148, 196, 255, 0.15);
+      border-radius: 16px;
     }
     .splash {
       text-align: center;
-      width: 320px;
+      width: 360px;
+      padding: 20px 16px 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 18px;
     }
     .logo {
-      width: 64px;
-      height: 64px;
-      margin-bottom: 16px;
-      animation: pulse 2s ease-in-out infinite;
+      width: 36px;
+      height: 36px;
+      flex-shrink: 0;
+      animation: pulse 2.5s ease-in-out infinite;
+    }
+    .title-group {
+      text-align: left;
     }
     h1 {
-      font-size: 22px;
-      font-weight: 600;
-      margin-bottom: 24px;
-      color: rgba(255, 255, 255, 0.95);
+      font-size: 20px;
+      font-weight: 700;
+      color: #e8f5ff;
       letter-spacing: -0.3px;
+      line-height: 1.1;
+    }
+    .subtitle {
+      font-size: 11.5px;
+      color: #86accb;
+      margin-top: 2px;
     }
     .steps {
+      width: 100%;
       text-align: left;
-      padding: 0 12px;
+      background: rgba(16, 30, 52, 0.5);
+      border: 1px solid rgba(148, 196, 255, 0.12);
+      border-radius: 10px;
+      padding: 8px 12px;
+      margin-bottom: 12px;
     }
     .step {
       display: flex;
       align-items: center;
       gap: 10px;
-      padding: 6px 0;
-      font-size: 13px;
-      color: rgba(255, 255, 255, 0.4);
-      transition: color 0.3s;
+      padding: 5px 0;
+      font-size: 12.5px;
+      color: rgba(232, 245, 255, 0.45);
+      transition: all 0.2s ease;
     }
     .step.active {
-      color: rgba(255, 255, 255, 0.9);
+      color: #e8f5ff;
+      font-weight: 500;
     }
     .step.done {
-      color: rgba(134, 59, 255, 0.9);
+      color: #72c2ff;
     }
     .step.error {
-      color: #ff4444;
+      color: #ef4444;
     }
     .icon {
       width: 16px;
@@ -64,25 +90,67 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 12px;
+      font-size: 11px;
     }
-    .step .icon.pending::before { content: '○'; }
-    .step.active .icon::before {
-      content: '●';
-      animation: spin 1s linear infinite;
+    .step .icon.pending::before { content: '○'; opacity: 0.5; }
+    .step.active .icon {
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(114, 194, 255, 0.25);
+      border-top-color: #72c2ff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
     }
-    .step.done .icon::before { content: '✓'; }
-    .step.error .icon::before { content: '!'; }
+    .step.active .icon::before { content: ''; }
+    .step.done .icon::before { content: '✓'; font-weight: bold; }
+    .step.error .icon::before { content: '!'; font-weight: bold; }
+
+    .step-text {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* Live activity log ticker */
+    .log-box {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(148, 196, 255, 0.08);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-family: 'JetBrains Mono', 'Fira Code', Menlo, Monaco, monospace;
+      font-size: 10.5px;
+      color: #86accb;
+      height: 38px;
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+      text-align: left;
+      line-height: 1.3;
+    }
+    .log-prefix {
+      color: #72c2ff;
+      margin-right: 6px;
+      flex-shrink: 0;
+    }
+    .log-message {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1;
+    }
+
     .hint {
       font-size: 11px;
-      color: rgba(255, 255, 255, 0.3);
-      margin-top: 16px;
-      min-height: 16px;
-      transition: opacity 0.3s;
+      color: rgba(134, 172, 203, 0.7);
+      margin-top: 10px;
+      min-height: 15px;
     }
+
     @keyframes pulse {
       0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.7; transform: scale(0.97); }
+      50% { opacity: 0.75; transform: scale(0.96); }
     }
     @keyframes spin {
       from { transform: rotate(0deg); }
@@ -92,35 +160,44 @@
 </head>
 <body>
   <div class="splash">
-    <svg class="logo" viewBox="0 0 48 46" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path fill="#863bff" d="M25.946 44.938c-.664.845-2.021.375-2.021-.698V33.937a2.26 2.26 0 0 0-2.262-2.262H10.287c-.92 0-1.456-1.04-.92-1.788l7.48-10.471c1.07-1.497 0-3.578-1.842-3.578H1.237c-.92 0-1.456-1.04-.92-1.788L10.013.474c.214-.297.556-.474.92-.474h28.894c.92 0 1.456 1.04.92 1.788l-7.48 10.471c-1.07 1.498 0 3.579 1.842 3.579h11.377c.943 0 1.473 1.088.89 1.83L25.947 44.94z"/>
-    </svg>
-    <h1>Owlynn</h1>
+    <div class="header">
+      <svg class="logo" viewBox="0 0 48 46" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path fill="#72c2ff" d="M25.946 44.938c-.664.845-2.021.375-2.021-.698V33.937a2.26 2.26 0 0 0-2.262-2.262H10.287c-.92 0-1.456-1.04-.92-1.788l7.48-10.471c1.07-1.497 0-3.578-1.842-3.578H1.237c-.92 0-1.456-1.04-.92-1.788L10.013.474c.214-.297.556-.474.92-.474h28.894c.92 0 1.456 1.04.92 1.788l-7.48 10.471c-1.07 1.498 0 3.579 1.842 3.579h11.377c.943 0 1.473 1.088.89 1.83L25.947 44.94z"/>
+      </svg>
+      <div class="title-group">
+        <h1>Owlynn</h1>
+        <div class="subtitle" id="global-status">Starting local AI environment...</div>
+      </div>
+    </div>
+
     <div class="steps">
       <div class="step" id="step-containers">
         <span class="icon pending"></span>
-        <span>Starting containers...</span>
+        <span class="step-text">Starting containers...</span>
       </div>
       <div class="step" id="step-lmstudio">
         <span class="icon pending"></span>
-        <span>Connecting to LM Studio...</span>
+        <span class="step-text">Connecting to LM Studio...</span>
       </div>
       <div class="step" id="step-backend">
         <span class="icon pending"></span>
-        <span>Starting backend...</span>
+        <span class="step-text">Starting backend server...</span>
       </div>
       <div class="step" id="step-health">
         <span class="icon pending"></span>
-        <span>Initializing AI...</span>
+        <span class="step-text">Initializing AI engine...</span>
       </div>
     </div>
+
+    <div class="log-box">
+      <span class="log-prefix">›</span>
+      <span class="log-message" id="log-message">Initializing startup checks...</span>
+    </div>
+
     <div class="hint" id="hint"></div>
   </div>
-  <script>
-    // Preload exposes ipcRenderer on window via contextBridge
-    const ipcRenderer = window.ipcRenderer
 
-    const stepNames = ['containers', 'lmstudio', 'backend', 'health']
+  <script>
     const stepLabels = {
       containers: 'Containers',
       lmstudio: 'LM Studio',
@@ -132,33 +209,63 @@
       const el = document.getElementById(`step-${name}`)
       if (!el) return
       el.className = `step ${status}`
-      const label = stepLabels[name] || name
-      if (status === 'done') {
-        el.querySelector('span:last-child').textContent = `${label} ready`
-      } else if (status === 'error') {
-        el.querySelector('span:last-child').textContent = message || `${label} failed`
-      } else if (message) {
-        el.querySelector('span:last-child').textContent = message
+      const icon = el.querySelector('.icon')
+      if (icon) {
+        icon.className = status === 'active' ? 'icon' : `icon ${status}`
       }
+      const label = stepLabels[name] || name
+      const textEl = el.querySelector('.step-text')
+      if (textEl) {
+        if (status === 'done') {
+          textEl.textContent = message || `${label} ready`
+        } else if (status === 'error') {
+          textEl.textContent = message || `${label} failed`
+        } else if (message) {
+          textEl.textContent = message
+        }
+      }
+    }
+
+    function setLog(text) {
+      if (!text) return
+      const el = document.getElementById('log-message')
+      if (el) el.textContent = text
     }
 
     function setHint(text) {
-      document.getElementById('hint').textContent = text
+      const el = document.getElementById('hint')
+      if (el) el.textContent = text || ''
     }
 
-    ipcRenderer.on('splash-status', (_event, data) => {
-      const { step, status, message } = data
-      updateStep(step, status, message)
+    function handleSplashStatus(data) {
+      if (!data) return
+      const { step, status, message, logLine } = data
+      if (step && status) {
+        updateStep(step, status, message)
+      }
+      if (logLine) {
+        setLog(logLine)
+      } else if (message) {
+        setLog(message)
+      }
       if (step === 'lmstudio' && status === 'active') {
-        setHint('Please open LM Studio and start the server.')
-      }
-      if (step === 'health' && status === 'active') {
-        setHint('Loading LLMs — this may take up to 3 minutes...')
-      }
-      if (status === 'done') {
+        setHint('Waiting for LM Studio on :1234...')
+      } else if (step === 'health' && status === 'active') {
+        setHint('Loading LangGraph & local models...')
+      } else if (status === 'done' || status === 'error') {
         setHint('')
       }
-    })
+    }
+
+    // Attach listeners across all bridge patterns safely
+    const api = window.electronAPI || window.ipcRenderer
+    if (api && typeof api.on === 'function') {
+      api.on('splash-status', (arg1, arg2) => {
+        // Handles both (event, data) and (data) signatures
+        const data = arg2 !== undefined ? arg2 : arg1
+        handleSplashStatus(data)
+      })
+    }
   </script>
 </body>
 </html>

@@ -6,6 +6,7 @@ cause permission issues in CI or interfere with test assertions.
 """
 
 import os
+
 import pytest
 
 
@@ -17,6 +18,7 @@ def pytest_configure(config):
     os.environ["OWLYNN_NO_PRELOAD"] = "1"
 
     import tempfile
+
     import pytest
 
     # Sandbox data and workspace dirs globally for all tests
@@ -44,6 +46,7 @@ def pytest_configure(config):
 
     # Prevent audit_log from setting up file handlers during test imports
     from unittest.mock import patch
+
     import src.config.audit_log as _audit
 
     # Disable file logging in the audit module
@@ -83,14 +86,15 @@ def pytest_configure(config):
 def setup_database_schema():
     """Autouse fixture to programmatically initialize DB schema for tests."""
     import asyncio
-    from src.models.base import Base
-    from src.models.db import engine
+
+    import src.memory.db_models
+    import src.memory.scenarios
 
     # Explicitly import all models to ensure they are registered with Base.metadata
     # This prevents 'no such table' errors when xdist workers run subsets of tests
     import src.models.project
-    import src.memory.scenarios
-    import src.memory.db_models
+    from src.models.base import Base
+    from src.models.db import engine
 
     async def _create_tables():
         async with engine.begin() as conn:

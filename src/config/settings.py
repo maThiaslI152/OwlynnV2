@@ -51,8 +51,8 @@ MCP_CONFIG_PATH = PROJECT_ROOT / "mcp_config.json"
 # ── Web RAG ──────────────────────────────────────────────────────────────────
 
 WEB_RAG_ENABLED = config.get("web_rag.enabled", True)
-WEB_RAG_EMBED_MODEL = config.get(
-    "web_rag.embed_model", "text-embedding-nomic-embed-text-v1.5-embedding"
+WEB_RAG_EMBED_MODEL = (
+    config.get("web_rag.embed_model") or config.get_embedding_model_name()
 )
 WEB_RAG_TOP_K = int(config.get("web_rag.top_k", 5))
 WEB_RAG_CHUNK_CHARS = int(config.get("web_rag.chunk_chars", 720))

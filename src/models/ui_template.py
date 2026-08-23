@@ -1,9 +1,11 @@
 import time
-from sqlalchemy import Column, String, Float
-from src.models.base import Base
+
+from sqlalchemy import Column, Float, String
 
 # We'll use a JSON type that is compatible with both SQLite and Postgres
 from sqlalchemy.types import JSON
+
+from src.models.base import Base
 
 
 class UITemplate(Base):

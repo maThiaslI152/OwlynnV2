@@ -11,9 +11,9 @@ from unittest.mock import MagicMock
 sys.modules["mem0"] = MagicMock()
 
 import pytest
-from hypothesis import given, settings, assume
+from hypothesis import assume, given, settings
 from hypothesis import strategies as st
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.graph.message import add_messages
 
 from src.agent.core.state import AgentState
@@ -21,10 +21,13 @@ from src.agent.core.state import AgentState
 # ── Constants ────────────────────────────────────────────────────────────
 
 VALID_MODEL_USED = [
+    "main-local",
     "small-local",
     "large-cloud",
+    "main-local-fallback",
     "small-local-fallback",
     "large-cloud-fallback",
+    "pentest-local",
 ]
 
 # ── Strategies ───────────────────────────────────────────────────────────
@@ -65,7 +68,6 @@ def _build_state(**overrides) -> AgentState:
         "model_used": None,
         "memory_context": None,
         "persona": None,
-        "current_medium_model": None,
         "selected_toolboxes": None,
         "token_budget": None,
         "pending_tool_calls": None,

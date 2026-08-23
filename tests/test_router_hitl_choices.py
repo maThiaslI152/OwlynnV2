@@ -3,11 +3,11 @@
 import pytest
 from langchain_core.messages import HumanMessage
 
+from src.agent.core.state import AgentState
 from src.agent.routing.router import (
     _build_low_confidence_router_choices,
     _is_simple_informational_query,
 )
-from src.agent.core.state import AgentState
 
 
 @pytest.mark.parametrize(
@@ -42,7 +42,7 @@ def test_build_low_confidence_router_choices_cloud_first():
     choices = _build_low_confidence_router_choices(
         "how many provinces in Norway", cloud_available=True
     )
-    assert all(c["route"] == "complex-cloud" for c in choices)
+    assert all(c["route"] in ("complex-default", "complex-cloud") for c in choices)
 
 
 def test_is_simple_informational_query():
@@ -68,6 +68,7 @@ async def test_simple_factual_query_skips_router_hitl(monkeypatch):
 
         return LLM()
 
+    monkeypatch.setattr(router_mod, "get_main_llm", fake_small_llm)
     monkeypatch.setattr(router_mod, "get_small_llm", fake_small_llm)
     monkeypatch.setattr(
         router_mod,

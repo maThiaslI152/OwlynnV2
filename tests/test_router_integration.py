@@ -9,17 +9,16 @@ Covers:
 """
 
 import sys
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 sys.modules["mem0"] = MagicMock()
 
 import pytest
 from langchain_core.messages import HumanMessage
 
-from src.agent.routing.router import router_node
 from src.agent.core.state import AgentState
-from src.tools.skills import SkillDefinition, MatchResult
-
+from src.agent.routing.router import router_node
+from src.tools.skills import MatchResult, SkillDefinition
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -70,7 +69,7 @@ def _make_mock_llm(content: str) -> MagicMock:
 @patch("src.agent.routing.router.get_profile")
 @patch("src.agent.routing.router.interrupt")
 @patch("src.agent.routing.router.SkillMatcher")
-@patch("src.agent.routing.router.get_small_llm", new_callable=AsyncMock)
+@patch("src.agent.routing.router.get_main_llm", new_callable=AsyncMock)
 @patch("langgraph.config.get_config")
 async def test_router_skill_hitl_round_trip(
     mock_get_config,
@@ -149,7 +148,7 @@ async def test_router_skill_hitl_round_trip(
 @patch("src.agent.routing.router.get_profile")
 @patch("src.agent.routing.router.interrupt")
 @patch("src.agent.routing.router.SkillMatcher")
-@patch("src.agent.routing.router.get_small_llm", new_callable=AsyncMock)
+@patch("src.agent.routing.router.get_main_llm", new_callable=AsyncMock)
 @patch("langgraph.config.get_config")
 async def test_router_skill_hitl_resume(
     mock_get_config,
@@ -215,7 +214,7 @@ async def test_router_skill_hitl_resume(
 @patch("src.agent.routing.router.get_profile")
 @patch("src.agent.routing.router.interrupt")
 @patch("src.agent.routing.router.SkillMatcher")
-@patch("src.agent.routing.router.get_small_llm", new_callable=AsyncMock)
+@patch("src.agent.routing.router.get_main_llm", new_callable=AsyncMock)
 @patch("langgraph.config.get_config")
 async def test_router_confident_ambiguous_skill_hitl(
     mock_get_config,
@@ -279,7 +278,7 @@ async def test_router_confident_ambiguous_skill_hitl(
 @pytest.mark.anyio
 @patch("src.agent.routing.router.interrupt")
 @patch("src.agent.routing.router.SkillMatcher")
-@patch("src.agent.routing.router.get_small_llm", new_callable=AsyncMock)
+@patch("src.agent.routing.router.get_main_llm", new_callable=AsyncMock)
 @patch("langgraph.config.get_config")
 async def test_router_confident_aligned_skill_no_hitl(
     mock_get_config,

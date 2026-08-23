@@ -1,5 +1,6 @@
-import httpx
 import os
+
+import httpx
 
 H1_BASE = "https://api.hackerone.com/v1"
 

@@ -11,10 +11,10 @@ from src.tools.screen_assist.gateway import (
 from src.tools.screen_assist.tools import SCREEN_ASSIST_TOOLS
 
 __all__ = [
-    "ScreenAssistGateway",
-    "MacScreenAssistGateway",
-    "get_screen_assist_gateway",
     "SCREEN_ASSIST_TOOLS",
+    "MacScreenAssistGateway",
+    "ScreenAssistGateway",
+    "get_screen_assist_gateway",
 ]
 
 

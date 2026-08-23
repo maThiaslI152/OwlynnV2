@@ -6,9 +6,10 @@ from unittest.mock import MagicMock
 sys.modules["mem0"] = MagicMock()
 
 import pytest
-from src.config.config_loader import config
-from src.agent.core.graph import build_graph
 from langgraph.checkpoint.memory import MemorySaver
+
+from src.agent.core.graph import build_graph
+from src.config.config_loader import config
 
 
 def test_recursion_limit_configured():

@@ -1,7 +1,7 @@
 ---
 status: active
 category: architecture
-last_updated: 2026-07-10
+last_updated: 2026-08-23
 owner: ai-agent
 audience: agent
 ---
@@ -16,11 +16,13 @@ Owlynn uses layered memory (STM, LTM, personal context, scenarios) with a **spli
 
 | Tier | Storage | What It Stores | Retrieval |
 |------|---------|---------------|-----------|
-| **Short-Term (STM)** | `data/memories.json` | Important facts from recent conversations | Keyword search via `memory_manager.py`. Regex `re.UNICODE` bug fixed. |
-| **Long-Term (LTM)** | Qdrant via Mem0 | Embedding-indexed facts + L1 atoms | Semantic search (gated) |
+| **Short-Term (STM)** | PostgreSQL (`memories` table) | Important facts from recent conversations | Keyword search via `memory_manager.py`. |
+| **Long-Term (LTM)** | PostgreSQL pgvector (`memory_vectors` table) | Embedding-indexed facts + L1 atoms | Semantic search (gated via text-embedding-mxbai-embed-large-v1, 1024-dim) |
+| **Thought Graph** | PostgreSQL (`thought_nodes`, `thought_edges` tables) | Interconnected mindmap thoughts, attack chains, and knowledge relations | Graph traversal, node clustering, REST API (`/api/graph/data`) |
 | **Personal** | `data/topics.json`, `data/interests.json`, `data/conversations.json` | User topics, interests, conversation history | Time-decay-weighted relevance |
 | **L2/L3 scenarios** | `scenarios/*/playbook.md`, `constraints.md` | Pentest / research workflows | Router `scenario_id` + markdown loader |
-| **Semantic Cache** | Redis (`redisvl`) | Previous AI answers keyed by prompt embedding | Vector similarity (`>= 0.92`) — bypasses graph entirely |
+| **Semantic Cache** | Redis (`redisvl`) / pgvector | Previous AI answers keyed by prompt embedding | Vector similarity (`>= 0.92`) — bypasses graph entirely |
+| **Extraction Queue** | PostgreSQL (`extraction_jobs` table) | Async memory & procedural skill synthesis queue | Dual-channel extraction worker (`worker.py`) |
 
 ## Memory Injection Flow (Phase 1)
 
@@ -46,9 +48,9 @@ After the agent responds, `memory_write_node`:
 5. Records the conversation in `conversations.json`
 6. Invalidates the memory cache for the next turn
 
-### Background extraction (Gemma 4 E2B) — resource deferral
+### Background extraction (Gemma 4 12B Agentic) — resource deferral
 
-LTM atom extraction uses the unified local model (`models.small`, `gemma-4-e2b-heretic-uncensored-mlx`) in a background worker. It has been upgraded to an Observer/Reflector 2-phase LLM pipeline for deduplication. To avoid GPU/CPU contention with active chat or local fallback:
+LTM atom extraction uses the unified local model (`models.main`, `gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m`) in a background worker. It has been upgraded to an Observer/Reflector 2-phase LLM pipeline for deduplication. To avoid GPU/CPU contention with active chat or local fallback:
 
 ```text
 memory_write → Redis queue → worker waits for idle window → invoke_medium_background() → Mem0
@@ -64,8 +66,19 @@ memory_write → Redis queue → worker waits for idle window → invoke_medium_
 
 LM Studio does **not** expose per-request GPU throttling via the OpenAI API; defer-until-idle is the practical mitigation on Apple Silicon unified memory.
 
+### Dual-Channel Autonomous Learning Loop (Hermes-Style)
+
+The PostgreSQL extraction worker operates a dual-channel learning pass:
+1. **Declarative Fact Channel:** Extracts structured memory atoms (L1) with semantic deduplication and stores them in Mem0/Qdrant.
+2. **Procedural Skill Channel:** Analyzes user corrections, workflow sequences, and tool execution recipes using `SkillLearnerEngine` (`src/memory/skills_learner.py`). It applies a 4-tier cascade:
+   - *Patch Active Skill:* Appends learned pitfalls/workarounds to loaded skill packages.
+   - *Update Umbrella:* Extends domain umbrella skills.
+   - *Author Support Files:* Generates `references/`, `templates/`, and `scripts/` inside `skills/<category>/<skill_name>/`.
+   - *Synthesize Class-Level Skill:* Automatically creates new `agentskills.io` compliant skill packages.
+
 **Module:** `src/agent/local_llm_scheduler.py`  
-**Worker:** `src/memory/extraction/worker.py` (`get_extraction_llm(foreground=False)`)
+**Worker:** `src/memory/extraction/worker.py` (`get_extraction_llm(foreground=False)`)  
+**Skill Engine:** `src/memory/skills_learner.py` (`SkillLearnerEngine`)
 
 ## Configuration
 

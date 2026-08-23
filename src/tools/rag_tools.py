@@ -5,11 +5,13 @@ RAG Tools — Automatic Document Indexing & Retrieval
 Provides the tool set for targeted semantic search over indexed documents in the active project workspace.
 """
 
-from langchain_core.tools import tool
 import logging
 import os
-from src.tools.workspace_context import _active_project_id
+
+from langchain_core.tools import tool
+
 from src.config.settings import get_project_workspace
+from src.tools.workspace_context import _active_project_id
 
 logger = logging.getLogger(__name__)
 

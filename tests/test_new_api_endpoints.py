@@ -7,13 +7,13 @@ Tests for new API endpoints added in task 1.2:
 Requirements: 6.3, 9.6, 7.6
 """
 
-import unittest
 import os
+import shutil
 import sys
 import tempfile
-import shutil
+import unittest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 

@@ -1,5 +1,5 @@
 ---
-last_verified: 2026-06-07
+last_verified: 2026-08-22
 auto_generated: false
 purpose: "Cloud LLM connection architecture: key resolution, security, circuit breaker, cost/cache tracking, DeepSeek V4 payload path, and deferred output cache."
 ---
@@ -7,13 +7,11 @@ purpose: "Cloud LLM connection architecture: key resolution, security, circuit b
 
 ### Overview
 
-The system uses a two-tier LLM pool (`small` / `cloud`) managed by `LLMPool` in [`src/agent/llm.py`](src/agent/llm.py). The cloud tier connects to **DeepSeek V4** (`deepseek-v4-flash` default, `deepseek-v4-pro` optional) via the OpenAI-compatible API at `https://api.deepseek.com/v1`.
+Owlynn is structured around 4 primary model categories (`main`, `vision`, `embedding`, `pentest`) with cloud escalation to **DeepSeek V4** (`deepseek-v4-flash` default, `deepseek-v4-pro` optional) via the OpenAI-compatible API at `https://api.deepseek.com/v1`.
 
-Routes: **`simple | complex-cloud`** only. Legacy `complex-default` / `complex-vision` / `complex-longctx` routes were removed (2026-06).
+Routes: **`simple | complex-cloud`** (or `complex-default` in offline/pentest mode).
 
 **DeepSeek API behavior (thinking mode, KV prefix cache, tool loops, payload structure):** see [`docs/architecture/DEEPSEEK_V4_INTEGRATION.md`](architecture/DEEPSEEK_V4_INTEGRATION.md).
-
-**Implementation status (2026-06-07):** Phases 0–4 **implemented** — cache-friendly prompt layers, cloud brief gate, flash/pro tier, thinking policy, `reasoning_content` replay, prefix-cache observability, vision transcription cache, brief invalidation on memory write. **Phase 5 exact-match output cache deferred** (see DEEPSEEK doc Part V).
 
 ### Key Resolution Chain
 
@@ -28,23 +26,26 @@ See [`src/config/secret_store.py`](src/config/secret_store.py) for secret store 
 ### Cloud Payload Path (complex-cloud)
 
 ```
-complex_llm_node
-  └─ prepare_cloud_payload()     # cloud_payload.py — anonymize, brief gate, vision proxy
-       └─ _invoke_cloud_path()   # cloud_invoke.py — strict tools, reasoning replay
-            └─ SessionCostTracker # prompt_cache_hit_tokens, cost estimate
-                 └─ WS model_info.token_usage
+complex_llm_node (complex.py coordinator)
+  ├─ build_complex_system_prompt() (complex_prompt.py)
+  ├─ prepare_cloud_payload() (cloud_payload.py — anonymize, brief gate, vision proxy)
+  ├─ execute_complex_loop() (complex_executor.py)
+  │    └─ invoke_cloud_chat() (cloud_invoke.py — strict tools, reasoning replay)
+  │         └─ SessionCostTracker (prompt_cache_hit_tokens, cost estimate)
+  └─ handle_complex_tool_action() (complex_tool_action.py)
 ```
 
 | Module | Purpose |
 |--------|---------|
-| [`cloud_payload.py`](src/agent/nodes/complex_utils/cloud_payload.py) | Stable/volatile prompt layers, brief cache (300s TTL), thinking config, cache metrics extraction |
-| [`cloud_invoke.py`](src/agent/nodes/complex_utils/cloud_invoke.py) | Raw OpenAI client, `/v1` + `/beta` fallback, `reasoning_content` on tool loops |
-| [`complex.py`](src/agent/nodes/complex.py) | `api_tokens_used` populated on all cloud paths including `tools_off` (BUG-12) |
-| [`vision_proxy.py`](src/agent/nodes/complex_utils/vision_proxy.py) | Lazy Gemma 4 E2B VLM (`models.vision_proxy`) → text/UI transcription for DeepSeek; hash cache + idle unload |
-| [`vision_qwen3vl.py`](src/agent/nodes/complex_utils/vision_qwen3vl.py) | Parse Qwen3-VL natural-language output into structured blocks |
-| [`vision_schema.py`](src/agent/nodes/complex_utils/vision_schema.py) | OCR/layout JSON parse + cloud formatting |
-| [`vision_model_manager.py`](src/agent/nodes/complex_utils/vision_model_manager.py) | Lazy load / idle unload of local VLM client |
-| [`cloud_cost_tracker.py`](src/agent/cloud_cost_tracker.py) | Per-session tokens, cache hit ratio, USD estimate |
+| [`src/agent/core/complex.py`](src/agent/core/complex.py) | Coordinator node routing between executor, prompt builder, and tool action handler |
+| [`src/agent/core/complex_prompt.py`](src/agent/core/complex_prompt.py) | Dynamic system prompt construction with cache-stable layers |
+| [`src/agent/core/complex_executor.py`](src/agent/core/complex_executor.py) | Multi-turn reasoning & tool execution loop with error classification |
+| [`src/agent/core/complex_tool_action.py`](src/agent/core/complex_tool_action.py) | Tool invocation dispatcher, HITL interceptor, and error boundary |
+| [`src/agent/cloud/error_classifier.py`](src/agent/cloud/error_classifier.py) | Fine-grained cloud error categorization and backoff policy |
+| [`src/agent/core/complex_utils/cloud_payload.py`](src/agent/core/complex_utils/cloud_payload.py) | Stable/volatile prompt layers, brief cache (300s TTL), thinking config, cache metrics extraction |
+| [`src/agent/core/complex_utils/cloud_invoke.py`](src/agent/core/complex_utils/cloud_invoke.py) | Raw OpenAI client, `/v1` + `/beta` fallback, `reasoning_content` on tool loops |
+| [`src/agent/core/complex_utils/vision_proxy.py`](src/agent/core/complex_utils/vision_proxy.py) | Lazy OCR / VLM (`models.vision`: `baidu.unlimited-ocr`) → text/UI transcription; hash cache + idle unload |
+| [`src/agent/cloud_cost_tracker.py`](src/agent/cloud_cost_tracker.py) | Per-session tokens, cache hit ratio, USD estimate |
 
 ### Cache Layers (current)
 
@@ -52,7 +53,7 @@ complex_llm_node
 |-------|------|-------|------------|
 | DeepSeek KV prefix cache | Identical input prefix tokens | DeepSeek server | No — discounts input billing only |
 | Cloud brief cache | Built brief string | Process-local dict | No |
-| Vision transcription cache | VLM output by image hash | Process-local dict | No |
+| Vision transcription cache | OCR / VLM output by image hash | Process-local dict | No |
 | Memory context cache | Formatted memory/knowledge | `MemoryContextCache` | No |
 | **Output response cache** | Full assistant reply | — | **Not implemented (deferred)** |
 

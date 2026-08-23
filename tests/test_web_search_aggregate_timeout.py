@@ -13,7 +13,7 @@ async def test_web_search_aggregate_timeout():
     async def instant_timeout(coro, timeout):
         if asyncio.iscoroutine(coro):
             coro.close()
-        raise asyncio.TimeoutError()
+        raise TimeoutError()
 
     with patch("src.tools.web_tools.asyncio.wait_for", side_effect=instant_timeout):
         result = await web_search.ainvoke({"query": "test timeout query xyz"})

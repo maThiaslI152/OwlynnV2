@@ -24,8 +24,8 @@ from src.config.settings import SEARXNG_URL
 logger = logging.getLogger(__name__)
 
 
-from tenacity import retry, stop_after_attempt, wait_exponential
 import httpx
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 
 @retry(

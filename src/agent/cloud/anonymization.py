@@ -11,8 +11,6 @@ not catch all third-party names, addresses, financial IDs, or document content.
 
 import re
 import secrets
-from typing import Optional
-
 
 # Detection patterns in priority order (longest match first)
 _PATTERNS: list[tuple[str, re.Pattern]] = [
@@ -80,7 +78,7 @@ _PATTERNS: list[tuple[str, re.Pattern]] = [
 ]
 
 
-def anonymize(text: str, context: Optional[dict] = None) -> tuple[str, dict]:
+def anonymize(text: str, context: dict | None = None) -> tuple[str, dict]:
     """
     Scan text for sensitive patterns, replace with [CATEGORY_N] placeholders.
 

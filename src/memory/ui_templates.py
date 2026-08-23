@@ -1,9 +1,9 @@
 import logging
-from typing import Optional
 import uuid
+from datetime import UTC, datetime, timedelta
 
-from datetime import datetime, timedelta, timezone
-from sqlalchemy import select, delete
+from sqlalchemy import delete, select
+
 from src.models.db import AsyncSessionLocal
 from src.models.ui_template import UITemplate
 
@@ -20,7 +20,7 @@ async def create_ui_template(type_: str, payload: dict) -> str:
     return template_id
 
 
-async def get_ui_template(template_id: str) -> Optional[dict]:
+async def get_ui_template(template_id: str) -> dict | None:
     """Retrieve a UI template by ID."""
     async with AsyncSessionLocal() as session:
         stmt = select(UITemplate).filter_by(id=template_id)
@@ -33,7 +33,7 @@ async def get_ui_template(template_id: str) -> Optional[dict]:
 
 async def cleanup_old_templates(days: int = 30) -> int:
     """Delete UI templates older than the specified number of days."""
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    cutoff = datetime.now(UTC) - timedelta(days=days)
     # The cutoff needs to be naive UTC for SQLite compatibility in some setups,
     # or just use standard datetime comparison.
     cutoff_naive = cutoff.replace(tzinfo=None)

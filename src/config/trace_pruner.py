@@ -1,8 +1,8 @@
 import asyncio
 import logging
-import os
 import time
 from pathlib import Path
+
 from src.config.config_loader import ConfigLoader
 
 logger = logging.getLogger(__name__)

@@ -4,7 +4,6 @@ from unittest.mock import patch
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-
 from src.tools.notebook_libs import (
     available_notebook_libraries,
     chart_completion_message,

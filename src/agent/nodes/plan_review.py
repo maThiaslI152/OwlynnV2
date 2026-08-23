@@ -11,8 +11,8 @@ import logging
 import re
 from typing import Any
 
-from langgraph.types import interrupt
 from langchain_core.messages import AIMessage
+from langgraph.types import interrupt
 
 from src.agent.core.state import AgentState
 from src.agent.hitl.policy import is_sensitive_call
@@ -119,18 +119,18 @@ async def plan_review_node(state: AgentState) -> AgentState:
     pitfalls: list[str] = []
 
     try:
-        from src.agent.llm import get_small_llm
+        from src.agent.llm import get_main_llm
 
-        small_llm = await get_small_llm()
+        main_llm = await get_main_llm()
         review_prompt = _PLAN_REVIEW_PROMPT.format(plan_summary=plan_summary)
-        response = await small_llm.ainvoke(review_prompt)
+        response = await main_llm.ainvoke(review_prompt)
         result = _parse_json(
             response.content if hasattr(response, "content") else str(response)
         )
         stated_intent = result.get("stated_intent", "")
         pitfalls = result.get("pitfalls", [])
     except Exception as e:
-        logger.warning("[plan_review] Small LLM failed: %s", e)
+        logger.warning("[plan_review] Main LLM failed: %s", e)
         pitfalls = [
             "Unable to automatically analyze plan risks — please review manually."
         ]

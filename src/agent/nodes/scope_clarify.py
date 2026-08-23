@@ -12,7 +12,7 @@ import json
 import logging
 from typing import Any
 
-from langgraph.types import interrupt, Command
+from langgraph.types import Command, interrupt
 
 from src.agent.core.state import AgentState
 from src.agent.hitl.scope_heuristics import needs_clarification
@@ -21,8 +21,8 @@ from src.memory.user_profile import get_profile
 
 logger = logging.getLogger(__name__)
 
-from src.config.log_middleware import log_hitl_event, log_node
 from src.config.audit_log import audit_info
+from src.config.log_middleware import log_hitl_event, log_node
 
 # Requests matching these patterns are better handled via web search than
 # by asking the user for clarification. The LLM can search the internet to
@@ -198,26 +198,26 @@ async def scope_clarify_node(state: AgentState) -> AgentState | Command:
     pitfalls: list[str] = []
 
     try:
-        from src.agent.llm import get_small_llm
+        from src.agent.llm import get_main_llm
 
-        small_llm = await get_small_llm()
+        main_llm = await get_main_llm()
     except Exception as e:
-        logger.warning("[scope_clarify] Small LLM unavailable: %s", e)
-        small_llm = None
+        logger.warning("[scope_clarify] Main LLM unavailable: %s", e)
+        main_llm = None
 
-    if small_llm is not None:
+    if main_llm is not None:
         prompt = _CLASSIFIER_PROMPT.format(
             message=_truncate(user_text, 2000),
             missing_dimensions=", ".join(missing),
         )
         try:
-            response = await small_llm.ainvoke(prompt)
+            response = await main_llm.ainvoke(prompt)
             result = _parse_json(response.content)
             questions = (result.get("questions") or [])[:3]
             task_summary = result.get("task_summary", "")
             pitfalls = result.get("pitfalls_if_assumed", [])
             logger.info(
-                "[scope_clarify] Small LLM generated %d questions", len(questions)
+                "[scope_clarify] Main LLM generated %d questions", len(questions)
             )
         except Exception as e:
             logger.warning(

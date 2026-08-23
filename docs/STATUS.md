@@ -1,7 +1,7 @@
 ---
 status: active
 category: standards
-last_updated: 2026-07-10
+last_updated: 2026-08-23
 owner: ai-agent
 audience: agent
 ---
@@ -12,7 +12,37 @@ audience: agent
 
 ## Overview
 
-Project status tracker. Last updated: 2026-07-09 — Router decomposition, pentest v3 multi-agent, study improvements, documentation overhaul.
+Project status tracker. Last updated: 2026-08-23 — Offline HTML/Chart.js local charts (v0.2.3), reliability fixes, Thought Graph UX.
+
+## Recent Changes (2026-08-23 — v0.2.3 Offline HTML/Chart.js Charts)
+
+| Change | Impact | Doc |
+|--------|--------|-----|
+| **Offline Chart.js vendor bundle** | Vendored Chart.js 4.4.1 at `/vendor/chart.umd.min.js`; works without CDN or network. | [`changes/offline-html-chartjs/CHANGELOG.md`](changes/offline-html-chartjs/CHANGELOG.md) |
+| **Local HTML chart default** | Price/performance comparisons use `write_workspace_file` + HTML canvas — not `notebook_run`. | [`technical/model-quirks-and-routing.md`](technical/model-quirks-and-routing.md) |
+| **Chart auto-embed** | `write_workspace_file` for `.html` emits `chart_artifact` on WebSocket tool events. | [`guides/interactive-viz-gemini-research.md`](guides/interactive-viz-gemini-research.md) |
+| **html_comparison_chart skill** | Copy-paste offline Chart.js + CSS fallback templates. | `skills/html_comparison_chart/SKILL.md` |
+| **v0.2.3 desktop build** | Packaged `Owlynn-0.2.3-arm64.dmg` with mindmap branch picker + offline charts. | [`guides/app-release.md`](guides/app-release.md) |
+
+## Recent Changes (2026-08-23 — Unified Gemma 4 12B Agentic Architecture)
+
+| Change | Impact | Doc |
+|--------|--------|-----|
+| **Unified 12B Agentic Local Architecture** | Consolidated local model roles (routing, extraction, simple responses, complex fallback, pentest) to `gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m`. | [`architecture/overview.md`](architecture/overview.md) |
+| **Speculative Decoding Safeguards** | Explicitly disable simple draft speculative decoding in LM Studio loads to prevent sequence position mismatch crashes (`decode() failed`). | [`changes/unified-12b-agentic-optimization/CHANGELOG.md`](changes/unified-12b-agentic-optimization/CHANGELOG.md) |
+| **Zero-Latency Mode Switching** | Unloading/reloading eliminated during pentest/normal mode switches when unified model is active. | [`guides/dev-startup.md`](guides/dev-startup.md) |
+| **Deterministic Tool Ordering in Pentest** | Alphabetical tool schema sorting before `bind_tools()` ensures byte-stable prompt caching. | [`development/EXTENDING_AGENT.md`](development/EXTENDING_AGENT.md) |
+
+## Recent Changes (2026-08-22 — Unified 4-Model Taxonomy & Backbone Modernization)
+
+| Change | Impact | Doc |
+|--------|--------|-----|
+| **Unified 4-Model Taxonomy** | Consolidated local model roles to single source of truth in `defaults.yaml`. Configured `baidu.unlimited-ocr` as dedicated vision proxy. | [`architecture/overview.md`](architecture/overview.md) |
+| **MXBAI 1024-dim Vector Migration** | Upgraded embedding pipeline to `text-embedding-mxbai-embed-large-v1` (1024 dims). PostgreSQL pgvector migration applied across `memory_vectors`, `engagement_vectors`, and `semantic_cache`. | [`features/MEMORY.md`](features/MEMORY.md) |
+| **Modular Complex Backbone** | Decomposed `complex.py` monolith into modular coordinator, `complex_prompt.py`, `complex_executor.py`, and `complex_tool_action.py`. | [`architecture/CLOUD-LLM-ARCHITECTURE.md`](architecture/CLOUD-LLM-ARCHITECTURE.md) |
+| **Dynamic Tool Registry** | Upgraded `ToolRegistry` with service gating (`check_fn`) and error bounding. Deterministic alphabetical sorting for KV cache stability. | [`features/TOOLS.md`](features/TOOLS.md) |
+| **Fine-Grained Cloud Error Classifier** | Fine-grained API error categorization with jittered exponential backoff (`error_classifier.py`). | [`architecture/CLOUD-LLM-ARCHITECTURE.md`](architecture/CLOUD-LLM-ARCHITECTURE.md) |
+| **Inference Truncation & Compaction** | Verified 3-tier auto-compaction and context truncation cycle with reference-only task snapshots. | [`architecture/overview.md`](architecture/overview.md) |
 
 ## Recent Changes (2026-07-09 — Router Decomposition & Pentest V3)
 

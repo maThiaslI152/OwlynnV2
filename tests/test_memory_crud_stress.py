@@ -7,15 +7,15 @@ import time
 import unittest
 
 from src.memory.memory_manager import (
+    load_memories,
     save_memory,
     search_memories,
-    load_memories,
 )
 from src.memory.personal_assistant import (
+    load_interests,
+    load_topics,
     track_topic,
     update_interests,
-    load_topics,
-    load_interests,
 )
 
 

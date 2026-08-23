@@ -16,9 +16,8 @@ Usage::
         ...
 """
 
-import time
 import logging
-from typing import Optional
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +69,7 @@ class CloudCircuitBreaker:
         self._failure_threshold = failure_threshold
         self._cooldown_seconds = cooldown_seconds
         self._consecutive_failures: int = 0
-        self._last_failure_time: Optional[float] = None
+        self._last_failure_time: float | None = None
         self._circuit_open: bool = False
 
     # ── public API ─────────────────────────────────────────────────
@@ -85,6 +84,21 @@ class CloudCircuitBreaker:
         self._consecutive_failures = 0
         self._last_failure_time = None
         self._circuit_open = False
+
+    @property
+    def failure_threshold(self) -> int:
+        return self._failure_threshold
+
+    def force_open(self, reason: str = "manual") -> None:
+        """Force the circuit breaker into OPEN state."""
+        self._circuit_open = True
+        self._consecutive_failures = self._failure_threshold
+        self._last_failure_time = time.monotonic()
+        logger.warning(
+            "[circuit-breaker] Circuit FORCED OPEN (%s), cloud escalation disabled for %ds",
+            reason,
+            self._cooldown_seconds,
+        )
 
     def record_failure(self) -> None:
         """Record a failed cloud API attempt."""
@@ -170,7 +184,7 @@ class CloudCircuitBreaker:
 
 # ── module-level singleton ────────────────────────────────────────
 
-_breaker: Optional[CloudCircuitBreaker] = None
+_breaker: CloudCircuitBreaker | None = None
 
 
 def get_circuit_breaker() -> CloudCircuitBreaker:

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ChevronRight } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 interface SidebarAccordionProps {
@@ -34,9 +35,9 @@ export function SidebarAccordion({ title, actions, children, defaultOpen = true 
           <motion.span 
             animate={{ rotate: open ? 90 : 0 }}
             transition={{ duration: 0.2 }}
-            style={{ display: 'inline-block', fontSize: '9px' }}
+            style={{ display: 'inline-flex', alignItems: 'center' }}
           >
-            ▶
+            <ChevronRight size={11} />
           </motion.span>
           {title}
         </span>

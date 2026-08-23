@@ -1,7 +1,7 @@
 ---
 status: active
 category: reference
-last_updated: 2026-07-14
+last_updated: 2026-08-23
 owner: ai-agent
 audience: agent
 ---
@@ -12,14 +12,14 @@ audience: agent
 
 ```yaml
 manifest:
-  version: 21
-  generated: "2026-08-11T01:53:00Z"
+  version: 26
+  generated: "2026-08-23T03:20:00Z"
   files:
     - path: AGENTS.md
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-07-10
+      last_updated: 2026-08-23
     - path: docs/ADR.md
       status: active
       category: architecture
@@ -79,7 +79,7 @@ manifest:
       status: active
       category: guide
       audience: agent
-      last_updated: 2026-06-10
+      last_updated: 2026-08-23
     - path: docs/FUTURE_WORKS.md
       status: active
       category: planning
@@ -94,12 +94,12 @@ manifest:
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-07-10
+      last_updated: 2026-08-23
     - path: docs/features/MEMORY.md
       status: active
       category: architecture
       audience: agent
-      last_updated: 2026-07-10
+      last_updated: 2026-08-23
     - path: docs/features/SEMANTIC_CACHE.md
       status: active
       category: performance
@@ -115,7 +115,7 @@ manifest:
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-07-12
+      last_updated: 2026-08-22
     - path: docs/architecture/PROJECT_OVERVIEW.md
       status: active
       category: reference
@@ -150,7 +150,21 @@ manifest:
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-07-10
+    - path: docs/changes/thought-graph-mindmap-ui/CHANGELOG.md
+      status: active
+      category: changelog
+      audience: agent
+      last_updated: 2026-08-23
+    - path: docs/changes/unified-12b-agentic-optimization/CHANGELOG.md
+      status: active
+      category: changelog
+      audience: agent
+      last_updated: 2026-08-23
+    - path: docs/changes/backbone-modernization/CHANGELOG.md
+      status: active
+      category: changelog
+      audience: agent
+      last_updated: 2026-08-22
     - path: docs/features/WEB_SEARCH.md
       status: active
       category: architecture
@@ -171,6 +185,11 @@ manifest:
       category: reference
       audience: agent
       last_updated: 2026-07-09
+    - path: docs/changes/mindmap-browser-e2e-automation/CHANGELOG.md
+      status: active
+      category: changelog
+      audience: agent
+      last_updated: 2026-08-23
     - path: docs/changes/phase-1-4-roadmap/CHANGELOG.md
       status: active
       category: changelog
@@ -225,12 +244,12 @@ manifest:
       status: active
       category: architecture
       audience: agent
-      last_updated: 2026-06-09
+      last_updated: 2026-08-22
     - path: docs/architecture/overview.md
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-07-12
+      last_updated: 2026-08-23
     - path: docs/archive/AGENT_RESUME_PLAYBOOK.md
       status: archived
       category: archive
@@ -686,6 +705,21 @@ manifest:
       category: evaluation
       audience: agent
       last_updated: 2026-06-26
+    - path: docs/evaluations/mindmap-browser-e2e-2026-08-23.md
+      status: active
+      category: evaluation
+      audience: agent
+      last_updated: 2026-08-23
+    - path: docs/evaluations/pentest-model-benchmark-2026-08-23.md
+      status: active
+      category: evaluation
+      audience: agent
+      last_updated: 2026-08-23
+    - path: docs/evaluations/pentest-model-benchmark-2026-08-22.md
+      status: active
+      category: evaluation
+      audience: agent
+      last_updated: 2026-08-22
     - path: docs/evaluations/pentest-model-benchmark-2026-06-28.md
       status: active
       category: evaluation
@@ -848,9 +882,21 @@ manifest:
       last_updated: 2026-07-14
     - path: docs/changes/pentest-anonymity-docs/CHANGELOG.md
       status: active
+    - path: docs/changes/thought-graph-mindmap-ui/CHANGELOG.md
+      status: active
       category: changelog
       audience: agent
-      last_updated: 2026-08-11
+      last_updated: 2026-08-23
+    - path: docs/changes/unified-12b-agentic-optimization/CHANGELOG.md
+      status: active
+      category: changelog
+      audience: agent
+      last_updated: 2026-08-23
+    - path: docs/changes/mindmap-branching-tool-resilience/CHANGELOG.md
+      status: active
+      category: changelog
+      audience: agent
+      last_updated: 2026-08-23
 ```
 
 ## Related
@@ -861,4 +907,4 @@ manifest:
 
 ## Last updated
 
-2026-08-11 — manifest v21; added pentest-anonymity-docs
+2026-08-23 — manifest v26; added mindmap-branching-tool-resilience, thought-graph-mindmap-ui, unified-12b-agentic-optimization

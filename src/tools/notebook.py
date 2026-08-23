@@ -6,13 +6,13 @@ This has been updated to use a secure background worker process to protect
 the main server's memory space and configuration from the LLM code execution.
 """
 
+import atexit
 import json
 import logging
-import threading
-import subprocess
-import atexit
 import os
+import subprocess
 import sys
+import threading
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ def _cleanup_worker(proc):
 def _cleanup_all():
     with _notebook_lock:
         for session in _notebook_sessions.values():
-            if "process" in session and session["process"]:
+            if session.get("process"):
                 _cleanup_worker(session["process"])
 
 
@@ -135,7 +135,7 @@ def execute_notebook_code(
     import re
 
     code = re.sub(
-        r"""(read_csv|read_excel|read_json|read_parquet|read_table|open)\s*\(\s*(['"])(?!/|\.\./)([^'"\/]+\.[a-zA-Z0-9]+)\2""",
+        r"""(read_csv|read_excel|read_json|read_parquet|read_table|to_csv|to_excel|to_json|to_parquet|savefig|write_html|open)\s*\(\s*(['"])(?!/|\.\./)([^'"\/]+\.[a-zA-Z0-9]+)\2""",
         lambda m: f"{m.group(1)}({m.group(2)}{ws_dir}/{m.group(3)}{m.group(2)})",
         code,
     )
@@ -160,8 +160,7 @@ def execute_notebook_code(
             _cleanup_worker(proc)
             key = _get_session_key(session_key)
             with _notebook_lock:
-                if key in _notebook_sessions:
-                    del _notebook_sessions[key]
+                _notebook_sessions.pop(key, None)
             return f"[Cell {cell_num}] Timeout Error: Code execution exceeded 15.0 seconds."
 
         response_line = proc.stdout.readline()
@@ -197,7 +196,7 @@ def execute_notebook_code(
 
     except Exception as e:
         logger.warning("Worker communication error: %s", e)
-        return f"[Cell {cell_num}] IPC Error:\n{str(e)}"
+        return f"[Cell {cell_num}] IPC Error:\n{e!s}"
 
 
 @tool

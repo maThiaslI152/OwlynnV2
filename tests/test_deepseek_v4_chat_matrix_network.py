@@ -97,11 +97,11 @@ async def test_cloud_brief_multiturn_produces_substantive_reply():
 
     from openai import AsyncOpenAI
 
-    from src.agent.hitl.cloud_brief import build_cloud_brief
     from src.agent.cloud.cloud_payload import (
         COMPLEX_PROMPT_STABLE,
         finalize_cloud_visible_content,
     )
+    from src.agent.hitl.cloud_brief import build_cloud_brief
     from src.config.config_loader import config
 
     brief = build_cloud_brief(

@@ -15,22 +15,21 @@ from typing import Any
 import httpx
 import numpy as np
 
+from src.config.config_loader import config
 from src.config.settings import (
     WEB_RAG_CHUNK_CHARS,
     WEB_RAG_CHUNK_OVERLAP,
-    WEB_RAG_EMBED_MODEL,
     WEB_RAG_ENABLED,
     WEB_RAG_MIN_CHARS_FOR_RANK,
     WEB_RAG_TOP_K,
     WEB_SEARCH_RERANK_TOP_N,
 )
-from src.config.config_loader import config
 
 logger = logging.getLogger(__name__)
 
 # LM Studio embedding endpoint (sourced from centralized config)
-_LMSTUDIO_BASE_URL = config.get("models.embedding.base_url", "http://127.0.0.1:1234/v1")
-_LMSTUDIO_EMBED_MODEL = WEB_RAG_EMBED_MODEL
+_LMSTUDIO_BASE_URL = config.get_embedding_base_url()
+_LMSTUDIO_EMBED_MODEL = config.get_embedding_model_name()
 
 _http_client: httpx.AsyncClient | None = None
 _http_lock = asyncio.Lock()

@@ -4,7 +4,9 @@ Mirrors Cowork's document creation skills.
 """
 
 import os
+
 from langchain_core.tools import tool
+
 from src.tools.workspace_context import tool_workspace_root
 
 
@@ -91,7 +93,7 @@ def create_xlsx(filename: str, data: str, sheet_name: str = "Sheet1") -> str:
     """
     try:
         from openpyxl import Workbook
-        from openpyxl.styles import Font, Border, Side
+        from openpyxl.styles import Border, Font, Side
     except ImportError:
         return "Error: openpyxl not installed. Run: pip install openpyxl"
 

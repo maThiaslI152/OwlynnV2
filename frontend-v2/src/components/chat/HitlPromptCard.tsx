@@ -11,6 +11,7 @@
  */
 
 import { useState } from 'react'
+import { Check, X } from 'lucide-react'
 
 interface ChoiceOption {
   label: string
@@ -138,7 +139,9 @@ export function HitlPromptCard({
     const label = status === 'approved' ? 'Approved' : status === 'rejected' ? 'Declined' : 'Dismissed'
     return (
       <div className={`hitl-resolved-chip hitl-resolved-${status}`}>
-        <span className="hitl-resolved-icon">{status === 'approved' ? '✓' : status === 'rejected' ? '✗' : '—'}</span>
+        <span className="hitl-resolved-icon" style={{ display: 'inline-flex', alignItems: 'center' }}>
+          {status === 'approved' ? <Check size={14} /> : status === 'rejected' ? <X size={14} /> : '—'}
+        </span>
         <span>{label}: {model.title}</span>
       </div>
     )

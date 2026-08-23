@@ -45,8 +45,8 @@ class TestUnifiedSettings:
     def test_contains_llm_config_fields(self, client):
         data = client.get("/api/unified-settings").json()
         for field in [
-            "small_llm_base_url",
-            "small_llm_model_name",
+            "main_llm_base_url",
+            "main_llm_model_name",
             "llm_base_url",
             "llm_model_name",
             "cloud_llm_base_url",
@@ -71,6 +71,7 @@ class TestUnifiedSettings:
     def test_contains_routing_cloud_fields(self, client):
         data = client.get("/api/unified-settings").json()
         for field in [
+            "cloud_routing_mode",
             "cloud_escalation_enabled",
             "cloud_anonymization_enabled",
             "router_hitl_enabled",
@@ -115,13 +116,15 @@ class TestUnifiedSettings:
     def test_error_returns_error_dict(self):
         from src.api.server import app
 
-        with patch(
-            "src.api.routes.settings.get_profile", side_effect=RuntimeError("boom")
+        with (
+            patch(
+                "src.api.routes.settings.get_profile", side_effect=RuntimeError("boom")
+            ),
+            TestClient(app, raise_server_exceptions=False) as c,
         ):
-            with TestClient(app, raise_server_exceptions=False) as c:
-                data = c.get("/api/unified-settings").json()
-                assert "detail" in data
-                assert "boom" in data["detail"]
+            data = c.get("/api/unified-settings").json()
+            assert "detail" in data
+            assert "boom" in data["detail"]
 
 
 class TestProfileUpdateRuntimeBehavior:
@@ -136,17 +139,19 @@ class TestProfileUpdateRuntimeBehavior:
     def test_post_profile_sensitive_update_resets_cached_llm_instances(self, client):
         from src.agent.llm import LLMPool
 
-        old_small = LLMPool._small_llm
+        old_main = LLMPool._main_llm
         try:
-            LLMPool._small_llm = object()
+            LLMPool._main_llm = object()
             resp = client.post(
                 "/api/profile",
-                json={"small_llm_model_name": "qwen2.5-1.5b-instruct"},
+                json={
+                    "main_llm_model_name": "gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m"
+                },
             )
             assert resp.status_code == 200
-            assert LLMPool._small_llm is None
+            assert LLMPool._main_llm is None
         finally:
-            LLMPool._small_llm = old_small
+            LLMPool._main_llm = old_main
 
     def test_post_profile_does_not_clear_llm_pool_for_non_sensitive_fields(
         self, client

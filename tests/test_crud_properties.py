@@ -23,16 +23,17 @@ cross-test interference. ``max_examples=100`` balances coverage vs speed.
 Run: ``pytest tests/test_crud_properties.py -v --hypothesis-show-statistics``
 """
 
+import asyncio
 import os
 import sys
 import time
-import asyncio
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from hypothesis import given, settings
-from hypothesis.strategies import text, uuids
 from hypothesis import strategies as st
+from hypothesis.strategies import text, uuids
+
 from src.memory.project import ProjectManager
 
 # --- Strategies (Req 8.2, 8.3) ---

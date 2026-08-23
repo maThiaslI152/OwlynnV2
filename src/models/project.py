@@ -1,6 +1,6 @@
-from typing import List, Optional
-from sqlalchemy import String, Text, ForeignKey, Integer, Float, Boolean, JSON
+from sqlalchemy import JSON, Boolean, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from src.models.base import Base
 
 
@@ -13,10 +13,10 @@ class Project(Base):
     category: Mapped[str] = mapped_column(String, default="general", nullable=False)
     mode: Mapped[str] = mapped_column(String, default="normal", nullable=False)
 
-    chats: Mapped[List["Chat"]] = relationship(
+    chats: Mapped[list["Chat"]] = relationship(
         back_populates="project", cascade="all, delete-orphan"
     )
-    files: Mapped[List["KnowledgeFile"]] = relationship(
+    files: Mapped[list["KnowledgeFile"]] = relationship(
         back_populates="project", cascade="all, delete-orphan"
     )
 
@@ -28,8 +28,8 @@ class Chat(Base):
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False)
     name: Mapped[str] = mapped_column(String, nullable=False)
     created_at: Mapped[float] = mapped_column(Float, nullable=False)
-    pinned: Mapped[Optional[bool]] = mapped_column(Boolean, default=False)
-    tags: Mapped[Optional[dict]] = mapped_column(JSON, default=list)
+    pinned: Mapped[bool | None] = mapped_column(Boolean, default=False)
+    tags: Mapped[dict | None] = mapped_column(JSON, default=list)
 
     project: Mapped["Project"] = relationship(back_populates="chats")
 

@@ -1,7 +1,7 @@
 ---
 status: active
 category: reference
-last_updated: 2026-07-10
+last_updated: 2026-08-22
 owner: ai-agent
 audience: agent
 ---
@@ -12,15 +12,16 @@ audience: agent
 
 ## Overview
 
-Tools are organized into 5 toolbox categories. The Router selects which categories are needed per turn, and only the relevant tools are bound to the LLM — saving ~2000 tokens of schema overhead.
+Tools are organized into toolbox categories managed by `ToolRegistry`. The Router selects which categories are needed per turn, and only the relevant tools are bound to the LLM — saving ~2000 tokens of schema overhead. Tool schemas are deterministically sorted to maintain KV cache stability.
 
 ## Entry Points
 
 ```text
-src/agent/tool_sets.py            # ToolboxRegistry, resolve_tools()
-src/tools/                        # Tool implementations (@tool decorators)
-src/agent/nodes/complex.py         # Tool binding in complex_llm_node()
-src/agent/nodes/complex_utils/     # Tool formatting and fallback
+src/tools/registry.py             # ToolRegistry (dynamic discovery, check_fn gating, error bounding)
+src/agent/tool_sets.py            # TOOLBOX_REGISTRY, resolve_tools()
+src/tools/                        # Tool implementations (@tool and @registry.register)
+src/agent/core/complex_prompt.py   # Deterministic tool sorting and guidance assembly
+src/agent/core/complex_tool_action.py # Parallel tool execution and bounded outputs
 src/agent/nodes/security_proxy.py  # SENSITIVE_TOOLS set
 src/api/routes/files.py            # Tool discovery (GET /api/tools)
 ```
@@ -86,6 +87,18 @@ src/api/routes/files.py            # Tool discovery (GET /api/tools)
 | `export_ipynb_html` | Export notebook to HTML via nbconvert (when installed) |
 | `render_interactive_block` | Validate payload and return inline chat widget fence (quiz, steps, callout, embed, cell) |
 
+### Local HTML charts (offline, Gemma 12B default)
+
+For price/performance/benchmark comparisons with **pre-known values**, the local model should **not** use `notebook_run`. Instead:
+
+1. Call `write_workspace_file` with a self-contained `.html` file
+2. Load vendored Chart.js: `<script src="/vendor/chart.umd.min.js"></script>` (offline, no CDN)
+3. Embed in reply: `[Title](/api/files/chart.html?project_id=default)`
+
+Skill template: `skills/html_comparison_chart/SKILL.md` via `invoke_skill`.  
+Config: `visualization.chartjs_local_url` in `defaults.yaml`.  
+Use `notebook_run` only when the user explicitly asks for matplotlib, PNG, Python, or dataset computation.
+
 ### Toolbox: `productivity`
 
 | Tool | Description |
@@ -95,6 +108,8 @@ src/api/routes/files.py            # Tool discovery (GET /api/tools)
 | `todo_complete` | Mark a task as done |
 | `list_skills` | List available skill templates from `skills/` directory |
 | `invoke_skill` | Load and return a skill's prompt template |
+| `skill_view` | View skill metadata, instructions, and package support files (`references/`, `templates/`, `scripts/`) |
+| `skill_manage` | Author, create, or update skill packages and support files |
 | `render_interactive_block` | Build validated inline widget fences for chat UI |
 
 ### Toolbox: `study`

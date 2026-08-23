@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+
 import pytest
 
 
@@ -58,7 +59,7 @@ class TestHitlFixtures:
 class TestFixturesRoundTrip:
     def test_fixture_serializable(self):
         """All fixtures should be JSON-serializable."""
-        from src.hitl.fixtures import load_fixture, list_fixtures
+        from src.hitl.fixtures import list_fixtures, load_fixture
 
         for name in list_fixtures():
             fixture = load_fixture(name)

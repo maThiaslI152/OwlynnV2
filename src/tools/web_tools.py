@@ -16,13 +16,14 @@ from dataclasses import dataclass
 from urllib.parse import parse_qs, quote_plus, unquote, urlparse
 
 from langchain_core.tools import tool
+
+from src.config.config_loader import config
 from src.config.settings import (
     SEARXNG_URL,
     WEB_SEARCH_ENABLE_BROWSER_FALLBACK,
     WEB_SEARCH_ENABLE_CURL_CFFI,
     WEB_SEARCH_TIMEOUT_SECONDS,
 )
-from src.config.config_loader import config
 
 logger = logging.getLogger(__name__)
 
@@ -119,23 +120,26 @@ def unwrap_redirect_search_url(url: str) -> str:
                     return unquote(uddg)
     except Exception as e:
         logger.warning("Error suppressed: %s", e)
-        pass
     return raw
 
 
 def _get_ddgs_class():
-    """Resolve DDGS from duckduckgo-search (PyPI: duckduckgo-search)."""
-    try:
-        from duckduckgo_search import DDGS  # type: ignore
-
-        return DDGS
-    except ImportError:
-        pass
+    """Resolve DDGS from ddgs or fallback duckduckgo-search."""
     try:
         from ddgs import DDGS  # type: ignore
 
         return DDGS
-    except ImportError:
+    except (ImportError, Exception):
+        pass
+    try:
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            from duckduckgo_search import DDGS  # type: ignore
+
+        return DDGS
+    except (ImportError, Exception):
         return None
 
 
@@ -164,7 +168,7 @@ def _parse_ddg_html_results(html: str, max_hits: int = 5) -> list[dict[str, str]
         if any(r["href"] == href for r in results):
             return
         results.append({"title": title, "href": href, "body": snippet or "No snippet"})
-        return None
+        return
 
     for a in soup.select("a.result__a"):
         href = (a.get("href") or "").strip()
@@ -501,9 +505,12 @@ def _format_search_hits_markdown(
     ]
     for i, r in enumerate(hits, 1):
         href = unwrap_redirect_search_url(r.get("href", "") or "")
+        body = (r.get("body") or "").strip()
+        if len(body) > 600:
+            body = body[:600] + "..."
         lines.append(f"**{i}. {r['title']}**")
         lines.append(f"   URL: {href}")
-        lines.append(f"   {r['body']}")
+        lines.append(f"   {body}")
         lines.append("")
     return "\n".join(lines)
 
@@ -579,8 +586,8 @@ async def _web_search_httpx_ddg_html(
 
 async def _google_search_playwright(query: str, focus_query: str = "") -> str:
     """Fallback Google search using Playwright to handle fragile selectors or CAPTCHAs."""
-    from playwright.async_api import async_playwright
     from bs4 import BeautifulSoup
+    from playwright.async_api import async_playwright
 
     try:
         async with async_playwright() as p:
@@ -654,7 +661,7 @@ async def _google_search_playwright(query: str, focus_query: str = "") -> str:
             )
     except Exception as e:
         logger.error(f"_google_search_playwright error: {e}")
-        return f"[google_search_playwright] Error: {str(e)}"
+        return f"[google_search_playwright] Error: {e!s}"
 
 
 async def _web_search_dynamic_playwright(
@@ -754,29 +761,11 @@ async def web_search(
         aggregate_timeout = float(config.get("web_search.timeouts.aggregate", 60.0))
 
         async def _search_pipeline():
-            # Browser extension path (Tier 0.2)
+            # Browser extension path (Tier 0.2) — use if connected without blocking
             from src.api.routes.browser_extension import (
-                is_extension_connected,
                 dispatch_extension_search,
+                is_extension_connected,
             )
-
-            if not is_extension_connected():
-                from src.api.shared import connected_websockets
-                import asyncio
-
-                if connected_websockets:
-                    logger.info(
-                        "Extension disconnected. Requesting frontend to launch browser..."
-                    )
-                    payload = json.dumps({"type": "browser_launch_requested"})
-                    for ws in list(connected_websockets):
-                        try:
-                            await ws.send_text(payload)
-                        except Exception:
-                            pass
-                    await asyncio.sleep(
-                        6
-                    )  # Wait for Brave to boot and extension to reconnect
 
             if is_extension_connected():
                 try:
@@ -880,12 +869,18 @@ async def web_search(
                     max_r = 15 if (focus_query or "").strip() else 5
 
                     def _search():
-                        with DDGS() as ddgs:
-                            if news:
-                                return ddgs.news(
+                        import warnings
+
+                        with warnings.catch_warnings():
+                            warnings.filterwarnings("ignore", category=RuntimeWarning)
+                            with DDGS() as ddgs:
+                                if news:
+                                    return ddgs.news(
+                                        query, backend=backend, max_results=max_r
+                                    )
+                                return ddgs.text(
                                     query, backend=backend, max_results=max_r
                                 )
-                            return ddgs.text(query, backend=backend, max_results=max_r)
 
                     results = await asyncio.to_thread(_search)
                 except Exception as e:
@@ -945,7 +940,7 @@ async def web_search(
 
         try:
             return await asyncio.wait_for(_search_pipeline(), timeout=aggregate_timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return _structured_search_failure(
                 query,
                 attempts,
@@ -953,7 +948,7 @@ async def web_search(
             )
     except Exception as e:
         logger.error(f"web_search error: {e}")
-        return f"[web_search] Error: {str(e)}"
+        return f"[web_search] Error: {e!s}"
 
 
 def _html_static_fallback_text(html: str) -> str:
@@ -1013,8 +1008,8 @@ def _html_to_plain_text(html: str) -> str:
     return "\n".join(lines)
 
 
-from tenacity import retry, stop_after_attempt, wait_exponential
 import httpx
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 
 @tool
@@ -1117,7 +1112,7 @@ async def fetch_webpage(url: str, focus_query: str = "") -> str:
         return f"[fetch_webpage] Timed out fetching {url}"
     except Exception as e:
         logger.warning("Error suppressed: %s", e)
-        return f"[fetch_webpage] Error: {str(e)}"
+        return f"[fetch_webpage] Error: {e!s}"
 
 
 async def _crawl_urls(urls: list[str]) -> str:
@@ -1174,7 +1169,7 @@ async def browser_background_fetch(urls: list[str]) -> str:
                 out.append(f"=== URL: {url} | Title: {title} ===\n{text}\n")
         return "\n".join(out)
     except Exception as e:
-        return f"Error: {str(e)}"
+        return f"Error: {e!s}"
 
 
 @tool

@@ -22,14 +22,13 @@ from langchain_core.messages import (
 )
 
 from src.agent.nodes.summarize import (
-    _estimate_tokens,
+    _SUMMARIZE_THRESHOLD,
     _estimate_messages_tokens,
+    _estimate_tokens,
     _is_protected,
     _split_messages,
-    _SUMMARIZE_THRESHOLD,
     auto_summarize_node,
 )
-
 
 # ── Helper to build a conversation with N turns ──────────────────────────
 
@@ -153,7 +152,7 @@ class TestAutoSummarizeNode:
         assert result == {}  # only 5 turns, all kept as recent
 
     @pytest.mark.asyncio
-    @patch("src.agent.nodes.summarize.get_small_llm")
+    @patch("src.agent.nodes.summarize.get_main_llm")
     async def test_summarizes_when_above_threshold(self, mock_get_llm):
         """Should summarize older messages when above 85% threshold."""
         mock_llm = AsyncMock()
@@ -179,7 +178,7 @@ class TestAutoSummarizeNode:
         assert event["messages_compressed"] > 0
 
     @pytest.mark.asyncio
-    @patch("src.agent.nodes.summarize.get_small_llm")
+    @patch("src.agent.nodes.summarize.get_main_llm")
     async def test_preserves_protected_messages(self, mock_get_llm):
         """Protected messages (tool results, pinned, system) must survive."""
         mock_llm = AsyncMock()
@@ -210,7 +209,7 @@ class TestAutoSummarizeNode:
         assert pinned_msg in new_msgs
 
     @pytest.mark.asyncio
-    @patch("src.agent.nodes.summarize.get_small_llm")
+    @patch("src.agent.nodes.summarize.get_main_llm")
     async def test_graceful_on_llm_failure(self, mock_get_llm):
         """Should return empty dict if Small_LLM fails."""
         mock_get_llm.side_effect = Exception("LLM unavailable")

@@ -1,50 +1,90 @@
-"""Startup preload behavior — cloud-primary skips medium when cloud available."""
+"""Startup preload behavior — unified local model preloading and Eco-Mode battery skipping."""
 
+import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 
 @pytest.mark.asyncio
-async def test_preload_skips_medium_when_cloud_available():
-    """When cloud key present, medium preload should not be called."""
-    medium_mock = AsyncMock()
-    small_mock = AsyncMock()
-
-    captured: dict = {}
+async def test_preload_on_ac_power_initializes_main_llm():
+    """On AC power, startup preload initializes main LLM and runs default swap."""
+    swap_mock = AsyncMock()
+    main_llm_mock = AsyncMock()
 
     async def fake_preload():
-        from src.config.config_loader import config
-        from src.config.secret_store import resolve_deepseek_api_key
-        from src.memory.user_profile import get_profile
+        from src.api.power_monitor import is_on_battery
 
-        profile = get_profile()
-        cloud_key = resolve_deepseek_api_key()
-        cloud_on = bool(cloud_key) and profile.get("cloud_escalation_enabled", True)
-        require_medium = (
-            bool(config.get("startup.require_medium_when_cloud_unavailable", True))
-            and not cloud_on
-        )
-        captured["cloud_on"] = cloud_on
-        captured["require_medium"] = require_medium
+        if os.getenv("OWLYNN_NO_PRELOAD") == "1":
+            return
 
-        await small_mock()
-        if require_medium:
-            await medium_mock()
+        if await is_on_battery():
+            return
+
+        await swap_mock()
+        await main_llm_mock()
 
     with (
         patch(
-            "src.config.secret_store.resolve_deepseek_api_key",
-            return_value="sk-test",
+            "src.api.power_monitor.is_on_battery",
+            new_callable=AsyncMock,
+            return_value=False,
         ),
-        patch(
-            "src.memory.user_profile.get_profile",
-            return_value={"cloud_escalation_enabled": True},
-        ),
+        patch.dict(os.environ, {"OWLYNN_NO_PRELOAD": "0"}, clear=False),
     ):
         await fake_preload()
 
-    assert captured["cloud_on"] is True
-    assert captured["require_medium"] is False
-    medium_mock.assert_not_called()
-    small_mock.assert_called_once()
+    swap_mock.assert_called_once()
+    main_llm_mock.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_preload_skips_heavy_llm_when_on_battery():
+    """When running on battery (Eco-Mode), startup skips heavy LLM preloading."""
+    main_llm_mock = AsyncMock()
+    swap_mock = AsyncMock()
+    eco_mode_activated = False
+
+    async def fake_preload():
+        nonlocal eco_mode_activated
+        from src.api.power_monitor import is_on_battery
+
+        if os.getenv("OWLYNN_NO_PRELOAD") == "1":
+            return
+
+        if await is_on_battery():
+            eco_mode_activated = True
+            return
+
+        await swap_mock()
+        await main_llm_mock()
+
+    with (
+        patch(
+            "src.api.power_monitor.is_on_battery",
+            new_callable=AsyncMock,
+            return_value=True,
+        ),
+        patch.dict(os.environ, {"OWLYNN_NO_PRELOAD": "0"}, clear=False),
+    ):
+        await fake_preload()
+
+    assert eco_mode_activated is True
+    swap_mock.assert_not_called()
+    main_llm_mock.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_preload_skips_when_env_var_set():
+    """When OWLYNN_NO_PRELOAD=1 is set, preload exits immediately."""
+    main_llm_mock = AsyncMock()
+
+    async def fake_preload():
+        if os.getenv("OWLYNN_NO_PRELOAD") == "1":
+            return
+        await main_llm_mock()
+
+    with patch.dict(os.environ, {"OWLYNN_NO_PRELOAD": "1"}):
+        await fake_preload()
+
+    main_llm_mock.assert_not_called()

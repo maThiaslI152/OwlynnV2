@@ -31,9 +31,17 @@ mock_think_step.name = "sequential-thinking_think"
 
 class TestMergeMcpTools:
     def test_merges_when_toolbox_all(self):
-        with patch(
-            "src.tools.mcp_client.get_mcp_tools",
-            return_value=[mock_pentest_execute],
+        with (
+            patch(
+                "src.tools.mcp_client.get_mcp_tools",
+                return_value=[mock_pentest_execute],
+            ),
+            patch(
+                "src.config.config_loader.config.get",
+                side_effect=lambda k, d=None: (
+                    True if k in ("mcp.enabled", "mcp.include_on_all") else d
+                ),
+            ),
         ):
             base = resolve_tools(["file_ops"], web_search_enabled=False)
             merged = merge_mcp_tools(base, toolbox_names=["all"])
@@ -56,9 +64,17 @@ class TestMergeMcpTools:
             assert tools == []
 
     def test_resolve_tools_all_includes_mcp(self):
-        with patch(
-            "src.tools.mcp_client.get_mcp_tools",
-            return_value=[mock_pentest_execute],
+        with (
+            patch(
+                "src.tools.mcp_client.get_mcp_tools",
+                return_value=[mock_pentest_execute],
+            ),
+            patch(
+                "src.config.config_loader.config.get",
+                side_effect=lambda k, d=None: (
+                    True if k in ("mcp.enabled", "mcp.include_on_all") else d
+                ),
+            ),
         ):
             tools = resolve_tools(["all"])
             assert mock_pentest_execute in tools
@@ -84,6 +100,12 @@ class TestMcpHitlPolicy:
         assert is_mcp_execution_tool("sequential-thinking_think") is False
 
     def test_should_include_on_all(self):
-        assert should_include_mcp_tools(["all"]) is True
-        assert should_include_mcp_tools(["file_ops"]) is False
-        assert should_include_mcp_tools(["mcp"]) is True
+        with patch(
+            "src.config.config_loader.config.get",
+            side_effect=lambda k, d=None: (
+                True if k in ("mcp.enabled", "mcp.include_on_all") else d
+            ),
+        ):
+            assert should_include_mcp_tools(["all"]) is True
+            assert should_include_mcp_tools(["file_ops"]) is False
+            assert should_include_mcp_tools(["mcp"]) is True

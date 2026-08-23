@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import shlex
-import uuid
-from src.memory.pentest_engagement import get_active_engagement, store_evidence
 import time
+import uuid
+
+from src.memory.pentest_engagement import get_active_engagement, store_evidence
 
 
 def _build_ssh_cmd(
@@ -60,7 +61,7 @@ async def _ssh_exec(
     )
     try:
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         proc.kill()
         return "", "SSH command timed out", -1
 
@@ -309,7 +310,7 @@ def _process_output_for_evidence(
         return output
 
     # Save to evidence
-    content_bytes = f"Command: {command}\n\n{output}".encode("utf-8")
+    content_bytes = f"Command: {command}\n\n{output}".encode()
 
     # Extract binary name for filename
     binary = command.split()[0].split("/")[-1] if command else "command"

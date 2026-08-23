@@ -12,28 +12,30 @@ from unittest.mock import AsyncMock, MagicMock, patch
 sys.modules["mem0"] = MagicMock()
 
 import pytest
-from hypothesis import given, settings, assume
+from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from src.agent.core.state import AgentState
 
-
 # ── Valid domains ────────────────────────────────────────────────────────
 
 VALID_ROUTES = {
     "simple",
+    "complex-default",
     "complex-cloud",
 }
 COMPLEX_ROUTES = {
+    "complex-default",
     "complex-cloud",
 }
 
 ROUTE_TO_MODEL = {
+    "complex-default": "main-local",
     "complex-cloud": "large-cloud",
 }
 
-LOCAL_ROUTES: set[str] = set()
+LOCAL_ROUTES: set[str] = {"complex-default"}
 
 
 # ── Strategies ───────────────────────────────────────────────────────────
@@ -96,6 +98,26 @@ def _make_mock_llm():
     return mock_llm
 
 
+async def _passthrough_local_path(
+    *,
+    prompt_messages,
+    tools,
+    budget,
+    max_context,
+    is_fallback=False,
+):
+    """Fast mock for local complex path — avoids real LLM pool."""
+    from src.agent.llm import get_fallback_llm
+
+    llm = await get_fallback_llm()
+    if tools:
+        bound = llm.bind_tools(tools).bind(max_tokens=budget)
+    else:
+        bound = llm.bind(max_tokens=budget)
+    response = await bound.ainvoke(prompt_messages)
+    return response, {"prompt_tokens": 0, "completion_tokens": 0}
+
+
 async def _passthrough_cloud_path(
     *,
     llm,
@@ -143,10 +165,24 @@ class TestModelProvenanceMatchesRoute:
                 new_callable=AsyncMock,
                 return_value=mock_llm,
             ),
+            patch(
+                "src.agent.llm.get_main_llm",
+                new_callable=AsyncMock,
+                return_value=mock_llm,
+            ),
             patch("src.agent.core.complex.get_profile", return_value=profile),
             patch(
                 "src.agent.core.complex._invoke_cloud_path",
                 side_effect=_passthrough_cloud_path,
+            ),
+            patch(
+                "src.agent.core.complex._invoke_local_path",
+                side_effect=_passthrough_local_path,
+            ),
+            patch(
+                "src.agent.llm.get_fallback_llm",
+                new_callable=AsyncMock,
+                return_value=mock_llm,
             ),
         ):
             from src.agent.core.complex import complex_llm_node
@@ -176,9 +212,51 @@ class TestModelProvenanceMatchesRoute:
                 "src.agent.core.complex._invoke_cloud_path",
                 side_effect=_passthrough_cloud_path,
             ),
+            patch(
+                "src.agent.core.complex._invoke_local_path",
+                side_effect=_passthrough_local_path,
+            ),
+            patch(
+                "src.agent.llm.get_fallback_llm",
+                new_callable=AsyncMock,
+                return_value=mock_llm,
+            ),
         ):
             from src.agent.core.complex import complex_llm_node
 
             result = await complex_llm_node(state)
 
         assert result["model_used"] == "large-cloud"
+
+    @pytest.mark.asyncio
+    async def test_default_route_produces_main_local(self):
+        """complex-default route must set model_used to main-local."""
+        state = _make_state("complex-default")
+        mock_llm = _make_mock_llm()
+        profile = _mock_profile()
+        with (
+            patch(
+                "src.agent.llm.get_main_llm",
+                new_callable=AsyncMock,
+                return_value=mock_llm,
+            ),
+            patch("src.agent.core.complex.get_profile", return_value=profile),
+            patch(
+                "src.agent.core.complex._invoke_cloud_path",
+                side_effect=_passthrough_cloud_path,
+            ),
+            patch(
+                "src.agent.core.complex._invoke_local_path",
+                side_effect=_passthrough_local_path,
+            ),
+            patch(
+                "src.agent.llm.get_fallback_llm",
+                new_callable=AsyncMock,
+                return_value=mock_llm,
+            ),
+        ):
+            from src.agent.core.complex import complex_llm_node
+
+            result = await complex_llm_node(state)
+
+        assert result["model_used"] == "main-local"

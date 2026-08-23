@@ -9,6 +9,34 @@ import { execFile, spawn, type ChildProcess } from 'node:child_process'
 const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
+// Augment PATH for macOS packaged apps which do not inherit user shell environment
+function fixPath(): void {
+  const home = os.homedir()
+  const extraPaths = [
+    path.join(home, 'homebrew', 'bin'),
+    path.join(home, 'homebrew', 'sbin'),
+    path.join(home, '.cargo', 'bin'),
+    path.join(home, '.local', 'bin'),
+    path.join(home, '.lmstudio', 'bin'),
+    '/opt/homebrew/bin',
+    '/opt/homebrew/sbin',
+    '/usr/local/bin',
+    '/usr/local/sbin',
+    '/usr/bin',
+    '/bin',
+    '/usr/sbin',
+    '/sbin',
+  ]
+  const current = (process.env.PATH || '').split(path.delimiter)
+  for (const p of extraPaths) {
+    if (fs.existsSync(p) && !current.includes(p)) {
+      current.unshift(p)
+    }
+  }
+  process.env.PATH = current.join(path.delimiter)
+}
+fixPath()
+
 process.env.APP_ROOT = path.join(__dirname, '..')
 
 export const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
@@ -39,17 +67,39 @@ const proposals: ActionProposal[] = []
 
 // ── Helpers ──────────────────────────────────────────────────────
 
-function findUvPath(): string {
-  const candidates = [
+function findPythonOrUv(projectRoot: string): { cmd: string; args: string[] } {
+  // 1. Direct venv python if available
+  const venvPython = path.join(projectRoot, '.venv', 'bin', 'python')
+  if (fs.existsSync(venvPython)) {
+    return {
+      cmd: venvPython,
+      args: ['-m', 'uvicorn', 'src.api.server:app', '--host', '127.0.0.1', '--port', '8000', '--ws-max-size', '16777216', '--no-access-log']
+    }
+  }
+
+  // 2. uv run
+  const uvCandidates = [
+    path.join(os.homedir(), 'homebrew', 'bin', 'uv'),
     '/opt/homebrew/bin/uv',
     '/usr/local/bin/uv',
     path.join(os.homedir(), '.cargo', 'bin', 'uv'),
-    '/usr/bin/uv',
+    path.join(os.homedir(), '.local', 'bin', 'uv'),
+    'uv',
   ]
-  for (const p of candidates) {
-    if (fs.existsSync(p)) return p
+  for (const p of uvCandidates) {
+    if (p === 'uv' || fs.existsSync(p)) {
+      return {
+        cmd: p,
+        args: ['run', 'python', '-m', 'uvicorn', 'src.api.server:app', '--host', '127.0.0.1', '--port', '8000', '--ws-max-size', '16777216', '--no-access-log']
+      }
+    }
   }
-  return 'uv'
+
+  // 3. Fallback: python3
+  return {
+    cmd: 'python3',
+    args: ['-m', 'uvicorn', 'src.api.server:app', '--host', '127.0.0.1', '--port', '8000', '--ws-max-size', '16777216', '--no-access-log']
+  }
 }
 
 function getProjectRoot(): string {
@@ -90,13 +140,15 @@ function readEnvFile(filePath: string): Record<string, string> {
   return env
 }
 
-function sendSplash(step: string, status: string, message?: string) {
-  splashWin?.webContents.send('splash-status', { step, status, message })
+function sendSplash(step: string, status: string, message?: string, logLine?: string) {
+  if (splashWin && !splashWin.isDestroyed()) {
+    splashWin.webContents.send('splash-status', { step, status, message, logLine })
+  }
 }
 
-function execFileAsync(cmd: string, args: string[]): Promise<string> {
+function execFileAsync(cmd: string, args: string[], options?: { cwd?: string }): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile(cmd, args, (error, stdout) => {
+    execFile(cmd, args, { env: process.env, ...options }, (error, stdout) => {
       if (error) reject(error)
       else resolve(stdout)
     })
@@ -125,21 +177,24 @@ function fetchJson(url: string, timeoutMs = 3000): Promise<any> {
 // ── Startup Sequence ─────────────────────────────────────────────
 
 async function startContainers(projectRoot: string): Promise<void> {
+  sendSplash('containers', 'active', 'Checking container status...', 'Checking Qdrant & Redis containers...')
   // Check if containers are already running (idempotent — works with start.sh)
   for (const cmd of ['podman', 'docker']) {
     try {
       const stdout = await execFileAsync(cmd, [
         'ps', '--filter', 'name=owlynn_qdrant', '--filter', 'name=owlynn_redis',
         '--format', '{{.Names}}',
-      ])
+      ], { cwd: projectRoot })
       const running = stdout.trim().split('\n').filter(Boolean)
       if (running.length >= 2) {
         console.log('[startup] Containers already running:', running.join(', '))
+        sendSplash('containers', 'done', 'Containers ready', `Running: ${running.join(', ')}`)
         return
       }
     } catch { /* ignore */ }
   }
 
+  sendSplash('containers', 'active', 'Starting Podman/Docker compose...', 'Starting Qdrant and Redis services...')
   const cmds = [
     ['podman', ['compose', 'up', '-d', 'qdrant', 'redis']],
     ['docker', ['compose', 'up', '-d', 'qdrant', 'redis']],
@@ -147,25 +202,34 @@ async function startContainers(projectRoot: string): Promise<void> {
   ]
   for (const [cmd, args] of cmds) {
     try {
-      await execFileAsync(cmd as string, args as string[])
+      await execFileAsync(cmd as string, args as string[], { cwd: projectRoot })
+      sendSplash('containers', 'done', 'Containers started', 'Qdrant & Redis started successfully')
       return
     } catch { /* ignore */ }
   }
   console.warn('[startup] Could not start containers (podman/docker not found). Qdrant/Redis may be unavailable.')
+  sendSplash('containers', 'done', 'Containers skipped', 'Containers not started — using local memory storage')
 }
 
 async function waitForLMStudio(): Promise<void> {
   const startTime = Date.now()
-  const hintDelay = 10_000
+  const hintDelay = 5_000
   const timeout = 120_000
+
+  sendSplash('lmstudio', 'active', 'Connecting to LM Studio on :1234...', 'Probing http://127.0.0.1:1234/v1/models')
 
   while (Date.now() - startTime < timeout) {
     try {
-      await fetchJson('http://127.0.0.1:1234/v1/models', 2000)
+      const data = await fetchJson('http://127.0.0.1:1234/v1/models', 2000)
+      const models = Array.isArray(data?.data) ? data.data.map((m: any) => m.id) : []
+      const mainModel = models.find((m: string) => !m.includes('embed') && !m.includes('ocr')) || models[0] || 'active'
+      const short = mainModel.length > 25 ? mainModel.slice(0, 22) + '…' : mainModel
+      sendSplash('lmstudio', 'done', 'LM Studio connected', `Loaded: ${short}`)
       return
     } catch { /* ignore */ }
+
     if (Date.now() - startTime > hintDelay) {
-      sendSplash('lmstudio', 'active', 'Waiting for LM Studio — please open it...')
+      sendSplash('lmstudio', 'active', 'Waiting for LM Studio — please open it...', 'Waiting for LM Studio local server on port 1234')
     }
     await new Promise(r => setTimeout(r, 1000))
   }
@@ -222,17 +286,14 @@ async function spawnBackend(projectRoot: string): Promise<void> {
   env.STIRLING_PDF_API_KEY = env.STIRLING_PDF_API_KEY || 'owlynn-local-dev'
   env.DOCLING_ARTIFACTS_PATH = env.DOCLING_ARTIFACTS_PATH || path.join(projectRoot, '.models', 'docling')
 
-  const uvPath = findUvPath()
-  console.log('[startup] Using uv at:', uvPath)
+  const { cmd, args } = findPythonOrUv(projectRoot)
+  console.log('[startup] Launching backend:', cmd, args.join(' '))
+  sendSplash('backend', 'active', 'Starting Python backend...', `Executing: ${path.basename(cmd)} ${args.slice(0, 3).join(' ')}`)
 
   return new Promise((resolve, reject) => {
     let settled = false
 
-    const child = spawn(uvPath, [
-      'run', 'python', '-m', 'uvicorn', 'src.api.server:app',
-      '--host', '127.0.0.1', '--port', '8000',
-      '--ws-max-size', '16777216', '--no-access-log',
-    ], {
+    const child = spawn(cmd, args, {
       cwd: projectRoot,
       env,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -247,16 +308,18 @@ async function spawnBackend(projectRoot: string): Promise<void> {
     } catch { /* ignore */ }
 
     child.stdout?.on('data', (data: Buffer) => {
-      console.log('[backend]', data.toString().trim())
+      const lines = data.toString().trim().split('\n').filter(Boolean)
+      for (const line of lines) {
+        console.log('[backend]', line)
+        sendSplash('backend', 'active', 'Starting server...', line.slice(0, 90))
+      }
     })
 
     child.stderr?.on('data', (data: Buffer) => {
-      const msg = data.toString().trim()
-      console.error('[backend]', msg)
-      // Forward backend errors to splash hint
-      if (splashWin && !settled) {
-        const shortMsg = msg.split('\n').pop()?.slice(0, 80) || msg.slice(0, 80)
-        sendSplash('backend', 'active', shortMsg)
+      const lines = data.toString().trim().split('\n').filter(Boolean)
+      for (const line of lines) {
+        console.error('[backend]', line)
+        sendSplash('backend', 'active', 'Initializing backend...', line.slice(0, 90))
       }
     })
 
@@ -275,12 +338,11 @@ async function spawnBackend(projectRoot: string): Promise<void> {
       backendProcess = null
       if (!settled) {
         settled = true
-        reject(new Error(`Failed to spawn backend: ${err.message}`))
+        reject(new Error(`Failed to spawn backend (${cmd}): ${err.message}`))
       }
     })
 
     // Give the process 2 seconds to stabilize before resolving
-    // (the health check will verify it's actually working)
     setTimeout(() => {
       if (!settled) {
         settled = true
@@ -295,17 +357,25 @@ async function waitForHealth(): Promise<void> {
   const timeout = 180_000
   let consecutiveReady = 0
 
+  sendSplash('health', 'active', 'Initializing AI engine...', 'Compiling LangGraph nodes and memory pools...')
+
   while (Date.now() - startTime < timeout) {
     try {
       const data = await fetchJson('http://127.0.0.1:8000/api/health', 2000)
       if (data.agent === 'ready') {
         consecutiveReady++
-        if (consecutiveReady >= 2) return // Require 2 consecutive "ready" to confirm
+        if (consecutiveReady >= 2) {
+          sendSplash('health', 'done', 'AI Engine ready', 'LangGraph pipeline and tools initialized')
+          return
+        }
       } else {
         consecutiveReady = 0
-        sendSplash('health', 'active', `Initializing AI — ${data.agent || 'loading'}...`)
+        const statusMsg = data.agent ? `Initializing AI (${data.agent})...` : 'Initializing AI engine...'
+        sendSplash('health', 'active', statusMsg, `State: ${data.agent || 'loading'}`)
       }
-    } catch { /* ignore */ }
+    } catch {
+      sendSplash('health', 'active', 'Waiting for backend HTTP server...', 'Connecting to http://127.0.0.1:8000/api/health')
+    }
     await new Promise(r => setTimeout(r, 1000))
   }
   throw new Error('Backend health check timed out after 180 seconds')
@@ -316,8 +386,8 @@ async function waitForHealth(): Promise<void> {
 function createSplashWindow(): Promise<void> {
   return new Promise((resolve) => {
     splashWin = new BrowserWindow({
-      width: 400,
-      height: 300,
+      width: 440,
+      height: 330,
       frame: false,
       resizable: false,
       transparent: true,
@@ -334,7 +404,9 @@ function createSplashWindow(): Promise<void> {
     const splashPath = fs.existsSync(path.join(process.resourcesPath, 'splash.html'))
       ? path.join(process.resourcesPath, 'splash.html')
       : path.join(__dirname, 'splash.html')
-    splashWin.webContents.on('did-finish-load', () => resolve())
+    splashWin.webContents.on('did-finish-load', () => {
+      setTimeout(resolve, 150)
+    })
     splashWin.loadFile(splashPath)
   })
 }
@@ -392,7 +464,7 @@ function createTray() {
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'Show Owlynn', click: () => win?.show() },
     { type: 'separator' },
-    { label: 'Quit Owlynn', click: () => { isQuitting = true; app.quit() } },
+    { label: 'Quit Owlynn', click: async () => { isQuitting = true; await gracefulShutdown(); app.quit() } },
   ]))
   tray.on('double-click', () => win?.show())
 }
@@ -509,6 +581,124 @@ function registerIpcHandlers() {
       })
     })
   })
+  ipcMain.handle('quit_app', async () => {
+    isQuitting = true
+    await gracefulShutdown()
+    app.quit()
+  })
+}
+
+async function gracefulShutdown(): Promise<void> {
+  console.log('[shutdown] Initiating graceful shutdown...')
+  const projectRoot = getProjectRoot()
+
+  // 1. Unload model from LM Studio to free RAM
+  try {
+    const http = require('http')
+    const getLoadedModels = (): Promise<any[]> =>
+      new Promise((resolve) => {
+        const timer = setTimeout(() => resolve([]), 1500)
+        http
+          .get('http://127.0.0.1:1234/v1/models', (res: any) => {
+            let data = ''
+            res.on('data', (c: string) => { data += c })
+            res.on('end', () => {
+              clearTimeout(timer)
+              try {
+                const parsed = JSON.parse(data)
+                resolve(Array.isArray(parsed?.data) ? parsed.data : [])
+              } catch {
+                resolve([])
+              }
+            })
+          })
+          .on('error', () => {
+            clearTimeout(timer)
+            resolve([])
+          })
+      })
+
+    const models = await getLoadedModels()
+    for (const m of models) {
+      if (m?.id) {
+        const req = http.request({
+          hostname: '127.0.0.1',
+          port: 1234,
+          path: `/v1/models/${encodeURIComponent(m.id)}`,
+          method: 'DELETE',
+          timeout: 2000,
+        })
+        req.on('error', () => {})
+        req.end()
+      }
+    }
+    console.log('[shutdown] Sent model unload requests to LM Studio')
+  } catch (e) {
+    console.warn('[shutdown] Model unload error:', e)
+  }
+
+  // 2. Stop Python backend process cleanly
+  if (backendProcess) {
+    backendProcess.kill('SIGTERM')
+    await new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        try { backendProcess?.kill('SIGKILL') } catch { /* ignore */ }
+        resolve(null)
+      }, 2500)
+      backendProcess?.on('exit', () => {
+        clearTimeout(timer)
+        resolve(null)
+      })
+    })
+    backendProcess = null
+  }
+  try { fs.unlinkSync(PID_PATH) } catch { /* ignore */ }
+
+  // 3. Stop Podman/Docker containers
+  try {
+    for (const cmd of ['podman', 'docker']) {
+      try {
+        await execFileAsync(cmd, ['compose', 'stop', 'qdrant', 'redis'], { cwd: projectRoot })
+        console.log(`[shutdown] Stopped containers via ${cmd}`)
+        break
+      } catch { /* try next */ }
+    }
+  } catch (e) {
+    console.warn('[shutdown] Container stop error:', e)
+  }
+
+  console.log('[shutdown] Graceful shutdown complete.')
+}
+
+function launchBraveBrowser(): void {
+  try {
+    const extensionPath = getExtensionPath()
+    const candidates = [
+      '/Volumes/KNV3_1TB/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
+      '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
+      path.join(app.getPath('home'), 'Applications', 'Brave Browser.app', 'Contents', 'MacOS', 'Brave Browser'),
+    ]
+    let braveBin = ''
+    for (const c of candidates) {
+      if (fs.existsSync(c)) {
+        braveBin = c
+        break
+      }
+    }
+
+    if (braveBin && fs.existsSync(extensionPath)) {
+      console.log('[startup] Launching Brave Browser with extension:', extensionPath)
+      const braveProc = spawn(braveBin, [`--load-extension=${extensionPath}`], {
+        detached: true,
+        stdio: 'ignore',
+      })
+      braveProc.unref()
+    } else if (process.platform === 'darwin') {
+      execFile('open', ['-a', 'Brave Browser'], () => {})
+    }
+  } catch (err) {
+    console.warn('[startup] Could not auto-launch Brave Browser:', err)
+  }
 }
 
 // ── Main Flow ────────────────────────────────────────────────────
@@ -523,47 +713,41 @@ app.whenReady().then(async () => {
   const splashStartTime = Date.now()
 
   // 2. Start containers
-  sendSplash('containers', 'active', 'Starting containers...')
   await startContainers(projectRoot)
-  sendSplash('containers', 'done')
 
   // 3. Wait for LM Studio
-  sendSplash('lmstudio', 'active', 'Connecting to LM Studio...')
   try {
     await waitForLMStudio()
-    sendSplash('lmstudio', 'done')
   } catch (err) {
-    sendSplash('lmstudio', 'error', 'LM Studio not responding')
-    // Continue anyway — backend can start without LM Studio
+    const msg = err instanceof Error ? err.message : String(err)
+    sendSplash('lmstudio', 'error', 'LM Studio offline', `Port 1234: ${msg}`)
+    // Continue anyway — backend can start and fall back to cloud/local
   }
 
   // 4. Start backend
-  sendSplash('backend', 'active', 'Starting backend...')
   try {
     await killStaleBackend()
     await spawnBackend(projectRoot)
-    sendSplash('backend', 'done')
+    sendSplash('backend', 'done', 'Backend running', 'Uvicorn server running on http://127.0.0.1:8000')
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
-    sendSplash('backend', 'error', `Backend failed: ${msg}`)
+    sendSplash('backend', 'error', `Backend failed: ${msg}`, `Process error: ${msg}`)
     return // Stay on splash — don't transition to broken main window
   }
 
   // 5. Wait for health
-  sendSplash('health', 'active', 'Initializing AI...')
   try {
     await waitForHealth()
-    sendSplash('health', 'done')
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
-    sendSplash('health', 'error', `Backend timed out: ${msg}`)
+    sendSplash('health', 'error', `AI init timed out: ${msg}`, `Timeout waiting for agent readiness: ${msg}`)
     return // Stay on splash — don't transition to broken main window
   }
 
-  // 6. Ensure splash was visible for at least 3 seconds
+  // 6. Ensure splash was visible for at least 1.5s so user can read status
   const splashElapsed = Date.now() - splashStartTime
-  if (splashElapsed < 3000) {
-    await new Promise(r => setTimeout(r, 3000 - splashElapsed))
+  if (splashElapsed < 1500) {
+    await new Promise(r => setTimeout(r, 1500 - splashElapsed))
   }
 
   // 7. Switch to main window
@@ -571,20 +755,18 @@ app.whenReady().then(async () => {
   splashWin = null
   createMainWindow()
   createTray()
+  launchBraveBrowser()
 })
 
 // ── Shutdown ─────────────────────────────────────────────────────
 
-app.on('before-quit', () => {
-  isQuitting = true
-  if (backendProcess) {
-    backendProcess.kill('SIGTERM')
-    const killTimer = setTimeout(() => {
-      backendProcess?.kill('SIGKILL')
-    }, 5000)
-    backendProcess.on('exit', () => clearTimeout(killTimer))
+app.on('before-quit', async (e) => {
+  if (!isQuitting) {
+    e.preventDefault()
+    isQuitting = true
+    await gracefulShutdown()
+    app.quit()
   }
-  try { fs.unlinkSync(PID_PATH) } catch { /* ignore */ }
 })
 
 app.on('window-all-closed', () => {

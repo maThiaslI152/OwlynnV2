@@ -7,7 +7,6 @@ and LISTEN/NOTIFY for efficient wakeup.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import uuid
 from typing import Any
@@ -15,6 +14,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 _NOTIFY_CHANNEL = "extraction_channel"
+_DEDUP: dict[str, Any] = {}
 
 
 async def enqueue_extraction(payload: dict[str, Any]) -> bool:

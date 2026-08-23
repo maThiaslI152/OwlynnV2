@@ -1,14 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
+import { Maximize2, Minimize2, Sparkles, GraduationCap, Shield } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { SafeModePanel } from '../shared/SafeModePanel'
 import { SettingsPanel } from '../shared/SettingsPanel'
 import { CloudSettingsPanel } from '../shared/CloudSettingsPanel'
-import { CloudUsagePanel } from '../shared/CloudUsagePanel'
-import { OrchestrationPanel } from '../shared/OrchestrationPanel'
 import { MemoryPanel } from '../shared/MemoryPanel'
-import { PentestToolsPanel } from '../pentest/PentestToolsPanel'
-import { StudyProgressPanel } from '../study/StudyProgressPanel'
-import { useAppStore } from '../../state/useAppStore'
 import { electronBridge } from '../../lib/electronBridge'
 
 const IconFolder = () => <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
@@ -19,14 +15,13 @@ const IconCloud = () => <svg viewBox="0 0 24 24" width="14" height="14" fill="no
 interface MacMenuBarProps {
   isCompact?: boolean
   onToggleMode?: () => void
+  activeMode?: 'normal' | 'study' | 'pentest'
+  onModeChange?: (mode: 'normal' | 'study' | 'pentest') => void
 }
 
-export function MacMenuBar({ isCompact, onToggleMode }: MacMenuBarProps) {
+export function MacMenuBar({ isCompact, onToggleMode, activeMode = 'normal', onModeChange }: MacMenuBarProps) {
   const [activeMenu, setActiveMenu] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
-  const connectionState = useAppStore((s) => s.connectionState)
-  const cloudStatus = useAppStore((s) => s.cloudStatus)
-  const activeMode = useAppStore((s) => s.activeMode)
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -55,9 +50,9 @@ export function MacMenuBar({ isCompact, onToggleMode }: MacMenuBarProps) {
             className="topbar-btn mini-toggle-btn"
             onClick={onToggleMode}
             title={isCompact ? "Expand to Full Workspace" : "Minimize to Mini-Owlynn"}
-            style={{ WebkitAppRegion: 'no-drag', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', marginRight: '8px' } as any}
+            style={{ WebkitAppRegion: 'no-drag', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', marginRight: '8px', display: 'inline-flex', alignItems: 'center' } as any}
           >
-            {isCompact ? '⛶' : '↙'}
+            {isCompact ? <Maximize2 size={14} /> : <Minimize2 size={14} />}
           </button>
         )}
         
@@ -68,7 +63,7 @@ export function MacMenuBar({ isCompact, onToggleMode }: MacMenuBarProps) {
           {activeMenu === 'owlynn' && (
             <div className="menu-dropdown">
               <div className="menu-dropdown-item" onClick={() => {
-                toast(`Owlynn v${__APP_VERSION__}`, { icon: '🦉', duration: 3000 })
+                toast(`Owlynn v${__APP_VERSION__}`, { duration: 3000 })
                 setActiveMenu(null)
               }}>About Owlynn</div>
               <div className="menu-dropdown-divider" />
@@ -82,9 +77,10 @@ export function MacMenuBar({ isCompact, onToggleMode }: MacMenuBarProps) {
                 setActiveMenu(null)
               }}>Hide Owlynn</div>
               <div className="menu-dropdown-item" onClick={() => {
-                // In Electron, close all windows triggers app quit behavior
-                // For packaged app, this triggers before-quit which stops backend
-                window.close()
+                setActiveMenu(null)
+                void electronBridge.quitApp().catch(() => {
+                  window.close()
+                })
               }}>Quit Owlynn</div>
             </div>
           )}
@@ -141,53 +137,98 @@ export function MacMenuBar({ isCompact, onToggleMode }: MacMenuBarProps) {
           )}
         </div>
       </div>
-      
-      {/* Center - Empty */}
+      {/* Center - Mode Switcher */}
       <div className="menu-center">
-      </div>
-      
-      <div className="menu-right">
-        {/* Dynamic Status Pill */}
-        <div className="dynamic-status-pill">
-          <button 
-            className="status-pill-button"
-            onClick={() => toggleMenu('status_pill')}
+        {onModeChange && (
+          <div
+            style={
+              {
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                background: 'rgba(0,0,0,0.3)',
+                padding: '2px 4px',
+                borderRadius: 8,
+                border: '1px solid rgba(255,255,255,0.08)',
+                WebkitAppRegion: 'no-drag',
+              } as any
+            }
           >
-            <span className={`connection-dot connection-dot-${connectionState}`} />
-            <span className="status-label">
-              {cloudStatus?.available ? 'Cloud Reasoning' : 'Local Reasoning'}
-            </span>
-          </button>
-          {activeMenu === 'status_pill' && (
-            <div className="menu-dropdown right-dropdown large-dropdown">
-              <div className="menu-dropdown-content">
-                {/* Mode-specific panels */}
-                {activeMode === 'study' && (
-                  <>
-                    <h4>Study Progress</h4>
-                    <StudyProgressPanel />
-                    <hr />
-                  </>
-                )}
-                {activeMode === 'pentest' && (
-                  <>
-                    <h4>Pentest Tools</h4>
-                    <PentestToolsPanel />
-                    <hr />
-                  </>
-                )}
-                <h4>Cloud & Usage</h4>
-                <CloudUsagePanel />
-                <hr />
-                <h4>Cloud Settings</h4>
-                <CloudSettingsPanel />
-                <hr />
-                <h4>Orchestration details</h4>
-                <OrchestrationPanel />
-              </div>
-            </div>
-          )}
-        </div>
+            <button
+              type="button"
+              onClick={() => onModeChange('normal')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '2px 10px',
+                fontSize: 11,
+                fontWeight: activeMode === 'normal' ? 600 : 400,
+                borderRadius: 6,
+                background:
+                  activeMode === 'normal' ? 'rgba(56, 189, 248, 0.25)' : 'transparent',
+                color: activeMode === 'normal' ? '#38bdf8' : '#94a3b8',
+                border:
+                  activeMode === 'normal'
+                    ? '1px solid rgba(56, 189, 248, 0.4)'
+                    : '1px solid transparent',
+                cursor: 'pointer',
+              }}
+            >
+              <Sparkles size={11} /> Normal
+            </button>
+            <button
+              type="button"
+              onClick={() => onModeChange('study')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '2px 10px',
+                fontSize: 11,
+                fontWeight: activeMode === 'study' ? 600 : 400,
+                borderRadius: 6,
+                background:
+                  activeMode === 'study' ? 'rgba(192, 132, 252, 0.25)' : 'transparent',
+                color: activeMode === 'study' ? '#c084fc' : '#94a3b8',
+                border:
+                  activeMode === 'study'
+                    ? '1px solid rgba(192, 132, 252, 0.4)'
+                    : '1px solid transparent',
+                cursor: 'pointer',
+              }}
+            >
+              <GraduationCap size={11} /> Study
+            </button>
+            <button
+              type="button"
+              onClick={() => onModeChange('pentest')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '2px 10px',
+                fontSize: 11,
+                fontWeight: activeMode === 'pentest' ? 600 : 400,
+                borderRadius: 6,
+                background:
+                  activeMode === 'pentest' ? 'rgba(244, 63, 94, 0.25)' : 'transparent',
+                color: activeMode === 'pentest' ? '#f43f5e' : '#94a3b8',
+                border:
+                  activeMode === 'pentest'
+                    ? '1px solid rgba(244, 63, 94, 0.4)'
+                    : '1px solid transparent',
+                cursor: 'pointer',
+              }}
+            >
+              <Shield size={11} /> Pentest
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="menu-right">
+        {/* Status info moved to bottom StatusBar */}
       </div>
       {/* ── Full Settings Modal ── */}
       {showSettings && (

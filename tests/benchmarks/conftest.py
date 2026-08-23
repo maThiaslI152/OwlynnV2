@@ -23,7 +23,6 @@ from langchain_core.messages import AIMessage, HumanMessage
 
 from src.agent.llm import LLMPool
 
-
 # ── Report output path (shared across benchmarks) ─────────────────────────
 _REPORT_DIR = Path(__file__).parent
 REPORT_PATH = _REPORT_DIR / "benchmark_report.json"
@@ -58,8 +57,8 @@ class MockDelayLLM:
         self,
         delay_ms: int = 50,
         response_content: str = "Mock response",
-        tool_calls: Optional[list] = None,
-        fail_on_call: Optional[Exception] = None,
+        tool_calls: list | None = None,
+        fail_on_call: Exception | None = None,
     ):
         self._delay = delay_ms / 1000.0
         self._content = response_content
@@ -87,7 +86,7 @@ class MockDelayLLM:
 def make_mock_llm(
     delay_ms: int = 50,
     content: str = "Mock response",
-    tool_calls: Optional[list] = None,
+    tool_calls: list | None = None,
 ) -> MockDelayLLM:
     """Convenience factory for MockDelayLLM."""
     return MockDelayLLM(
@@ -110,22 +109,22 @@ class ProfileBuilder:
     name: str = "BenchUser"
     cloud_anonymization_enabled: bool = True
     cloud_escalation_enabled: bool = True
+    cloud_routing_mode: str = "auto"
     lm_studio_fold_system: bool = False
     router_hitl_enabled: bool = False  # disabled in benchmarks to avoid interrupt()
     route_confidence_threshold: float = 0.6
     skill_clarification_threshold: float = 0.5
     cloud_llm_base_url: str = "https://api.deepseek.com/v1"
     cloud_llm_model_name: str = "deepseek-chat"
-    small_llm_base_url: str = "http://127.0.0.1:1234/v1"
-    small_llm_model_name: str = "ibm-grok4-ultrafast-coder-1b"
-    llm_base_url: str = "http://127.0.0.1:1234/v1"
-    medium_models: dict = field(
-        default_factory=lambda: {
-            "default": "qwen2.5-3b-instruct",
-            "vision": "zai-org/glm-4.6v-flash",
-            "longctx": "lfm2-8b-a1b-gguf-q8_0",
-        }
+    main_llm_base_url: str = "http://127.0.0.1:1234/v1"
+    main_llm_model_name: str = (
+        "gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m"
     )
+    small_llm_base_url: str = "http://127.0.0.1:1234/v1"
+    small_llm_model_name: str = (
+        "gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m"
+    )
+    llm_base_url: str = "http://127.0.0.1:1234/v1"
     custom_sensitive_terms: list = field(default_factory=list)
     deepseek_api_key: str = ""
     web_search_enabled: bool = True
@@ -135,12 +134,15 @@ class ProfileBuilder:
             "name": self.name,
             "cloud_anonymization_enabled": self.cloud_anonymization_enabled,
             "cloud_escalation_enabled": self.cloud_escalation_enabled,
+            "cloud_routing_mode": self.cloud_routing_mode,
             "lm_studio_fold_system": self.lm_studio_fold_system,
             "router_hitl_enabled": self.router_hitl_enabled,
             "route_confidence_threshold": self.route_confidence_threshold,
             "skill_clarification_threshold": self.skill_clarification_threshold,
             "cloud_llm_base_url": self.cloud_llm_base_url,
             "cloud_llm_model_name": self.cloud_llm_model_name,
+            "main_llm_base_url": self.main_llm_base_url,
+            "main_llm_model_name": self.main_llm_model_name,
             "small_llm_base_url": self.small_llm_base_url,
             "small_llm_model_name": self.small_llm_model_name,
             "llm_base_url": self.llm_base_url,
@@ -248,21 +250,33 @@ async def time_concurrent(fn, args_list: list, concurrency: int = 4) -> LatencyT
 
 
 def setup_benchmark_llms(
-    small: Optional[MockDelayLLM] = None,
-    medium: Optional[MockDelayLLM] = None,
-    cloud: Optional[MockDelayLLM] = None,
-    fallback: Optional[MockDelayLLM] = None,
+    small: MockDelayLLM | None = None,
+    medium: MockDelayLLM | None = None,
+    cloud: MockDelayLLM | None = None,
+    fallback: MockDelayLLM | None = None,
+    complex_local: MockDelayLLM | None = None,
+    main: MockDelayLLM | None = None,
 ) -> dict:
     """Register mock LLMs in LLMPool and return the override dict."""
     overrides = {}
+    if main is not None:
+        overrides["main"] = main
     if small is not None:
         overrides["small"] = small
     if medium is not None:
         overrides["medium"] = medium
+        if "main" not in overrides:
+            overrides["main"] = medium
+        if fallback is None:
+            overrides["fallback"] = medium
+        if complex_local is None:
+            overrides["complex_local"] = medium
     if cloud is not None:
         overrides["cloud"] = cloud
     if fallback is not None:
         overrides["fallback"] = fallback
+    if complex_local is not None:
+        overrides["complex_local"] = complex_local
     LLMPool.set_test_overrides(overrides)
     return overrides
 
@@ -278,7 +292,7 @@ def teardown_benchmark_llms():
 def make_router_state(
     text: str = "Hello, how are you?",
     web_search: bool = True,
-    extra: Optional[dict] = None,
+    extra: dict | None = None,
 ) -> dict:
     """Build a minimal AgentState dict for router_node."""
     state = {
@@ -293,7 +307,7 @@ def make_router_state(
 def make_complex_state(
     route: str = "complex-default",
     text: str = "Write a Python function to sort a list",
-    extra: Optional[dict] = None,
+    extra: dict | None = None,
 ) -> dict:
     """Build a minimal AgentState dict for complex_llm_node."""
     state = {
@@ -316,7 +330,7 @@ def make_complex_state(
 
 def make_simple_state(
     text: str = "Hello",
-    extra: Optional[dict] = None,
+    extra: dict | None = None,
 ) -> dict:
     """Build a minimal AgentState dict for simple_node."""
     state = {
@@ -383,7 +397,7 @@ def _clean_pool_after_test():
 def pytest_sessionfinish(session, exitstatus):
     """Write benchmark_report.json after all tests complete."""
     try:
-        from tests.benchmarks.report import write_report, print_summary
+        from tests.benchmarks.report import print_summary, write_report
 
         path = write_report()
         print(f"\n[benchmark] Report written to {path}")

@@ -6,11 +6,12 @@ from unittest.mock import MagicMock
 sys.modules["mem0"] = MagicMock()
 
 import pytest
+
 from src.tools.notebook import (
-    notebook_run,
-    notebook_reset,
-    notebook_vars,
     _reset_notebook,
+    notebook_reset,
+    notebook_run,
+    notebook_vars,
 )
 
 

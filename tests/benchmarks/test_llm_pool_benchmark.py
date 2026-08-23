@@ -7,7 +7,7 @@ All tests use MockDelayLLM via test overrides.
 
 import asyncio
 import sys
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 sys.modules["mem0"] = MagicMock()
 
@@ -46,24 +46,24 @@ class TestPoolConcurrentAccess:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("concurrency", [1, 2, 4, 8])
-    async def test_pool_concurrent_get_small(self, concurrency: int):
-        """Concurrent get_small_llm() calls — cached path."""
+    async def test_pool_concurrent_get_main(self, concurrency: int):
+        """Concurrent get_main_llm() calls — cached path."""
         from src.agent.llm import LLMPool
 
         mock = make_mock_llm(delay_ms=0, content="pooled")
-        setup_benchmark_llms(small=mock)
+        setup_benchmark_llms(main=mock)
 
         # Warm: ensure pool is populated
-        await LLMPool.get_small_llm()
+        await LLMPool.get_main_llm()
 
         async def _get():
-            return await LLMPool.get_small_llm()
+            return await LLMPool.get_main_llm()
 
         args_list = [() for _ in range(concurrency * 5)]
         tracker = await time_concurrent(_get, args_list, concurrency=concurrency)
 
         entry = BenchmarkEntry(
-            name=f"pool_get_small_c{concurrency}",
+            name=f"pool_get_main_c{concurrency}",
             category="pool",
             warmup_iters=0,
             measured_iters=tracker.count,
@@ -130,7 +130,7 @@ class TestPoolColdVsWarm:
         for _ in range(BENCH_ITERATIONS):
             start = asyncio.get_running_loop().time()
             _ = await LLMPool.get_small_llm()
-            tracker.record((asyncio.get_running_loop().time() - start))
+            tracker.record(asyncio.get_running_loop().time() - start)
 
         entry = BenchmarkEntry(
             name="pool_small_cold_vs_warm",
@@ -163,7 +163,7 @@ class TestPoolColdVsWarm:
         for _ in range(BENCH_ITERATIONS):
             start = asyncio.get_running_loop().time()
             _ = await LLMPool.get_cloud_llm("flash")
-            tracker.record((asyncio.get_running_loop().time() - start))
+            tracker.record(asyncio.get_running_loop().time() - start)
 
         entry = BenchmarkEntry(
             name="pool_medium_warm_same_variant",

@@ -1,17 +1,16 @@
-from fastapi import APIRouter, HTTPException, File, UploadFile
+from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, PlainTextResponse
-
-import logging
 
 router = APIRouter()
 
-import os
-import json
 import asyncio
+import json
+import os
+
 from src.api.shared import connected_websockets, logger
-from src.config.settings import WORKSPACE_DIR, get_project_workspace
 from src.config.audit_log import audit_info
 from src.config.config_loader import config
+from src.config.settings import WORKSPACE_DIR, get_project_workspace
 
 
 def notify_file_processed(filepath_or_name, status="processed"):
@@ -99,7 +98,6 @@ def notify_file_processed(filepath_or_name, status="processed"):
                                         asyncio.run_coroutine_threadsafe(coro, loop)
                                     except Exception as e:
                                         logger.warning("Error suppressed: %s", e)
-                                        pass
 
                                 from src.memory.vector_lifecycle import (
                                     VectorLifecycleManager,
@@ -125,7 +123,6 @@ def notify_file_processed(filepath_or_name, status="processed"):
                                         asyncio.run_coroutine_threadsafe(coro, loop)
                                     except Exception as e:
                                         logger.warning("Error suppressed: %s", e)
-                                        pass
                             except Exception as e:
                                 logger.error(
                                     "Failed to auto-index file %s: %s", filepath, e
@@ -144,7 +141,6 @@ def notify_file_processed(filepath_or_name, status="processed"):
                                         asyncio.run_coroutine_threadsafe(coro, loop)
                                     except Exception as e:
                                         logger.warning("Error suppressed: %s", e)
-                                        pass
 
                         asyncio.run_coroutine_threadsafe(index_task(), loop)
         except Exception as e:
@@ -174,10 +170,11 @@ def render_pdf_as_composite(raw_bytes: bytes, max_pages: int = 10) -> str | None
     DIVIDER_H = int(config.get("pdf_rendering.divider_height", 28))
 
     try:
-        import fitz
         import base64
-        from PIL import Image
         from io import BytesIO
+
+        import fitz
+        from PIL import Image
 
         doc = fitz.open(stream=raw_bytes, filetype="pdf")
         page_imgs = []
@@ -598,6 +595,7 @@ async def api_upload_file(
 
         # Auto-index into project knowledge base for all projects
         import asyncio
+
         from src.api.server import _auto_index_project_file
 
         asyncio.create_task(

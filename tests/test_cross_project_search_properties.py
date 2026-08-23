@@ -15,20 +15,19 @@ random project data, filenames, and file content, then verify that searching
 for known-present substrings always yields results.
 """
 
-import os
-import sys
-import shutil
-import tempfile
 import asyncio
+import os
+import shutil
+import sys
+import tempfile
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from hypothesis import given, settings, assume, HealthCheck
+from hypothesis import HealthCheck, assume, given, settings
 from hypothesis import strategies as st
 
-from src.memory.project import ProjectManager
 from src.config.settings import get_project_workspace, normalize_project_id
-
+from src.memory.project import ProjectManager
 
 # ── Strategies ───────────────────────────────────────────────────────────
 
@@ -332,9 +331,7 @@ class TestCrossProjectSearchCoverage:
                 )
                 for q in ["", "   ", "\t"]:
                     results = await run_search(fixture.pm, q, project_id=pid)
-                    assert len(results) == 0, (
-                        f"Empty query '{repr(q)}' returned results"
-                    )
+                    assert len(results) == 0, f"Empty query '{q!r}' returned results"
             finally:
                 await fixture.cleanup()
 

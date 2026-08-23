@@ -1,6 +1,25 @@
 import { useAppStore } from '../../state/useAppStore'
 import { ScreenAssistLivePanel } from '../pentest/ScreenAssistLivePanel'
 
+function formatModelBadge(raw: string): string {
+  let name = raw
+  if (name.startsWith('local-fallback(') && name.endsWith(')')) {
+    name = name.slice('local-fallback('.length, -1)
+  }
+  if (name.startsWith('small-local-fallback(') && name.endsWith(')')) {
+    name = name.slice('small-local-fallback('.length, -1)
+  }
+  if (name.includes('gemma-4-12b-agentic')) {
+    const quantMatch = name.match(/@(q[0-9]_[a-z0-9_]+)/i)
+    return quantMatch ? `gemma-4-12b-agentic@${quantMatch[1]}` : 'gemma-4-12b-agentic'
+  }
+  if (name.includes('gemma-4-12b-it')) return 'gemma-4-12b-it'
+  if (name.includes('deepseek-chat')) return 'DeepSeek-V3'
+  if (name.includes('deepseek-reasoner')) return 'DeepSeek-R1'
+  if (name.length > 26) return name.slice(0, 24) + '…'
+  return name
+}
+
 export function OrchestrationPanel() {
   const routerMetadata = useAppStore((s) => s.routerMetadata)
   const modelInfo = useAppStore((s) => s.modelInfo)
@@ -39,8 +58,6 @@ export function OrchestrationPanel() {
     )
   }
 
-  // Show model badge only when explicit modelInfo is received (from server or WS event).
-  // The route badge below already communicates the routing path independently.
   const displayModel = modelInfo || null
 
   return (
@@ -49,8 +66,11 @@ export function OrchestrationPanel() {
         <div className="orchestration-row">
           <span className="orchestration-label">Model</span>
           <span className="orchestration-value">
-            <span className={`model-badge ${displayModel.includes('cloud') ? 'model-cloud' : 'model-local'}`}>
-              {displayModel}
+            <span
+              className={`model-badge ${displayModel.includes('cloud') || displayModel.includes('deepseek') ? 'model-cloud' : 'model-local'}`}
+              title={displayModel}
+            >
+              {formatModelBadge(displayModel)}
             </span>
           </span>
         </div>

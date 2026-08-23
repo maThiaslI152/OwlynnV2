@@ -2,11 +2,17 @@
 
 from langchain_core.messages import ToolMessage
 
-from src.agent.core.complex import (
-    _fallback_for_blank_response,
+from src.agent.core.complex_prompt import (
+    _WEB_SEARCH_ANSWER_NUDGE,
+    _FETCH_RETRY_NUDGE_DYNAMIC,
+    apply_fetch_retry_nudge,
+    apply_web_search_answer_nudge,
     build_fetch_retry_nudge_messages,
     build_web_search_answer_nudge_messages,
+    fetch_retry_nudge_applied,
+    web_search_nudge_applied,
 )
+from src.agent.core.complex_utils.fallback import _fallback_for_blank_response
 
 
 def _fetch_tool(content: str) -> ToolMessage:
@@ -17,22 +23,24 @@ def test_nudge_when_no_extractable_text():
     m = _fetch_tool(
         "[fetch_webpage] No extractable text in static HTML (likely a JavaScript SPA"
     )
-    out = build_fetch_retry_nudge_messages([m])
+    out = apply_fetch_retry_nudge([m])
     assert len(out) == 1
-    assert "browser_background_fetch" in out[0].content
+    assert _FETCH_RETRY_NUDGE_DYNAMIC in out[0].content
+    assert build_fetch_retry_nudge_messages([m]) == []
 
 
 def test_nudge_when_spa_metadata_note():
     m = _fetch_tool(
         "[Note: Page body is mostly empty in static HTML — typical of JavaScript apps."
     )
-    out = build_fetch_retry_nudge_messages([m])
+    out = apply_fetch_retry_nudge([m])
     assert len(out) == 1
+    assert "browser_background_fetch" in out[0].content
 
 
 def test_nudge_http_error_suggests_other_hit():
     m = _fetch_tool("[fetch_webpage] HTTP error 404 for https://example.com/x")
-    out = build_fetch_retry_nudge_messages([m])
+    out = apply_fetch_retry_nudge([m])
     assert len(out) == 1
     assert "web_search" in out[0].content
 
@@ -41,20 +49,21 @@ def test_dynamic_takes_precedence_over_http_when_both_in_batch():
     """Same batch: empty-body message wins over HTTP hint (elif branch)."""
     m1 = _fetch_tool("[fetch_webpage] HTTP error 500 for https://a")
     m2 = _fetch_tool("[fetch_webpage] No extractable text")
-    out = build_fetch_retry_nudge_messages([m1, m2])
-    assert len(out) == 1
-    assert "browser_background_fetch" in out[0].content
+    out = apply_fetch_retry_nudge([m1, m2])
+    assert len(out) == 2
+    assert _FETCH_RETRY_NUDGE_DYNAMIC in out[1].content
+    assert fetch_retry_nudge_applied(out)
 
 
 def test_no_nudge_for_unrelated_tool():
     m = ToolMessage(content="x", name="web_search", tool_call_id="tc2")
-    assert build_fetch_retry_nudge_messages([m]) == []
+    assert apply_fetch_retry_nudge([m]) == [m]
 
 
 def test_no_nudge_for_substantial_fetch_body():
     body = "📄 Content from https://example.com:\n\n" + ("paragraph\n" * 50)
     m = _fetch_tool(body)
-    assert build_fetch_retry_nudge_messages([m]) == []
+    assert apply_fetch_retry_nudge([m]) == [m]
 
 
 def _web_search_ok(content: str) -> ToolMessage:
@@ -68,20 +77,23 @@ def test_web_search_answer_nudge_when_hits_present():
         "   URL: https://docs.aws.amazon.com/eks/latest/userguide/what-is-eks.html\n"
         "   Amazon EKS is managed Kubernetes.\n"
     )
-    out = build_web_search_answer_nudge_messages([_web_search_ok(body)])
+    out = apply_web_search_answer_nudge([_web_search_ok(body)])
     assert len(out) == 1
-    assert "must now write a complete answer" in out[0].content
+    assert _WEB_SEARCH_ANSWER_NUDGE in out[0].content
+    assert web_search_nudge_applied(out)
+    assert build_web_search_answer_nudge_messages([_web_search_ok(body)]) == []
 
 
 def test_web_search_answer_nudge_skipped_on_failure():
-    out = build_web_search_answer_nudge_messages(
+    out = apply_web_search_answer_nudge(
         [
             _web_search_ok(
                 '[web_search] Unable to retrieve online results for "x".',
             )
         ]
     )
-    assert out == []
+    assert out[0].content.startswith("[web_search]")
+    assert not web_search_nudge_applied(out)
 
 
 def test_blank_response_fallback_synthetic_when_web_search_succeeded():

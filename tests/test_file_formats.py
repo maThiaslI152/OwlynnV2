@@ -3,13 +3,12 @@ Test suite for extended file format processing.
 Tests all newly supported file formats.
 """
 
-import os
 import json
-import tempfile
+import os
 import shutil
-from pathlib import Path
-
 import sys
+import tempfile
+from pathlib import Path
 
 # Project root on path (see pytest.ini pythonpath)
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))

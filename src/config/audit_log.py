@@ -43,7 +43,7 @@ import json
 import logging
 import os
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any
@@ -188,7 +188,6 @@ def _resolve_audit_dir() -> Path:
             return Path(audit_dir_str).expanduser().resolve()
     except Exception as e:
         logger.warning("Error suppressed: %s", e)
-        pass
     return Path.home() / ".owlynn" / "logs"
 
 
@@ -351,7 +350,7 @@ def audit_event(
     extra = _extra_var.get()
 
     payload: dict[str, Any] = {
-        "ts": datetime.now(timezone.utc).isoformat(timespec="milliseconds"),
+        "ts": datetime.now(UTC).isoformat(timespec="milliseconds"),
         "channel": channel,
         "event": event,
     }

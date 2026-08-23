@@ -8,8 +8,9 @@ from unittest.mock import MagicMock
 sys.modules["mem0"] = MagicMock()
 
 import pytest
+
 from src.api.file_processor import FileWatcherHandler
-from src.api.shared import extract_docx_text, extract_doc_text
+from src.api.shared import extract_doc_text, extract_docx_text
 
 
 def test_docx_extraction():

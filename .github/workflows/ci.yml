@@ -58,6 +58,12 @@ jobs:
         working-directory: frontend-v2
         run: npm ci
 
+      - name: Check WS Payload Types Drift
+        working-directory: frontend-v2
+        run: |
+          npm run generate:types
+          git diff --exit-code src/types/protocol.generated.ts
+
       - name: Lint Frontend
         working-directory: frontend-v2
         run: npm run lint

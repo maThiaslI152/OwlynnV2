@@ -1,14 +1,14 @@
 from fastapi import APIRouter
 
 router = APIRouter()
-from fastapi import Response
-from fastapi import HTTPException
-from src.agent.routing.router import generate_chat_title_router_llm
 import logging
+
+from fastapi import HTTPException, Response
+
+from src.agent.routing.router import generate_chat_title_router_llm
 
 logger = logging.getLogger(__name__)
 
-from src.memory.project import project_manager
 from src.memory.personal_assistant import (
     get_relevant_topics,
     get_user_interests_summary,
@@ -16,7 +16,7 @@ from src.memory.personal_assistant import (
     track_topic,
     update_interests,
 )
-
+from src.memory.project import project_manager
 
 # Personal Assistant Endpoints - Topics, Interests, Conversation History
 
@@ -126,7 +126,7 @@ async def api_create_project(body: dict):
         return await project_manager.create_project(
             name, instructions=instructions, mode=mode
         )
-    except Exception as e:
+    except Exception:
         import traceback
 
         traceback.print_exc()
@@ -310,6 +310,7 @@ async def api_add_project_directory_knowledge(project_id: str, body: dict):
         raise HTTPException(status_code=400, detail="directory_path is required")
 
     import os
+
     from src.config.settings import get_project_workspace
 
     project_workspace = get_project_workspace(project_id)
@@ -369,9 +370,10 @@ async def api_add_project_directory_knowledge(project_id: str, body: dict):
 
     # Process files in a background task to prevent blocking the HTTP response
     async def index_directory_background():
+        import asyncio
+
         from src.api.file_processor import FileWatcherHandler
         from src.api.routes.files import notify_file_processed
-        import asyncio
 
         handler = FileWatcherHandler(
             project_workspace, on_processed_callback=notify_file_processed
@@ -388,8 +390,9 @@ async def api_add_project_directory_knowledge(project_id: str, body: dict):
                 )
 
     # Dispatch to the app event loop
-    from src.api.server import app
     import asyncio
+
+    from src.api.server import app
 
     loop = getattr(app.state, "loop", None)
     if loop:
@@ -408,7 +411,7 @@ async def api_add_project_directory_knowledge(project_id: str, body: dict):
 async def api_get_history(thread_id: str):
     """Retrieves full chat history for a specific thread."""
     from src.api.server import app
-    from src.api.shared import serialize_message, logger
+    from src.api.shared import logger, serialize_message
 
     try:
         agent = app.state.agent

@@ -11,7 +11,7 @@ Property-based tests for the AnonymizationEngine.
 import re
 
 import pytest
-from hypothesis import given, settings, assume
+from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
 from src.agent.cloud.anonymization import anonymize, deanonymize

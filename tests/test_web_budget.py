@@ -2,6 +2,10 @@
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
+from src.agent.core.complex_prompt import (
+    apply_web_search_answer_nudge,
+    web_search_nudge_applied,
+)
 from src.agent.core.complex_utils.web_budget import (
     WEB_TOOL_NAMES,
     count_web_tool_usage,
@@ -31,7 +35,7 @@ def test_data_viz_budget_blocks_all_web_tools():
         [_Tool("web_search"), _Tool("notebook_run")],
         status,
     )
-    names = {getattr(t, "name") for t in tools or []}
+    names = {t.name for t in tools or []}
     assert "web_search" not in names
     assert "notebook_run" in names
 
@@ -63,7 +67,7 @@ def test_per_tool_cap_blocks_individual_tools_before_round_cap():
         [_Tool("web_search"), _Tool("fetch_webpage"), _Tool("notebook_run")],
         status,
     )
-    names = {getattr(t, "name") for t in tools or []}
+    names = {t.name for t in tools or []}
     assert "web_search" not in names
     assert "fetch_webpage" in names
     assert "notebook_run" in names
@@ -98,3 +102,16 @@ def test_count_web_tool_usage_ignores_non_web_tools():
     usage = count_web_tool_usage(msgs)
     assert usage["web_search"] == 1
     assert "read_workspace_file" not in usage
+
+
+def test_web_search_nudge_embedded_in_tool_message_not_human():
+    body = (
+        '🔍 Web search results for: "test"\n\n'
+        "**1. Hit**\n"
+        "   URL: https://example.com\n"
+        "   Snippet text.\n"
+    )
+    msg = ToolMessage(content=body, tool_call_id="1", name="web_search")
+    nudged = apply_web_search_answer_nudge([msg])
+    assert web_search_nudge_applied(nudged)
+    assert all(not isinstance(m, HumanMessage) for m in nudged)

@@ -14,17 +14,16 @@ We test the core isolation mechanisms:
 3. Deleting a chat from one project does not affect the other project's chats
 """
 
+import asyncio
 import os
 import sys
-import asyncio
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from hypothesis import given, settings, assume, HealthCheck
+from hypothesis import HealthCheck, assume, given, settings
 from hypothesis import strategies as st
 
 from src.memory.project import ProjectManager
-
 
 # ── Strategies ───────────────────────────────────────────────────────────
 

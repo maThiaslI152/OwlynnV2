@@ -1,10 +1,11 @@
 """Unit tests for SkillMatcher class."""
 
-import pytest
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from src.tools.skills import SkillDefinition, SkillLoader, SkillMatcher, MatchResult
+import pytest
+
+from src.tools.skills import MatchResult, SkillDefinition, SkillLoader, SkillMatcher
 
 
 def _make_skill(

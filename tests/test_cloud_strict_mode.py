@@ -16,8 +16,8 @@ sys.modules["mem0"] = MagicMock()
 async def test_complex_node_blocks_fallback_on_cloud_failure():
     """When cloud LLM fails, the complex node tries local fallback.
     If local fallback also fails, it produces a graceful error."""
-    from src.agent.llm import CloudUnavailableError
     from src.agent.core.complex import complex_llm_node
+    from src.agent.llm import CloudUnavailableError
 
     async def _cloud_raises(*_args, **_kwargs):
         raise CloudUnavailableError("No API key")
@@ -45,7 +45,10 @@ async def test_complex_node_blocks_fallback_on_cloud_failure():
 
     with (
         patch("src.agent.core.complex.get_cloud_llm", side_effect=_cloud_raises),
-        patch("src.agent.core.complex.get_fallback_llm", side_effect=_fallback_raises),
+        patch(
+            "src.agent.core.complex._invoke_local_fallback",
+            side_effect=_fallback_raises,
+        ),
         patch("src.agent.core.complex.get_profile", return_value=profile),
     ):
         result = await complex_llm_node(state)

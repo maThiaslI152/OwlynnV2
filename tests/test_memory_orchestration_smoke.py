@@ -11,13 +11,13 @@ from langchain_core.messages import AIMessage, HumanMessage
 
 sys.modules.setdefault("mem0", MagicMock())
 
+from src.agent.core.state import AgentState
 from src.agent.nodes.memory import (
     memory_inject_lite_node,
     memory_retrieve_node,
     memory_write_node,
 )
 from src.agent.routing.router import router_node
-from src.agent.core.state import AgentState
 from src.memory.extraction.queue import enqueue_extraction
 from src.memory.extraction.worker import process_extraction_job
 
@@ -64,9 +64,11 @@ def mock_extractor_llm():
 def clear_extraction_dedup():
     from src.memory.extraction import queue as q
 
-    q._DEDUP.clear()
+    if hasattr(q, "_DEDUP") and isinstance(q._DEDUP, dict):
+        q._DEDUP.clear()
     yield
-    q._DEDUP.clear()
+    if hasattr(q, "_DEDUP") and isinstance(q._DEDUP, dict):
+        q._DEDUP.clear()
 
 
 @pytest.fixture(autouse=True)
@@ -104,12 +106,16 @@ async def test_memory_pipeline_lite_router_retrieve_write(
         return LLM()
 
     with patch("src.agent.routing.router._check_cloud_available", return_value=False):
-        with patch("src.agent.routing.router.get_small_llm", fake_small_llm):
-            with patch(
-                "src.agent.routing.router._memory_gate_fields",
-                return_value={"needs_memory_retrieval": True, "scenario_id": "pentest"},
-            ):
-                routed = await router_node(state)
+        with patch("src.agent.routing.router.get_main_llm", fake_small_llm):
+            with patch("src.agent.routing.router.get_small_llm", fake_small_llm):
+                with patch(
+                    "src.agent.routing.router._memory_gate_fields",
+                    return_value={
+                        "needs_memory_retrieval": True,
+                        "scenario_id": "pentest",
+                    },
+                ):
+                    routed = await router_node(state)
 
     assert routed["route"] in ("complex-cloud", "complex-default")
     assert routed.get("needs_memory_retrieval") is True
@@ -122,9 +128,23 @@ async def test_memory_pipeline_lite_router_retrieve_write(
         mock_mem.search = MagicMock(
             return_value=[{"memory": "User prefers ap-southeast-1 region"}]
         )
-        with patch(
-            "src.agent.nodes.memory._is_semantically_similar",
-            AsyncMock(return_value=False),
+        with (
+            patch(
+                "src.agent.nodes.memory._is_semantically_similar",
+                AsyncMock(return_value=False),
+            ),
+            patch(
+                "src.memory.pentest_engagement.get_active_engagement",
+                AsyncMock(return_value={"id": "eng-1", "name": "Pentest Alpha"}),
+            ),
+            patch(
+                "src.memory.pentest_engagement.get_engagement_context",
+                AsyncMock(return_value="Active pentest engagement context"),
+            ),
+            patch(
+                "src.memory.pentest_engagement.get_findings_summary",
+                AsyncMock(return_value={"total": 0}),
+            ),
         ):
             retrieved = await memory_retrieve_node(state)
         # Pentest mode bypasses Mem0 search entirely
@@ -143,12 +163,14 @@ async def test_memory_pipeline_lite_router_retrieve_write(
     }
 
     # Pentest mode: memory_write_node skips extraction, logs to engagement timeline
-    with patch(
-        "src.memory.extraction.queue.enqueue_extraction",
-        AsyncMock(return_value=True),
-    ) as enq:
-        with patch("src.memory.long_term.memory", MagicMock()):
-            written = await memory_write_node(state)
+    with (
+        patch(
+            "src.memory.extraction.queue.enqueue_extraction",
+            AsyncMock(return_value=True),
+        ) as enq,
+        patch("src.memory.long_term.memory", MagicMock()),
+    ):
+        written = await memory_write_node(state)
 
     # Pentest mode skips Mem0 extraction
     assert enq.await_count == 0
@@ -246,4 +268,3 @@ async def test_redis_enqueue_when_available():
     }
     queued = await enqueue_extraction(payload)
     assert queued is True
-

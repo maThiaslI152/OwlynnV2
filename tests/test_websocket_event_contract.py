@@ -1,6 +1,6 @@
 import json
 from contextlib import contextmanager
-from unittest.mock import patch, AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,13 +13,31 @@ from src.memory.user_profile import _DEFAULTS
 def cleanup_projects_via_api():
     """Clean up any projects created by tests to prevent state leakage."""
     yield
-    from src.api.server import app
+    import asyncio
 
-    client = TestClient(app)
-    projs = client.get("/api/projects").json()
-    for p in projs:
-        if p.get("id") != "default":
-            client.delete(f"/api/projects/{p['id']}")
+    from src.memory.project import project_manager
+
+    async def _clean():
+        try:
+            projs = await project_manager.list_projects()
+            for p in projs:
+                pid = p.get("id") if isinstance(p, dict) else getattr(p, "id", None)
+                if pid and pid != "default":
+                    await project_manager.delete_project(pid)
+        except Exception:
+            pass
+
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.create_task(_clean())
+        else:
+            loop.run_until_complete(_clean())
+    except Exception:
+        try:
+            asyncio.run(_clean())
+        except Exception:
+            pass
 
 
 class _DummyWatcher:
@@ -497,23 +515,31 @@ def test_ws_interrupt_contract_contains_backend_risk_metadata(tmp_path):
 def test_ask_user_response_preserves_structured_answer(tmp_path):
     captured_inputs = []
 
-    async def _capture_start_run(self, input_data, config, **kwargs):
+    async def _capture_start_run(
+        self, input_data, config, correlation_id=None, **kwargs
+    ):
         captured_inputs.append(input_data)
         done_msg = {"type": "status", "content": "idle"}
+        self.event_buffer.append((done_msg, correlation_id))
         for q in list(self.listeners):
-            await q.put((done_msg, None))
+            await q.put((done_msg, correlation_id))
 
-    with patch("src.api.ws.handler.GraphSession.start_run", new=_capture_start_run):
-        with _client_with_agent(tmp_path, _ChunkMessageAgent()) as client:
-            with client.websocket_connect(_ws_url(client, "ws-ask-user")) as ws:
-                ws.send_text(
-                    json.dumps(
-                        {
-                            "type": "ask_user_response",
-                            "answer": {"route": "complex", "toolbox": "tools_on"},
-                        }
-                    )
+    with (
+        patch(
+            "src.api.controllers.graph_session.GraphSession.start_run",
+            new=_capture_start_run,
+        ),
+        _client_with_agent(tmp_path, _ChunkMessageAgent()) as client,
+    ):
+        with client.websocket_connect(_ws_url(client, "ws-ask-user")) as ws:
+            ws.send_text(
+                json.dumps(
+                    {
+                        "type": "ask_user_response",
+                        "answer": {"route": "complex", "toolbox": "tools_on"},
+                    }
                 )
+            )
 
     assert captured_inputs
     resume = getattr(captured_inputs[0], "resume", None)
@@ -524,58 +550,59 @@ def test_ask_user_response_preserves_structured_answer(tmp_path):
 def test_ws_interleaved_messages_preserve_project_context_per_payload(tmp_path):
     captured_inputs = []
 
-    async def _capture_start_run(self, input_data, config, **kwargs):
+    async def _capture_start_run(
+        self, input_data, config, correlation_id=None, **kwargs
+    ):
         captured_inputs.append(input_data)
         done_msg = {"type": "status", "content": "idle"}
+        self.event_buffer.append((done_msg, correlation_id))
         for q in list(self.listeners):
-            await q.put((done_msg, None))
+            await q.put((done_msg, correlation_id))
 
     with (
-        patch("src.api.ws.handler.GraphSession.start_run", new=_capture_start_run),
+        patch(
+            "src.api.controllers.graph_session.GraphSession.start_run",
+            new=_capture_start_run,
+        ),
         patch(
             "src.api.ws.handler.generate_chat_title_router_llm",
             AsyncMock(return_value="mock-title"),
         ),
+        _client_with_agent(tmp_path, _ChunkMessageAgent()) as client,
     ):
-        with _client_with_agent(tmp_path, _ChunkMessageAgent()) as client:
-            with client.websocket_connect(
-                _ws_url(client, "ws-project-interleave")
-            ) as ws:
-                ws.send_text(
-                    json.dumps(
-                        {
-                            "type": "user.message",
-                            "id": "first",
-                            "content": "first",
-                            "message": "first",
-                            "project_id": "proj-alpha",
-                        }
-                    )
+        with client.websocket_connect(_ws_url(client, "ws-project-interleave")) as ws:
+            ws.send_text(
+                json.dumps(
+                    {
+                        "type": "user.message",
+                        "id": "first",
+                        "content": "first",
+                        "message": "first",
+                        "project_id": "proj-alpha",
+                    }
                 )
-                ws.send_text(
-                    json.dumps(
-                        {
-                            "type": "user.message",
-                            "id": "second",
-                            "content": "second",
-                            "message": "second",
-                            "project_id": "proj-beta",
-                        }
-                    )
+            )
+            ws.send_text(
+                json.dumps(
+                    {
+                        "type": "user.message",
+                        "id": "second",
+                        "content": "second",
+                        "message": "second",
+                        "project_id": "proj-beta",
+                    }
                 )
-                idles = 0
-                for _ in range(400):
-                    try:
-                        event = ws.receive_json()
-                        if (
-                            event.get("type") == "status"
-                            and event.get("content") == "idle"
-                        ):
-                            idles += 1
-                            if idles == 2:
-                                break
-                    except Exception:
-                        break
+            )
+            idles = 0
+            for _ in range(400):
+                try:
+                    event = ws.receive_json()
+                    if event.get("type") == "status" and event.get("content") == "idle":
+                        idles += 1
+                        if idles == 2:
+                            break
+                except Exception:
+                    break
 
     dict_runs = [
         item
@@ -590,118 +617,117 @@ def test_ws_interleaved_messages_preserve_project_context_per_payload(tmp_path):
 def test_ws_and_project_crud_interleaving_preserves_project_isolation(tmp_path):
     captured_inputs = []
 
-    async def _capture_start_run(self, input_data, config, **kwargs):
+    async def _capture_start_run(
+        self, input_data, config, correlation_id=None, **kwargs
+    ):
         captured_inputs.append(input_data)
         done_msg = {"type": "status", "content": "idle"}
+        self.event_buffer.append((done_msg, correlation_id))
         for q in list(self.listeners):
-            await q.put((done_msg, None))
+            await q.put((done_msg, correlation_id))
 
     with (
-        patch("src.api.ws.handler.GraphSession.start_run", new=_capture_start_run),
+        patch(
+            "src.api.controllers.graph_session.GraphSession.start_run",
+            new=_capture_start_run,
+        ),
         patch(
             "src.api.ws.handler.generate_chat_title_router_llm",
             AsyncMock(return_value="mock-title"),
         ),
+        _client_with_agent(tmp_path, _ChunkMessageAgent()) as client,
     ):
-        with _client_with_agent(tmp_path, _ChunkMessageAgent()) as client:
-            # Explorer-like CRUD flow across two projects.
-            proj_a = client.post("/api/projects", json={"name": "Interleave A"}).json()
-            proj_b = client.post("/api/projects", json={"name": "Interleave B"}).json()
-            pid_a = proj_a["id"]
-            pid_b = proj_b["id"]
+        # Explorer-like CRUD flow across two projects.
+        proj_a = client.post("/api/projects", json={"name": "Interleave A"}).json()
+        proj_b = client.post("/api/projects", json={"name": "Interleave B"}).json()
+        pid_a = proj_a["id"]
+        pid_b = proj_b["id"]
 
-            client.post(
-                f"/api/projects/{pid_a}/chats",
-                json={"id": "p2-a-1", "name": "A 1", "created_at": 1.0},
-            )
-            client.post(
-                f"/api/projects/{pid_b}/chats",
-                json={"id": "p2-b-1", "name": "B 1", "created_at": 1.0},
-            )
-            client.put(
-                f"/api/projects/{pid_a}/chats/p2-a-1", json={"name": "A 1 updated"}
-            )
-            client.delete(f"/api/projects/{pid_b}/chats/p2-b-1")
+        client.post(
+            f"/api/projects/{pid_a}/chats",
+            json={"id": "p2-a-1", "name": "A 1", "created_at": 1.0},
+        )
+        client.post(
+            f"/api/projects/{pid_b}/chats",
+            json={"id": "p2-b-1", "name": "B 1", "created_at": 1.0},
+        )
+        client.put(f"/api/projects/{pid_a}/chats/p2-a-1", json={"name": "A 1 updated"})
+        client.delete(f"/api/projects/{pid_b}/chats/p2-b-1")
 
-            with client.websocket_connect(
-                _ws_url(client, "ws-crud-project-interleave")
-            ) as ws:
-                ws.send_text(
-                    json.dumps(
-                        {
-                            "type": "user.message",
-                            "id": "run in A",
-                            "content": "run in A",
-                            "message": "run in A",
-                            "project_id": pid_a,
-                        }
-                    )
+        with client.websocket_connect(
+            _ws_url(client, "ws-crud-project-interleave")
+        ) as ws:
+            ws.send_text(
+                json.dumps(
+                    {
+                        "type": "user.message",
+                        "id": "run in A",
+                        "content": "run in A",
+                        "message": "run in A",
+                        "project_id": pid_a,
+                    }
                 )
-                ws.send_text(
-                    json.dumps(
-                        {
-                            "type": "user.message",
-                            "id": "run in B",
-                            "content": "run in B",
-                            "message": "run in B",
-                            "project_id": pid_b,
-                        }
-                    )
+            )
+            ws.send_text(
+                json.dumps(
+                    {
+                        "type": "user.message",
+                        "id": "run in B",
+                        "content": "run in B",
+                        "message": "run in B",
+                        "project_id": pid_b,
+                    }
                 )
-                ws.send_text(
-                    json.dumps(
-                        {
-                            "type": "user.message",
-                            "id": "back to A",
-                            "content": "back to A",
-                            "message": "back to A",
-                            "project_id": pid_a,
-                        }
-                    )
+            )
+            ws.send_text(
+                json.dumps(
+                    {
+                        "type": "user.message",
+                        "id": "back to A",
+                        "content": "back to A",
+                        "message": "back to A",
+                        "project_id": pid_a,
+                    }
                 )
-                idles = 0
-                for _ in range(400):
-                    try:
-                        event = ws.receive_json()
-                        if (
-                            event.get("type") == "status"
-                            and event.get("content") == "idle"
-                        ):
-                            idles += 1
-                            if idles == 3:
-                                break
-                    except Exception:
-                        break
-
-            dict_runs = [
-                item
-                for item in captured_inputs
-                if isinstance(item, dict) and "message" not in item
-            ]
-            assert len(dict_runs) >= 3
-            assert dict_runs[0].get("project_id") == pid_a
-            assert dict_runs[1].get("project_id") == pid_b
-            assert dict_runs[2].get("project_id") == pid_a
-
-            # Verify CRUD isolation remained intact while websocket payloads interleaved.
-            final_a = client.get(f"/api/projects/{pid_a}").json()
-            final_b = client.get(f"/api/projects/{pid_b}").json()
-
-            assert any(chat.get("id") == "p2-a-1" for chat in final_a.get("chats", []))
-            # No chats from project B leaked into A
-            assert not any(
-                str(chat.get("id", "")).startswith("b-")
-                for chat in final_a.get("chats", [])
             )
+            idles = 0
+            for _ in range(400):
+                try:
+                    event = ws.receive_json()
+                    if event.get("type") == "status" and event.get("content") == "idle":
+                        idles += 1
+                        if idles == 3:
+                            break
+                except Exception:
+                    break
 
-            assert not any(
-                chat.get("id") == "p2-b-1" for chat in final_b.get("chats", [])
-            )
-            # No chats from project A leaked into B
-            assert not any(
-                str(chat.get("id", "")).startswith("a-")
-                for chat in final_b.get("chats", [])
-            )
+        dict_runs = [
+            item
+            for item in captured_inputs
+            if isinstance(item, dict) and "message" not in item
+        ]
+        assert len(dict_runs) >= 3
+        assert dict_runs[0].get("project_id") == pid_a
+        assert dict_runs[1].get("project_id") == pid_b
+        assert dict_runs[2].get("project_id") == pid_a
+
+        # Verify CRUD isolation remained intact while websocket payloads interleaved.
+        final_a = client.get(f"/api/projects/{pid_a}").json()
+        final_b = client.get(f"/api/projects/{pid_b}").json()
+
+        assert any(chat.get("id") == "p2-a-1" for chat in final_a.get("chats", []))
+        # No chats from project B leaked into A
+        assert not any(
+            str(chat.get("id", "")).startswith("b-")
+            for chat in final_a.get("chats", [])
+        )
+
+        assert not any(chat.get("id") == "p2-b-1" for chat in final_b.get("chats", []))
+        # No chats from project A leaked into B
+        assert not any(
+            str(chat.get("id", "")).startswith("a-")
+            for chat in final_b.get("chats", [])
+        )
 
 
 def test_ws_deterministic_multi_switch_sweep_keeps_project_context_and_crud_isolation(
@@ -709,181 +735,183 @@ def test_ws_deterministic_multi_switch_sweep_keeps_project_context_and_crud_isol
 ):
     captured_inputs = []
 
-    async def _capture_start_run(self, input_data, config, **kwargs):
+    async def _capture_start_run(
+        self, input_data, config, correlation_id=None, **kwargs
+    ):
         captured_inputs.append(input_data)
         done_msg = {"type": "status", "content": "idle"}
+        self.event_buffer.append((done_msg, correlation_id))
         for q in list(self.listeners):
-            await q.put((done_msg, None))
+            await q.put((done_msg, correlation_id))
 
     with (
-        patch("src.api.ws.handler.GraphSession.start_run", new=_capture_start_run),
+        patch(
+            "src.api.controllers.graph_session.GraphSession.start_run",
+            new=_capture_start_run,
+        ),
         patch(
             "src.api.ws.handler.generate_chat_title_router_llm",
             AsyncMock(return_value="mock-title"),
         ),
+        _client_with_agent(tmp_path, _ChunkMessageAgent()) as client,
     ):
-        with _client_with_agent(tmp_path, _ChunkMessageAgent()) as client:
-            proj_a = client.post("/api/projects", json={"name": "Sweep A"}).json()
-            proj_b = client.post("/api/projects", json={"name": "Sweep B"}).json()
-            proj_c = client.post("/api/projects", json={"name": "Sweep C"}).json()
-            pid_a = proj_a["id"]
-            pid_b = proj_b["id"]
-            pid_c = proj_c["id"]
+        proj_a = client.post("/api/projects", json={"name": "Sweep A"}).json()
+        proj_b = client.post("/api/projects", json={"name": "Sweep B"}).json()
+        proj_c = client.post("/api/projects", json={"name": "Sweep C"}).json()
+        pid_a = proj_a["id"]
+        pid_b = proj_b["id"]
+        pid_c = proj_c["id"]
 
-            # Explorer-like baseline chat setup across three projects.
-            client.post(
-                f"/api/projects/{pid_a}/chats",
-                json={"id": "p3-a-1", "name": "A 1", "created_at": 1.0},
+        # Explorer-like baseline chat setup across three projects.
+        client.post(
+            f"/api/projects/{pid_a}/chats",
+            json={"id": "p3-a-1", "name": "A 1", "created_at": 1.0},
+        )
+        client.post(
+            f"/api/projects/{pid_b}/chats",
+            json={"id": "p3-b-1", "name": "B 1", "created_at": 1.0},
+        )
+        client.post(
+            f"/api/projects/{pid_c}/chats",
+            json={"id": "p3-c-1", "name": "C 1", "created_at": 1.0},
+        )
+
+        crud_client = TestClient(client.app)
+        with client.websocket_connect(_ws_url(client, "ws-multi-switch-sweep")) as ws:
+            # Deterministic interleaving sequence: A -> B -> C -> B -> A -> C
+            ws.send_text(
+                json.dumps(
+                    {
+                        "type": "user.message",
+                        "id": "runA1",
+                        "content": "run-A-1",
+                        "message": "run-A-1",
+                        "project_id": pid_a,
+                    }
+                )
             )
-            client.post(
-                f"/api/projects/{pid_b}/chats",
-                json={"id": "p3-b-1", "name": "B 1", "created_at": 1.0},
+            crud_client.put(
+                f"/api/projects/{pid_b}/chats/p3-b-1", json={"name": "B 1 updated"}
             )
-            client.post(
+
+            ws.send_text(
+                json.dumps(
+                    {
+                        "type": "user.message",
+                        "id": "runB1",
+                        "content": "run-B-1",
+                        "message": "run-B-1",
+                        "project_id": pid_b,
+                    }
+                )
+            )
+            crud_client.post(
                 f"/api/projects/{pid_c}/chats",
-                json={"id": "p3-c-1", "name": "C 1", "created_at": 1.0},
+                json={"id": "p3-c-2", "name": "C 2", "created_at": 2.0},
             )
 
-            with client.websocket_connect(
-                _ws_url(client, "ws-multi-switch-sweep")
-            ) as ws:
-                # Deterministic interleaving sequence: A -> B -> C -> B -> A -> C
-                ws.send_text(
-                    json.dumps(
-                        {
-                            "type": "user.message",
-                            "id": "runA1",
-                            "content": "run-A-1",
-                            "message": "run-A-1",
-                            "project_id": pid_a,
-                        }
-                    )
+            ws.send_text(
+                json.dumps(
+                    {
+                        "type": "user.message",
+                        "id": "runC1",
+                        "content": "run-C-1",
+                        "message": "run-C-1",
+                        "project_id": pid_c,
+                    }
                 )
-                client.put(
-                    f"/api/projects/{pid_b}/chats/p3-b-1", json={"name": "B 1 updated"}
-                )
-
-                ws.send_text(
-                    json.dumps(
-                        {
-                            "type": "user.message",
-                            "id": "runB1",
-                            "content": "run-B-1",
-                            "message": "run-B-1",
-                            "project_id": pid_b,
-                        }
-                    )
-                )
-                client.post(
-                    f"/api/projects/{pid_c}/chats",
-                    json={"id": "p3-c-2", "name": "C 2", "created_at": 2.0},
-                )
-
-                ws.send_text(
-                    json.dumps(
-                        {
-                            "type": "user.message",
-                            "id": "runC1",
-                            "content": "run-C-1",
-                            "message": "run-C-1",
-                            "project_id": pid_c,
-                        }
-                    )
-                )
-                client.delete(f"/api/projects/{pid_a}/chats/p3-a-1")
-                client.post(
-                    f"/api/projects/{pid_a}/chats",
-                    json={"id": "p3-a-2", "name": "A 2", "created_at": 2.0},
-                )
-
-                ws.send_text(
-                    json.dumps(
-                        {
-                            "type": "user.message",
-                            "id": "runB2",
-                            "content": "run-B-2",
-                            "message": "run-B-2",
-                            "project_id": pid_b,
-                        }
-                    )
-                )
-                client.delete(f"/api/projects/{pid_c}/chats/p3-c-1")
-
-                ws.send_text(
-                    json.dumps(
-                        {
-                            "type": "user.message",
-                            "id": "runA2",
-                            "content": "run-A-2",
-                            "message": "run-A-2",
-                            "project_id": pid_a,
-                        }
-                    )
-                )
-                ws.send_text(
-                    json.dumps(
-                        {
-                            "type": "user.message",
-                            "id": "pc2",
-                            "content": "p-c-2",
-                            "message": "p-c-2",
-                            "project_id": pid_c,
-                        }
-                    )
-                )
-                idles = 0
-                for _ in range(400):
-                    try:
-                        event = ws.receive_json()
-                        if (
-                            event.get("type") == "status"
-                            and event.get("content") == "idle"
-                        ):
-                            idles += 1
-                            if idles == 6:
-                                break
-                    except Exception:
-                        break
-
-            dict_runs = [
-                item
-                for item in captured_inputs
-                if isinstance(item, dict) and "message" not in item
-            ]
-            assert len(dict_runs) >= 6
-            ordered_project_ids = [item.get("project_id") for item in dict_runs[:6]]
-            assert ordered_project_ids == [pid_a, pid_b, pid_c, pid_b, pid_a, pid_c]
-
-            final_a = client.get(f"/api/projects/{pid_a}").json()
-            final_b = client.get(f"/api/projects/{pid_b}").json()
-            final_c = client.get(f"/api/projects/{pid_c}").json()
-
-            chats_a = final_a.get("chats", [])
-            chats_b = final_b.get("chats", [])
-            chats_c = final_c.get("chats", [])
-
-            # A: deleted a-1 and replaced with a-2 only.
-            assert not any(chat.get("id") == "p3-a-1" for chat in chats_a)
-            assert any(chat.get("id") == "p3-a-2" for chat in chats_a)
-            # No chats from B or C leaked into A
-            assert not any(str(chat.get("id", "")).startswith("b-") for chat in chats_a)
-            assert not any(str(chat.get("id", "")).startswith("c-") for chat in chats_a)
-
-            # B: b-1 remains and was updated, isolation intact.
-            assert any(
-                chat.get("id") == "p3-b-1" and chat.get("name") == "B 1 updated"
-                for chat in chats_b
             )
-            # No chats from A or C leaked into B
-            assert not any(str(chat.get("id", "")).startswith("a-") for chat in chats_b)
-            assert not any(str(chat.get("id", "")).startswith("c-") for chat in chats_b)
+            crud_client.delete(f"/api/projects/{pid_a}/chats/p3-a-1")
+            crud_client.post(
+                f"/api/projects/{pid_a}/chats",
+                json={"id": "p3-a-2", "name": "A 2", "created_at": 2.0},
+            )
 
-            # C: c-1 deleted, c-2 retained, isolation intact.
-            assert not any(chat.get("id") == "p3-c-1" for chat in chats_c)
-            assert any(chat.get("id") == "p3-c-2" for chat in chats_c)
-            # No chats from A or B leaked into C
-            assert not any(str(chat.get("id", "")).startswith("a-") for chat in chats_c)
-            assert not any(str(chat.get("id", "")).startswith("b-") for chat in chats_c)
+            ws.send_text(
+                json.dumps(
+                    {
+                        "type": "user.message",
+                        "id": "runB2",
+                        "content": "run-B-2",
+                        "message": "run-B-2",
+                        "project_id": pid_b,
+                    }
+                )
+            )
+            crud_client.delete(f"/api/projects/{pid_c}/chats/p3-c-1")
+
+            ws.send_text(
+                json.dumps(
+                    {
+                        "type": "user.message",
+                        "id": "runA2",
+                        "content": "run-A-2",
+                        "message": "run-A-2",
+                        "project_id": pid_a,
+                    }
+                )
+            )
+            ws.send_text(
+                json.dumps(
+                    {
+                        "type": "user.message",
+                        "id": "pc2",
+                        "content": "p-c-2",
+                        "message": "p-c-2",
+                        "project_id": pid_c,
+                    }
+                )
+            )
+            idles = 0
+            for _ in range(400):
+                try:
+                    event = ws.receive_json()
+                    if event.get("type") == "status" and event.get("content") == "idle":
+                        idles += 1
+                        if idles == 6:
+                            break
+                except Exception:
+                    break
+
+        dict_runs = [
+            item
+            for item in captured_inputs
+            if isinstance(item, dict) and "message" not in item
+        ]
+        assert len(dict_runs) >= 6
+        ordered_project_ids = [item.get("project_id") for item in dict_runs[:6]]
+        assert ordered_project_ids == [pid_a, pid_b, pid_c, pid_b, pid_a, pid_c]
+
+        final_a = client.get(f"/api/projects/{pid_a}").json()
+        final_b = client.get(f"/api/projects/{pid_b}").json()
+        final_c = client.get(f"/api/projects/{pid_c}").json()
+
+        chats_a = final_a.get("chats", [])
+        chats_b = final_b.get("chats", [])
+        chats_c = final_c.get("chats", [])
+
+        # A: deleted a-1 and replaced with a-2 only.
+        assert not any(chat.get("id") == "p3-a-1" for chat in chats_a)
+        assert any(chat.get("id") == "p3-a-2" for chat in chats_a)
+        # No chats from B or C leaked into A
+        assert not any(str(chat.get("id", "")).startswith("b-") for chat in chats_a)
+        assert not any(str(chat.get("id", "")).startswith("c-") for chat in chats_a)
+
+        # B: b-1 remains and was updated, isolation intact.
+        assert any(
+            chat.get("id") == "p3-b-1" and chat.get("name") == "B 1 updated"
+            for chat in chats_b
+        )
+        # No chats from A or C leaked into B
+        assert not any(str(chat.get("id", "")).startswith("a-") for chat in chats_b)
+        assert not any(str(chat.get("id", "")).startswith("c-") for chat in chats_b)
+
+        # C: c-1 deleted, c-2 retained, isolation intact.
+        assert not any(chat.get("id") == "p3-c-1" for chat in chats_c)
+        assert any(chat.get("id") == "p3-c-2" for chat in chats_c)
+        # No chats from A or B leaked into C
+        assert not any(str(chat.get("id", "")).startswith("a-") for chat in chats_c)
+        assert not any(str(chat.get("id", "")).startswith("b-") for chat in chats_c)
 
 
 def test_ws_high_pressure_interleaving_preserves_ordered_project_context_and_crud_state(
@@ -891,290 +919,294 @@ def test_ws_high_pressure_interleaving_preserves_ordered_project_context_and_cru
 ):
     captured_inputs = []
 
-    async def _capture_start_run(self, input_data, config, **kwargs):
+    async def _capture_start_run(
+        self, input_data, config, correlation_id=None, **kwargs
+    ):
         captured_inputs.append(input_data)
         done_msg = {"type": "status", "content": "idle"}
+        self.event_buffer.append((done_msg, correlation_id))
         for q in list(self.listeners):
-            await q.put((done_msg, None))
+            await q.put((done_msg, correlation_id))
 
     with (
-        patch("src.api.ws.handler.GraphSession.start_run", new=_capture_start_run),
+        patch(
+            "src.api.controllers.graph_session.GraphSession.start_run",
+            new=_capture_start_run,
+        ),
         patch(
             "src.api.ws.handler.generate_chat_title_router_llm",
             AsyncMock(return_value="mock-title"),
         ),
+        _client_with_agent(tmp_path, _ChunkMessageAgent()) as client,
     ):
-        with _client_with_agent(tmp_path, _ChunkMessageAgent()) as client:
-            proj_a = client.post("/api/projects", json={"name": "Pressure A"}).json()
-            proj_b = client.post("/api/projects", json={"name": "Pressure B"}).json()
-            proj_c = client.post("/api/projects", json={"name": "Pressure C"}).json()
-            pid_a = proj_a["id"]
-            pid_b = proj_b["id"]
-            pid_c = proj_c["id"]
+        proj_a = client.post("/api/projects", json={"name": "Pressure A"}).json()
+        proj_b = client.post("/api/projects", json={"name": "Pressure B"}).json()
+        proj_c = client.post("/api/projects", json={"name": "Pressure C"}).json()
+        pid_a = proj_a["id"]
+        pid_b = proj_b["id"]
+        pid_c = proj_c["id"]
 
-            client.post(
-                f"/api/projects/{pid_a}/chats",
-                json={"id": "p4-a-1", "name": "A 1", "created_at": 1.0},
+        client.post(
+            f"/api/projects/{pid_a}/chats",
+            json={"id": "p4-a-1", "name": "A 1", "created_at": 1.0},
+        )
+        client.post(
+            f"/api/projects/{pid_b}/chats",
+            json={"id": "p4-b-1", "name": "B 1", "created_at": 1.0},
+        )
+        client.post(
+            f"/api/projects/{pid_c}/chats",
+            json={"id": "p4-c-1", "name": "C 1", "created_at": 1.0},
+        )
+
+        sequence = [
+            pid_a,
+            pid_b,
+            pid_c,
+            pid_a,
+            pid_c,
+            pid_b,
+            pid_a,
+            pid_b,
+            pid_c,
+            pid_b,
+            pid_a,
+            pid_c,
+        ]
+        crud_client = TestClient(client.app)
+        with client.websocket_connect(
+            _ws_url(client, "ws-high-pressure-interleave")
+        ) as ws:
+            ws.send_text(
+                json.dumps(
+                    {
+                        "type": "user.message",
+                        "id": "pa1",
+                        "content": "p-a-1",
+                        "message": "p-a-1",
+                        "project_id": pid_a,
+                    }
+                )
             )
-            client.post(
-                f"/api/projects/{pid_b}/chats",
-                json={"id": "p4-b-1", "name": "B 1", "created_at": 1.0},
+            crud_client.put(
+                f"/api/projects/{pid_b}/chats/p4-b-1", json={"name": "B 1 u1"}
             )
-            client.post(
+
+            ws.send_text(
+                json.dumps(
+                    {
+                        "type": "user.message",
+                        "id": "pb1",
+                        "content": "p-b-1",
+                        "message": "p-b-1",
+                        "project_id": pid_b,
+                    }
+                )
+            )
+            crud_client.post(
                 f"/api/projects/{pid_c}/chats",
-                json={"id": "p4-c-1", "name": "C 1", "created_at": 1.0},
+                json={"id": "p4-c-2", "name": "C 2", "created_at": 2.0},
             )
 
-            sequence = [
-                pid_a,
-                pid_b,
-                pid_c,
-                pid_a,
-                pid_c,
-                pid_b,
-                pid_a,
-                pid_b,
-                pid_c,
-                pid_b,
-                pid_a,
-                pid_c,
-            ]
-            with client.websocket_connect(
-                _ws_url(client, "ws-high-pressure-interleave")
-            ) as ws:
-                ws.send_text(
-                    json.dumps(
-                        {
-                            "type": "user.message",
-                            "id": "pa1",
-                            "content": "p-a-1",
-                            "message": "p-a-1",
-                            "project_id": pid_a,
-                        }
-                    )
+            ws.send_text(
+                json.dumps(
+                    {
+                        "type": "user.message",
+                        "id": "pc1",
+                        "content": "p-c-1",
+                        "message": "p-c-1",
+                        "project_id": pid_c,
+                    }
                 )
-                client.put(
-                    f"/api/projects/{pid_b}/chats/p4-b-1", json={"name": "B 1 u1"}
-                )
-
-                ws.send_text(
-                    json.dumps(
-                        {
-                            "type": "user.message",
-                            "id": "pb1",
-                            "content": "p-b-1",
-                            "message": "p-b-1",
-                            "project_id": pid_b,
-                        }
-                    )
-                )
-                client.post(
-                    f"/api/projects/{pid_c}/chats",
-                    json={"id": "p4-c-2", "name": "C 2", "created_at": 2.0},
-                )
-
-                ws.send_text(
-                    json.dumps(
-                        {
-                            "type": "user.message",
-                            "id": "pc1",
-                            "content": "p-c-1",
-                            "message": "p-c-1",
-                            "project_id": pid_c,
-                        }
-                    )
-                )
-                client.delete(f"/api/projects/{pid_a}/chats/p4-a-1")
-                client.post(
-                    f"/api/projects/{pid_a}/chats",
-                    json={"id": "p4-a-2", "name": "A 2", "created_at": 2.0},
-                )
-
-                ws.send_text(
-                    json.dumps(
-                        {
-                            "type": "user.message",
-                            "id": "pa2",
-                            "content": "p-a-2",
-                            "message": "p-a-2",
-                            "project_id": pid_a,
-                        }
-                    )
-                )
-                client.put(
-                    f"/api/projects/{pid_c}/chats/p4-c-2", json={"name": "C 2 u1"}
-                )
-
-                ws.send_text(
-                    json.dumps(
-                        {
-                            "type": "user.message",
-                            "id": "pc2",
-                            "content": "p-c-2",
-                            "message": "p-c-2",
-                            "project_id": pid_c,
-                        }
-                    )
-                )
-                client.post(
-                    f"/api/projects/{pid_b}/chats",
-                    json={"id": "p4-b-2", "name": "B 2", "created_at": 2.0},
-                )
-
-                ws.send_text(
-                    json.dumps(
-                        {
-                            "type": "user.message",
-                            "id": "pb2",
-                            "content": "p-b-2",
-                            "message": "p-b-2",
-                            "project_id": pid_b,
-                        }
-                    )
-                )
-                client.delete(f"/api/projects/{pid_c}/chats/p4-c-1")
-
-                ws.send_text(
-                    json.dumps(
-                        {
-                            "type": "user.message",
-                            "id": "pa3",
-                            "content": "p-a-3",
-                            "message": "p-a-3",
-                            "project_id": pid_a,
-                        }
-                    )
-                )
-                client.put(
-                    f"/api/projects/{pid_a}/chats/p4-a-2", json={"name": "A 2 u1"}
-                )
-
-                ws.send_text(
-                    json.dumps(
-                        {
-                            "type": "user.message",
-                            "id": "pb3",
-                            "content": "p-b-3",
-                            "message": "p-b-3",
-                            "project_id": pid_b,
-                        }
-                    )
-                )
-                client.delete(f"/api/projects/{pid_b}/chats/p4-b-1")
-
-                ws.send_text(
-                    json.dumps(
-                        {
-                            "type": "user.message",
-                            "id": "pc3",
-                            "content": "p-c-3",
-                            "message": "p-c-3",
-                            "project_id": pid_c,
-                        }
-                    )
-                )
-                client.post(
-                    f"/api/projects/{pid_a}/chats",
-                    json={"id": "p4-a-3", "name": "A 3", "created_at": 3.0},
-                )
-
-                ws.send_text(
-                    json.dumps(
-                        {
-                            "type": "user.message",
-                            "id": "pb4",
-                            "content": "p-b-4",
-                            "message": "p-b-4",
-                            "project_id": pid_b,
-                        }
-                    )
-                )
-                client.put(
-                    f"/api/projects/{pid_b}/chats/p4-b-2", json={"name": "B 2 u1"}
-                )
-
-                ws.send_text(
-                    json.dumps(
-                        {
-                            "type": "user.message",
-                            "id": "pa4",
-                            "content": "p-a-4",
-                            "message": "p-a-4",
-                            "project_id": pid_a,
-                        }
-                    )
-                )
-                ws.send_text(
-                    json.dumps(
-                        {
-                            "type": "user.message",
-                            "id": "pc4",
-                            "content": "p-c-4",
-                            "message": "p-c-4",
-                            "project_id": pid_c,
-                        }
-                    )
-                )
-                idles = 0
-                for _ in range(400):
-                    try:
-                        event = ws.receive_json()
-                        if (
-                            event.get("type") == "status"
-                            and event.get("content") == "idle"
-                        ):
-                            idles += 1
-                            if idles == 12:
-                                break
-                    except Exception:
-                        break
-
-            dict_runs = [
-                item
-                for item in captured_inputs
-                if isinstance(item, dict) and "message" not in item
-            ]
-            assert len(dict_runs) >= len(sequence)
-            ordered_project_ids = [
-                item.get("project_id") for item in dict_runs[: len(sequence)]
-            ]
-            assert ordered_project_ids == sequence
-
-            final_a = client.get(f"/api/projects/{pid_a}").json()
-            final_b = client.get(f"/api/projects/{pid_b}").json()
-            final_c = client.get(f"/api/projects/{pid_c}").json()
-
-            chats_a = final_a.get("chats", [])
-            chats_b = final_b.get("chats", [])
-            chats_c = final_c.get("chats", [])
-
-            assert not any(chat.get("id") == "p4-a-1" for chat in chats_a)
-            assert any(
-                chat.get("id") == "p4-a-2" and chat.get("name") == "A 2 u1"
-                for chat in chats_a
             )
-            assert any(chat.get("id") == "p4-a-3" for chat in chats_a)
-            # No chats from B or C leaked into A
-            assert not any(str(chat.get("id", "")).startswith("b-") for chat in chats_a)
-            assert not any(str(chat.get("id", "")).startswith("c-") for chat in chats_a)
-
-            assert not any(chat.get("id") == "p4-b-1" for chat in chats_b)
-            assert any(
-                chat.get("id") == "p4-b-2" and chat.get("name") == "B 2 u1"
-                for chat in chats_b
+            crud_client.delete(f"/api/projects/{pid_a}/chats/p4-a-1")
+            crud_client.post(
+                f"/api/projects/{pid_a}/chats",
+                json={"id": "p4-a-2", "name": "A 2", "created_at": 2.0},
             )
-            # No chats from A or C leaked into B
-            assert not any(str(chat.get("id", "")).startswith("a-") for chat in chats_b)
-            assert not any(str(chat.get("id", "")).startswith("c-") for chat in chats_b)
 
-            assert not any(chat.get("id") == "p4-c-1" for chat in chats_c)
-            assert any(
-                chat.get("id") == "p4-c-2" and chat.get("name") == "C 2 u1"
-                for chat in chats_c
+            ws.send_text(
+                json.dumps(
+                    {
+                        "type": "user.message",
+                        "id": "pa2",
+                        "content": "p-a-2",
+                        "message": "p-a-2",
+                        "project_id": pid_a,
+                    }
+                )
             )
-            # No chats from A or B leaked into C
-            assert not any(str(chat.get("id", "")).startswith("a-") for chat in chats_c)
-            assert not any(str(chat.get("id", "")).startswith("b-") for chat in chats_c)
+            crud_client.put(
+                f"/api/projects/{pid_c}/chats/p4-c-2", json={"name": "C 2 u1"}
+            )
+
+            ws.send_text(
+                json.dumps(
+                    {
+                        "type": "user.message",
+                        "id": "pc2",
+                        "content": "p-c-2",
+                        "message": "p-c-2",
+                        "project_id": pid_c,
+                    }
+                )
+            )
+            crud_client.post(
+                f"/api/projects/{pid_b}/chats",
+                json={"id": "p4-b-2", "name": "B 2", "created_at": 2.0},
+            )
+
+            ws.send_text(
+                json.dumps(
+                    {
+                        "type": "user.message",
+                        "id": "pb2",
+                        "content": "p-b-2",
+                        "message": "p-b-2",
+                        "project_id": pid_b,
+                    }
+                )
+            )
+            crud_client.delete(f"/api/projects/{pid_c}/chats/p4-c-1")
+
+            ws.send_text(
+                json.dumps(
+                    {
+                        "type": "user.message",
+                        "id": "pa3",
+                        "content": "p-a-3",
+                        "message": "p-a-3",
+                        "project_id": pid_a,
+                    }
+                )
+            )
+            crud_client.put(
+                f"/api/projects/{pid_a}/chats/p4-a-2", json={"name": "A 2 u1"}
+            )
+
+            ws.send_text(
+                json.dumps(
+                    {
+                        "type": "user.message",
+                        "id": "pb3",
+                        "content": "p-b-3",
+                        "message": "p-b-3",
+                        "project_id": pid_b,
+                    }
+                )
+            )
+            crud_client.delete(f"/api/projects/{pid_b}/chats/p4-b-1")
+
+            ws.send_text(
+                json.dumps(
+                    {
+                        "type": "user.message",
+                        "id": "pc3",
+                        "content": "p-c-3",
+                        "message": "p-c-3",
+                        "project_id": pid_c,
+                    }
+                )
+            )
+            crud_client.post(
+                f"/api/projects/{pid_a}/chats",
+                json={"id": "p4-a-3", "name": "A 3", "created_at": 3.0},
+            )
+
+            ws.send_text(
+                json.dumps(
+                    {
+                        "type": "user.message",
+                        "id": "pb4",
+                        "content": "p-b-4",
+                        "message": "p-b-4",
+                        "project_id": pid_b,
+                    }
+                )
+            )
+            crud_client.put(
+                f"/api/projects/{pid_b}/chats/p4-b-2", json={"name": "B 2 u1"}
+            )
+
+            ws.send_text(
+                json.dumps(
+                    {
+                        "type": "user.message",
+                        "id": "pa4",
+                        "content": "p-a-4",
+                        "message": "p-a-4",
+                        "project_id": pid_a,
+                    }
+                )
+            )
+            ws.send_text(
+                json.dumps(
+                    {
+                        "type": "user.message",
+                        "id": "pc4",
+                        "content": "p-c-4",
+                        "message": "p-c-4",
+                        "project_id": pid_c,
+                    }
+                )
+            )
+            idles = 0
+            for _ in range(400):
+                try:
+                    event = ws.receive_json()
+                    if event.get("type") == "status" and event.get("content") == "idle":
+                        idles += 1
+                        if idles == 12:
+                            break
+                except Exception:
+                    break
+
+        dict_runs = [
+            item
+            for item in captured_inputs
+            if isinstance(item, dict) and "message" not in item
+        ]
+        assert len(dict_runs) >= len(sequence)
+        ordered_project_ids = [
+            item.get("project_id") for item in dict_runs[: len(sequence)]
+        ]
+        assert ordered_project_ids == sequence
+
+        final_a = client.get(f"/api/projects/{pid_a}").json()
+        final_b = client.get(f"/api/projects/{pid_b}").json()
+        final_c = client.get(f"/api/projects/{pid_c}").json()
+
+        chats_a = final_a.get("chats", [])
+        chats_b = final_b.get("chats", [])
+        chats_c = final_c.get("chats", [])
+
+        assert not any(chat.get("id") == "p4-a-1" for chat in chats_a)
+        assert any(
+            chat.get("id") == "p4-a-2" and chat.get("name") == "A 2 u1"
+            for chat in chats_a
+        )
+        assert any(chat.get("id") == "p4-a-3" for chat in chats_a)
+        # No chats from B or C leaked into A
+        assert not any(str(chat.get("id", "")).startswith("b-") for chat in chats_a)
+        assert not any(str(chat.get("id", "")).startswith("c-") for chat in chats_a)
+
+        assert not any(chat.get("id") == "p4-b-1" for chat in chats_b)
+        assert any(
+            chat.get("id") == "p4-b-2" and chat.get("name") == "B 2 u1"
+            for chat in chats_b
+        )
+        # No chats from A or C leaked into B
+        assert not any(str(chat.get("id", "")).startswith("a-") for chat in chats_b)
+        assert not any(str(chat.get("id", "")).startswith("c-") for chat in chats_b)
+
+        assert not any(chat.get("id") == "p4-c-1" for chat in chats_c)
+        assert any(
+            chat.get("id") == "p4-c-2" and chat.get("name") == "C 2 u1"
+            for chat in chats_c
+        )
+        # No chats from A or B leaked into C
+        assert not any(str(chat.get("id", "")).startswith("a-") for chat in chats_c)
+        assert not any(str(chat.get("id", "")).startswith("b-") for chat in chats_c)
 
 
 def test_ws_router_info_event_emitted(tmp_path):

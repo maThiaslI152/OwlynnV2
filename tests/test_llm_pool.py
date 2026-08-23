@@ -9,14 +9,14 @@ import pytest
 
 from src.agent.llm import CloudUnavailableError, LLMPool
 
-
 PROFILE = {
-    "small_llm_base_url": "http://127.0.0.1:1234/v1",
-    "small_llm_model_name": "liquid/lfm2.5-1.2b",
+    "main_llm_base_url": "http://127.0.0.1:1234/v1",
+    "main_llm_model_name": "gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m",
     "llm_base_url": "http://127.0.0.1:1234/v1",
     "cloud_llm_base_url": "https://api.deepseek.com/v1",
     "cloud_llm_model_name": "deepseek-chat",
     "deepseek_api_key": "",
+    "cloud_routing_mode": "auto",
 }
 
 
@@ -31,15 +31,68 @@ def _clear_pool():
 
 
 def test_clear_resets_all_slots():
+    LLMPool._main_llm = "fake"
     LLMPool._small_llm = "fake"
+    LLMPool._fallback_llm = "fake"
+    LLMPool._pentest_llm = "fake"
     LLMPool._cloud_llm_flash = "fake"
     LLMPool._cloud_llm_pro = "fake"
 
     LLMPool.clear()
 
+    assert LLMPool._main_llm is None
     assert LLMPool._small_llm is None
+    assert LLMPool._fallback_llm is None
+    assert LLMPool._pentest_llm is None
     assert LLMPool._cloud_llm_flash is None
     assert LLMPool._cloud_llm_pro is None
+
+
+@pytest.mark.anyio
+async def test_get_main_llm_creates_instance():
+    """get_main_llm returns a ChatOpenAI client configured from profile/defaults."""
+    with (
+        patch("src.agent.llm.get_profile", return_value=PROFILE),
+        patch("src.agent.llm.ChatOpenAI") as MockChat,
+    ):
+        MockChat.return_value = MagicMock()
+        client = await LLMPool.get_main_llm()
+        assert client is not None
+
+    call_kwargs = MockChat.call_args[1]
+    assert call_kwargs["api_key"] == "sk-local-no-key-needed"
+    assert "model" in call_kwargs
+
+
+@pytest.mark.anyio
+async def test_get_pentest_llm_creates_instance():
+    """get_pentest_llm returns a ChatOpenAI client with pentest model."""
+    with (
+        patch("src.agent.llm.get_profile", return_value=PROFILE),
+        patch("src.agent.llm.ChatOpenAI") as MockChat,
+    ):
+        MockChat.return_value = MagicMock()
+        client = await LLMPool.get_pentest_llm()
+        assert client is not None
+
+    call_kwargs = MockChat.call_args[1]
+    assert call_kwargs["api_key"] == "sk-local-no-key-needed"
+    assert "model" in call_kwargs
+
+
+@pytest.mark.anyio
+async def test_get_fallback_llm_creates_instance():
+    """get_fallback_llm returns a ChatOpenAI client for local fallback."""
+    with (
+        patch("src.agent.llm.get_profile", return_value=PROFILE),
+        patch("src.agent.llm.ChatOpenAI") as MockChat,
+    ):
+        MockChat.return_value = MagicMock()
+        client = await LLMPool.get_fallback_llm()
+        assert client is not None
+
+    call_kwargs = MockChat.call_args[1]
+    assert call_kwargs["api_key"] == "sk-local-no-key-needed"
 
 
 @pytest.mark.anyio

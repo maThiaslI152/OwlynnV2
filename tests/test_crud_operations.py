@@ -17,10 +17,10 @@ setUp/tearDown handle project lifecycle to avoid test pollution.
 Run: ``pytest tests/test_crud_operations.py -v``
 """
 
-import unittest
+import asyncio
 import os
 import sys
-import asyncio
+import unittest
 
 # Add src to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))

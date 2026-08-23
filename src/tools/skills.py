@@ -18,10 +18,11 @@ import time
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+
 from langchain_core.tools import tool
-from src.config.settings import PROJECT_ROOT
+
 from src.config.config_loader import config as _app_config
+from src.config.settings import PROJECT_ROOT
 
 try:
     from sklearn.feature_extraction.text import TfidfVectorizer
@@ -50,7 +51,7 @@ class SkillParam:
     name: str
     description: str
     required: bool = True
-    default: Optional[str] = None
+    default: str | None = None
 
 
 @dataclass
@@ -67,6 +68,9 @@ class SkillDefinition:
     chain_compatible: bool = True
     version: str = "1.0"
     tools_used: list[str] = field(default_factory=list)
+    is_package: bool = False
+    package_dir: str | None = None
+    support_files: dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.name or not self.name.strip():
@@ -97,7 +101,7 @@ class MatchResult:
     """
 
     is_ambiguous: bool
-    top_match: Optional[SkillDefinition] = None
+    top_match: SkillDefinition | None = None
     candidate_skills: list[tuple[SkillDefinition, float]] = field(default_factory=list)
     ambiguity_reason: str = ""
     best_score: float = 0.0
@@ -181,7 +185,9 @@ def _parse_front_matter(text: str) -> tuple[dict, str]:
     return meta, body.strip()
 
 
-def _parse_skill_file(text: str, filename: str) -> SkillDefinition:
+def _parse_skill_file(
+    text: str, filename: str, package_dir: Path | None = None
+) -> SkillDefinition:
     """Parse a skill markdown file and return a fully-populated SkillDefinition.
 
     Applies v2.0 defaults for any missing fields so that v1.0 skill files
@@ -214,20 +220,35 @@ def _parse_skill_file(text: str, filename: str) -> SkillDefinition:
     if isinstance(tools_used, str):
         tools_used = [t.strip() for t in tools_used.split(",") if t.strip()]
 
+    default_name = package_dir.name if package_dir else Path(filename).stem
+    name = meta.get("name", default_name)
+
     # Normalise triggers to a list
     triggers = meta.get("triggers", [])
     if isinstance(triggers, str):
         triggers = [triggers]
+    if not triggers and (package_dir is not None or filename.endswith("SKILL.md")):
+        triggers = [name]
 
-    # chain_compatible — already parsed as bool by _parse_front_matter when
-    # present; default to True when absent.
+    # chain_compatible
     chain_compatible = meta.get("chain_compatible", True)
     if isinstance(chain_compatible, str):
         chain_compatible = chain_compatible.lower() not in ("false", "no", "0")
 
+    is_pkg = package_dir is not None
+    support_files: dict[str, str] = {}
+    if package_dir and package_dir.is_dir():
+        for sub_folder in ("references", "templates", "scripts", "assets"):
+            sdir = package_dir / sub_folder
+            if sdir.is_dir():
+                for sfile in sorted(sdir.rglob("*")):
+                    if sfile.is_file():
+                        rel = str(sfile.relative_to(package_dir))
+                        support_files[rel] = str(sfile)
+
     return SkillDefinition(
         file=filename,
-        name=meta.get("name", Path(filename).stem),
+        name=name,
         triggers=triggers,
         description=meta.get("description", ""),
         prompt=body,
@@ -236,6 +257,9 @@ def _parse_skill_file(text: str, filename: str) -> SkillDefinition:
         chain_compatible=chain_compatible,
         version=meta.get("version", "1.0"),
         tools_used=tools_used,
+        is_package=is_pkg,
+        package_dir=str(package_dir) if package_dir else None,
+        support_files=support_files,
     )
 
 
@@ -243,52 +267,134 @@ logger = logging.getLogger(__name__)
 
 
 class SkillLoader:
-    """Loads, parses, and caches skill definitions from ``skills/*.md``."""
+    """Loads, parses, and caches skill definitions from ``skills/`` and ``.agents/skills/``."""
 
-    def __init__(self, skills_dir: Path) -> None:
+    def __init__(
+        self, skills_dir: Path, secondary_dirs: list[Path] | None = None
+    ) -> None:
         self._skills_dir = skills_dir
+        self._secondary_dirs = secondary_dirs if secondary_dirs is not None else []
         self._cache: dict[str, SkillDefinition] = {}
         self._last_scan: float = 0.0
         self._cache_ttl: float = 30.0
 
+    def _scan_dir(self, directory: Path) -> list[SkillDefinition]:
+        if not directory.exists():
+            return []
+        found: list[SkillDefinition] = []
+
+        # 1. Flat .md files
+        for f in sorted(directory.glob("*.md")):
+            if f.name == "SKILL.md":
+                continue
+            try:
+                text = f.read_text(encoding="utf-8")
+                skill = _parse_skill_file(text, f.name)
+                found.append(skill)
+            except Exception as exc:
+                logger.warning("Skipping skill file %s: %s", f.name, exc)
+
+        # 2. Package directories with SKILL.md
+        for skill_md in sorted(directory.glob("**/SKILL.md")):
+            pkg_dir = skill_md.parent
+            if pkg_dir.name in (
+                "references",
+                "templates",
+                "scripts",
+                "assets",
+                ".archive",
+            ):
+                continue
+            try:
+                text = skill_md.read_text(encoding="utf-8")
+                rel_file = str(skill_md.relative_to(directory))
+                skill = _parse_skill_file(text, rel_file, package_dir=pkg_dir)
+                found.append(skill)
+            except Exception as exc:
+                logger.warning("Skipping skill package %s: %s", pkg_dir.name, exc)
+
+        return found
+
     def load_all(self) -> list[SkillDefinition]:
-        """Parse all ``.md`` files in skills_dir; return cached list if within TTL."""
+        """Parse all skill definitions; return cached list if within TTL."""
         if self._cache and time.time() - self._last_scan < self._cache_ttl:
             return list(self._cache.values())
 
         self._skills_dir.mkdir(parents=True, exist_ok=True)
         self._cache.clear()
-        for f in sorted(self._skills_dir.glob("*.md")):
-            try:
-                text = f.read_text(encoding="utf-8")
-                skill = _parse_skill_file(text, f.name)
-                self._cache[f.name] = skill
-            except Exception as exc:
-                logger.warning("Skipping skill file %s: %s", f.name, exc)
-                continue
+
+        # Primary skills dir
+        for s in self._scan_dir(self._skills_dir):
+            self._cache[s.file] = s
+
+        # Secondary directories
+        for sdir in self._secondary_dirs:
+            for s in self._scan_dir(sdir):
+                if s.file not in self._cache and s.name not in [
+                    x.name for x in self._cache.values()
+                ]:
+                    self._cache[s.file] = s
+
         self._last_scan = time.time()
         return list(self._cache.values())
 
-    def load_one(self, filename: str) -> Optional[SkillDefinition]:
+    def load_one(self, filename: str) -> SkillDefinition | None:
         """Parse a single skill file and return its definition, or ``None``."""
+        # Try direct file in skills_dir
         path = self._skills_dir / filename
-        if not path.exists():
-            return None
-        try:
-            text = path.read_text(encoding="utf-8")
-            skill = _parse_skill_file(text, filename)
-            self._cache[filename] = skill
-            return skill
-        except Exception as exc:
-            logger.warning("Skipping skill file %s: %s", filename, exc)
-            return None
+        if path.is_file():
+            try:
+                text = path.read_text(encoding="utf-8")
+                skill = _parse_skill_file(text, filename)
+                self._cache[filename] = skill
+                return skill
+            except Exception as exc:
+                logger.warning("Skipping skill file %s: %s", filename, exc)
+                return None
+
+        # Try package dir
+        if path.is_dir() and (path / "SKILL.md").is_file():
+            try:
+                text = (path / "SKILL.md").read_text(encoding="utf-8")
+                skill = _parse_skill_file(
+                    text, f"{filename}/SKILL.md", package_dir=path
+                )
+                self._cache[filename] = skill
+                return skill
+            except Exception as exc:
+                logger.warning("Skipping skill package %s: %s", filename, exc)
+                return None
+
+        # Secondary dirs
+        for sdir in self._secondary_dirs:
+            spath = sdir / filename
+            if spath.is_file():
+                try:
+                    text = spath.read_text(encoding="utf-8")
+                    skill = _parse_skill_file(text, filename)
+                    self._cache[filename] = skill
+                    return skill
+                except Exception:
+                    pass
+            elif spath.is_dir() and (spath / "SKILL.md").is_file():
+                try:
+                    text = (spath / "SKILL.md").read_text(encoding="utf-8")
+                    skill = _parse_skill_file(
+                        text, f"{filename}/SKILL.md", package_dir=spath
+                    )
+                    self._cache[filename] = skill
+                    return skill
+                except Exception:
+                    pass
+
+        return None
 
     def invalidate_cache(self) -> None:
         """Clear the cache so the next ``load_all`` re-reads from disk."""
         self._cache.clear()
         self._last_scan = 0.0
 
-    def get_by_name(self, name: str) -> Optional[SkillDefinition]:
+    def get_by_name(self, name: str) -> SkillDefinition | None:
         """Lookup a cached skill by name (case-insensitive)."""
         if not self._cache:
             self.load_all()
@@ -305,7 +411,9 @@ class SkillLoader:
         return [s for s in self._cache.values() if s.category == category]
 
 
-_default_loader = SkillLoader(SKILLS_DIR)
+_default_loader = SkillLoader(
+    SKILLS_DIR, secondary_dirs=[PROJECT_ROOT / ".agents" / "skills"]
+)
 
 
 class SkillMatcher:
@@ -359,9 +467,7 @@ class SkillMatcher:
         combined.sort(key=lambda x: x[1], reverse=True)
         return combined[:top_k]
 
-    def match_best(
-        self, query: str, threshold: float = 0.3
-    ) -> Optional[SkillDefinition]:
+    def match_best(self, query: str, threshold: float = 0.3) -> SkillDefinition | None:
         """Return the single best match above *threshold*, or ``None``."""
         results = self.match(query, top_k=1)
         if results and results[0][1] >= threshold:
@@ -421,7 +527,6 @@ class SkillMatcher:
         "note",
         "presentation",
         "slide",
-        "check",
         "verify",
         "fact",
     }
@@ -588,8 +693,8 @@ class ContextInjector:
         self,
         skill: SkillDefinition,
         context: str,
-        params: Optional[dict[str, str]] = None,
-        chain_state: Optional[dict] = None,
+        params: dict[str, str] | None = None,
+        chain_state: dict | None = None,
     ) -> str:
         """Render a skill prompt with context, parameters, and chain state.
 
@@ -653,7 +758,7 @@ class ChainStep:
 
     skill_name: str
     params: dict[str, str] = field(default_factory=dict)
-    context_override: Optional[str] = None
+    context_override: str | None = None
 
 
 @dataclass
@@ -789,7 +894,7 @@ def load_all_skills() -> list[dict]:
     ]
 
 
-def find_matching_skill(user_text: str) -> Optional[dict]:
+def find_matching_skill(user_text: str) -> dict | None:
     """Find a skill whose triggers match the user's message.
 
     .. deprecated::
@@ -906,3 +1011,137 @@ def run_skill_chain(steps: str, context: str = "") -> str:
 
     step_prompts = "\n\n---\n\n".join(result.steps)
     return f"{result.instructions}\n\n---\n\n{step_prompts}"
+
+
+@tool
+def skill_view(skill_name: str, file_path: str = "") -> str:
+    """Views the prompt, instructions, and support files of a skill package.
+
+    Args:
+        skill_name: Name of the skill to view.
+        file_path: Optional relative path to a support file (e.g. 'references/nmap_probes.md', 'templates/config.yaml', 'scripts/verify.py'). If omitted, views the main skill instructions.
+    """
+    skill = _default_loader.get_by_name(skill_name)
+    if not skill:
+        all_skills = _default_loader.load_all()
+        available = ", ".join(s.name for s in all_skills) or "none"
+        return f"Skill '{skill_name}' not found. Available: {available}"
+
+    if not file_path or not file_path.strip():
+        out = [
+            f"# Skill: {skill.name} (v{skill.version})",
+            f"**Category:** {skill.category}",
+            f"**Description:** {skill.description}",
+            f"**Triggers:** {', '.join(skill.triggers)}",
+        ]
+        if skill.is_package and skill.support_files:
+            out.append("\n## Support Files:")
+            for rel in sorted(skill.support_files):
+                out.append(f"  • `{rel}`")
+        out.append(f"\n## Instructions / Prompt:\n{skill.prompt}")
+        return "\n".join(out)
+
+    target_rel = file_path.strip().lstrip("/")
+    if skill.support_files and target_rel in skill.support_files:
+        full_path = Path(skill.support_files[target_rel])
+        if full_path.is_file():
+            return f"# File: {skill.name} / {target_rel}\n\n{full_path.read_text(encoding='utf-8')}"
+
+    if skill.package_dir:
+        candidate = Path(skill.package_dir) / target_rel
+        if candidate.is_file():
+            return f"# File: {skill.name} / {target_rel}\n\n{candidate.read_text(encoding='utf-8')}"
+
+    avail_files = list(skill.support_files.keys()) if skill.support_files else ["None"]
+    return f"Support file '{file_path}' not found in skill '{skill.name}'. Available: {', '.join(avail_files)}"
+
+
+@tool
+def skill_manage(
+    action: str,
+    skill_name: str,
+    file_path: str = "",
+    content: str = "",
+    category: str = "general",
+    description: str = "",
+    triggers: str = "",
+) -> str:
+    """Manages skill packages by creating new skills or authoring support files.
+
+    Args:
+        action: Action to perform: 'create' (create new skill package), 'write_file' (write or update a support file in references/templates/scripts), 'list_files' (list files in a skill package).
+        skill_name: Name of the skill package (e.g. 'custom_recon_workflow').
+        file_path: Relative path for write_file (must start with references/, templates/, or scripts/).
+        content: Text content to write into the file or SKILL.md.
+        category: Category for new skill ('research', 'writing', 'productivity', 'data', 'communication', 'general').
+        description: Description for new skill.
+        triggers: Comma-separated triggers for new skill.
+    """
+    clean_name = re.sub(r"[^\w\-]", "_", skill_name.strip().lower())
+    if not clean_name:
+        return "Error: skill_name must be non-empty"
+
+    if action == "list_files":
+        skill = _default_loader.get_by_name(skill_name)
+        if not skill:
+            return f"Skill '{skill_name}' not found."
+        if not skill.support_files:
+            return f"Skill '{skill.name}' has no support files (is_package={skill.is_package})."
+        return f"Support files for {skill.name}:\n" + "\n".join(
+            f"  • {f}" for f in sorted(skill.support_files)
+        )
+
+    if action == "create":
+        target_dir = SKILLS_DIR / clean_name
+        target_dir.mkdir(parents=True, exist_ok=True)
+        (target_dir / "references").mkdir(exist_ok=True)
+        (target_dir / "templates").mkdir(exist_ok=True)
+        (target_dir / "scripts").mkdir(exist_ok=True)
+
+        triggers_list = (
+            [t.strip() for t in triggers.split(",") if t.strip()]
+            if triggers
+            else [clean_name]
+        )
+        skill_md = target_dir / "SKILL.md"
+
+        frontmatter = [
+            "---",
+            f"name: {skill_name.strip()}",
+            f"category: {category if category in ALLOWED_CATEGORIES else 'general'}",
+            f"description: {description.strip() or 'Custom procedural skill'}",
+            f"triggers: [{', '.join(triggers_list)}]",
+            "version: '1.0'",
+            "---",
+            content.strip()
+            or f"# {skill_name.strip()}\n\nProcedural instructions and guidelines.",
+        ]
+        skill_md.write_text("\n".join(frontmatter), encoding="utf-8")
+        _default_loader.invalidate_cache()
+        return f"Successfully created skill package '{skill_name}' at {target_dir}"
+
+    if action == "write_file":
+        if not file_path or not file_path.strip():
+            return "Error: file_path is required for write_file (e.g. 'references/notes.md')"
+
+        clean_rel = file_path.strip().lstrip("/")
+        valid_prefixes = ("references/", "templates/", "scripts/", "assets/")
+        if not any(clean_rel.startswith(p) for p in valid_prefixes):
+            return (
+                f"Error: file_path must start with one of: {', '.join(valid_prefixes)}"
+            )
+
+        skill = _default_loader.get_by_name(skill_name)
+        if skill and skill.package_dir:
+            pkg_path = Path(skill.package_dir)
+        else:
+            pkg_path = SKILLS_DIR / clean_name
+            pkg_path.mkdir(parents=True, exist_ok=True)
+
+        dest_file = pkg_path / clean_rel
+        dest_file.parent.mkdir(parents=True, exist_ok=True)
+        dest_file.write_text(content, encoding="utf-8")
+        _default_loader.invalidate_cache()
+        return f"Successfully wrote {clean_rel} in skill '{skill_name}'"
+
+    return f"Unknown action '{action}'. Valid actions: create, write_file, list_files."

@@ -5,8 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from src.tools.skills import SkillLoader, SkillDefinition
-
+from src.tools.skills import SkillDefinition, SkillLoader
 
 VALID_SKILL_MD = """\
 ---

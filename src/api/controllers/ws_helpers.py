@@ -1,11 +1,13 @@
-import os
 import json
 import logging
+import os
+
 from langchain_core.messages import AIMessage
+
 from src.agent.core.complex_utils.formatter import (
+    _TOOL_ONLY_PLACEHOLDERS,
     _strip_dsml_blocks,
     _strip_thinking_tags,
-    _TOOL_ONLY_PLACEHOLDERS,
 )
 from src.api.shared import _TOOL_DESTRUCTIVE_RE, _TOOL_NETWORK_RE, _TOOL_PRIV_RE
 
@@ -42,13 +44,6 @@ def _last_ai_message(messages: list) -> AIMessage | None:
         if isinstance(msg, AIMessage):
             return msg
     return None
-
-
-from src.agent.routing.router import generate_chat_title_router_llm
-from src.config.settings import get_project_workspace, normalize_project_id
-from src.tools.notebook_libs import parse_chart_artifact
-from src.tools.workspace_context import set_active_project_for_run, reset_active_project
-from src.config.audit_log import set_thread_id, audit_info
 
 
 def _files_for_message_content(files: list, base_dir: str) -> list:

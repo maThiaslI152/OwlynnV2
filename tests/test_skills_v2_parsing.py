@@ -6,13 +6,13 @@ from unittest.mock import MagicMock
 sys.modules["mem0"] = MagicMock()
 
 import pytest
+
 from src.tools.skills import (
-    _parse_front_matter,
-    _parse_skill_file,
     SkillDefinition,
     SkillParam,
+    _parse_front_matter,
+    _parse_skill_file,
 )
-
 
 # ---------------------------------------------------------------------------
 # _parse_front_matter: structured params block

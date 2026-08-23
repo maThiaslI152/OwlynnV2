@@ -9,8 +9,8 @@ Requires a live Redis instance at localhost:6379.
 """
 
 import asyncio
-import sys
 import os
+import sys
 import uuid
 
 # Ensure project root is on sys.path

@@ -1,6 +1,6 @@
 """LM Studio model swap for pentest mode.
 
-Unloads the default model (Qwen3 VL 4B) and loads the pentest model
+Unloads the main model (google/gemma-4-26b-a4b-qat) and loads the pentest model
 (Gemma 4 12B Coder) when entering pentest mode. Reverses on exit.
 
 LM Studio API:
@@ -27,7 +27,6 @@ _POLL_INTERVAL_S = 2.0
 IS_PENTEST_SWAPPED = False
 
 
-
 def _management_base() -> str:
     return str(
         config.get(
@@ -36,12 +35,15 @@ def _management_base() -> str:
     ).rstrip("/")
 
 
-def _small_model_key() -> str:
-    """LM Studio catalog key for the default small model (Qwen3 VL 4B)."""
-    override = config.get("models.small.lm_studio_model_key")
+def _main_model_key() -> str:
+    """LM Studio catalog key for the main model."""
+    override = config.get("models.main.lm_studio_model_key")
     if override:
         return str(override)
-    return config.get_small_model_name()
+    return config.get_main_model_name()
+
+
+_small_model_key = _main_model_key
 
 
 def _pentest_model_key() -> str:
@@ -65,6 +67,12 @@ def _is_loaded(entry: dict) -> bool:
 
 def _find_entry(catalog: list[dict], key: str) -> dict | None:
     key_lower = key.lower()
+    # 1. Exact match
+    for entry in catalog:
+        entry_key = str(entry.get("key") or "").lower()
+        if entry_key == key_lower:
+            return entry
+    # 2. Substring match
     for entry in catalog:
         entry_key = str(entry.get("key") or "").lower()
         if key_lower in entry_key or entry_key in key_lower:
@@ -110,9 +118,15 @@ async def _load_model(client: httpx.AsyncClient, key: str) -> bool:
     """Load a model and wait until it has a loaded instance."""
     deadline = time.monotonic() + _LOAD_TIMEOUT_S
     try:
+        load_payload = {
+            "model": key,
+            "flash_attention": True,
+            "speculative_draft_simple": False,
+            "speculative_draft_model": "",
+        }
         resp = await client.post(
             f"{_management_base()}/api/v1/models/load",
-            json={"model": key},
+            json=load_payload,
             timeout=_LOAD_TIMEOUT_S,
         )
         if resp.status_code not in (200, 201, 202):
@@ -129,7 +143,12 @@ async def _load_model(client: httpx.AsyncClient, key: str) -> bool:
         try:
             catalog = await _get_catalog(client)
             entry = _find_entry(catalog, key)
-            if entry and _is_loaded(entry):
+            if not entry:
+                logger.warning(
+                    "[model_swap] Model key '%s' not found in LM Studio catalog", key
+                )
+                return False
+            if _is_loaded(entry):
                 logger.info("[model_swap] Loaded: %s", key)
                 return True
         except Exception:
@@ -143,10 +162,9 @@ async def _load_model(client: httpx.AsyncClient, key: str) -> bool:
 async def swap_to_pentest() -> dict:
     """Swap from default model to pentest model.
 
-    Unloads Qwen3 VL 4B, loads Gemma 4 12B Coder.
     Returns {"ok": bool, "message": str}.
     """
-    small_key = _small_model_key()
+    main_key = _main_model_key()
     pentest_key = _pentest_model_key()
 
     global IS_PENTEST_SWAPPED
@@ -156,6 +174,22 @@ async def swap_to_pentest() -> dict:
         return {"ok": True, "message": "Using Ollama (auto-loads models on demand)."}
 
     async with httpx.AsyncClient() as client:
+        # Check if unified model (same model for main and pentest)
+        if main_key == pentest_key:
+            catalog = await _get_catalog(client)
+            entry = _find_entry(catalog, pentest_key)
+            if entry and _is_loaded(entry):
+                return {
+                    "ok": True,
+                    "message": f"Unified model active: {pentest_key}",
+                }
+            if await _load_model(client, pentest_key):
+                return {"ok": True, "message": f"Unified model loaded: {pentest_key}"}
+            return {
+                "ok": False,
+                "message": f"Failed to load unified model: {pentest_key}",
+            }
+
         # Check current state
         catalog = await _get_catalog(client)
         pentest_entry = _find_entry(catalog, pentest_key)
@@ -165,10 +199,10 @@ async def swap_to_pentest() -> dict:
                 "message": f"Pentest model already loaded: {pentest_key}",
             }
 
-        # Unload small model first (free VRAM)
-        small_entry = _find_entry(catalog, small_key)
-        if small_entry and _is_loaded(small_entry):
-            await _unload_model(client, small_key)
+        # Unload main model first (free VRAM)
+        main_entry = _find_entry(catalog, main_key)
+        if main_entry and _is_loaded(main_entry):
+            await _unload_model(client, main_key)
             # Brief pause for VRAM release
             await asyncio.sleep(2.0)
 
@@ -181,10 +215,9 @@ async def swap_to_pentest() -> dict:
 async def swap_to_default() -> dict:
     """Swap from pentest model back to default model.
 
-    Unloads Gemma 4 12B, loads Qwen3 VL 4B.
     Returns {"ok": bool, "message": str}.
     """
-    small_key = _small_model_key()
+    main_key = _main_model_key()
     pentest_key = _pentest_model_key()
 
     global IS_PENTEST_SWAPPED
@@ -194,11 +227,24 @@ async def swap_to_default() -> dict:
         return {"ok": True, "message": "Using Ollama (auto-loads models on demand)."}
 
     async with httpx.AsyncClient() as client:
+        # Check if unified model (same model for main and pentest)
+        if main_key == pentest_key:
+            catalog = await _get_catalog(client)
+            entry = _find_entry(catalog, main_key)
+            if entry and _is_loaded(entry):
+                return {"ok": True, "message": f"Unified model active: {main_key}"}
+            if await _load_model(client, main_key):
+                return {"ok": True, "message": f"Unified model loaded: {main_key}"}
+            return {
+                "ok": False,
+                "message": f"Failed to load unified model: {main_key}",
+            }
+
         # Check current state
         catalog = await _get_catalog(client)
-        small_entry = _find_entry(catalog, small_key)
-        if small_entry and _is_loaded(small_entry):
-            return {"ok": True, "message": f"Default model already loaded: {small_key}"}
+        main_entry = _find_entry(catalog, main_key)
+        if main_entry and _is_loaded(main_entry):
+            return {"ok": True, "message": f"Default model already loaded: {main_key}"}
 
         # Unload pentest model first
         pentest_entry = _find_entry(catalog, pentest_key)
@@ -207,6 +253,6 @@ async def swap_to_default() -> dict:
             await asyncio.sleep(2.0)
 
         # Load default model
-        if await _load_model(client, small_key):
-            return {"ok": True, "message": f"Swapped to default model: {small_key}"}
-        return {"ok": False, "message": f"Failed to load default model: {small_key}"}
+        if await _load_model(client, main_key):
+            return {"ok": True, "message": f"Swapped to default model: {main_key}"}
+        return {"ok": False, "message": f"Failed to load default model: {main_key}"}

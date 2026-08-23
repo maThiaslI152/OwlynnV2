@@ -24,8 +24,8 @@ import uuid
 from typing import Any
 
 from openai import AsyncOpenAI
-from sqlalchemy import text
 from sqlalchemy import delete as sa_delete
+from sqlalchemy import text
 
 from src.config.audit_log import audit_info, audit_warn
 from src.config.config_loader import config
@@ -38,15 +38,8 @@ logger = logging.getLogger(__name__)
 # Embedding config
 # ---------------------------------------------------------------------------
 
-_embed_model: str = config.get(
-    "models.embedding.model_name",
-    "text-embedding-nomic-embed-text-v1.5-embedding",
-)
-_provider: str = config.get("models.provider", "lm_studio")
-_default_embed_url = (
-    "http://127.0.0.1:11434/v1" if _provider == "ollama" else "http://127.0.0.1:1234/v1"
-)
-_embed_url: str = config.get("models.embedding.base_url", _default_embed_url)
+_embed_model: str = config.get_embedding_model_name()
+_embed_url: str = config.get_embedding_base_url()
 
 _embed_client = AsyncOpenAI(api_key="sk-dummy", base_url=_embed_url)
 
@@ -60,7 +53,7 @@ _DEDUP_THRESHOLD: float = 0.08  # < 0.08 => >92% similar → skip
 
 
 async def get_embedding(text_: str) -> list[float]:
-    """Return a 768-dim embedding vector for *text_* using the configured model.
+    """Return an embedding vector (1024-dim) for *text_* using the configured model.
 
     This function is also imported by :mod:`src.memory.pentest_vectors` and
     :mod:`src.memory.semantic_cache`.
@@ -238,7 +231,11 @@ async def _async_search(
                         "created_at": (
                             row.created_at.isoformat() if row.created_at else None
                         ),
-                        "score": 1.0 - float(row.distance),
+                        "score": (
+                            1.0 - float(row.distance)
+                            if row.distance is not None
+                            else 1.0
+                        ),
                     },
                 }
                 for row in rows
@@ -257,20 +254,24 @@ async def _async_delete(
 ) -> bool:
     """Delete memories by id, or by user_id and metadata filters."""
     try:
-        async with AsyncSessionLocal() as session:
-            async with session.begin():
-                if memory_id:
-                    stmt = sa_delete(MemoryVector).where(MemoryVector.id == memory_id)
-                else:
-                    stmt = sa_delete(MemoryVector)
-                    if user_id:
-                        stmt = stmt.where(MemoryVector.user_id == user_id)
-                    if metadata:
-                        for k, v in metadata.items():
-                            # Querying JSONB metadata field in PostgreSQL
-                            stmt = stmt.where(MemoryVector.meta_data[k].as_string() == (f'"{v}"' if isinstance(v, str) else str(v)))
-                await session.execute(stmt)
-        audit_info("memory.ltm", "delete", id=memory_id, user_id=user_id, metadata=metadata)
+        async with AsyncSessionLocal() as session, session.begin():
+            if memory_id:
+                stmt = sa_delete(MemoryVector).where(MemoryVector.id == memory_id)
+            else:
+                stmt = sa_delete(MemoryVector)
+                if user_id:
+                    stmt = stmt.where(MemoryVector.user_id == user_id)
+                if metadata:
+                    for k, v in metadata.items():
+                        # Querying JSONB metadata field in PostgreSQL
+                        stmt = stmt.where(
+                            MemoryVector.meta_data[k].as_string()
+                            == (f'"{v}"' if isinstance(v, str) else str(v))
+                        )
+            await session.execute(stmt)
+        audit_info(
+            "memory.ltm", "delete", id=memory_id, user_id=user_id, metadata=metadata
+        )
         return True
     except Exception as exc:
         logger.warning("[ltm] delete() failed: %s", exc, exc_info=True)
@@ -329,7 +330,9 @@ class LongTermMemory:
         user_id: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> bool:
-        return await _async_delete(memory_id=memory_id, user_id=user_id, metadata=metadata)
+        return await _async_delete(
+            memory_id=memory_id, user_id=user_id, metadata=metadata
+        )
 
     async def delete_all(self, user_id: str) -> bool:
         return await _async_delete_all(user_id)
@@ -343,21 +346,22 @@ class LongTermMemory:
 #   asyncio.to_thread or directly from async FastAPI endpoints without await)
 # ---------------------------------------------------------------------------
 
+
 def _run_async(coro):
     """Run an async coroutine from synchronous code.
 
-    Inside a running event loop (FastAPI / LangGraph) we use
-    ``loop.run_until_complete`` on a new thread-safe future; outside an event
-    loop we spin up a temporary one.
+    If called outside an event loop, we use ``asyncio.run``.
+    If called from within a running event loop thread, we run it in a separate
+    thread via a ThreadPoolExecutor to prevent deadlocking the active loop.
     """
     try:
-        loop = asyncio.get_running_loop()
-        # We're inside a running loop — submit to the loop from a thread.
+        asyncio.get_running_loop()
         import concurrent.futures
-        future = asyncio.run_coroutine_threadsafe(coro, loop)
-        return future.result()
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(asyncio.run, coro)
+            return future.result()
     except RuntimeError:
-        # No running loop — create a new one (e.g. CLI / test context)
         return asyncio.run(coro)
 
 
@@ -369,6 +373,34 @@ class _SyncMemoryShim:
     so we spin up a temporary loop.  Call sites inside async FastAPI handlers
     that call this without ``await`` will trigger ``run_coroutine_threadsafe``.
     """
+
+    async def asearch(
+        self,
+        query: str,
+        filters: dict[str, Any] | None = None,
+        limit: int = 10,
+    ) -> dict:
+        return await _async_search(query, filters=filters, limit=limit)
+
+    async def aadd(
+        self,
+        content: str,
+        user_id: str = "default",
+        metadata: dict[str, Any] | None = None,
+    ):
+        return await _async_add(content, user_id=user_id, metadata=metadata)
+
+    async def adelete(
+        self,
+        memory_id: str | None = None,
+        user_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        **kwargs,
+    ) -> bool:
+        mid = memory_id or kwargs.get("memory_id")
+        uid = user_id or kwargs.get("user_id")
+        meta = metadata or kwargs.get("metadata")
+        return await _async_delete(memory_id=mid, user_id=uid, metadata=meta)
 
     def add(
         self,

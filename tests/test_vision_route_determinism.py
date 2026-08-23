@@ -1,8 +1,10 @@
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
 from langchain_core.messages import HumanMessage
-from src.agent.routing.router import router_node
+
 from src.agent.core.state import AgentState
+from src.agent.routing.router import router_node
 
 
 @pytest.mark.anyio

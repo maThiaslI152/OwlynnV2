@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { Check, RotateCw, AlertCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { WORKSPACE_REF_DRAG_TYPE, workspaceRefAttachment, type AttachedFile } from '../../lib/attachments'
 import { collapseKnowledgeFiles, type KnowledgeFileRow } from '../../lib/knowledgeFiles'
@@ -142,10 +143,10 @@ export function ProjectKnowledgePanel({
                       {file.name}
                     </span>
                     {indexing && (
-                      <span className={`knowledge-status-chip ${indexing.status}`} style={{ fontSize: '0.7rem', opacity: 0.85 }}>
-                        {indexing.status === 'indexing' && ' ⏳ indexing...'}
-                        {indexing.status === 'indexed' && ` ✅ (${indexing.chunks || 0} chk)`}
-                        {indexing.status === 'indexing_failed' && ' ❌ failed'}
+                      <span className={`knowledge-status-chip ${indexing.status}`} style={{ fontSize: '0.7rem', opacity: 0.85, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        {indexing.status === 'indexing' && <><RotateCw size={10} className="spinning" /> indexing...</>}
+                        {indexing.status === 'indexed' && <><Check size={10} /> ({indexing.chunks || 0} chunks)</>}
+                        {indexing.status === 'indexing_failed' && <><AlertCircle size={10} /> failed</>}
                       </span>
                     )}
                   </div>

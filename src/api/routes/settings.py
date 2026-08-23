@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException
+
 from src.config.settings_constants import (
     _ADVANCED_SETTINGS_DEFAULTS,
     _UNIFIED_SETTINGS_CLOUD_BUDGET_DEFAULTS,
@@ -8,9 +9,9 @@ router = APIRouter()
 import logging
 
 logger = logging.getLogger(__name__)
-from src.memory.user_profile import get_profile, update_profile, VALID_FIELDS
-from src.memory.persona import get_persona, update_persona_field
 from src.config.config_loader import config
+from src.memory.persona import get_persona, update_persona_field
+from src.memory.user_profile import VALID_FIELDS, get_profile, update_profile
 
 
 @router.get("/api/system-settings")
@@ -127,12 +128,17 @@ async def api_get_unified_settings():
 
         # Ensure all LLM override fields are present in the response
         llm_fields = {
-            "llm_base_url": "models.medium.base_url",
-            "small_llm_base_url": "models.small.base_url",
-            "large_llm_base_url": "models.medium.base_url",
-            "llm_model_name": "models.medium.variants.default.model_name",
-            "small_llm_model_name": "models.small.model_name",
-            "large_llm_model_name": "models.medium.variants.default.model_name",
+            "main_llm_base_url": "models.main.base_url",
+            "main_llm_model_name": "models.main.model_name",
+            "llm_base_url": "models.main.base_url",
+            "small_llm_base_url": "models.main.base_url",
+            "large_llm_base_url": "models.main.base_url",
+            "llm_model_name": "models.main.model_name",
+            "small_llm_model_name": "models.main.model_name",
+            "large_llm_model_name": "models.main.model_name",
+            "pentest_llm_model_name": "models.pentest.model_name",
+            "vision_llm_model_name": "models.vision.model_name",
+            "embedding_llm_model_name": "models.embedding.model_name",
             "cloud_llm_base_url": "models.cloud.base_url",
             "cloud_llm_model_name": "models.cloud.model_name",
         }
@@ -161,10 +167,10 @@ async def api_update_unified_settings(body: dict):
     """
     try:
         from src.config.secret_store import (
-            store_deepseek_api_key,
             delete_deepseek_api_key,
-            store_openrouter_api_key,
             delete_openrouter_api_key,
+            store_deepseek_api_key,
+            store_openrouter_api_key,
         )
 
         # Allowed fields: profile VALID_FIELDS + advanced settings defaults + cloud budget
@@ -202,6 +208,7 @@ async def api_update_unified_settings(body: dict):
                 "cloud_thinking_mode",
                 "cloud_reasoning_effort",
                 "cloud_escalation_enabled",
+                "cloud_routing_mode",
                 "travel_mode",
                 "deepseek_api_key",
                 "openrouter_api_key",
@@ -209,8 +216,8 @@ async def api_update_unified_settings(body: dict):
                 "openrouter_model",
             )
         ):
-            from src.agent.llm import LLMPool
             from src.agent.cloud.cloud_circuit_breaker import reset_circuit_breaker
+            from src.agent.llm import LLMPool
 
             LLMPool.clear()
             reset_circuit_breaker()

@@ -1,38 +1,38 @@
 ---
 status: active
 category: architecture
-last_updated: 2026-06-27
+last_updated: 2026-08-22
 owner: ai-agent
 ---
 
-# Vision Proxy (Phase 2)
+# Vision Proxy
 
-Gemma 4 E2B acts as a **vision-language sensor** for the text-only DeepSeek cloud path. It transcribes visible text, detects UI elements, and describes visual structure — DeepSeek synthesizes the final answer from the transcription.
+`baidu.unlimited-ocr` acts as a **vision-language and OCR sensor** for Owlynn and the text-only DeepSeek cloud path. It transcribes visible text, detects UI elements, and describes visual structure — DeepSeek / the main LLM synthesizes the final answer from the transcription.
 
 ## Flow
 
 ```text
 User image (chat upload or screen crop)
-  → vision_proxy (Gemma 4 E2B local VLM, lazy-loaded)
+  → vision_proxy (baidu.unlimited-ocr OCR proxy, lazy-loaded)
   → natural-language transcription of text + UI
-  → formatted block in cloud prompt (image_url stripped)
-  → DeepSeek V4
+  → formatted block in cloud/local prompt (image_url stripped)
+  → DeepSeek V4 / Main local LLM
 ```
 
 ## Modules
 
 | Path | Role |
 |------|------|
-| `src/agent/nodes/complex_utils/vision_proxy.py` | Image interception, VLM call, cache, cloud formatting |
-| `src/agent/nodes/complex_utils/vision_qwen3vl.py` | Parse natural-language output into structured blocks |
-| `src/agent/nodes/complex_utils/vision_schema.py` | Output contract: text_blocks, ui_elements, subjects, confidence |
-| `src/agent/nodes/complex_utils/lm_studio_vision.py` | LM Studio catalog search, auto-load, active-instance check |
-| `src/agent/nodes/complex_utils/vision_model_manager.py` | Lazy ChatOpenAI client, idle watchdog (300s unload) |
-| `src/agent/nodes/complex.py` | `complex-cloud` + images → proxy; failure → text-only fallback |
+| `src/agent/core/complex_utils/vision_proxy.py` | Image interception, OCR call, cache, prompt formatting |
+| `src/agent/core/complex_utils/vision_qwen3vl.py` | Parse natural-language output into structured blocks |
+| `src/agent/core/complex_utils/vision_schema.py` | Output contract: text_blocks, ui_elements, subjects, confidence |
+| `src/agent/core/complex_utils/lm_studio_vision.py` | LM Studio catalog search, auto-load, active-instance check |
+| `src/agent/core/complex_utils/vision_model_manager.py` | Lazy ChatOpenAI client, idle watchdog (300s unload) |
+| `src/agent/core/complex_executor.py` | `complex-cloud` + images → proxy; failure → text-only fallback |
 
 ## Output contract
 
-Gemma 4 E2B is prompted to transcribe text verbatim and identify UI elements. The parser extracts:
+`baidu.unlimited-ocr` is prompted to transcribe text verbatim and identify UI elements. The parser extracts:
 
 ```json
 {
@@ -54,9 +54,9 @@ confidence=0.75
 
 ```yaml
 models:
-  vision_proxy:
-    model_name: "gemma-4-e2b-heretic-uncensored-mlx"
-    lm_studio_model_key: "gemma-4-e2b-heretic-uncensored-mlx"
+  vision:
+    model_name: "baidu.unlimited-ocr"
+    lm_studio_model_key: "baidu.unlimited-ocr"
     temperature: 0.1
     max_tokens: 2048
 
@@ -73,11 +73,12 @@ cloud:
 
 `VisionModelManager` holds a dedicated client. Unloads after `cloud.vision_idle_unload_seconds` (default 300s) with no active transcriptions. On proxy failure, `complex-cloud` retries text-only.
 
-Models loaded in LM Studio for production:
-- `gemma-4-e2b-heretic-uncensored-mlx` (Unified: router, extraction, vision)
-- `text-embedding-nomic-embed-text-v1.5` (0.14 GB) — embeddings
+4 Core Models in Owlynn:
+- `gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m` (Unified Main / Pentest local model)
+- `baidu.unlimited-ocr` (Dedicated vision proxy)
+- `text-embedding-mxbai-embed-large-v1` (1024-dim embeddings)
 
-## Screen assist hook (Phase 3)
+## Screen assist hook
 
 ```python
 await transcribe_crop(image_bytes, mime_type="image/png")
@@ -102,7 +103,7 @@ cloud:
 PYTHONPATH=. python -m pytest -q \
   tests/test_vision_proxy.py \
   tests/test_vision_schema.py \
-  tests/test_vision_proxy_cloud_path.py
+  tests/test_vision_route_determinism.py
 ```
 
 ## Related

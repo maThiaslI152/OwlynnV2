@@ -10,21 +10,17 @@ import re
 
 from src.agent.core.state import AgentState
 from src.config.config_loader import config
+from src.config.secret_store import resolve_deepseek_api_key
 from src.config.settings import (
-    MEDIUM_DEFAULT_CONTEXT,
-    MEDIUM_LONGCTX_CONTEXT,
     CLOUD_CONTEXT,
 )
-from src.config.secret_store import resolve_deepseek_api_key
 from src.memory.user_profile import get_profile
 
 logger = logging.getLogger(__name__)
 
 # ── Context window constants ─────────────────────────────────────────────
-_MEDIUM_DEFAULT_CONTEXT = MEDIUM_DEFAULT_CONTEXT
-_MEDIUM_LONGCTX_CONTEXT = MEDIUM_LONGCTX_CONTEXT
 _CLOUD_CONTEXT = CLOUD_CONTEXT
-_SMALL_MODEL_CONTEXT = int(config.get("models.small.context_window", 65536))
+_MAIN_MODEL_CONTEXT = config.get_main_model_context_window()
 
 # Budget tiers from centralized config
 _BUDGET_TIERS_RAW = config.get(
@@ -79,9 +75,9 @@ def estimate_token_budget(user_text: str, route: str) -> int:
     """Estimate a reasonable max_tokens budget for the response.
 
     Uses per-tier context windows:
-    - simple → _SMALL_MODEL_CONTEXT with 1500 reserve
-    - complex-cloud → _CLOUD_CONTEXT (131072) with 8000 reserve, budget_max 16384
-    - complex-default → _MEDIUM_DEFAULT_CONTEXT with 4000 reserve, budget_max 8192
+    - simple → _MAIN_MODEL_CONTEXT with 1500 reserve
+    - complex-cloud → _CLOUD_CONTEXT (131072/1M) with 8000 reserve, budget_max 16384
+    - complex-default → _MAIN_MODEL_CONTEXT with 4000 reserve, budget_max 8192
     """
     reserves_cfg = config.get("routing.input_reserves", {})
     budget_max_cfg = config.get("routing.budget_max", {})
@@ -91,22 +87,26 @@ def estimate_token_budget(user_text: str, route: str) -> int:
         if len(user_text) > 100:
             budget = 512
         simple_reserve = int(reserves_cfg.get("simple", 1500))
-        return min(budget, _SMALL_MODEL_CONTEXT - simple_reserve)
+        return min(budget, _MAIN_MODEL_CONTEXT - simple_reserve)
 
     if route == "complex-cloud":
         context = _CLOUD_CONTEXT
         input_reserve = int(reserves_cfg.get("cloud", 8000))
         budget_max = int(budget_max_cfg.get("cloud", 16384))
     else:
-        # Default to complex-local
-        context = int(config.get("models.complex_local.context_window", 65536))
+        # Default to main local model (complex-default / complex-local)
+        context = _MAIN_MODEL_CONTEXT
         input_reserve = int(reserves_cfg.get("default", 4000))
-        budget_max = int(budget_max_cfg.get("other", 16384))
+        budget_max = int(budget_max_cfg.get("default", 8192))
 
     text_len = len(user_text)
     text_lower = user_text.lower()
 
     budget = budget_max
+    for max_chars, tier_budget in _BUDGET_TIERS:
+        if text_len <= max_chars:
+            budget = min(tier_budget, budget_max)
+            break
 
     if any(hint in text_lower for hint in _LONG_ANSWER_HINTS):
         budget = max(budget, 3072)
@@ -153,25 +153,61 @@ def _check_cloud_available() -> bool:
 
 
 def _check_travel_mode() -> bool:
-    """Check if Travel Mode is enabled via profile or Eco-Mode."""
+    """Check if Travel Mode is enabled via profile or Eco-Mode (running on battery)."""
     travel_mode = get_profile().get("travel_mode", False)
     if not travel_mode:
         try:
             from src.api.power_monitor import ECO_MODE
+
             if ECO_MODE:
                 travel_mode = True
         except ImportError:
             pass
     return travel_mode
 
-def _preferred_complex_route(cloud_available: bool | None = None) -> str:
-    """Default complex route: local-first, cloud on travel/fallback."""
+
+def _should_route_to_cloud(user_text: str = "", *, cloud_available: bool) -> bool:
+    """Determine if a complex task should route to DeepSeek cloud."""
+    if not cloud_available:
+        return False
+
+    profile = get_profile()
+    cloud_routing_mode = str(profile.get("cloud_routing_mode", "auto")).lower()
+
+    # 1. User explicitly forced local only
+    if cloud_routing_mode == "local_only":
+        return False
+
+    # 2. User explicitly forced cloud first
+    if cloud_routing_mode == "cloud_first":
+        return True
+
+    # 3. Explicit travel mode switch in profile
+    if profile.get("travel_mode", False):
+        return True
+
+    # 4. Battery / Eco-Mode (auto mode): offload compute to cloud to preserve laptop battery
+    if _check_travel_mode():
+        return True
+
+    # 5. Frontier mathematical / algorithmic quality explicitly requested
+    if user_text and _needs_frontier_quality(user_text):
+        return True
+
+    # Default is False (Local Main Model is the primary normal workhorse)
+    return False
+
+
+def _preferred_complex_route(
+    cloud_available: bool | None = None, user_text: str = ""
+) -> str:
+    """Default complex route: local-first by default, cloud when battery or cloud switch active."""
     if cloud_available is None:
         cloud_available = _check_cloud_available()
-    
-    if _check_travel_mode() and cloud_available:
+
+    if _should_route_to_cloud(user_text, cloud_available=cloud_available):
         return "complex-cloud"
-    return "complex-local"
+    return "complex-default"
 
 
 def _has_image_content(state: AgentState) -> bool:
@@ -218,29 +254,17 @@ def _resolve_complex_route(
     cloud_available: bool | None = None,
 ) -> tuple[str, list[str]]:
     """Given a complex classification, pick the specific route (local-first or cloud)."""
+    scenario_id = state.get("scenario_id")
+    if scenario_id == "pentest":
+        return "complex-default", toolbox
+
     if cloud_available is None:
         cloud_available = _check_cloud_available()
 
-    scenario_id = state.get("scenario_id")
-    if scenario_id == "pentest":
-        return "complex-local", toolbox
-
-    if _check_travel_mode() and cloud_available:
+    if _should_route_to_cloud(user_text, cloud_available=cloud_available):
         return "complex-cloud", toolbox
 
-    text_len = len(user_text)
-    estimated_input = 4000 + (text_len // 4)
-    _LOCAL_MAX_CONTEXT = int(config.get("models.complex_local.context_window", 65536))
-
-    if estimated_input > _LOCAL_MAX_CONTEXT * 0.80:
-        if cloud_available:
-            return "complex-cloud", toolbox
-
-    if _needs_frontier_quality(user_text):
-        if cloud_available:
-            return "complex-cloud", toolbox
-
-    return "complex-local", toolbox
+    return "complex-default", toolbox
 
 
 def _build_router_metadata(

@@ -8,13 +8,13 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from run_local_frontier_eval import (  # noqa: E402
+from run_local_frontier_eval import (
+    CLOUD_FAILURE_BADGES,
     WsEventLog,
     expected_tools_satisfied,
     merge_executed_tools,
-    should_exit_idle_tool_stall,
-    CLOUD_FAILURE_BADGES,
     score_exchange,
+    should_exit_idle_tool_stall,
 )
 
 

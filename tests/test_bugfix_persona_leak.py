@@ -1,6 +1,7 @@
 """Unit tests for BUG-1 fix: Persona/System Prompt Leak in _clean_response."""
 
 import pytest
+
 from src.agent.core.simple import _clean_response
 
 

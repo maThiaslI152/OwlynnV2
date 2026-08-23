@@ -11,7 +11,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Optional
 
 import httpx
 
@@ -42,11 +41,10 @@ def record_pdf_activity() -> None:
 
 
 async def _get_lm_studio_base_url() -> str:
-    base = config.get("models.small.base_url", "http://127.0.0.1:1234/v1")
-    return base.rstrip("/")
+    return config.get_main_model_base_url().rstrip("/")
 
 
-async def _get_loaded_model_key() -> Optional[str]:
+async def _get_loaded_model_key() -> str | None:
     """Return the model key currently loaded in LM Studio, or None."""
     base = await _get_lm_studio_base_url()
     try:
@@ -64,11 +62,13 @@ async def _get_loaded_model_key() -> Optional[str]:
 
 async def _unload_llm() -> None:
     """Unload the current model from LM Studio to free unified memory."""
-    if config.get("models.provider", "lm_studio") == "ollama":
+    if config.get_models_provider() == "ollama":
         return
 
     model_key = (
-        config.get("models.small.lm_studio_model_key") or await _get_loaded_model_key()
+        config.get("models.main.lm_studio_model_key")
+        or config.get("models.small.lm_studio_model_key")
+        or await _get_loaded_model_key()
     )
     if not model_key:
         logger.debug("[idle] No model loaded, nothing to unload.")

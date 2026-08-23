@@ -152,8 +152,8 @@ async def _auto_create_study_project(
         import asyncio
         import shutil
 
-        from src.memory.project import project_manager
         from src.config.settings import get_project_workspace
+        from src.memory.project import project_manager
 
         project_name = f"{course_id} — {name}"
         instructions = (
@@ -864,7 +864,6 @@ def mastery_record(kind: str, topic: str, detail: str = "") -> str:
         return "Mem0 memory not initialized."
 
     from src.memory.educator import (
-        STUDY_STRUGGLE_PREFIX,
         build_mastery_atom,
         build_misconception_atom,
     )
@@ -1167,8 +1166,9 @@ def course_delete(course_id: str, delete_project: bool = False) -> str:
     # Optionally delete associated project
     if delete_project and project_id:
         try:
-            from src.memory.project import project_manager
             import asyncio
+
+            from src.memory.project import project_manager
 
             asyncio.get_event_loop().run_until_complete(
                 project_manager.delete_project(project_id)

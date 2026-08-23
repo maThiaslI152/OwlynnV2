@@ -1,7 +1,7 @@
 ---
 status: active
 category: architecture
-last_updated: 2026-07-12
+last_updated: 2026-08-23
 owner: ai-agent
 audience: agent
 ---
@@ -12,7 +12,7 @@ audience: agent
 
 ## System Context
 
-Owlynn is a **privacy-first hybrid** coworker for Apple Silicon (Mac M4 Air 24GB). **Local:** workspace files, Qdrant/Redis memory, routing, embeddings, and unified model routing, embedding, and memory extraction stay on-device. **Cloud (opt-in):** complex reasoning uses **DeepSeek V4** when a key is configured; prompts are **best-effort anonymized** before send (see `src/agent/anonymization.py`). Startup preloads **Gemma 4 E2B unified model + nomic embedding**.
+Owlynn is a **privacy-first hybrid** coworker for Apple Silicon (Mac M4 Air 24GB). **Local:** workspace files, PostgreSQL/pgvector and Redis memory, routing, embeddings, and unified model routing, embedding, and memory extraction stay on-device. **Cloud (opt-in):** complex reasoning uses **DeepSeek V4** when a key is configured; prompts are **best-effort anonymized** before send (see `src/agent/anonymization.py`). Startup preloads **Gemma 4 12B Agentic (`gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m`) unified local model + MXBAI embedding (`text-embedding-mxbai-embed-large-v1`)**.
 
 ```
 Browser (http://127.0.0.1:5173)
@@ -26,14 +26,14 @@ Browser (http://127.0.0.1:5173)
   │     └─► Tool execution (web search, file ops, REPL, MCP)
   │
   ├─► Local LLM Provider (LM Studio: 1234 / Ollama: 11434)
-  │     ├─► Gemma 4 E2B unified local model (startup preload)
-  │     └─► nomic embedding (startup preload)
-  │
-  ├─► Qdrant (port 6333)
-  │     └─► Long-term memory (Mem0 embeddings)
+  │     ├─► Main Local Model: gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m (Unified Local Engine: Routing, Simple, Extraction, Fallback, Pentest)
+  │     ├─► Vision Model: baidu.unlimited-ocr (Vision Transcription Proxy)
+  │     ├─► Embedding Model: text-embedding-mxbai-embed-large-v1 (1024 dims)
+  │     └─► Pentest Model: gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m (90% Tool Accuracy, Zero-Latency Mode Switching)
   │
   ├─► PostgreSQL (port 5432)
-  │     └─► LangGraph checkpointing / session persistence
+  │     ├─► LangGraph checkpointing / session persistence
+  │     └─► pgvector Long-Term Memory (memory_vectors @ 1024 dims)
   │
   └─► Redis (port 6379)
         └─► Semantic Cache / Memory extraction queue
@@ -43,28 +43,34 @@ Browser (http://127.0.0.1:5173)
 
 | Module | Path | Responsibility |
 |--------|------|----------------|
-| **Config** | `src/config/defaults.yaml` | Single source of truth for all settings. Override chain: YAML → env → profile |
-| **Config Loader** | `src/config/config_loader.py` | Layered config with typed accessors, env var mapping, validation |
+| **Config** | `src/config/defaults.yaml` | Single source of truth for all settings (`models.main`, `models.vision`, `models.embedding`, `models.pentest`, `models.cloud`). Override chain: YAML → env → profile |
+| **Config Loader** | `src/config/config_loader.py` | Layered config with typed accessors (`get_main_model_name`, `get_vision_model_name`, `get_embedding_model_name`, `get_pentest_model_name`), env var mapping, validation |
 | **Agent Graph** | `src/agent/core/graph.py` | LangGraph orchestration: memory→router→simple/complex→tools→memory |
 | **Checkpointer** | `src/agent/core/checkpointer.py`| PostgreSQL checkpointer (`AsyncPostgresSaver`) managing state |
-| **Router** | `src/agent/routing/router.py` | Cloud-primary routing: `simple`, `complex-cloud` — keyword bypass, LLM classifier, HITL |
-| **Simple Node** | `src/agent/core/simple.py` | Fast answers via local unified model (Gemma 4 E2B), retry-once on failure |
-| **Complex Node** | `src/agent/core/complex.py` | Tool-augmented reasoning — Cloud DeepSeek V4 |
-| **Cloud payload** | `src/agent/nodes/complex_utils/cloud_payload.py` | Anonymization, brief gate, stable/volatile prompt layers, cache metrics |
-| **Cloud invoke** | `src/agent/nodes/complex_utils/cloud_invoke.py` | Raw DeepSeek client, tool strict mode, reasoning replay |
-| **Vision proxy** | `src/agent/nodes/complex_utils/vision_*.py` | Lazy VLM → JSON OCR → text for DeepSeek cloud path |
+| **Router** | `src/agent/routing/router.py` | Routing: `simple`, `complex-default`, `complex-cloud` — keyword bypass, LLM classifier, HITL |
+| **Simple Node** | `src/agent/core/simple.py` | Fast answers via local unified model (`gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m`), retry-once on failure |
+| **Complex Facade** | `src/agent/core/complex.py` | Tool-augmented reasoning coordinator facade |
+| **Complex Prompt** | `src/agent/core/complex_prompt.py` | Prompt templates, stable/volatile layering, deterministic tool sorting |
+| **Complex Executor** | `src/agent/core/complex_executor.py` | LLM invocation, fallback management, cutoff continuation |
+| **Complex Tool Action** | `src/agent/core/complex_tool_action.py` | Parallel tool dispatch, output bounding, in-place error recovery |
+| **Cloud payload** | `src/agent/cloud/cloud_payload.py` | Anonymization, brief gate, stable/volatile prompt layers, cache metrics |
+| **Cloud invoke** | `src/agent/cloud/cloud_invoke.py` | Raw DeepSeek client, tool strict mode, reasoning replay |
+| **Error Classifier** | `src/agent/cloud/error_classifier.py` | Fine-grained API error categorization and jittered exponential backoff |
+| **Vision proxy** | `src/agent/core/complex_utils/vision_*.py` | Dedicated VLM (`baidu.unlimited-ocr`) → structured OCR → text for DeepSeek cloud path |
 | **Screen assist** | `src/tools/screen_assist/` | tmux, macOS AX, browser, Kali SSH tools |
-| **Memory** | `src/agent/nodes/memory.py` | Memory injection + write: STM, LTM (Mem0/Qdrant), personal context |
-| **Summarizer** | `src/agent/nodes/summarize.py` | Auto-compress older turns when context >85% of window |
+| **Memory** | `src/agent/nodes/memory.py` | Memory injection + write: STM, LTM (PostgreSQL pgvector 1024-dim), personal context |
+| **Summarizer** | `src/agent/nodes/summarize.py` | 3-tier context compaction: tool output pre-pruning + reference-only task snapshot header |
 | **HITL** | `src/agent/hitl/` | Safety gates: scope_clarify, plan_review, security_proxy |
-| **LLM Pool** | `src/agent/llm.py` | Singleton pool: router + extraction + cloud instances |
+| **LLM Pool** | `src/agent/llm.py` | Singleton pool: main local model + vision + cloud instances |
+| **Tool Registry** | `src/tools/registry.py` | Dynamic tool registry with `@registry.register`, `check_fn` gating, error bounding |
 | **Tools** | `src/tools/` | Web search, file ops, notebook, skills, MCP |
-| **Tool Reranker** | `src/agent/tool_reranker.py` | Semantic tool reranking using Nomic embeddings |
+| **Tool Reranker** | `src/agent/tool_reranker.py` | Semantic tool reranking using MXBAI embeddings |
 | **API** | `src/api/server.py` | FastAPI with REST + WebSocket + OpenAI-compatible endpoints |
 | **Scheduler** | `src/api/scheduler_manager.py` | APScheduler for autonomous background jobs |
 | **Power monitor** | `src/api/power_monitor.py` | Async battery status watcher via pmset, handles Eco-Mode transitions |
 | **Idle manager** | `src/api/idle_manager.py` | Resource optimization watcher (LLM model unload, StirlingPDF shutdown) |
-| **Frontend** | `frontend-v2/` | React 19 + Vite + Zustand + Electron main process |
+| **Thought Graph** | `src/memory/thought_graph.py` | Thought Node and Edge graph persistence, auto-seeding, relations, and REST API |
+| **Frontend** | `frontend-v2/` | React 19 + Vite + Zustand + ForceGraph2D (Coggle Organic Mindmap + Maya Node Editor) + Electron |
 
 ## Agent Flow
 
@@ -86,7 +92,7 @@ after_memory_retrieve ──► If tokens >85% context: auto_summarize → compr
   ▼
 simple | scope_clarify → complex_llm
   │
-  ├── simple ──► simple_node (Gemma 4 E2B, fast)
+  ├── simple ──► simple_node (Main local model, direct response)
   │
   └── complex ──► scope_clarify ──► complex_llm
                         │              │

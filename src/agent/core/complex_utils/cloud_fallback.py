@@ -8,7 +8,8 @@ that was previously copy-pasted 6+ times in complex.py.
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Awaitable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from langchain_core.messages import AIMessage
 
@@ -17,7 +18,7 @@ from src.config.config_loader import config
 logger = logging.getLogger(__name__)
 
 _DEFAULT_FALLBACK_BUDGET = int(config.get("complex.default_token_budget", 4096))
-_DEFAULT_FALLBACK_CONTEXT = int(config.get("models.small.context_window", 65536))
+_DEFAULT_FALLBACK_CONTEXT = config.get_main_model_context_window()
 
 
 def _fallback_error_message(reason: str) -> str:
@@ -81,7 +82,7 @@ async def handle_cloud_fallback(
             "vision_proxy_model": None,
         }
     except Exception as fb_err:
-        logger.warning("[complex] Local fallback also failed: %s", fb_err)
+        logger.error("[complex] Local fallback also failed: %s", fb_err, exc_info=True)
         fallback_chain.append(
             {"model": "local-fallback", "status": "failed", "reason": str(fb_err)[:80]}
         )

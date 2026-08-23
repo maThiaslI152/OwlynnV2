@@ -6,8 +6,8 @@ It enforces policy checks and triggers HITL interruption for sensitive actions.
 """
 
 import json
-import re
 import logging
+import re
 from typing import Any
 
 from langchain_core.messages import AIMessage
@@ -18,10 +18,14 @@ from src.memory.user_profile import get_profile
 
 logger = logging.getLogger(__name__)
 
-from src.config.log_middleware import log_hitl_event, log_node
-
-from src.agent.hitl.policy import is_information_retrieval, SENSITIVE_TOOLS
 from src.agent.hitl.context import enrich_interrupt
+from src.agent.hitl.policy import (
+    SENSITIVE_TOOLS as SENSITIVE_TOOLS,
+)
+from src.agent.hitl.policy import (
+    is_information_retrieval,
+)
+from src.config.log_middleware import log_hitl_event, log_node
 
 SENSITIVE_PATTERN_RE = re.compile(
     r"(?:\brm\s+-rf\b|(?:^|[;&|])\s*curl\b|(?:^|[;&|])\s*wget\b|\bsudo\b|\bchmod\b|\bchown\b|\bssh\b|\bscp\b)",
@@ -206,7 +210,7 @@ async def security_proxy_node(state: AgentState) -> AgentState:
         for call in tool_calls:
             name = str(call.get("name", "unknown"))
             args = call.get("args", {})
-            allowed, reason = guard_tool_call(name, args)
+            allowed, reason = await guard_tool_call(name, args)
             if not allowed:
                 from langgraph.types import interrupt as lg_interrupt
 

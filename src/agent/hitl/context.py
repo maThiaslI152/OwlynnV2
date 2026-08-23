@@ -4,7 +4,8 @@ and scope_clarify to build enriched interrupt payloads.
 """
 
 from typing import Any
-from langchain_core.messages import HumanMessage, AIMessage
+
+from langchain_core.messages import AIMessage, HumanMessage
 
 # Map tool names to human-readable action descriptions
 _TOOL_ACTION_LABELS = {

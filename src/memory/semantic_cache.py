@@ -10,7 +10,7 @@ All operations are async and use the shared :mod:`src.models.db` session.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import delete, text
 
@@ -24,11 +24,8 @@ logger = logging.getLogger(__name__)
 # Config
 # ---------------------------------------------------------------------------
 
-_embed_model: str = config.get(
-    "models.embedding.model_name",
-    "text-embedding-nomic-embed-text-v1.5-embedding",
-)
-_embed_url: str = config.get("models.embedding.base_url", "http://127.0.0.1:1234/v1")
+_embed_model: str = config.get_embedding_model_name()
+_embed_url: str = config.get_embedding_base_url()
 
 # Cosine distance threshold: < 0.08 ≈ >92% similar → cache hit
 _CACHE_THRESHOLD: float = 0.08
@@ -41,7 +38,7 @@ _CACHE_THRESHOLD: float = 0.08
 
 async def _get_embedding(text_: str) -> list[float]:
     """Delegate to the shared embedding helper in :mod:`src.memory.long_term`."""
-    from src.memory.long_term import get_embedding  # noqa: PLC0415
+    from src.memory.long_term import get_embedding
 
     return await get_embedding(text_)
 
@@ -156,7 +153,7 @@ async def cleanup_old_cache_entries(days: int = 30) -> int:
         Number of rows deleted.
     """
     try:
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        cutoff = datetime.now(UTC) - timedelta(days=days)
 
         async with AsyncSessionLocal() as session:
             stmt = delete(SemanticCacheEntry).where(

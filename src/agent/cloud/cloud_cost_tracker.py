@@ -5,10 +5,9 @@ Tracks per-session token usage (input/output/cache-hit) and estimated cost for
 DeepSeek V4 API calls. Supports flash vs pro tier pricing and daily budget warnings.
 """
 
-import time
 import logging
+import time
 from dataclasses import dataclass, field
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -59,8 +58,8 @@ class SessionCostTracker:
     total_calls: int = 0
     failed_calls: int = 0
     session_start: float = field(default_factory=time.monotonic)
-    last_call_time: Optional[float] = None
-    last_turn: Optional[dict] = None
+    last_call_time: float | None = None
+    last_turn: dict | None = None
     _warned_thresholds: set[float] = field(default_factory=set, repr=False)
 
     def record_usage(
@@ -228,7 +227,7 @@ class SessionCostTracker:
         self._warned_thresholds.clear()
 
 
-_tracker: Optional[SessionCostTracker] = None
+_tracker: SessionCostTracker | None = None
 
 
 def get_cost_tracker() -> SessionCostTracker:

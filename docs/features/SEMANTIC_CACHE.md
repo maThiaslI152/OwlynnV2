@@ -43,7 +43,7 @@ The cache is **project-scoped**: a question answered in Project A will not be se
 
 ### CustomOpenAIVectorizer
 
-A lightweight Pydantic-compatible vectorizer that calls the **LM Studio embedding endpoint** (`nomic-embed-text-v1.5`) via the OpenAI async client. This reuses the same embedding model already running for Mem0/Qdrant, adding zero additional memory overhead.
+A lightweight Pydantic-compatible vectorizer that calls the **LM Studio embedding endpoint** (`text-embedding-mxbai-embed-large-v1`, 1024 dims) via the OpenAI async client. This reuses the same embedding model already running for LTM/pgvector, adding zero additional memory overhead.
 
 ## Integration Points
 

@@ -78,7 +78,7 @@ Expected: `owlynn_qdrant`, `owlynn_redis` up. Fix: `podman compose up -d` or `./
 curl -s http://127.0.0.1:1234/v1/models | python3 -c "import sys,json; d=json.load(sys.stdin); print(len(d.get('data',[])))"
 ```
 
-Expected: ≥1 model. Unified local model: `gemma-4-e2b-heretic-uncensored-mlx`. See [llm-pool.md](llm-pool.md).
+Expected: ≥1 model. Unified local model: `gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m`. See [llm-pool.md](llm-pool.md).
 
 ### 3. Backend
 

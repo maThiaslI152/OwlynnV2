@@ -1,5 +1,5 @@
-import re
 import os
+import re
 
 SCRIPT_PATH = "/Users/tim/AntigravityProject/Owlynn/frontend/script.js"
 HTML_PATH = "/Users/tim/AntigravityProject/Owlynn/frontend/index.html"

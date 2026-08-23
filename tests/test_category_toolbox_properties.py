@@ -20,13 +20,13 @@ from unittest.mock import MagicMock
 # Mem0 may not be installed in the test environment
 sys.modules["mem0"] = MagicMock()
 
-from hypothesis import given, settings, assume
+from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
 from src.agent.tool_sets import (
-    TOOLBOX_REGISTRY,
     ALWAYS_INCLUDED_TOOLS,
     COMPLEX_TOOLS_WITH_WEB,
+    TOOLBOX_REGISTRY,
     resolve_tools,
 )
 

@@ -1,5 +1,6 @@
-import httpx
 import os
+
+import httpx
 
 SHODAN_BASE = "https://api.shodan.io"
 

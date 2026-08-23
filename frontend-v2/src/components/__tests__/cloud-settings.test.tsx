@@ -70,6 +70,58 @@ describe('CloudSettingsPanel', () => {
     })
   })
 
+  it('loads and saves cloud routing policy mode', async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === '/api/unified-settings' && !init) {
+        return {
+          ok: true,
+          json: async () => ({
+            cloud_routing_mode: 'auto',
+            cloud_model_tier: 'flash',
+            cloud_thinking_mode: 'auto',
+            cloud_reasoning_effort: 'high',
+            cloud_escalation_enabled: true,
+          }),
+        }
+      }
+      if (url === '/api/unified-settings' && init?.method === 'PUT') {
+        return { ok: true, json: async () => ({ status: 'ok' }) }
+      }
+      if (url === '/api/cloud-status') {
+        return {
+          ok: true,
+          json: async () => ({
+            available: true,
+            key_valid: true,
+            model: 'deepseek-v4-flash',
+            error: '',
+          }),
+        }
+      }
+      return { ok: false, json: async () => ({}) }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<CloudSettingsPanel />)
+    await waitFor(() => {
+      expect(screen.getByTestId('cloud-routing-mode')).toBeTruthy()
+    })
+
+    fireEvent.change(screen.getByTestId('cloud-routing-mode'), {
+      target: { value: 'local_only' },
+    })
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/unified-settings',
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({ cloud_routing_mode: 'local_only' }),
+        })
+      )
+    })
+  })
+
   it('disables reasoning effort when thinking mode is never', async () => {
     vi.stubGlobal(
       'fetch',

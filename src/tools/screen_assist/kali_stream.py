@@ -5,8 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import shlex
-import time
-from typing import Awaitable, Callable
+from collections.abc import Awaitable, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +109,7 @@ class KaliTerminalStreamer:
             if proc.returncode != 0:
                 return None
             return stdout.decode("utf-8", errors="replace")
-        except (asyncio.TimeoutError, OSError):
+        except (TimeoutError, OSError):
             return None
 
     def _build_ssh_cmd(self) -> list[str]:

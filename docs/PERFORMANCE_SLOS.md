@@ -54,11 +54,11 @@ Measured from: user sends message → assistant first token received (streaming)
 | Component | Budget | Notes |
 |-----------|--------|-------|
 | Python agent (langgraph + LLM pool) | 2 GB | Peak during complex reasoning + tool execution |
-| Local Unified LLM (`gemma-4-e2b-heretic-uncensored-mlx`, LM Studio) | 5 GB | Router, vision proxy, memory extraction |
-| nomic embedding (LM Studio) | 140 MB | Memory/RAG/web-rank embeddings |
-| Qdrant (Docker) | 512 MB | Vector store for memory |
-| Redis (Docker) | 128 MB | Session state + LangGraph checkpoints |
-| SearxNG (Docker) | 256 MB | Local web search |
+| Local Main LLM (`gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m`, LM Studio) | ~7.5 GB | Unified engine: Router, direct responses, memory extraction, local complex reasoning, pentest mode |
+| Local Vision LLM (`baidu.unlimited-ocr`, LM Studio) | 1.5 GB | Dedicated OCR / visual transcription proxy |
+| MXBAI embedding (`text-embedding-mxbai-embed-large-v1`, LM Studio) | 670 MB | PostgreSQL pgvector / memory / semantic cache embeddings (1024 dims) |
+| PostgreSQL + pgvector | 512 MB | State checkpoints + vector memory |
+| Redis (Docker) | 128 MB | Semantic cache + extraction queue |
 | Frontend (Electron + React) | 256 MB | Desktop shell + rendered UI |
 | **Total sustained** | **~8.3 GB** | All models loaded, all services running |
 | **Total peak** | **~9.3 GB** | During complex reasoning + web search + memory save |

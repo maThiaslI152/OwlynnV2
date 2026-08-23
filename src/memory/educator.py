@@ -22,21 +22,21 @@ _STUDY_KEYWORDS = (
 )
 
 _CORRECTION_PATTERNS = (
-    re.compile(r"\b(was|is)\s+wrong\b", re.I),
-    re.compile(r"\byou'?re?\s+wrong\b", re.I),
-    re.compile(r"\bincorrect\b", re.I),
-    re.compile(r"\bmisunderstand\b", re.I),
-    re.compile(r"\bcorrect\s+your\s+answer\b", re.I),
-    re.compile(r"\bplease\s+correct\b", re.I),
-    re.compile(r"\bemphasizes\b", re.I),
+    re.compile(r"\b(was|is)\s+wrong\b", re.IGNORECASE),
+    re.compile(r"\byou'?re?\s+wrong\b", re.IGNORECASE),
+    re.compile(r"\bincorrect\b", re.IGNORECASE),
+    re.compile(r"\bmisunderstand\b", re.IGNORECASE),
+    re.compile(r"\bcorrect\s+your\s+answer\b", re.IGNORECASE),
+    re.compile(r"\bplease\s+correct\b", re.IGNORECASE),
+    re.compile(r"\bemphasizes\b", re.IGNORECASE),
 )
 
 _MASTERY_PATTERNS = (
-    re.compile(r"\bi\s+finally\s+understand\b", re.I),
-    re.compile(r"\bnow\s+i\s+understand\b", re.I),
-    re.compile(r"\bi\s+get\s+it\b", re.I),
-    re.compile(r"\bmakes\s+sense\s+now\b", re.I),
-    re.compile(r"\bi\s+think\s+i\s+understand\b", re.I),
+    re.compile(r"\bi\s+finally\s+understand\b", re.IGNORECASE),
+    re.compile(r"\bnow\s+i\s+understand\b", re.IGNORECASE),
+    re.compile(r"\bi\s+get\s+it\b", re.IGNORECASE),
+    re.compile(r"\bmakes\s+sense\s+now\b", re.IGNORECASE),
+    re.compile(r"\bi\s+think\s+i\s+understand\b", re.IGNORECASE),
 )
 
 
@@ -57,11 +57,11 @@ def is_study_mastery(human: str) -> bool:
 
 
 _STRUGGLE_RECALL_PATTERNS = (
-    re.compile(r"\bwhat\s+did\s+i\s+struggle\b", re.I),
-    re.compile(r"\bwhat\s+was\s+(hard|difficult|challenging)\b", re.I),
-    re.compile(r"\bwhat\s+.*\bstruggle\s+with\b", re.I),
-    re.compile(r"\bwhere\s+did\s+i\s+get\s+confused\b", re.I),
-    re.compile(r"\bwhat\s+.*\bmisconception\b", re.I),
+    re.compile(r"\bwhat\s+did\s+i\s+struggle\b", re.IGNORECASE),
+    re.compile(r"\bwhat\s+was\s+(hard|difficult|challenging)\b", re.IGNORECASE),
+    re.compile(r"\bwhat\s+.*\bstruggle\s+with\b", re.IGNORECASE),
+    re.compile(r"\bwhere\s+did\s+i\s+get\s+confused\b", re.IGNORECASE),
+    re.compile(r"\bwhat\s+.*\bmisconception\b", re.IGNORECASE),
 )
 
 
@@ -80,7 +80,7 @@ def study_struggle_search_queries(user_text: str) -> list[str]:
         "study misconception user struggled corrected",
         user_text.strip(),
     ]
-    topic = re.search(r"digital literacy|chapter\s+\d+", user_text, re.I)
+    topic = re.search(r"digital literacy|chapter\s+\d+", user_text, re.IGNORECASE)
     if topic:
         queries.insert(0, f"{STUDY_STRUGGLE_PREFIX} {topic.group(0)}")
     return queries
@@ -90,7 +90,7 @@ def _extract_correction_topic(human: str) -> str:
     topic_match = re.search(
         r"(?:explanation of|about|regarding)\s+([^—\-.]+)",
         human,
-        re.I,
+        re.IGNORECASE,
     )
     return topic_match.group(1).strip() if topic_match else "study topic"
 
@@ -100,7 +100,7 @@ def _extract_correction_focus(human: str) -> str:
     focus_match = re.search(
         r"(?:pdf|chapter|textbook)\s+(?:emphasizes?|says?|focuses? on)\s+(.+?)(?:\.|$)",
         human,
-        re.I,
+        re.IGNORECASE,
     )
     if focus_match:
         return focus_match.group(1).strip()[:200]
@@ -128,7 +128,7 @@ def build_mastery_atom(human: str) -> str:
     topic_match = re.search(
         r"(?:understand|get)\s+(.+?)(?:\s+now|\.|$)",
         human,
-        re.I,
+        re.IGNORECASE,
     )
     topic = topic_match.group(1).strip() if topic_match else human.strip()[:100]
     return (
@@ -171,6 +171,39 @@ def prioritize_study_memories(results: list) -> list:
         else:
             other.append(item)
     return study + other
+
+
+async def afetch_study_struggle_memories(
+    memory: object, mem0_uid: str, user_text: str
+) -> list:
+    """Run targeted Mem0 searches for study struggle recall asynchronously."""
+    merged: list = []
+    seen: set[str] = set()
+    for query in study_struggle_search_queries(user_text):
+        try:
+            if hasattr(memory, "asearch"):
+                results_dict = await memory.asearch(
+                    query, filters={"user_id": mem0_uid}, limit=10
+                )
+            else:
+                results_dict = memory.search(
+                    query, filters={"user_id": mem0_uid}, limit=10
+                )
+            batch = (
+                results_dict.get("results", [])
+                if isinstance(results_dict, dict)
+                else results_dict
+            )
+            for item in batch or []:
+                if not isinstance(item, dict):
+                    continue
+                key = str(item.get("memory") or item.get("text") or "")[:120]
+                if key and key not in seen:
+                    seen.add(key)
+                    merged.append(item)
+        except Exception:
+            continue
+    return prioritize_study_memories(merged)
 
 
 def fetch_study_struggle_memories(
@@ -261,7 +294,7 @@ def detect_weak_topics(memory: object, mem0_uid: str) -> list[dict]:
 
         # Extract topic
         topic_match = re.search(
-            r"\[STUDY_(?:STRUGGLE|MASTERY)\]\s*([^:]+):", text, re.I
+            r"\[STUDY_(?:STRUGGLE|MASTERY)\]\s*([^:]+):", text, re.IGNORECASE
         )
         topic = topic_match.group(1).strip() if topic_match else "Unknown"
 

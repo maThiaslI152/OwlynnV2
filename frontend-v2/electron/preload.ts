@@ -14,6 +14,7 @@ const ALLOWED_INVOKE_CHANNELS = [
   'hide_to_tray',
   'get_extension_path',
   'open_extension_folder',
+  'quit_app',
 ]
 
 const ALLOWED_SEND_CHANNELS: string[] = []

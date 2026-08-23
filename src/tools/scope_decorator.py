@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import functools
 import logging
-from typing import Callable
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -36,11 +36,11 @@ def scope_validated(func: Callable) -> Callable:
 
     @functools.wraps(func)
     async def wrapper(*args, **kwargs):
-        from src.tools.scope_guard import guard_tool_call, extract_targets_from_args
         from src.memory.pentest_engagement import get_active_engagement
+        from src.tools.scope_guard import extract_targets_from_args, guard_tool_call
 
         # Only validate when an active engagement exists
-        eng = get_active_engagement()
+        eng = await get_active_engagement()
         if eng:
             tool_name = func.__name__
             # Convert positional args to kwargs for target extraction
@@ -59,7 +59,7 @@ def scope_validated(func: Callable) -> Callable:
                 except (ValueError, IndexError):
                     pass
 
-            allowed, reason = guard_tool_call(tool_name, bound_args)
+            allowed, reason = await guard_tool_call(tool_name, bound_args)
             if not allowed:
                 logger.warning(
                     "[scope] BLOCKED %s: %s (targets: %s)",

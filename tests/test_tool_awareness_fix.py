@@ -20,10 +20,9 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from src.agent.core.complex import (
-    _looks_like_prose_tool_stall,
     COMPLEX_TOOL_GUIDANCE_WEB,
+    _looks_like_prose_tool_stall,
 )
-
 
 # ── Test 1: Bug condition — long prose with workspace files should be detected as stall ──
 

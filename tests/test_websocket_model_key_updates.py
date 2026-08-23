@@ -5,8 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage, AIMessageChunk
 
-from src.memory.user_profile import get_profile
-from src.memory.user_profile import _DEFAULTS
+from src.memory.user_profile import _DEFAULTS, get_profile
 
 
 class _DummyWatcher:
@@ -20,7 +19,7 @@ class _DummyWatcher:
 class _FakeAgent:
     async def astream_events(self, _input_data, config=None, version="v2"):
         profile = get_profile()
-        model_key = profile.get("small_llm_model_name", "unknown-model")
+        model_key = profile.get("main_llm_model_name", "unknown-model")
         yield {
             "event": "on_chat_model_stream",
             "metadata": {"langgraph_node": "simple"},
@@ -76,8 +75,8 @@ def _ws_url(client, thread_id):
 
 
 def test_websocket_uses_updated_model_key_after_profile_post(client):
-    new_model = "qwen2.5-1.5b-instruct"
-    resp = client.post("/api/profile", json={"small_llm_model_name": new_model})
+    new_model = "gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m"
+    resp = client.post("/api/profile", json={"main_llm_model_name": new_model})
     assert resp.status_code == 200
 
     with client.websocket_connect(_ws_url(client, "test-model-update")) as ws:
@@ -94,9 +93,9 @@ def test_websocket_uses_updated_model_key_after_profile_post(client):
 
 
 def test_websocket_run_does_not_emit_legacy_model_key_after_update(client):
-    legacy = "liquid/lfm2.5-1.2b"
-    new_model = "qwen2.5-1.5b-instruct"
-    resp = client.post("/api/profile", json={"small_llm_model_name": new_model})
+    legacy = "legacy-model-v1"
+    new_model = "gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m"
+    resp = client.post("/api/profile", json={"main_llm_model_name": new_model})
     assert resp.status_code == 200
 
     with client.websocket_connect(_ws_url(client, "test-model-no-stale")) as ws:

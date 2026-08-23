@@ -1,13 +1,14 @@
-import pytest
 import time
 from unittest.mock import MagicMock, patch
 
+import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+
+from src.agent.core.state import AgentState
 from src.agent.nodes.coherence import (
     _parse_coherence_json,
     coherence_check_node,
 )
-from src.agent.core.state import AgentState
 
 
 def test_parse_coherence_json():
@@ -52,6 +53,7 @@ async def test_coherence_check_node_coherent(monkeypatch):
     async def fake_get_small_llm():
         return FakeLLM()
 
+    monkeypatch.setattr("src.agent.nodes.coherence.get_main_llm", fake_get_small_llm)
     monkeypatch.setattr("src.agent.nodes.coherence.get_small_llm", fake_get_small_llm)
 
     state: AgentState = {
@@ -87,6 +89,7 @@ async def test_coherence_check_node_tool_failures(monkeypatch):
     async def fake_get_small_llm():
         return FakeLLM()
 
+    monkeypatch.setattr("src.agent.nodes.coherence.get_main_llm", fake_get_small_llm)
     monkeypatch.setattr("src.agent.nodes.coherence.get_small_llm", fake_get_small_llm)
 
     # 2 tool messages: 1 failed, 1 succeeded
@@ -137,6 +140,7 @@ async def test_coherence_check_node_short_response(monkeypatch):
     async def fake_get_small_llm():
         return FakeLLM()
 
+    monkeypatch.setattr("src.agent.nodes.coherence.get_main_llm", fake_get_small_llm)
     monkeypatch.setattr("src.agent.nodes.coherence.get_small_llm", fake_get_small_llm)
 
     # Route is complex, response is under 10 characters (e.g. "Done.")
@@ -174,6 +178,7 @@ async def test_coherence_check_node_below_retry_threshold(monkeypatch):
     async def fake_get_small_llm():
         return FakeLLM()
 
+    monkeypatch.setattr("src.agent.nodes.coherence.get_main_llm", fake_get_small_llm)
     monkeypatch.setattr("src.agent.nodes.coherence.get_small_llm", fake_get_small_llm)
 
     state: AgentState = {
@@ -205,6 +210,7 @@ async def test_coherence_check_node_latency_warning(mock_audit_warn, monkeypatch
     async def fake_get_small_llm():
         return FakeLLM()
 
+    monkeypatch.setattr("src.agent.nodes.coherence.get_main_llm", fake_get_small_llm)
     monkeypatch.setattr("src.agent.nodes.coherence.get_small_llm", fake_get_small_llm)
 
     # Latency: 20 seconds ago
