@@ -54,7 +54,6 @@ def test_legacy_static_endpoints_are_retired():
         with TestClient(app, raise_server_exceptions=True) as client:
             assert client.get("/script.js").status_code == 410
             assert client.get("/style.css").status_code == 410
-            assert client.get("/vendor/anything.js").status_code == 410
 
 
 def test_legacy_assets_are_not_served_via_static_mount():

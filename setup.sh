@@ -56,9 +56,15 @@ download_models(output_dir=Path('$MODEL_DIR'))
 fi
 
 # ═══════════════════════════════════════════════════════════════════
-# [4/4] Copy .env.example → .env if missing
+# [4/5] Vendor offline Chart.js (workspace HTML charts)
 # ═══════════════════════════════════════════════════════════════════
-echo "[4/4] Configuration..."
+echo "[4/5] Chart.js vendor bundle..."
+bash scripts/vendor_chartjs.sh
+
+# ═══════════════════════════════════════════════════════════════════
+# [5/5] Copy .env.example → .env if missing
+# ═══════════════════════════════════════════════════════════════════
+echo "[5/5] Configuration..."
 if [ ! -f .env ]; then
     cp .env.example .env
     echo "      Created .env from .env.example — edit as needed."

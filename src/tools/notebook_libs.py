@@ -100,7 +100,11 @@ def parse_chart_artifact(
     if not content or "Error" in content:
         return None
     lowered = content.lower()
-    if "saved" not in lowered and not _CHART_FILENAME_RE.search(content):
+    if (
+        "saved" not in lowered
+        and "written to" not in lowered
+        and not _CHART_FILENAME_RE.search(content)
+    ):
         return None
 
     html_match = _INTERACTIVE_CHART_RE.search(content)

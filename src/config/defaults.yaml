@@ -24,8 +24,8 @@ external_services:
   qdrant:
     host: "localhost"        # QDRANT_HOST env
     port: 6333               # QDRANT_PORT env
-    collection_name: "owlynn_memory_nomic"
-    embedding_dims: 768
+    collection_name: "owlynn_memory_mxbai"
+    embedding_dims: 1024
   redis:
     url: "redis://localhost:6379"  # REDIS_URL env
   searxng:
@@ -44,9 +44,9 @@ external_services:
 # ── Startup preload ──────────────────────────────────────────────────────────
 startup:
   preload:
-    - small      # Gemma 4 E2B unified local model (routing, extraction)
+    - main       # Gemma 4 12B Agentic unified local model (routing, extraction, simple, pentest)
     - vision     # Baidu OCR (specialized for image transcription)
-    - embedding  # nomic embed — always
+    - embedding  # MXBAI embed (1024 dims) — always
   warmup: true
   idle_unload_minutes: 15  # Unload local LLM from LM Studio after N mins idle (0 = disabled)
 
@@ -57,19 +57,25 @@ services:
     idle_minutes: 10      # How long to wait before stopping the container
 
 # ── Models — AI/LLM Configuration ────────────────────────────────────────────
-# Unified Local: qwen3-vl-4b — Routing, Fallback, Vision, Memory extraction
-# Cloud: DeepSeek V4 — primary workhorse for all complex reasoning
+# ── Model Architecture (Single Source of Truth) ──────────────────────────────
+# 1. Main Local Model: gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m — Primary Local Workhorse (Routing, Simple, Complex Reasoning, Extraction, Pentest)
+# 2. Vision Model: baidu.unlimited-ocr — Dedicated vision transcription proxy
+# 3. Embedding Model: text-embedding-mxbai-embed-large-v1 (1024 dims)
+# 4. Dedicated Offline Pentest Model: gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m (90% tool accuracy, 53 tok/s)
+# 5. Cloud Model: DeepSeek V4 — Optional cloud offloading (on Battery / Eco-Mode or explicit Cloud Switch)
 models:
   provider: "lm_studio"                       # "lm_studio" or "ollama"
-  small:
-    base_url: "http://127.0.0.1:1234/v1"      # SMALL_LLM_BASE_URL env
-    model_name: "gemma4-12b-qat-uncensored-hauhaucs-balanced@q4_k_m"
-    lm_studio_model_key: "gemma4-12b-qat-uncensored-hauhaucs-balanced@q4_k_m"  # For model swap API
+
+  # ── 1. Main Local Model (Unified 12B Agentic Architecture) ─────────────────
+  main:
+    base_url: "http://127.0.0.1:1234/v1"      # MAIN_LLM_BASE_URL env
+    model_name: "gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m"
+    lm_studio_model_key: "gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m"  # For model swap API
     temperature: 0.1                          # Low temp for consistent routing classification
-    max_tokens: 8192                          # Increased budget for vision/extraction tasks
+    max_tokens: 8192                          # Token budget for responses/extraction/reasoning
     max_output_tokens: 8192
-    context_window: 65536                     # Expanded for fallback capability (was 32768)
-    timeout: 180                              # Allow up to 180s for complex fallback tasks
+    context_window: 16384                     # 16k context window (matches LM Studio)
+    timeout: 180                              # Allow up to 180s for complex reasoning tasks
     stop:
       - "<end_of_turn>"
       - "<|im_end|>"
@@ -78,14 +84,14 @@ models:
       - "</s>"
       - "<|end_of_sentence|>"
     extra_body:
+      flash_attention: true
       top_p: 0.95
-      keep_alive: -1                          # Ask LM Studio to keep model loaded
-      # LM Studio handles concurrency internally (e.g. 2 parallel slots).
-      # Configure this within LM Studio's Server settings.
+      keep_alive: -1                          # Keep loaded in LM Studio
 
+  # ── 2. Vision Transcription Proxy Model ────────────────────────────────────
   vision:
     base_url: "http://127.0.0.1:1234/v1"      # VISION_LLM_BASE_URL env
-    model_name: "baidu.Unlimited-OCR-GGUF"
+    model_name: "baidu.unlimited-ocr"
     lm_studio_model_key: "baidu.unlimited-ocr"  # For model swap API
     temperature: 0.1
     max_tokens: 8192
@@ -96,6 +102,44 @@ models:
       top_p: 0.95
       keep_alive: -1
 
+  # ── 3. Vector Embedding Model (1024 dims) ──────────────────────────────────
+  embedding:
+    base_url: "http://127.0.0.1:1234/v1"      # EMBEDDING_LLM_BASE_URL env
+    model_name: "text-embedding-mxbai-embed-large-v1"
+    dims: 1024
+    timeout: 30.0
+
+  # ── 4. Dedicated Offline Pentest Model ─────────────────────────────────────
+  pentest:
+    base_url: "http://127.0.0.1:1234/v1"      # PENTEST_LLM_BASE_URL env
+    model_name: "gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m"  # 90% tool accuracy, 94% command gen (53 tok/s)
+    lm_studio_model_key: "gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m"  # For model swap API
+    temperature: 0.2
+    max_tokens: 8192                          # Output token budget
+    max_output_tokens: 8192
+    timeout: 180
+    request_timeout: 180
+    context_window: 32768                     # 32K context window
+    stop:
+      - "<end_of_turn>"
+      - "<|im_end|>"
+      - "<|endoftext|>"
+      - "<|eot_id|>"
+      - "</s>"
+      - "<|end_of_sentence|>"
+    extra_body:
+      keep_alive: -1                          # Unified with main model; stays loaded
+      flash_attention: true
+      top_p: 0.95
+    note: "Cloud APIs refuse security content. Pentest mode always uses this local model."
+    cloud_proxy:
+      enabled: true
+      allowed_categories:
+        - "public_knowledge"
+      max_cloud_tokens: 4096
+      sanitize_targets: true
+
+  # ── 5. Cloud Model (DeepSeek API / OpenRouter) ─────────────────────────────
   cloud:
     provider: "deepseek"                     # "deepseek" or "openrouter"
     openrouter_model: ""                     # if set, overrides tier selection
@@ -118,69 +162,6 @@ models:
     tiers:
       flash: "deepseek-v4-flash"
       pro: "deepseek-v4-pro"
-
-  pentest:
-    base_url: "http://127.0.0.1:1234/v1"    # Pentest mode local-only model
-    model_name: "gemma-4-12b-coder-fable5-composer2.5-v1"  # Winner of pentest benchmark (84.1%)
-    lm_studio_model_key: "gemma-4-12b-coder-fable5-composer2.5-v1"  # For model swap API
-    temperature: 0.3
-    max_tokens: 8192                          # Output token budget
-    max_output_tokens: 8192
-    timeout: 180
-    request_timeout: 180
-    context_window: 32768                     # 32K — model supports up to 262K, 32K balances VRAM
-    stop:
-      - "<end_of_turn>"
-      - "<|im_end|>"
-      - "<|endoftext|>"
-      - "<|eot_id|>"
-      - "</s>"
-      - "<|end_of_sentence|>"
-    extra_body:
-      keep_alive: 0                           # Unload after idle (model swap handles lifecycle)
-      flash_attention: true
-      top_p: 0.95
-    note: "Cloud APIs refuse security content. Pentest mode always uses this local model."
-    cloud_proxy:
-      enabled: true
-      allowed_categories:
-        - "public_knowledge"
-      max_cloud_tokens: 4096
-      sanitize_targets: true
-
-  complex_local:
-    provider: "lm_studio"
-    base_url: "http://127.0.0.1:1234/v1"
-    model_name: "gemma4-12b-qat-uncensored-hauhaucs-balanced@q4_k_m"
-    lm_studio_model_key: "gemma4-12b-qat-uncensored-hauhaucs-balanced@q4_k_m"
-    temperature: 0.4
-    max_tokens: 16384
-    max_output_tokens: 16384
-    timeout: 180
-    request_timeout: 180
-    context_window: 65536
-    stop:
-      - "<end_of_turn>"
-      - "<|im_end|>"
-      - "<|endoftext|>"
-      - "<|eot_id|>"
-      - "</s>"
-      - "<|end_of_sentence|>"
-    extra_body:
-      top_p: 0.95
-
-  embedding:
-    base_url: "http://127.0.0.1:1234/v1"
-    model_name: "text-embedding-nomic-embed-text-v1.5-embedding"
-    dims: 768
-    timeout: 30.0
-
-  # Standard (non-M4) overrides — used when OPTIMIZE_FOR_M4 is false
-  standard:
-    small:
-      timeout: 15
-      max_tokens: 2048
-      max_output_tokens: 2048
 
 # ── Routing ──────────────────────────────────────────────────────────────────
 routing:
@@ -213,6 +194,7 @@ routing:
   # Per-route budget maximums
   budget_max:
     cloud: 16384
+    default: 8192
     other: 16384                           # Increased for M4 24GB
 
   # Skill matching
@@ -261,7 +243,7 @@ memory:
 # ── MCP extensions (stdio servers from mcp_config.json) ─────────────────────
 mcp:
   enabled: true
-  include_on_all: true                     # Merge MCP tools when toolbox is "all" / empty
+  include_on_all: false                    # Only merge MCP tools when toolbox explicitly requires "mcp" or pentest
   auto_toolbox_on_pentest: true            # Append toolbox "mcp" on pentest scenario_id
   sensitive_name_prefixes:                 # HITL approval required (server_key + "_" + tool)
     - "pentest_"
@@ -324,7 +306,7 @@ web_search:
 # ── Web RAG (Embedding-based excerpt ranking) ─────────────────────────────────
 web_rag:
   enabled: true
-  embed_model: "text-embedding-nomic-embed-text-v1.5-embedding"
+  embed_model: "text-embedding-mxbai-embed-large-v1"
   top_k: 5
   chunk_chars: 720
   chunk_overlap: 120
@@ -344,6 +326,7 @@ complex:
   max_cutoff_retries: 1                   # Auto-continuation rounds (reduced for faster UX)
   max_cloud_retries: 3                    # Cloud LLM retries with backoff
   max_web_tool_rounds: 3                  # After N tool-calling turns, force synthesis (no more web tools)
+  local_tool_rerank_top_k: 8              # Rerank cap when local complex path binds >10 tools
   web_tool_budgets:
     default:
       web_search: 2
@@ -382,7 +365,7 @@ coherence:
 
 # ── Cloud ────────────────────────────────────────────────────────────────────
 cloud:
-  travel_mode: false                         # Force DeepSeek fallback to save local battery
+  travel_mode: false                         # Force DeepSeek cloud to save local battery (or explicit cloud switch)
   escalation_enabled: true
   anonymization_enabled: true
   thinking_mode: auto                        # auto | always | never
@@ -391,13 +374,13 @@ cloud:
   tool_loop_force_thinking: true
   vision_transcription_cache_ttl: 3600
   vision_idle_unload_seconds: 300            # Drop lazy VLM client after idle
-  vision_max_tokens: 2048                    # Qwen3-VL natural language cap
+  vision_max_tokens: 2048                    # OCR / Vision transcription token cap
   vision_temperature: 0.1                     # slight variation for descriptions
-  vision_prompt_mode: standard                # standard | qwen3vl
+  vision_prompt_mode: standard                # standard | ocr
   vision_lm_studio_auto_load: true             # Load model via native API before vision
   vision_lm_studio_load_timeout: 120
-  vision_qwen3vl_system: "You are a comprehensive and objective AI vision assistant. Your task is to analyze images accurately and without bias. Provide a detailed, factual description of the visual content, including the overall scene, subjects, and context. In addition, transcribe any visible text (words, numbers, code) verbatim, and identify key UI elements or structured data (charts, diagrams) if present. Be thorough, neutral, and precise."
-  vision_qwen3vl_user: "Please analyze this image thoroughly. Describe the scene, subjects, and context objectively, and transcribe any visible text or UI elements exactly as they appear."
+  vision_ocr_system: "You are a comprehensive and objective AI vision and OCR assistant. Transcribe any visible text (words, numbers, code) verbatim, and identify key UI elements or structured data (charts, diagrams) if present. Be thorough, neutral, and precise."
+  vision_ocr_user: "Please analyze this image thoroughly and transcribe all visible text and UI elements exactly as they appear."
   circuit_breaker:
     failure_threshold: 3
     cooldown_seconds: 60
@@ -427,6 +410,13 @@ pdf_rendering:
   patch_size: 28
   page_width: 392                          # 14 × 28
   divider_height: 28
+
+# ── Visualization ────────────────────────────────────────────────────────────
+visualization:
+  chartjs_local_url: "/vendor/chart.umd.min.js"   # SSOT for prompts/skills (offline)
+  chartjs_version: "4.4.1"
+  prefer_chartjs: true
+  # chartjs_cdn_fallback: optional emergency override — not used in local prompts
 
 # ── Audit Logging ────────────────────────────────────────────────────────────
 audit:

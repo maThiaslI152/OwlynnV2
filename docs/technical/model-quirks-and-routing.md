@@ -1,35 +1,41 @@
 # Model Quirks & Routing Setup
 
-**Date:** June 2026  
-**Last updated:** 2026-06-27
+**Date:** August 2026  
+**Last updated:** 2026-08-23
 
 This document details the local LLM routing stack, model-specific quirks, and the reasoning behind our configuration choices.
 
 ---
 
-## 1. The Local Unified Model: Gemma 4 E2B
+## 1. Unified Local Architecture
 
-The project uses `gemma-4-e2b-heretic-uncensored-mlx` (via LM Studio) as the local unified model slot (`models.small`). It serves as the router, simple answer engine, vision proxy, and memory extractor.
+Owlynn is standardized on the **Unified Local Architecture**:
 
-### Why Gemma 4 E2B?
-- **Multimodal native:** 4B parameter VLM with native vision support — no separate vision model needed.
-- **Strong tool calling:** Reliable `tool_use` capability for structured tool invocations.
-- **Good reading comprehension:** Outperforms previous models on context ingestion tasks (F4.1 recall).
-- **Compact:** ~5 GB VRAM (MLX 4-bit quantization), fits comfortably on M4 Air 24 GB alongside embedding model.
+1. **Main Local Model (`gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m`)**:
+   - Single unified local engine handling routing classification, direct simple responses, chat titles, background memory extraction, local complex reasoning fallback, and offline pentest mode (90% tool accuracy, 53 tok/s).
+   - Config: `models.main` & `models.pentest` in `defaults.yaml`.
 
-### Known Quirks & Safety Nets
-- **Thinking Tags:** Qwen uses `<thinking>` and `<think>` tags (in addition to plaintext "Thinking Process:" format). We strip all three formats in `formatter.py:_strip_thinking_tags()` and `router.py` to ensure clean JSON routing output.
-- **No `enable_thinking` toggle:** Unlike Gemma, Qwen does not use `chat_template_kwargs: enable_thinking`. Thinking is controlled via prompt instructions and post-processing strips.
+2. **Vision Model (`baidu.unlimited-ocr`)**:
+   - Dedicated vision and OCR transcription proxy. Transcribes text/UI from images before passing structured text to the reasoning engine.
+   - Config: `models.vision` in `defaults.yaml`.
+
+3. **Embedding Model (`text-embedding-mxbai-embed-large-v1`)**:
+   - 1024-dimensional dense vector embeddings for PostgreSQL pgvector (`memory_vectors`, `semantic_cache`, `engagement_vectors`).
+   - Config: `models.embedding` in `defaults.yaml`.
+
+4. **Pentest Mode (Zero-Latency Switching)**:
+   - Evaluated winner for local tool execution with 90% tool-use accuracy. Also supports `gemma-4-12b-coder-fable5-composer2.5-v1@q4_k_m` (84.1% overall).
+   - Config: `models.pentest` in `defaults.yaml`.
 
 ---
 
 ## 2. Cloud Primary: DeepSeek V4 (via API)
 
-All complex reasoning, tool calling, and vision synthesis runs on DeepSeek V4 cloud. No local complex model is loaded.
+All complex multi-step reasoning, tool calling, and synthesis runs on DeepSeek V4 cloud when configured.
 
 - **Configuration**: `models.cloud` in `defaults.yaml` (`deepseek-v4-flash` default, `deepseek-v4-pro` available)
 - **Context**: 1M tokens
-- **Vision**: Images are first transcribed by local Gemma 4 E2B, then DeepSeek synthesizes from transcribed text (text-only API)
+- **Vision**: Images are first transcribed by `baidu.unlimited-ocr`, then DeepSeek synthesizes from transcribed text (text-only API)
 
 See [`DEEPSEEK_V4_INTEGRATION.md`](../architecture/DEEPSEEK_V4_INTEGRATION.md) for cloud path details.
 
@@ -39,45 +45,64 @@ All model base URLs, endpoints, temperature settings, and context windows are st
 We **do not** hardcode temperatures or token limits in node files (`router.py`, `complex.py`), except for deterministic overrides. `config_loader.py` handles the merging of `defaults.yaml`, `.env`, `.env.local`, and profile overrides.
 
 Model name accessors in `ConfigLoader` provide a single point of reference:
-- `config.get_small_model_name()` — unified local model
-- `config.get_cloud_model_name()` — cloud model
+- `config.get_main_model_name()` — unified local model
+- `config.get_vision_model_name()` — vision proxy model
 - `config.get_embedding_model_name()` — embedding model
+- `config.get_pentest_model_name()` — pentest model
+- `config.get_cloud_model_name()` — cloud model
 
 Changing models = edit `defaults.yaml` only.
 
-## 4. Routing (Cloud-Primary)
+## 4. Routing (Cloud-Primary & Local-Capable)
 
 | Route | Model path | When |
 |-------|------------|------|
-| `simple` | `models.small` (Gemma 4 E2B) | Short Q&A, low tool need |
-| `complex-cloud` | `models.cloud` (DeepSeek V4) | All complex reasoning; images via `vision_proxy` → text |
-| `complex-default` | `models.small` (Gemma 4 E2B) | Local fallback when cloud is unavailable |
-
-Cloud path details: [`DEEPSEEK_V4_INTEGRATION.md`](../architecture/DEEPSEEK_V4_INTEGRATION.md).
+| `simple` | `models.main` (Gemma 4 12B Agentic) | Short Q&A, low tool need |
+| `complex-cloud` | `models.cloud` (DeepSeek V4) | Complex reasoning; images via `vision_proxy` → text |
+| `complex-default` | `models.main` (Gemma 4 12B Agentic) | Local fallback when cloud is unavailable or offline mode |
 
 ---
 
-## 5. Vision proxy: Gemma 4 E2B
+## 5. Vision proxy: baidu.unlimited-ocr
 
-Gemma 4 E2B serves as the VLM proxy for the cloud path. It transcribes text and describes image/UI context — DeepSeek synthesizes from the transcription.
+`baidu.unlimited-ocr` serves as the OCR/VLM proxy for the reasoning path. It transcribes text and describes image/UI context — DeepSeek / Main LLM synthesizes from the transcription.
 
 ### Role split
 
 | Layer | Model | Job |
 |-------|--------|-----|
-| `vision_proxy` | **Gemma 4 E2B** on LM Studio | Natural-language transcription (text + UI) |
-| `complex-cloud` | **DeepSeek V4** | Final answer from transcribed text |
+| `vision_proxy` | **baidu.unlimited-ocr** on LM Studio | OCR & natural-language transcription (text + UI) |
+| `complex-cloud` / `complex-default` | **DeepSeek V4** / **Gemma 4 12B Agentic** | Final answer from transcribed text |
 
-On proxy failure: `complex-cloud` retries with text-only prompt (no local multimodal fallback).
+On proxy failure: `complex-cloud` retries with text-only prompt.
 
-Config: `models.small.model_name` (used for routing, vision, and extraction).
+Config: `models.vision.model_name`.
 
-### VLM / LM Studio quirks
+---
 
-1. **Prompt = natural language** — System + user messages with `image_url` blocks.
-2. **Vision output varies** — Plain text or prose descriptions. Parser: `vision_qwen3vl.py` (which parses text/UI output); single call.
-3. **No image to cloud** — DeepSeek is text-only; images are stripped after proxy.
+## 6. Gemma 4 12B Agentic quirks (local path)
 
-### Telemetry (eval + WS)
+Model: `gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m` (`models.main` / `models.pentest`).
 
-`model_info` events include `vision_intake_mode` (`proxy` | `fallback`) and `vision_proxy_model` when the VLM succeeded.
+| Quirk | Mitigation in Owlynn |
+|-------|---------------------|
+| Emits `<think>` blocks | Stripped in `formatter.py` (`_strip_thinking_tags`) on complex and simple paths |
+| Tool-happy (90% tool accuracy) — loops tools instead of writing prose | Category web budgets (`complex.web_tool_budgets`), `complex.max_web_tool_rounds`, forced synthesis (`tools_for_invoke = None`), `COMPLEX_TOOL_GUIDANCE_WEB_LOCAL` |
+| Weak output synthesis (~74%) / multi-step completion (~69%) | `_fallback_for_blank_response`, one synthesis retry (`needs_web_synthesis_retry`, `_looks_like_prose_tool_stall`), coherence retry on local route |
+| Text-only (no native vision) | `_invoke_local_path` / `_invoke_pentest_path` sanitize `image_url` blocks to `[Image attached by user]` |
+| Gemma stop tokens (`<end_of_turn>`, etc.) | Passed via `models.main.stop` / `models.pentest.stop` in `_invoke_local_path` and `_invoke_pentest_path` (not `_invoke_cloud_path`) |
+| Prose tool stall ("I will now search…") | `_looks_like_prose_tool_stall` triggers one local synthesis retry with tools unbound |
+| Multi-hop `notebook_run` for charts stalls turns | Local path uses **HTML + offline Chart.js via `write_workspace_file`** for default charts (`/vendor/chart.umd.min.js`, no CDN); `notebook_run` only when user explicitly asks for matplotlib/PNG |
+| LM Studio MTP speculative decode crashes | `model_swap.py` sets `speculative_draft_simple: False` on model load |
+| KV cache: no synthetic `HumanMessage` mid-turn | Web/fetch nudges appended to `ToolMessage.content`; synthesis hints via volatile suffix (`build_volatile_suffix`) |
+
+### Local prompt patterns
+
+- **Normal complex (`complex-default`)**: `COMPLEX_TOOL_GUIDANCE_WEB_LOCAL` — "Use web_search once, then synthesize" instead of exhaustive multi-tool research loops.
+- **Forced synthesis hop**: `COMPLEX_TOOL_GUIDANCE_LOCAL_SYNTHESIS` injected into volatile suffix when web budget is exhausted.
+- **Tool rerank**: When >10 tools bound, `complex.local_tool_rerank_top_k` (default 8) via `rerank_tools` in `_invoke_local_path`.
+- **Kali tools**: Gated to pentest scenario only (`KALI_SCREEN_ASSIST_TOOLS` excluded from `COMPLEX_TOOLS_WITH_WEB`).
+
+### Context window
+
+`models.main.context_window` is **16384** (16k) for 24GB Mac RAM safety. Pentest slot may advertise 32k in LM Studio but complex local path caps against `models.main.context_window`.

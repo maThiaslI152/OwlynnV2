@@ -1,7 +1,7 @@
 ---
 status: active
 category: guide
-last_updated: 2026-07-10
+last_updated: 2026-08-23
 audience: agent
 owner: ai-agent
 ---
@@ -41,11 +41,12 @@ http://127.0.0.1:6333           # Qdrant (vector DB)
 http://127.0.0.1:6379           # Redis (session persistence)
 http://127.0.0.1:8090           # StirlingPDF (PDF text + OCR intake)
 http://127.0.0.1:8888           # SearXNG (optional — not started by ./start.sh)
+http://127.0.0.1:8000/vendor/chart.umd.min.js  # Offline Chart.js (workspace HTML charts)
 ```
 
 ## Step 0: One-time bootstrap (optional)
 
-Fresh checkout? Run `./setup.sh` once — starts containers, creates `.venv`, installs Python + npm deps, copies `.env.example` → `.env`.
+Fresh checkout? Run `./setup.sh` once — starts containers, creates `.venv`, installs Python + npm deps, vendors offline Chart.js, copies `.env.example` → `.env`.
 
 ## Step 1: Environment Configuration (.env + .env.local)
 
@@ -71,15 +72,18 @@ To swap a model, change 1-2 lines in `defaults.yaml`. No code changes needed.
 **Key config sections:**
 | Section | What it controls |
 |---------|-----------------|
-| `models.small` | Router/model for simple tasks (name, base_url, temp, max_tokens, context_window) |
-| `models.extraction` | _(deprecated)_ — extraction now uses `models.small` |
+| `models.main` | Unified local model for routing, extraction, direct responses, and local complex reasoning (`gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m`) |
+| `models.vision` | Dedicated OCR & visual transcription proxy (`baidu.unlimited-ocr`) |
+| `models.embedding` | 1024-dim embedding model for LTM/pgvector & semantic cache (`text-embedding-mxbai-embed-large-v1`) |
+| `models.pentest` | Dedicated isolated local model for Pentest mode (`gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m`) |
 | `models.cloud` | DeepSeek V4 API (`deepseek-v4-flash` / `deepseek-v4-pro`) |
 | `cloud` | Thinking mode, reasoning effort, vision cache TTL |
 | `routing` | Confidence thresholds, budget tiers, keyword bypasses |
-| `memory` | Max facts, cache TTL, decay constants |
+| `memory` | Max facts, cache TTL, decay constants, pgvector dimensions (1024) |
 | `web_search` | Search backend timeouts, user-agents |
 | `summarization` | Threshold ratio, context windows |
 | `complex` | Safety margins, cutoff retries |
+| `visualization` | Offline Chart.js URL (`/vendor/chart.umd.min.js`) for workspace HTML charts |
 
 **Config validation** runs at startup. Missing paths or missing YAML sections produce warnings in the backend log. Run manually:
 ```bash
@@ -91,12 +95,15 @@ python3 -c "from src.config.config_loader import validate_config; print(validate
 |---------|-----------|-------------|
 | `HOST` | `server.host` | `127.0.0.1` |
 | `PORT` | `server.port` | `8000` |
-| `SMALL_LLM_BASE_URL` | `models.small.base_url` | `http://127.0.0.1:1234/v1` |
+| `MAIN_LLM_BASE_URL` | `models.main.base_url` | `http://127.0.0.1:1234/v1` |
 | `CLOUD_LLM_BASE_URL` | `models.cloud.base_url` | `https://api.deepseek.com/v1` |
-| `SMALL_LLM_MODEL_NAME` | `models.small.model_name` | `gemma-4-e2b-heretic-uncensored-mlx` |
+| `MAIN_LLM_MODEL_NAME` | `models.main.model_name` | `gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m` |
+| `VISION_LLM_MODEL_NAME` | `models.vision.model_name` | `baidu.unlimited-ocr` |
+| `EMBEDDING_MODEL_NAME` | `models.embedding.model_name` | `text-embedding-mxbai-embed-large-v1` |
+| `PENTEST_LLM_MODEL_NAME` | `models.pentest.model_name` | `gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m` |
 | `CLOUD_LLM_MODEL_NAME` | `models.cloud.model_name` | `deepseek-v4-flash` |
 | `DEEPSEEK_API_KEY` | env (or `.env.local`) | — |
-| `QDRANT_HOST` / `QDRANT_PORT` | `external_services.qdrant.*` | `localhost:6333` |
+| `POSTGRES_HOST` / `POSTGRES_PORT` | `database.host` / `database.port` | `localhost:5432` |
 | `REDIS_URL` | `external_services.redis.url` | `redis://localhost:6379` |
 | `SEARXNG_URL` | `external_services.searxng.url` | `""` |
 | `VOICE_WAKE_WORD` | `server.voice.wake_word` | `Athena` |

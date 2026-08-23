@@ -6,7 +6,7 @@ Goals:
   2. Switch to split/mindmap view and adjust viewport (zoom/pan/fit)
   3. Send a conversation that triggers internet search via the Brave extension
   4. Wait for completion via WebSocket idle detection (DOM fallback secondary)
-  5. Ask Owlynn to generate a matplotlib chart from the search results
+  5. Ask Owlynn to generate a lightweight SVG chart via write_workspace_file (no notebook_run)
   6. Change conversation: topic-shift follow-up, then switch to another mindmap node
   7. Verify Thought Graph growth and capture screenshots at every stage
 """
@@ -34,7 +34,7 @@ EXTENSION_DIR = Path("/Volumes/KNV3_1TB/OwlynnV2/browser-extension")
 SCREENSHOT_DIR = Path("/Volumes/KNV3_1TB/OwlynnV2/assets/mindmap_e2e_screenshots")
 SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
 
-TURN_TIMEOUT_S = 450  # Up to 7.5 min for complex local LLM tool turns
+TURN_TIMEOUT_S = 180  # Local synthesis path should complete within 3 min
 MIN_RESPONSE_CHARS = 30
 EXTENSION_WAIT_S = 30
 EXTENSION_MARKER = "via Browser Extension"
@@ -240,6 +240,27 @@ async def get_graph_snapshot() -> dict:
         }
 
 
+async def workspace_has_file(filename: str, *, project_id: str = "default") -> bool:
+    """Return True when filename appears in the workspace file list."""
+    try:
+        async with httpx.AsyncClient(timeout=10.0, headers=_auth_headers()) as c:
+            resp = await c.get(
+                f"{API_URL}/api/files",
+                params={"project_id": project_id},
+            )
+            if resp.status_code != 200:
+                return False
+            payload = resp.json()
+            files = payload if isinstance(payload, list) else payload.get("files") or []
+            names = {
+                str(f.get("name") if isinstance(f, dict) else f).split("/")[-1]
+                for f in files
+            }
+            return filename in names
+    except Exception:
+        return False
+
+
 async def preflight_extension_search() -> dict:
     """Verify extension search works via REST before chat turns."""
     engines = ["google", "bing", "ddg"]
@@ -296,12 +317,35 @@ async def assert_statusbar_extension(page: Page) -> bool:
 
 
 async def get_active_branch(page: Page) -> str:
-    """Read the Active Branch thread id from split-view HUD."""
+    """Read active branch id from HUD data-node-id (fallback: legacy strong text)."""
+    try:
+        hud = page.locator('[data-testid="active-branch"]').first
+        if await hud.count() > 0:
+            node_id = await hud.get_attribute("data-node-id")
+            if node_id and node_id.strip():
+                return node_id.strip()
+    except Exception:
+        pass
     try:
         row = page.locator('span:has-text("Active Branch") strong').first
         return (await row.inner_text()).strip()
     except Exception:
         return ""
+
+
+def log_phase_result(phase: str, since_ts: float, ws_log: WsEventLog, result: dict) -> None:
+    """Log elapsed time and tool errors for a completed phase."""
+    elapsed = result.get("elapsed", "?")
+    source = result.get("source", "unknown")
+    completed = result.get("completed", False)
+    icon = "✅" if completed else "❌"
+    print(f"  {icon} Phase {phase}: {elapsed}s (source={source})", flush=True)
+    tools = result.get("executed_tools") or ws_log.tools_since(since_ts)
+    if tools:
+        print(f"      tools: {', '.join(tools)}", flush=True)
+    errors = ws_log.tool_errors_since(since_ts)
+    if errors:
+        print(f"      tool errors ({len(errors)}): {errors[:3]}", flush=True)
 
 
 async def scrape_dom_tool_output(page: Page) -> str:
@@ -354,10 +398,30 @@ async def create_branch_via_api(parent_id: str, title: str = "E2E Branch Switch"
         return {"ok": True, "node_id": new_id, "title": title}
 
 
+async def select_graph_node_programmatic(page: Page, node_id: str) -> bool:
+    """Select a graph node via DEV test hook exposed on MindmapCanvas."""
+    try:
+        return bool(
+            await page.evaluate(
+                """(id) => {
+                    const api = window.__OWLYNN_TEST__;
+                    if (api?.selectGraphNode) {
+                        api.selectGraphNode(id);
+                        return true;
+                    }
+                    return false;
+                }""",
+                node_id,
+            )
+        )
+    except Exception:
+        return False
+
+
 async def click_different_mindmap_node(
     page: Page, current_thread: str, graph_nodes: list[dict] | None = None
 ) -> dict:
-    """Click a different node on the ForceGraph canvas; verify Active Branch changes."""
+    """Switch to a different mindmap branch; prefer branch picker + DEV API."""
     fit_btn = page.locator("button[title='Fit to screen']")
     canvas = page.locator(".mindmap-container canvas")
     search_input = page.locator('input[placeholder="Search mindmap..."]')
@@ -367,24 +431,56 @@ async def click_different_mindmap_node(
         await canvas.wait_for(state="visible", timeout=8000)
         try:
             await fit_btn.click()
-            await page.wait_for_timeout(2000)
+            await page.wait_for_timeout(1500)
         except Exception:
             pass
 
-        box = await canvas.bounding_box()
-        if not box:
-            result["reason"] = "no_canvas_box"
-            return result
-
         initial = current_thread or await get_active_branch(page)
 
-        # Try mindmap search filter then click canvas center
         other = None
         if graph_nodes:
             other = next(
                 (n for n in graph_nodes if isinstance(n, dict) and n.get("id") != initial),
                 None,
             )
+
+        target_id = other.get("id") if other else None
+
+        # 1. Prefer branch picker button when available
+        if target_id:
+            branch_btn = page.locator(f'[data-testid="branch-option-{target_id}"]')
+            try:
+                if await branch_btn.count() > 0:
+                    await branch_btn.first.click()
+                    await page.wait_for_timeout(800)
+                    active = await get_active_branch(page)
+                    if active and active != initial:
+                        result.update(
+                            {"switched": True, "to": active, "method": "branch_option_click"}
+                        )
+                        return result
+            except Exception:
+                pass
+
+        # 2. Prefer DEV programmatic select
+        if target_id:
+            if await select_graph_node_programmatic(page, target_id):
+                await page.wait_for_timeout(800)
+                active = await get_active_branch(page)
+                hud = page.locator('[data-testid="active-branch"]').first
+                hud_id = await hud.get_attribute("data-node-id") if await hud.count() > 0 else None
+                if (active and active != initial) or (hud_id and hud_id != initial):
+                    result.update(
+                        {
+                            "switched": True,
+                            "to": active or hud_id or target_id,
+                            "method": "dev_select_graph_node",
+                            "hud_node_id": hud_id,
+                        }
+                    )
+                    return result
+
+        # 3. Try mindmap search filter then canvas click
         if other and other.get("title"):
             try:
                 title_prefix = str(other["title"])[:24]
@@ -392,35 +488,42 @@ async def click_different_mindmap_node(
                 await page.wait_for_timeout(800)
                 await fit_btn.click()
                 await page.wait_for_timeout(1000)
-                cx = box["x"] + box["width"] / 2
-                cy = box["y"] + box["height"] / 2
-                await page.mouse.click(cx, cy)
-                await page.wait_for_timeout(500)
-                active = await get_active_branch(page)
-                if active and active != initial:
-                    result.update(
-                        {"switched": True, "to": active, "method": "mindmap_search_click"}
-                    )
-                    return result
+                box = await canvas.bounding_box()
+                if box:
+                    cx = box["x"] + box["width"] / 2
+                    cy = box["y"] + box["height"] / 2
+                    await page.mouse.click(cx, cy)
+                    await page.wait_for_timeout(500)
+                    active = await get_active_branch(page)
+                    if active and active != initial:
+                        result.update(
+                            {"switched": True, "to": active, "method": "mindmap_search_click"}
+                        )
+                        return result
                 await search_input.fill("")
             except Exception:
                 pass
 
-        # Grid search across canvas — ForceGraph nodes spread after fit-to-screen
-        for row in range(2, 9):
-            for col in range(2, 9):
-                x = box["x"] + box["width"] * col / 10
-                y = box["y"] + box["height"] * row / 10
-                await page.mouse.click(x, y)
-                await page.wait_for_timeout(400)
-                active = await get_active_branch(page)
-                if active and active != initial:
-                    result.update({"switched": True, "to": active, "method": f"grid_{row}_{col}"})
-                    return result
+        # 4. Grid search across canvas
+        box = await canvas.bounding_box()
+        if box:
+            for row in range(2, 9):
+                for col in range(2, 9):
+                    x = box["x"] + box["width"] * col / 10
+                    y = box["y"] + box["height"] * row / 10
+                    await page.mouse.click(x, y)
+                    await page.wait_for_timeout(400)
+                    active = await get_active_branch(page)
+                    if active and active != initial:
+                        result.update(
+                            {"switched": True, "to": active, "method": f"grid_{row}_{col}"}
+                        )
+                        return result
 
-        # Fallback: create branch via API, refresh mindmap, search, and click
+        # 5. Fallback: create branch via API, then branch picker / DEV select
         created = await create_branch_via_api(initial)
         if created.get("ok"):
+            created_id = created.get("node_id", "")
             refresh_btn = page.locator("button[title='Refresh graph']")
             try:
                 await refresh_btn.click()
@@ -429,36 +532,43 @@ async def click_different_mindmap_node(
                 await page.wait_for_timeout(1000)
             except Exception:
                 pass
-            try:
-                await search_input.fill(created.get("title", "E2E Branch Switch"))
-                await page.wait_for_timeout(800)
-                cx = box["x"] + box["width"] / 2
-                cy = box["y"] + box["height"] / 2
-                await page.mouse.click(cx, cy)
-                await page.wait_for_timeout(600)
-                active = await get_active_branch(page)
-                if active and active != initial:
-                    result.update(
-                        {
-                            "switched": True,
-                            "to": active,
-                            "method": "api_branch_create_click",
-                            "created_node": created.get("node_id"),
-                        }
-                    )
-                    return result
-                if created.get("node_id") and active == created.get("node_id"):
-                    result.update(
-                        {
-                            "switched": True,
-                            "to": active,
-                            "method": "api_branch_create_direct",
-                            "created_node": created.get("node_id"),
-                        }
-                    )
-                    return result
-            except Exception as exc:
-                result["api_branch_error"] = str(exc)
+
+            if created_id:
+                branch_btn = page.locator(f'[data-testid="branch-option-{created_id}"]')
+                try:
+                    if await branch_btn.count() > 0:
+                        await branch_btn.first.click()
+                        await page.wait_for_timeout(800)
+                        active = await get_active_branch(page)
+                        if active and active != initial:
+                            result.update(
+                                {
+                                    "switched": True,
+                                    "to": active,
+                                    "method": "api_branch_branch_option",
+                                    "created_node": created_id,
+                                }
+                            )
+                            return result
+                except Exception:
+                    pass
+
+                if await select_graph_node_programmatic(page, created_id):
+                    await page.wait_for_timeout(800)
+                    active = await get_active_branch(page)
+                    hud = page.locator('[data-testid="active-branch"]').first
+                    hud_id = await hud.get_attribute("data-node-id") if await hud.count() > 0 else None
+                    if (active and active != initial) or (hud_id and hud_id != initial):
+                        result.update(
+                            {
+                                "switched": True,
+                                "to": active or hud_id or created_id,
+                                "method": "api_branch_dev_select",
+                                "created_node": created_id,
+                                "hud_node_id": hud_id,
+                            }
+                        )
+                        return result
 
         result["reason"] = "no_node_hit"
     except Exception as exc:
@@ -882,15 +992,10 @@ async def run_e2e() -> dict:
             await screenshot(page, "08_search_sent")
 
             result_c = await wait_for_turn(page, ws_log, turn_start_c, timeout_s=TURN_TIMEOUT_S)
-            print(f"  {'✅' if result_c['completed'] else '❌'} Turn completed in {result_c.get('elapsed', '?')}s (source: {result_c.get('source', 'unknown')})", flush=True)
-            if result_c.get("executed_tools"):
-                print(f"  🔧 Tools used: {', '.join(result_c['executed_tools'])}", flush=True)
+            log_phase_result("D-search", turn_start_c, ws_log, result_c)
             if result_c.get("response_text"):
                 preview = result_c["response_text"][:250].replace("\n", " ")
                 print(f"  📝 Response preview: {preview}...", flush=True)
-            tool_errors = ws_log.tool_errors_since(turn_start_c)
-            if tool_errors:
-                print(f"  ⚠️  Tool errors: {tool_errors[:2]}", flush=True)
 
             dom_tool_output = await scrape_dom_tool_output(page)
             ext_provenance = extension_provenance_found(
@@ -911,12 +1016,13 @@ async def run_e2e() -> dict:
                 for t in result_c.get("executed_tools", [])
                 if any(k in t.lower() for k in ("search", "web", "fetch", "crawl"))
             ]
-            search_passed = ext_provenance and (
-                ws_log.web_search_success_since(turn_start_c)
-                or (
-                    result_c["completed"]
-                    and len(result_c.get("response_text", "")) >= MIN_RESPONSE_CHARS
-                )
+            search_idle = ws_log.idle_since(turn_start_c)
+            search_response_len = len(result_c.get("response_text", ""))
+            search_passed = (
+                ext_provenance
+                and search_idle
+                and result_c.get("source") == "ws_idle"
+                and search_response_len >= MIN_RESPONSE_CHARS
             )
             results["steps"].append(
                 {
@@ -925,28 +1031,29 @@ async def run_e2e() -> dict:
                     "tools": result_c.get("executed_tools", []),
                     "search_tools": search_tools,
                     "extension_provenance": ext_provenance,
+                    "ws_idle": search_idle,
                     "web_search_success": ws_log.web_search_success_since(turn_start_c),
-                    "response_chars": len(result_c.get("response_text", "")),
+                    "response_chars": search_response_len,
                     "elapsed": result_c.get("elapsed"),
+                    "source": result_c.get("source"),
                 }
             )
 
             # ── STEP E: Ask Owlynn to Make a Graph ───────────────────────
-            print("\n📊 Step E: Ask Owlynn to generate a chart/graph", flush=True)
+            print("\n📊 Step E: Ask Owlynn to generate an offline Chart.js HTML chart", flush=True)
             graph_prompt = (
-                "Write a python script using matplotlib to create a horizontal bar chart "
-                "comparing performance execution times across Python 3.12 (1.0x), 3.13 (1.15x), "
-                "and 3.14 (1.30x). Save the chart to the workspace as 'python_benchmarks.png'."
+                "Create a horizontal bar chart as an HTML file named 'python_benchmarks.html' "
+                "in the workspace, comparing Python 3.12 (1.0x), 3.13 (1.15x), and 3.14 (1.30x). "
+                "Use Chart.js from /vendor/chart.umd.min.js with a canvas element. "
+                "Use write_workspace_file only — do not use notebook_run or any CDN."
             )
             turn_start_d = time.time()
             await send_message(page, graph_prompt)
             print(f"  📤 Sent graph prompt ({len(graph_prompt)} chars)", flush=True)
             await screenshot(page, "10_graph_prompt_sent")
 
-            result_d = await wait_for_turn(page, ws_log, turn_start_d, timeout_s=600)
-            print(f"  {'✅' if result_d['completed'] else '❌'} Turn completed in {result_d.get('elapsed', '?')}s (source: {result_d.get('source', 'unknown')})", flush=True)
-            if result_d.get("executed_tools"):
-                print(f"  🔧 Tools used: {', '.join(result_d['executed_tools'])}", flush=True)
+            result_d = await wait_for_turn(page, ws_log, turn_start_d, timeout_s=TURN_TIMEOUT_S)
+            log_phase_result("E-graph", turn_start_d, ws_log, result_d)
             if result_d.get("response_text"):
                 preview = result_d["response_text"][:250].replace("\n", " ")
                 print(f"  📝 Response preview: {preview}...", flush=True)
@@ -956,11 +1063,22 @@ async def run_e2e() -> dict:
             chart_tools = [
                 t
                 for t in result_d.get("executed_tools", [])
-                if any(k in t.lower() for k in ("notebook", "chart", "write", "workspace", "code"))
+                if any(k in t.lower() for k in ("write_workspace", "workspace", "chart", "html"))
             ]
-            graph_passed = "notebook_run" in result_d.get("executed_tools", []) and (
-                result_d["completed"]
-                or len(result_d.get("response_text", "")) >= MIN_RESPONSE_CHARS
+            graph_idle = ws_log.idle_since(turn_start_d)
+            graph_response_len = len(result_d.get("response_text", ""))
+            html_created = await workspace_has_file("python_benchmarks.html")
+            print(
+                f"  {'✅' if html_created else '❌'} Workspace file python_benchmarks.html: "
+                f"{'found' if html_created else 'not found'}",
+                flush=True,
+            )
+            graph_passed = (
+                "write_workspace_file" in result_d.get("executed_tools", [])
+                and graph_idle
+                and result_d.get("source") == "ws_idle"
+                and graph_response_len >= MIN_RESPONSE_CHARS
+                and html_created
             )
             results["steps"].append(
                 {
@@ -968,8 +1086,12 @@ async def run_e2e() -> dict:
                     "passed": graph_passed,
                     "tools": result_d.get("executed_tools", []),
                     "chart_tools": chart_tools,
-                    "response_chars": len(result_d.get("response_text", "")),
+                    "response_chars": graph_response_len,
                     "elapsed": result_d.get("elapsed"),
+                    "source": result_d.get("source"),
+                    "write_workspace_used": "write_workspace_file"
+                    in result_d.get("executed_tools", []),
+                    "html_file_created": html_created,
                 }
             )
 
@@ -989,11 +1111,7 @@ async def run_e2e() -> dict:
             await screenshot(page, "12_topic_shift_sent")
 
             result_f1 = await wait_for_turn(page, ws_log, turn_start_f1, timeout_s=TURN_TIMEOUT_S)
-            print(
-                f"  {'✅' if result_f1['completed'] else '❌'} Topic-shift turn completed in "
-                f"{result_f1.get('elapsed', '?')}s (source: {result_f1.get('source', 'unknown')})",
-                flush=True,
-            )
+            log_phase_result("F-topic-shift", turn_start_f1, ws_log, result_f1)
             await screenshot(page, "13_topic_shift_response")
 
             post_topic_graph = await get_graph_snapshot()
@@ -1006,13 +1124,27 @@ async def run_e2e() -> dict:
             )
 
             current_branch = await get_active_branch(page)
+            hud_before = await page.locator('[data-testid="active-branch"]').first.get_attribute(
+                "data-node-id"
+            )
             switch_result = await click_different_mindmap_node(
                 page, current_branch, post_topic_graph.get("nodes")
             )
+            hud_after = await page.locator('[data-testid="active-branch"]').first.get_attribute(
+                "data-node-id"
+            )
+            switch_result["hud_before"] = hud_before
+            switch_result["hud_after"] = hud_after
+            hud_changed = bool(hud_before and hud_after and hud_after != hud_before)
+            if hud_changed and not switch_result.get("switched"):
+                switch_result["switched"] = True
+                switch_result["to"] = hud_after
+                switch_result["method"] = switch_result.get("method") or "hud_data_node_id"
             print(
                 f"  {'✅' if switch_result.get('switched') else '⚠️ '} Mindmap node switch: "
                 f"{switch_result.get('from', '?')} → {switch_result.get('to') or 'unchanged'} "
-                f"({switch_result.get('method') or switch_result.get('reason', 'unknown')})",
+                f"(HUD {hud_before} → {hud_after}, "
+                f"{switch_result.get('method') or switch_result.get('reason', 'unknown')})",
                 flush=True,
             )
             try:
@@ -1029,11 +1161,7 @@ async def run_e2e() -> dict:
             await screenshot(page, "15_switch_node_sent")
 
             result_f2 = await wait_for_turn(page, ws_log, turn_start_f2, timeout_s=TURN_TIMEOUT_S)
-            print(
-                f"  {'✅' if result_f2['completed'] else '❌'} Switched-node turn completed in "
-                f"{result_f2.get('elapsed', '?')}s (source: {result_f2.get('source', 'unknown')})",
-                flush=True,
-            )
+            log_phase_result("F-switched-node", turn_start_f2, ws_log, result_f2)
             await screenshot(page, "16_switch_node_response")
 
             conversation_change_passed = (

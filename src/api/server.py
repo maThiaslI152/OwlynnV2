@@ -6,47 +6,46 @@ with the LangGraph agent, managing user profiles, and serving the frontend.
 It supports streaming responses and handling multimodal file uploads.
 """
 
-from src.api.routes import (
-    profile,
-    settings,
-    memory,
-    project,
-    files,
-    openai,
-    browser_extension,
-    study,
-    notebook,
-    pentest,
-    scheduled_jobs,
-    config,
-    export,
-)
-from src.api.ws import handler as ws_handler
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from fastapi import HTTPException
-from src.api.routes.files import notify_file_processed
-from src.api.shared import _stringify_lc_message_content
-import json
 import asyncio
+import json
+import logging
 import os
 import secrets
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from langchain_core.messages import HumanMessage
 
 from src.agent.core.graph import init_agent
 from src.agent.llm import LLMPool
-from src.memory.user_profile import get_profile
-from src.memory.project import project_manager
+from src.api.file_processor import start_watcher as start_watcher
+from src.api.routes import (
+    browser_extension,
+    config,
+    export,
+    files,
+    memory,
+    notebook,
+    openai,
+    pentest,
+    profile,
+    project,
+    scheduled_jobs,
+    settings,
+    study,
+    thought_graph,
+)
+from src.api.routes.files import notify_file_processed
+from src.api.shared import _stringify_lc_message_content
+from src.api.ws import handler as ws_handler
+from src.config.settings import WORKSPACE_DIR
 from src.memory.personal_assistant import (
     get_memory_context_for_prompt,
 )
-from src.config.settings import WORKSPACE_DIR
-from src.api.file_processor import start_watcher
-
-from contextlib import asynccontextmanager
-import logging
+from src.memory.user_profile import get_profile
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +72,6 @@ async def lifespan(app: FastAPI):
     import sys
     import threading
     from pathlib import Path
-    from logging.handlers import RotatingFileHandler
 
     _crash_log_dir = Path.home() / ".owlynn" / "logs"
     _crash_log_dir.mkdir(parents=True, exist_ok=True)
@@ -148,7 +146,7 @@ async def lifespan(app: FastAPI):
     app.state.sessions = {}  # thread_id -> GraphSession
 
     # Start power monitor loop
-    from src.api.power_monitor import power_monitor_loop, is_on_battery
+    from src.api.power_monitor import is_on_battery, power_monitor_loop
 
     app.state.power_monitor_task = asyncio.create_task(power_monitor_loop())
 
@@ -181,14 +179,14 @@ async def lifespan(app: FastAPI):
         # 1. Router (small) — always required
         try:
             from src.agent.model_swap import swap_to_default
-            
+
             # Ensure LM Studio is in the default state (unloads pentest model if stuck in VRAM)
             await swap_to_default()
-            
-            await LLMPool.get_small_llm()
-            logger.info("[startup] Small LLM client created")
+
+            await LLMPool.get_main_llm()
+            logger.info("[startup] Main LLM client created")
         except Exception as e:
-            logger.warning("[startup] Small LLM preload failed: %s", e)
+            logger.warning("[startup] Main LLM preload failed: %s", e)
             return
 
         # 2. Embedding — lightweight ping (no LM Studio model swap)
@@ -196,13 +194,8 @@ async def lifespan(app: FastAPI):
             try:
                 import httpx
 
-                embed_url = config.get(
-                    "models.embedding.base_url", "http://127.0.0.1:1234/v1"
-                ).rstrip("/")
-                embed_model = config.get(
-                    "models.embedding.model_name",
-                    "text-embedding-nomic-embed-text-v1.5-embedding",
-                )
+                embed_url = config.get_embedding_base_url().rstrip("/")
+                embed_model = config.get_embedding_model_name()
                 timeout = float(config.get("models.embedding.timeout", 30.0))
                 async with httpx.AsyncClient(timeout=timeout) as client:
                     resp = await client.post(
@@ -214,7 +207,7 @@ async def lifespan(app: FastAPI):
             except Exception as e:
                 logger.warning("[startup] Embedding warmup skipped: %s", e)
 
-        # 3. Extraction (qwen3-vl-4b) — always available for background work
+        # 3. Extraction (google/gemma-4-26b-a4b-qat) — always available for background work
         if "extraction" in preload_slots:
             try:
                 await LLMPool.get_extraction_llm()
@@ -225,7 +218,10 @@ async def lifespan(app: FastAPI):
         # 4. Vision — (e.g. Baidu OCR)
         if "vision" in preload_slots:
             try:
-                from src.agent.core.complex_utils.vision_model_manager import get_vision_llm
+                from src.agent.core.complex_utils.vision_model_manager import (
+                    get_vision_llm,
+                )
+
                 await get_vision_llm()
                 logger.info("[startup] Vision LLM client created")
             except Exception as e:
@@ -235,14 +231,14 @@ async def lifespan(app: FastAPI):
             await _asyncio.sleep(2)
             warmup_text = [HumanMessage(content="hi")]
             try:
-                small_llm = await LLMPool.get_small_llm()
+                main_llm = await LLMPool.get_main_llm()
                 await _asyncio.wait_for(
-                    small_llm.ainvoke(warmup_text),
+                    main_llm.ainvoke(warmup_text),
                     timeout=30,
                 )
-                logger.info("[startup] Small LLM warmup complete")
+                logger.info("[startup] Main LLM warmup complete")
             except Exception as e:
-                logger.warning("[startup] Small LLM warmup failed: %s", e)
+                logger.warning("[startup] Main LLM warmup failed: %s", e)
 
         logger.info("[startup] LLM preload complete (cloud_on=%s)", cloud_on)
 
@@ -289,8 +285,9 @@ async def lifespan(app: FastAPI):
     async def _check_legacy_chats():
         try:
             import asyncio as _asyncio
-            from src.memory.project import project_manager
+
             from src.agent.core.checkpointer import get_postgres_saver
+            from src.memory.project import project_manager
 
             await _asyncio.sleep(5)  # let the system stabilize
             try:
@@ -312,7 +309,7 @@ async def lifespan(app: FastAPI):
                         legacy_count += 1
             if legacy_count > 0:
                 logger.warning(
-                    "[startup] %d/%d chats have no checkpoint data (created before Postgres checkpointer). ",
+                    "[startup] %d/%d chats have no checkpoint data (created before Postgres checkpointer). "
                     "These chats will show 'history unavailable' when opened.",
                     legacy_count,
                     total_count,
@@ -344,14 +341,11 @@ async def lifespan(app: FastAPI):
             watcher.join(timeout=2.0)
         except Exception as e:
             logger.warning("Failed to stop file watcher: %s", e)
-    # Cleanup: cancel all background tasks
-    if getattr(app.state, "file_watcher", None):
-        try:
-            app.state.file_watcher.stop()
-            app.state.file_watcher.join()
-        except Exception as e:
-            logger.warning("Error suppressed: %s", e)
-            pass
+    if getattr(app.state, "power_monitor_task", None):
+        app.state.power_monitor_task.cancel()
+
+    if getattr(app.state, "idle_watcher_task", None):
+        app.state.idle_watcher_task.cancel()
 
     if getattr(app.state, "trace_pruner", None):
         app.state.trace_pruner.cancel()
@@ -377,6 +371,7 @@ app.include_router(ws_handler.router)
 app.include_router(scheduled_jobs.router)
 app.include_router(config.router)
 app.include_router(export.router)
+app.include_router(thought_graph.router)
 
 from src.api.local_auth import cors_allowed_origins
 
@@ -507,6 +502,8 @@ app.mount(
 )
 _ASSETS_DIR = os.path.join(FRONTEND_DIR, "assets")
 app.mount("/assets", StaticFiles(directory=_ASSETS_DIR, check_dir=False), name="assets")
+_VENDOR_DIR = os.path.join(_ROOT_DIR, "assets", "vendor")
+app.mount("/vendor", StaticFiles(directory=_VENDOR_DIR, check_dir=False), name="vendor")
 
 
 @app.get("/script.js")
@@ -522,14 +519,6 @@ async def serve_style():
     raise HTTPException(
         status_code=410,
         detail="Legacy style.css endpoint retired; use frontend-v2 assets",
-    )
-
-
-@app.get("/vendor/{path:path}")
-async def serve_vendor_retired(path: str):
-    raise HTTPException(
-        status_code=410,
-        detail="Legacy vendor endpoint retired; use frontend-v2 bundled assets",
     )
 
 
@@ -560,8 +549,8 @@ async def api_get_usage():
         build_cloud_usage_payload,
         get_cost_tracker,
     )
-    from src.memory.user_profile import get_profile
     from src.config.config_loader import config
+    from src.memory.user_profile import get_profile
 
     tracker = get_cost_tracker()
     profile = get_profile()
@@ -627,15 +616,96 @@ async def api_health():
         )
     except Exception as e:
         logger.warning("Error suppressed: %s", e)
-        pass
 
     return {"status": "ok", "agent": "ready" if agent_ready else "initializing"}
+
+
+@app.get("/api/system-info")
+async def api_system_info():
+    """Return live infrastructure status: Podman containers, LM Studio, Redis, Qdrant, and model name."""
+    import asyncio
+    import subprocess
+
+    import httpx
+
+    from src.config.config_loader import config as cfg
+
+    result: dict = {
+        "model_name": cfg.get("models.main.model_name", ""),
+        "lm_studio_url": cfg.get("models.main.base_url", "http://127.0.0.1:1234/v1"),
+        "lm_studio": "error",
+        "podman": "unavailable",
+        "podman_containers": 0,
+        "redis": "error",
+        "qdrant": "error",
+    }
+
+    # LM Studio check (OpenAI-compatible /v1/models)
+    try:
+        base = result["lm_studio_url"].rstrip("/")
+        models_url = (
+            (base + "/models") if base.endswith("/v1") else (base + "/v1/models")
+        )
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            r = await client.get(models_url)
+            result["lm_studio"] = "ok" if r.status_code == 200 else "error"
+    except (httpx.HTTPError, OSError):
+        result["lm_studio"] = "error"
+
+    # Podman check — run in thread pool to avoid blocking the event loop
+    def _run_podman() -> tuple[str, int]:
+        try:
+            proc = subprocess.run(
+                ["podman", "ps", "--format", "{{.Names}}"],
+                capture_output=True,
+                text=True,
+                timeout=4,
+                check=False,
+            )
+            if proc.returncode == 0:
+                containers = [c.strip() for c in proc.stdout.splitlines() if c.strip()]
+                return "running", len(containers)
+            return "stopped", 0
+        except FileNotFoundError:
+            return "unavailable", 0
+        except OSError:
+            return "stopped", 0
+
+    podman_status, podman_count = await asyncio.get_event_loop().run_in_executor(
+        None, _run_podman
+    )
+    result["podman"] = podman_status
+    result["podman_containers"] = podman_count
+
+    # Redis check
+    try:
+        import redis.asyncio as aioredis
+
+        redis_url = cfg.get("external_services.redis.url", "redis://localhost:6379")
+        r_client = aioredis.from_url(redis_url, socket_connect_timeout=2)
+        await r_client.ping()
+        await r_client.aclose()
+        result["redis"] = "ok"
+    except (OSError, RuntimeError, ConnectionRefusedError):
+        result["redis"] = "error"
+
+    # Qdrant check
+    try:
+        qdrant_host = cfg.get("external_services.qdrant.host", "localhost")
+        qdrant_port = cfg.get("external_services.qdrant.port", 6333)
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            r = await client.get(f"http://{qdrant_host}:{qdrant_port}/healthz")
+            result["qdrant"] = "ok" if r.status_code == 200 else "error"
+    except (httpx.HTTPError, OSError):
+        result["qdrant"] = "error"
+
+    return result
 
 
 @app.get("/api/local-run-token")
 async def api_local_run_token(request: Request):
     """Return the local run token for WS authentication. Only accessible from localhost."""
-    from src.api.local_auth import is_loopback_client, get_local_run_token
+    from src.api.local_auth import get_local_run_token, is_loopback_client
 
     if not is_loopback_client(request):
         raise HTTPException(status_code=403, detail="Only available from localhost")
@@ -795,7 +865,6 @@ async def _auto_index_project_file(
                 text = file_bytes.decode("utf-8", errors="ignore")
             except Exception as e:
                 logger.warning("Error suppressed: %s", e)
-                pass
 
         if text and len(text.strip()) > 50:
             from src.memory.vector_lifecycle import VectorLifecycleManager

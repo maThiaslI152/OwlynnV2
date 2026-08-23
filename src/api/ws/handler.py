@@ -12,59 +12,48 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 router = APIRouter()
 
-from src.agent.routing.router import generate_chat_title_router_llm
-from src.config.settings import get_project_workspace, normalize_project_id
-from src.tools.notebook_libs import parse_chart_artifact
-from src.tools.workspace_context import set_active_project_for_run, reset_active_project
-from src.config.audit_log import set_thread_id, audit_info
-import json
 import asyncio
+import json
 import os
 import uuid
 
-from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.types import Command
 
-from src.api.shared import (
-    connected_websockets,
-    _session_usage,
-    emit_cloud_usage_events,
-    _TOOL_DESTRUCTIVE_RE,
-    _TOOL_NETWORK_RE,
-    _TOOL_PRIV_RE,
-    serialize_message,
-    build_message_content,
-    _stringify_lc_message_content,
-    logger,
-)
-
-from src.agent.core.complex_utils.formatter import (
-    _strip_dsml_blocks,
-    _strip_thinking_tags,
-    _TOOL_ONLY_PLACEHOLDERS,
-)
-from src.memory.project import project_manager
-from src.memory.semantic_cache import check_semantic_cache, store_semantic_cache
-
-
+from src.agent.routing.router import generate_chat_title_router_llm
+from src.api.controllers.graph_session import GraphSession
 from src.api.controllers.ws_helpers import (
-    _sanitize_assistant_text,
+    _files_for_message_content,
     _is_tool_preamble_text,
     _last_ai_message,
-    _files_for_message_content,
-    serialize_interrupt_item,
+    _sanitize_assistant_text,
     _stringify_tool_input,
-    _tool_status_from_content,
     _tool_risk_metadata,
+    _tool_status_from_content,
+    serialize_interrupt_item,
 )
-from src.api.controllers.graph_session import GraphSession
+from src.api.shared import (
+    _session_usage,
+    _stringify_lc_message_content,
+    build_message_content,
+    connected_websockets,
+    emit_cloud_usage_events,
+    logger,
+    serialize_message,
+)
+from src.config.audit_log import audit_info
+from src.config.settings import get_project_workspace
+from src.memory.project import project_manager
+from src.memory.semantic_cache import check_semantic_cache, store_semantic_cache
+from src.tools.notebook_libs import parse_chart_artifact
 
 
 @router.websocket("/ws/chat/{thread_id}")
 async def websocket_endpoint(websocket: WebSocket, thread_id: str):
     # ── Token-based authentication ──────────────────────────────────────
-    from src.api.local_auth import get_local_run_token, is_loopback_client
     import secrets as _secrets
+
+    from src.api.local_auth import get_local_run_token
 
     token = websocket.query_params.get("token")
     expected = get_local_run_token(websocket.app)
@@ -400,14 +389,19 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                         # Derive a model name from the route for the frontend
                                         route = safe_metadata.get("route", "")
                                         if route == "simple":
-                                            model = "small-local"
+                                            model = "main-local"
                                         elif route == "complex-cloud":
                                             model = "large-cloud"
+                                        elif route in (
+                                            "complex-default",
+                                            "complex-local",
+                                        ):
+                                            model = "main-local"
                                         elif route.startswith("complex-"):
                                             variant = route.replace("complex-", "")
-                                            model = f"medium-{variant}"
+                                            model = f"main-{variant}"
                                         else:
-                                            model = "unknown"
+                                            model = "main-local"
                                         await _send_ws(
                                             {
                                                 "type": "router_info",
@@ -417,6 +411,9 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                         )
 
                             if node in ["simple", "complex_llm", "coherence_retry"]:
+                                if node == "complex_llm":
+                                    running_tool_calls.clear()
+                                    pending_tool_calls.clear()
                                 if isinstance(output, dict) and "messages" in output:
                                     messages = output.get("messages") or []
                                     msg = _last_ai_message(messages)
@@ -802,9 +799,9 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                                 "duration": duration,
                                                 "batch_id": batch_id,
                                             }
-                                            if (
-                                                status == "success"
-                                                and tool_name == "notebook_run"
+                                            if status == "success" and tool_name in (
+                                                "notebook_run",
+                                                "write_workspace_file",
                                             ):
                                                 chart_artifact = parse_chart_artifact(
                                                     content, session.last_project_id
@@ -814,6 +811,10 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                                                         chart_artifact
                                                     )
                                             await _send_ws(tool_payload)
+                                            if tool_call_id:
+                                                running_tool_calls.pop(
+                                                    tool_call_id, None
+                                                )
                                         else:
                                             # Skip internal assistant reminders and empty messages.
                                             content = str(
@@ -832,12 +833,20 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                     else:
                         # Our custom events (status, error, etc)
                         logger.debug("Custom Event: %s", event)
-                        # On idle: populate the semantic cache with the last AI answer
+                        # On idle: populate the semantic cache with the last AI answer (skip error messages)
                         if (
                             isinstance(event, dict)
                             and event.get("type") == "status"
                             and event.get("content") == "idle"
                             and _last_ai_text_for_cache
+                            and not _last_ai_text_for_cache.startswith(
+                                (
+                                    "Cloud unavailable",
+                                    "Unable to connect",
+                                    "Error:",
+                                    "Local fallback",
+                                )
+                            )
                             and _pending_cache.get("prompt")
                         ):
                             asyncio.create_task(
@@ -857,7 +866,6 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                     continue
         except WebSocketDisconnect:
             logger.debug("Forwarder disconnected")
-            pass
         except Exception as e:
             logger.error("Error in event forwarder: %s", e)
         finally:
@@ -976,7 +984,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
 
             # ── Idle manager: reset timer + ensure LLM is loaded ─────────
             try:
-                from src.api.idle_manager import record_activity, ensure_llm_loaded
+                from src.api.idle_manager import ensure_llm_loaded, record_activity
 
                 record_activity()
                 asyncio.create_task(ensure_llm_loaded())
@@ -1071,6 +1079,41 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                         "created_at": time_module.time(),
                     },
                 )
+
+                # Sync title with ThoughtGraph and create branch edge if branched from parent
+                try:
+                    from src.memory.thought_graph import thought_graph_manager
+
+                    node_mode = (
+                        "pentest"
+                        if scenario_id == "pentest"
+                        else ("study" if scenario_id == "study" else "normal")
+                    )
+                    await thought_graph_manager.get_or_create_node(
+                        node_id=chat_id,
+                        title=title or "New Thought",
+                        mode=node_mode,
+                        scenario_id=scenario_id,
+                    )
+                    if title:
+                        await thought_graph_manager.update_node(chat_id, title=title)
+
+                    parent_node = payload.get("parent_thread_id") or payload.get(
+                        "branch_from"
+                    )
+                    if parent_node and parent_node != chat_id:
+                        await thought_graph_manager.create_edge(
+                            source_id=parent_node,
+                            target_id=chat_id,
+                            relation="branches_to",
+                            weight=1.0,
+                            auto_generated=False,
+                        )
+                except Exception as e:
+                    logger.debug(
+                        "[ws_handler] Failed to sync thought node or branch: %s", e
+                    )
+
                 logger.info(
                     "Registered chat %s in project %s (title=%s)",
                     chat_id,
@@ -1186,8 +1229,9 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
 
 @router.websocket("/ws/pentest/terminal")
 async def pentest_terminal_ws(websocket: WebSocket):
-    from src.api.local_auth import get_local_run_token
     import secrets as _secrets
+
+    from src.api.local_auth import get_local_run_token
 
     token = websocket.query_params.get("token")
     expected = get_local_run_token(websocket.app)
