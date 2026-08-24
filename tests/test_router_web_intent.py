@@ -9,7 +9,11 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from src.agent.core.state import AgentState
-from src.agent.routing.router import router_node
+from src.agent.routing.router import (
+    _LOCAL_FIRST_DEFAULT_TOOLBOX,
+    _toolbox_for_local_first,
+    router_node,
+)
 
 
 @pytest.mark.anyio
@@ -381,3 +385,63 @@ async def test_greeting_still_simple_with_tool_history():
     }
     out = await router_node(state)
     assert out["route"] == "simple"
+
+
+# ── Local-first toolbox selection ─────────────────────────────────────────
+
+
+def test_toolbox_for_local_first_newest_redis_version():
+    """Live-data version queries must bind web_search only (not the all catalog)."""
+    assert _toolbox_for_local_first("What's the newest update of redis version") == [
+        "web_search"
+    ]
+
+
+def test_toolbox_for_local_first_coding_text_lean_default():
+    """Unknown coding-ish text gets the lean default — never implicit ['all']."""
+    toolbox = _toolbox_for_local_first(
+        "Please refactor the authentication middleware helpers"
+    )
+    assert toolbox == _LOCAL_FIRST_DEFAULT_TOOLBOX
+    assert "all" not in toolbox
+
+
+@pytest.mark.anyio
+async def test_newest_redis_version_selects_web_search_toolbox():
+    """Router path for newest Redis version must select web_search toolbox."""
+    state: AgentState = {
+        "messages": [HumanMessage(content="What's the newest update of redis version")],
+        "web_search_enabled": True,
+    }
+    with patch(
+        "src.agent.routing.router.get_profile",
+        return_value={"router_hitl_enabled": False},
+    ):
+        out = await router_node(state)
+    assert out["route"].startswith("complex")
+    assert out["selected_toolboxes"] == ["web_search"]
+    assert "all" not in out["selected_toolboxes"]
+
+
+@pytest.mark.anyio
+async def test_local_first_coding_text_never_implicit_all():
+    """Local-first coding-ish turns use lean default, never implicit ['all']."""
+    state: AgentState = {
+        "messages": [
+            HumanMessage(
+                content="Please refactor the authentication middleware helpers"
+            )
+        ],
+        "web_search_enabled": True,
+    }
+    with patch(
+        "src.agent.routing.router.get_profile",
+        return_value={"router_hitl_enabled": False},
+    ):
+        out = await router_node(state)
+    assert out["route"].startswith("complex")
+    assert out["selected_toolboxes"] == _LOCAL_FIRST_DEFAULT_TOOLBOX
+    assert "all" not in out["selected_toolboxes"]
+    assert (
+        out["router_metadata"].get("classification_source") == "hardcoded_local_first"
+    )

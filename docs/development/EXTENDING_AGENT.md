@@ -1,7 +1,7 @@
 ---
 status: active
 category: guide
-last_updated: 2026-08-23
+last_updated: 2026-08-24
 owner: ai-agent
 audience: agent
 ---
@@ -64,7 +64,7 @@ START → memory_inject_lite → router → memory_retrieve → auto_summarize? 
 
 `router_node()` → `src/agent/routing/router.py`
 - Behavior: Classifies requests and selects route + toolbox categories
-- Change points: `simple_keywords` keyword bypass, `_WEBISH_HINTS` web intent forcing
+- Change points: `simple_keywords` keyword bypass, `_WEBISH_HINTS` web intent forcing, `_toolbox_for_local_first()` (narrow local-first toolboxes; lean default never implicit `["all"]`)
 - Risk: Routing web/live-data questions to `simple` prevents tool usage (simple node disables tools)
 
 `route_decision()` → `src/agent/core/graph.py`
@@ -82,8 +82,8 @@ START → memory_inject_lite → router → memory_retrieve → auto_summarize? 
 
 `complex_llm_node()` → `src/agent/core/complex.py` (facade over `complex_prompt.py` and `complex_executor.py`)
 - Behavior: M-tier or Cloud model with dynamically-bound tools
-- Change points: `src/agent/core/complex_prompt.py`, guidance strings, tool list selection logic (`web_search_enabled`, `mode`)
-- Tool sets: resolved via `src/agent/tool_sets.py` (`resolve_tools()`)
+- Change points: `src/agent/core/complex_prompt.py`, guidance strings, tool list selection logic (`web_search_enabled`, `mode`), `_rerank_tools_for_invoke` before bind + context breakdown
+- Tool sets: resolved via `src/agent/tool_sets.py` (`resolve_tools()`); `"all"` / `COMPLEX_TOOLS_*` omit screen-assist and ipynb (named toolboxes keep them)
 
 ### Memory Injection & Retrieval
 

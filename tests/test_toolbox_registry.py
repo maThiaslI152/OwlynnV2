@@ -13,6 +13,7 @@ from src.agent.tool_sets import (
     resolve_tools,
 )
 from src.tools.ask_user import ask_user
+from src.tools.screen_assist.tools import NORMAL_SCREEN_ASSIST_TOOLS
 
 
 class TestResolveToolsSingleToolbox:
@@ -123,3 +124,33 @@ class TestResolveToolsEmptyList:
         tools_empty = resolve_tools([])
         tools_all = resolve_tools(["all"])
         assert set(id(t) for t in tools_empty) == set(id(t) for t in tools_all)
+
+
+IPYNB_TOOL_NAMES = {"read_ipynb", "write_ipynb", "export_ipynb_html"}
+SCREEN_ASSIST_CORE_NAMES = {getattr(t, "name", "") for t in NORMAL_SCREEN_ASSIST_TOOLS}
+
+
+def _tool_names(tools: list) -> set[str]:
+    return {getattr(t, "name", "") for t in tools}
+
+
+class TestLeanAllCatalog:
+    """COMPLEX_TOOLS_* is a chat core; screen-assist / ipynb stay on named boxes."""
+
+    def test_complex_with_web_excludes_screen_assist_and_ipynb(self):
+        names = _tool_names(COMPLEX_TOOLS_WITH_WEB)
+        assert names.isdisjoint(SCREEN_ASSIST_CORE_NAMES)
+        assert names.isdisjoint(IPYNB_TOOL_NAMES)
+
+    def test_complex_no_web_excludes_screen_assist_and_ipynb(self):
+        names = _tool_names(COMPLEX_TOOLS_NO_WEB)
+        assert names.isdisjoint(SCREEN_ASSIST_CORE_NAMES)
+        assert names.isdisjoint(IPYNB_TOOL_NAMES)
+
+    def test_screen_assist_toolbox_still_has_core_tools(self):
+        names = _tool_names(TOOLBOX_REGISTRY["screen_assist"])
+        assert SCREEN_ASSIST_CORE_NAMES <= names
+
+    def test_data_viz_toolbox_still_has_ipynb_tools(self):
+        names = _tool_names(TOOLBOX_REGISTRY["data_viz"])
+        assert IPYNB_TOOL_NAMES <= names

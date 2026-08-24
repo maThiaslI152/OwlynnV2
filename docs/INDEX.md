@@ -12,8 +12,8 @@ audience: agent
 
 ```yaml
 manifest:
-  version: 28
-  generated: "2026-08-24T10:00:00Z"
+  version: 30
+  generated: "2026-08-24T14:10:00Z"
   files:
     - path: AGENTS.md
       status: active
@@ -29,7 +29,7 @@ manifest:
       status: active
       category: architecture
       audience: agent
-      last_updated: 2026-07-12
+      last_updated: 2026-08-24
     - path: docs/architecture/REDIS_LIFECYCLE.md
       status: active
       category: architecture
@@ -79,7 +79,7 @@ manifest:
       status: active
       category: guide
       audience: agent
-      last_updated: 2026-08-23
+      last_updated: 2026-08-24
     - path: docs/FUTURE_WORKS.md
       status: active
       category: planning
@@ -150,6 +150,17 @@ manifest:
       status: active
       category: reference
       audience: agent
+      last_updated: 2026-08-24
+    - path: docs/changes/local-tool-bind-cap/CHANGELOG.md
+      status: active
+      category: changelog
+      audience: agent
+      last_updated: 2026-08-24
+    - path: docs/changes/v0.3.1-release/CHANGELOG.md
+      status: active
+      category: changelog
+      audience: agent
+      last_updated: 2026-08-24
     - path: docs/changes/thought-graph-mindmap-ui/CHANGELOG.md
       status: active
       category: changelog
@@ -790,6 +801,11 @@ manifest:
       category: reference
       audience: archive
       last_updated: 2026-06-10
+    - path: docs/guides/app-release.md
+      status: active
+      category: guide
+      audience: human
+      last_updated: 2026-08-24
     - path: docs/guides/cloud-multi-turn-context.md
       status: active
       category: guide
@@ -879,7 +895,7 @@ manifest:
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-06-10
+      last_updated: 2026-08-24
     - path: docs/changes/frontier-eval-stability/CHANGELOG.md
       status: active
       category: changelog

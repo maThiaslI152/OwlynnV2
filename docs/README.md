@@ -2,7 +2,7 @@
 status: active
 category: reference
 audience: agent
-last_updated: 2026-08-23
+last_updated: 2026-08-24
 owner: ai-agent
 ---
 
@@ -38,7 +38,7 @@ Historical context: [`architecture/PROJECT_OVERVIEW.md`](architecture/PROJECT_OV
 ```
 docs/
 ├── README.md                 # This file
-├── INDEX.md                  # Machine-readable manifest (v24, audience tags)
+├── INDEX.md                  # Machine-readable manifest (v30, audience tags)
 ├── development/              # Canonical agent file maps, extending agent, chat protocol
 ├── architecture/             # System design, agent flow, redis lifecycle, vision proxy
 ├── debugging/                # Symptom → subsystem guides
@@ -66,6 +66,7 @@ docs/
 
 ## Last updated
 
+2026-08-24 — v0.3.1 desktop: local tool bind cap, mindmap UX, `Owlynn-0.3.1-arm64.dmg` ([`guides/app-release.md`](guides/app-release.md)).
 2026-08-23 — Thought Graph & Mindmap Canvas UI Architecture: Replaced legacy left sidebar with full-width Coggle Organic Mindmap (Normal/Study) & Autodesk Maya Hypershade Node Editor (Pentest), top MacMenuBar mode switcher, real-time Brave extension status, and persistent thought graph engine.
 2026-08-23 — Unified Gemma 4 12B Agentic Q4 architecture, speculative decoding safeguards, deterministic tool ordering, and full 100% CI green.
 2026-08-22 — Backbone modernization, prompt cache stability, dynamic ToolRegistry, and full CI green

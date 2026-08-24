@@ -90,6 +90,7 @@ export interface ContextBreakdown {
     system: number
     conversation: number
     tools: number
+    schemas: number
     output: number
     reasoning: number
   }
@@ -97,6 +98,7 @@ export interface ContextBreakdown {
     system: number
     conversation: number
     tools: number
+    schemas: number
     output: number
     reasoning: number
   }

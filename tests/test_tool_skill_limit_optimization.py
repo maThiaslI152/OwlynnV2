@@ -10,6 +10,7 @@ sys.modules.setdefault("mem0", MagicMock())
 
 from langchain_core.messages import AIMessage, HumanMessage
 
+from src.agent.core.complex import _rerank_tools_for_invoke
 from src.agent.core.complex_executor import _rerank_tools_for_bind
 from src.agent.core.complex_prompt import _resolve_complex_tools
 from src.agent.core.complex_utils.context_breakdown import estimate_context_breakdown
@@ -201,6 +202,15 @@ class TestContextBreakdownToolSchema:
         assert "tool_schema_tokens_est" in bd
         assert bd["tool_schema_tokens_est"] > 0
         assert bd["bound_tool_count"] == 2
+        assert bd["categories"]["schemas"] == bd["tool_schema_tokens_est"]
+        without_schemas = estimate_context_breakdown(
+            [HumanMessage(content="hello")],
+            max_context=100_000,
+        )
+        assert bd["input_estimated"] == (
+            without_schemas["input_estimated"] + bd["tool_schema_tokens_est"]
+        )
+        assert bd["total_used"] == bd["input_estimated"]
 
 
 class TestResolveToolsAskUserPreserved:
@@ -209,3 +219,46 @@ class TestResolveToolsAskUserPreserved:
         assert ask_user in tools or any(
             getattr(t, "name", "") == "ask_user" for t in tools
         )
+
+
+class TestBoundToolCountPostRerank:
+    """Telemetry bound_tool_count must reflect the post-rerank invoke list."""
+
+    def test_rerank_for_invoke_caps_and_breakdown_matches(self):
+        tools = [_fake_tool(f"tool_{i}") for i in range(20)]
+        tools.append(_fake_tool("ask_user", "Ask clarifying questions"))
+        messages = [HumanMessage(content="find info")]
+
+        def fake_rerank(query, remainder, top_k=8):
+            return remainder[:top_k]
+
+        with (
+            patch("src.agent.tool_reranker.rerank_tools", side_effect=fake_rerank),
+            patch(
+                "src.agent.core.complex_executor.config.get",
+                side_effect=lambda key, default=None: {
+                    "complex.tool_rerank_enabled": True,
+                    "complex.tool_rerank_min_count": 10,
+                    "complex.tool_rerank_top_k": 8,
+                    "complex.pinned_tools": ["ask_user"],
+                }.get(key, default),
+            ),
+        ):
+            capped = _rerank_tools_for_invoke(
+                tools_for_invoke=tools,
+                tools_bound=True,
+                route="complex-default",
+                prompt_messages=messages,
+                state={"messages": messages},
+            )
+
+        assert capped is not None
+        assert len(capped) < len(tools)
+        bd = estimate_context_breakdown(
+            messages,
+            max_context=100_000,
+            bound_tools=capped,
+        )
+        assert bd["bound_tool_count"] == len(capped)
+        assert bd["categories"]["schemas"] == bd["tool_schema_tokens_est"]
+        assert bd["total_used"] == bd["input_estimated"]

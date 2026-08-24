@@ -52,11 +52,9 @@ type TauriEventPayload = ServerEvent
 
 function App() {
   const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  // If running via Vite dev server, fallback to the backend default. Otherwise use current host.
-  const wsHost = (window.location.port === '5173' || window.location.port === '3000' || window.location.port === '1420') 
-    ? '127.0.0.1:8000' 
-    : window.location.host
-  const defaultWs = `${wsProtocol}//${wsHost}/ws/chat`
+  // Prefer same-origin (Vite proxy) so browser-mode WS stays on the page host.
+  // Override with VITE_WS_BASE_URL when the UI is served separately from the API.
+  const defaultWs = `${wsProtocol}//${window.location.host}/ws/chat`
   const wsBaseUrl = import.meta.env.VITE_WS_BASE_URL ?? defaultWs
   const queryClient = useQueryClient()
   const [localRunToken, setLocalRunToken] = useState<string>('')
@@ -66,11 +64,14 @@ function App() {
     queryKey: ['local-run-token'],
     queryFn: async () => {
       const resp = await fetch('/api/health')
-      if (!resp.ok) return null
+      if (!resp.ok) throw new Error('Backend health check failed')
       const tokenResp = await fetch('/api/local-run-token')
-      if (!tokenResp.ok) return null
+      if (!tokenResp.ok) throw new Error('Failed to fetch local run token')
       return await tokenResp.json()
     },
+    retry: 5,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
+    refetchOnWindowFocus: true,
   })
 
   useEffect(() => {
@@ -302,6 +303,12 @@ function App() {
   const effectiveThreadId = activeMode === 'pentest' && activeEngagementId ? activeEngagementId : currentThreadId
 
   useEffect(() => {
+    // Backend rejects unauthenticated WS upgrades (403). Wait for the run token.
+    if (!localRunToken) {
+      setConnection('connecting')
+      return
+    }
+
     let disposed = false
     const controller = new AbortController()
     const loadHistory = async () => {
@@ -350,7 +357,7 @@ function App() {
       }
     }
 
-    const wsUrl = `${wsBaseUrl}/${encodeURIComponent(effectiveThreadId)}${localRunToken ? `?token=${encodeURIComponent(localRunToken)}` : ''}`
+    const wsUrl = `${wsBaseUrl}/${encodeURIComponent(effectiveThreadId)}?token=${encodeURIComponent(localRunToken)}`
     const wsClient = new WsClient(wsUrl)
     wsClientRef.current = wsClient
 

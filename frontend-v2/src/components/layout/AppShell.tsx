@@ -364,7 +364,6 @@ export function AppShell({
   activeProjectId,
   currentThreadId,
   onSwitchProject,
-  onRefreshProjects,
   onCreateProject,
   onHitlApprove,
   onHitlDecline,
@@ -740,6 +739,7 @@ export function AppShell({
               activeMode={activeMode}
               onSelectNode={handleSelectGraphNode}
               onNewChat={onNewChat}
+              branchSidebarMode="auto"
             />
             {currentThreadId && (
               <div
@@ -748,7 +748,7 @@ export function AppShell({
                 style={{
                   position: 'absolute',
                   bottom: 48,
-                  left: 216,
+                  left: 16,
                   display: 'flex',
                   alignItems: 'center',
                   gap: 6,
@@ -773,6 +773,25 @@ export function AppShell({
           </div>
         ) : (
           <div style={{ flex: 1, display: 'flex', width: '100%', height: '100%', overflow: 'hidden' }}>
+            {viewLayout === 'chat' && !isCompact && (
+              <div
+                style={{
+                  width: 220,
+                  flexShrink: 0,
+                  height: '100%',
+                  borderRight: '1px solid rgba(255, 255, 255, 0.06)',
+                }}
+              >
+                <MindmapCanvas
+                  activeNodeId={currentThreadId}
+                  activeMode={activeMode}
+                  onSelectNode={handleSelectGraphNode}
+                  onNewChat={onNewChat}
+                  branchSidebarMode="docked"
+                  showGraph={false}
+                />
+              </div>
+            )}
             {viewLayout === 'split' && !isCompact && (
               <div style={{ width: '48%', height: '100%', borderRight: '1px solid rgba(255, 255, 255, 0.06)', position: 'relative' }}>
                 <MindmapCanvas
@@ -780,6 +799,7 @@ export function AppShell({
                   activeMode={activeMode}
                   onSelectNode={handleSelectGraphNode}
                   onNewChat={onNewChat}
+                  branchSidebarMode="auto"
                 />
               </div>
             )}

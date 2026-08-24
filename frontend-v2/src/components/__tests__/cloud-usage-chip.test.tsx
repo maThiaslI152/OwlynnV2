@@ -38,6 +38,7 @@ describe('CloudUsageChip', () => {
           system: 2000,
           conversation: 3000,
           tools: 7000,
+          schemas: 1500,
           output: 800,
           reasoning: 0,
         },
@@ -45,6 +46,7 @@ describe('CloudUsageChip', () => {
           system: 0.2,
           conversation: 0.3,
           tools: 0.7,
+          schemas: 0.15,
           output: 0.1,
           reasoning: 0,
         },
@@ -60,6 +62,7 @@ describe('CloudUsageChip', () => {
     expect(screen.getByTestId('context-breakdown')).toBeTruthy()
     expect(screen.getByText('System')).toBeTruthy()
     expect(screen.getByText('Tools')).toBeTruthy()
+    expect(screen.getByText('Schemas')).toBeTruthy()
   })
 
   it('renders nothing without session calls', () => {

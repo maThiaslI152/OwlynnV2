@@ -21,6 +21,7 @@ const CATEGORY_META: Array<{
   { key: 'system', label: 'System', color: 'var(--purple, #a78bfa)' },
   { key: 'conversation', label: 'Conversation', color: 'var(--accent)' },
   { key: 'tools', label: 'Tools', color: 'var(--amber)' },
+  { key: 'schemas', label: 'Schemas', color: 'var(--blue)' },
   { key: 'output', label: 'Output', color: 'var(--green)' },
   { key: 'reasoning', label: 'Reasoning', color: 'var(--text-secondary)' },
 ]

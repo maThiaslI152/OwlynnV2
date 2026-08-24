@@ -266,6 +266,7 @@ When generating cache keys for chat histories or context gatekeepers (e.g., in `
 - [`docs/README.md`](docs/README.md) — full documentation map
 - [`docs/INDEX.md`](docs/INDEX.md) — machine-readable manifest (filter by `audience`)
 
+2026-08-24 — v0.3.1 desktop: local tool bind cap (web_search toolbox / lean `"all"` / schema telemetry), mindmap canvas resize + wrapping toolbar + branch auto-hide, composer send-in-pill, WS token wait. Changelog at docs/changes/v0.3.1-release/CHANGELOG.md.
 2026-08-24 — Organic map scaling: Thought Graph cluster/dormancy metadata + Mindmap Canvas fade/drift, cluster cohesion, search override, Focus recent, branch-list grouping; New Thread/Delete lifecycle. Changelog at docs/changes/organic-map-scaling/CHANGELOG.md.
 2026-08-23 — Self-Contained MVP Packaging (v0.3.0): Bundled Python backend (`.venv`, alembic, compose) into `.app` via `scripts/build_backend_bundle.sh`; first-launch extraction to `~/.owlynn/runtime/`; Podman/Docker splash blocking; Brave extension hint toast; version bump to 0.3.0. Changelog at docs/changes/self-contained-mvp/CHANGELOG.md.
 2026-08-23 — Offline HTML/Chart.js Local Visualization (v0.2.3): Vendored Chart.js 4.4.1 at `/vendor/chart.umd.min.js` for offline workspace HTML charts via `write_workspace_file` (no CDN, no `notebook_run` for simple comparisons). Added `html_comparison_chart` skill, local prompt guidance, WS `chart_artifact` auto-embed on `.html` writes, and E2E Step E update. Changelog at docs/changes/offline-html-chartjs/CHANGELOG.md.

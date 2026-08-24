@@ -25,6 +25,7 @@ from src.agent.routing.classifier import (
     parse_classification,
 )
 from src.agent.routing.deterministic import (
+    _WEBISH_HINTS,
     _has_image_content,
     _is_simple_informational_query,
     _last_user_text,
@@ -224,28 +225,33 @@ def _toolbox_for_skill(skill) -> list[str]:
     return toolbox
 
 
+_LOCAL_FIRST_DEFAULT_TOOLBOX = ["web_search", "memory", "productivity"]
+
+
+def _toolbox_for_local_first(user_text: str) -> list[str]:
+    """Narrow toolbox for hardcoded local-first turns — never implicit ``["all"]``.
+
+    Keyword helpers win first (screen / files / viz). Live-data or simple
+    informational queries get web_search only. Everything else gets a lean
+    chat core. ``["all"]`` remains only for empty-state fallback and explicit
+    HITL "Others" / "Just answer directly".
+    """
+    if _user_wants_screen_assist(user_text):
+        return ["screen_assist"]
+    if _user_wants_file_work(user_text):
+        return ["file_ops"]
+    if _user_wants_data_viz(user_text):
+        return ["data_viz"]
+    lower = user_text.lower()
+    if _is_simple_informational_query(user_text) or any(
+        hint in lower for hint in _WEBISH_HINTS
+    ):
+        return ["web_search"]
+    return list(_LOCAL_FIRST_DEFAULT_TOOLBOX)
+
+
 def _detect_task_type(text: str) -> str:
     """Heuristic task category detection for router telemetry."""
-    _WEBISH_HINTS = (
-        "weather",
-        "forecast",
-        "temperature in",
-        "humidity in",
-        "stock price",
-        "crypto price",
-        "news ",
-        "breaking",
-        "search the web",
-        "search for",
-        "look up",
-        "google ",
-        "current price",
-        "price in ",
-        "price",
-        "today's ",
-        "right now",
-        "live score",
-    )
     lower = text.lower()
     if any(hint in lower for hint in _WEBISH_HINTS):
         return "web_search"
@@ -327,7 +333,7 @@ async def router_node(state: AgentState) -> AgentState:
     # ── Stage 1: Fast routing (LLM bypassed for Local-First) ──────────────
     decision = "complex"
     confidence = 1.0
-    toolbox = ["all"]
+    toolbox = _toolbox_for_local_first(user_text)
     parsed_needs: bool | None = None
     parsed_scenario: str | None = None
     execution_plan: str | None = None
@@ -408,10 +414,14 @@ async def router_node(state: AgentState) -> AgentState:
                 "toolbox": skill_toolbox,
                 "score": match_result.best_score,
             }
-            # Apply skill toolbox so bind_tools is narrowed (not left at ["all"]).
+            # Apply skill toolbox so bind_tools is narrowed to the skill set.
             if config.get("routing.skill.apply_toolbox_on_match", True):
                 if skill_toolbox and "all" not in skill_toolbox:
-                    if not toolbox or toolbox == ["all"]:
+                    if (
+                        not toolbox
+                        or toolbox == ["all"]
+                        or toolbox == _LOCAL_FIRST_DEFAULT_TOOLBOX
+                    ):
                         toolbox = list(skill_toolbox)
                     else:
                         toolbox = list(dict.fromkeys([*toolbox, *skill_toolbox]))

@@ -1,7 +1,7 @@
 ---
 status: active
 category: reference
-last_updated: 2026-08-22
+last_updated: 2026-08-24
 owner: ai-agent
 audience: agent
 ---
@@ -32,8 +32,9 @@ src/api/routes/files.py            # Tool discovery (GET /api/tools)
 
 1. Router classifies the user request into one or more toolbox categories
 2. `resolve_tools(toolbox_names, web_search_enabled)` returns the union of tools from selected categories + always-included tools
-3. `complex_llm_node` binds only the resolved tools to the LLM
-4. If the Router is uncertain, it selects `"all"` to fall back to the full tool set
+3. `complex_llm_node` binds only the resolved tools to the LLM (after web-budget filter + embedding rerank)
+4. Local-first routing picks a **narrow** toolbox (`web_search`, `file_ops`, `data_viz`, `screen_assist`, or lean default `web_search`+`memory`+`productivity`) — never an implicit `["all"]`
+5. `"all"` is reserved for empty-state fallback and explicit HITL “Others”; it is a **lean chat core** (web + memory + notebook/docs/todos/skills + `render_interactive_block` + `ask_user`). Screen-assist and ipynb tools stay on named `screen_assist` / `data_viz` toolboxes only
 
 ## API
 
@@ -285,7 +286,7 @@ Pentest tools are curated — no study tools, no global memory tools. All tools 
 
 ## Tool loop parity
 
-`complex_llm_node` and `complex_tool_action_node` both resolve tools via `_resolve_complex_tools()` in [`complex.py`](../../src/agent/nodes/complex.py), honoring `selected_toolboxes`, `web_search_enabled`, and vision web-tool stripping. This keeps bound tools aligned with the `ToolNode` executor on multi-turn tool loops.
+`complex_llm_node` and `complex_tool_action_node` both resolve tools via `_resolve_complex_tools()` in [`complex.py`](../../src/agent/core/complex.py), honoring `selected_toolboxes`, `web_search_enabled`, and vision web-tool stripping. Context telemetry (`bound_tool_count`, Schemas row) uses the **post-rerank** list actually sent to the model. This keeps bound tools aligned with the `ToolNode` executor on multi-turn tool loops.
 
 ## MCP extensions
 

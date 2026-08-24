@@ -1,7 +1,7 @@
 ---
 status: active
 category: standards
-last_updated: 2026-08-23
+last_updated: 2026-08-24
 owner: ai-agent
 audience: agent
 ---
@@ -12,7 +12,15 @@ audience: agent
 
 ## Overview
 
-Project status tracker. Last updated: 2026-08-23 — Offline HTML/Chart.js local charts (v0.2.3), reliability fixes, Thought Graph UX.
+Project status tracker. Last updated: 2026-08-24 — v0.3.1 desktop (tool bind cap + mindmap UX).
+
+## Recent Changes (2026-08-24 — v0.3.1 Desktop)
+
+| Change | Impact | Doc |
+|--------|--------|-----|
+| **Local tool bind cap** | Live-data turns bind ~5 web tools instead of the 36-tool `"all"` catalog; chip shows schema tokens. | [`changes/local-tool-bind-cap/CHANGELOG.md`](changes/local-tool-bind-cap/CHANGELOG.md) |
+| **Mindmap / chat UX** | Token-gated WS; send-in-pill; branch sidebar auto-hide; canvas matches host; wrapping toolbar. | [`changes/v0.3.1-release/CHANGELOG.md`](changes/v0.3.1-release/CHANGELOG.md) |
+| **v0.3.1 desktop build** | Packaged `Owlynn-0.3.1-arm64.dmg`. | [`guides/app-release.md`](guides/app-release.md) |
 
 ## Recent Changes (2026-08-23 — v0.2.3 Offline HTML/Chart.js Charts)
 

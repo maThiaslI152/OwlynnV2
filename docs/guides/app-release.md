@@ -1,12 +1,12 @@
 ---
 status: active
 category: guide
-last_updated: 2026-08-23
+last_updated: 2026-08-24
 owner: ai-agent
 audience: human
 ---
 
-# Owlynn App Release Guide (v0.3.0)
+# Owlynn App Release Guide (v0.3.1)
 
 > **Purpose:** Build, distribute, install, and troubleshoot the self-contained Owlynn Electron app.
 
@@ -24,7 +24,7 @@ audience: human
 
 1. **Install Podman Desktop** — [podman-desktop.io](https://podman-desktop.io) (or Docker Desktop)
 2. **Install LM Studio** — [lmstudio.ai](https://lmstudio.ai), load `gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m`, start local server on `:1234`
-3. **Install Owlynn** — drag `Owlynn-0.3.0-arm64.dmg` to `/Applications`
+3. **Install Owlynn** — drag `Owlynn-0.3.1-arm64.dmg` to `/Applications`
 4. **First launch** — right-click → Open (unsigned app Gatekeeper bypass)
 5. **Optional:** load Brave extension from `Owlynn.app/Contents/Resources/browser-extension/` (toast on first launch)
 
@@ -58,7 +58,7 @@ npm run build
 | 1. Backend bundle | `bash ../scripts/build_backend_bundle.sh` | `dist/backend-bundle/` (src, alembic, .venv, compose) |
 | 2. TypeScript | `tsc -b` | type-check electron + frontend |
 | 3. Vite bundle | `vite build` | `dist/`, `dist-electron/` |
-| 4. Electron package | `electron-builder` | `dist/Owlynn-0.3.0-arm64.dmg` |
+| 4. Electron package | `electron-builder` | `dist/Owlynn-0.3.1-arm64.dmg` |
 
 ### What gets bundled
 
@@ -119,4 +119,5 @@ User-writable runtime extracted to `~/.owlynn/runtime/` on first launch (preserv
 ## Related
 
 - [`docs/guides/dev-startup.md`](dev-startup.md) — development from git checkout
-- [`docs/changes/self-contained-mvp/CHANGELOG.md`](../changes/self-contained-mvp/CHANGELOG.md) — v0.3.0 changelog
+- [`docs/changes/v0.3.1-release/CHANGELOG.md`](../changes/v0.3.1-release/CHANGELOG.md) — v0.3.1 changelog
+- [`docs/changes/self-contained-mvp/CHANGELOG.md`](../changes/self-contained-mvp/CHANGELOG.md) — v0.3.0 self-contained MVP

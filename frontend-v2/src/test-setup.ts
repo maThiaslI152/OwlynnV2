@@ -109,7 +109,7 @@ if (!globalThis.fetch) {
 
 // Define global application version for tests
 // @ts-expect-error - injected by build
-globalThis.__APP_VERSION__ = '0.3.0'
+globalThis.__APP_VERSION__ = '0.3.1'
 
 import { vi } from 'vitest'
 vi.mock('react-force-graph-2d', () => ({

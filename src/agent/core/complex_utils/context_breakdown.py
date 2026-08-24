@@ -68,15 +68,16 @@ def estimate_context_breakdown(
     bound_tools: list | None = None,
 ) -> dict:
     """
-    Build OpenCode-style context breakdown: system / conversation / tools / output
-    as token counts and percentages of max_context.
+    Build OpenCode-style context breakdown: system / conversation / tools /
+    schemas / output as token counts and percentages of max_context.
     """
-    categories = {"system": 0, "conversation": 0, "tools": 0}
+    categories = {"system": 0, "conversation": 0, "tools": 0, "schemas": 0}
     for msg in prompt_messages or []:
         cat, n = estimate_message_category_tokens(msg)
         categories[cat] = categories.get(cat, 0) + n
 
     tool_schema_tokens_est = estimate_tool_schema_tokens(bound_tools)
+    categories["schemas"] = tool_schema_tokens_est
 
     input_estimated = sum(categories.values())
     if input_actual and input_actual > 0 and input_estimated > 0:
@@ -105,6 +106,7 @@ def estimate_context_breakdown(
             "system": pct(categories["system"]),
             "conversation": pct(categories["conversation"]),
             "tools": pct(categories["tools"]),
+            "schemas": pct(categories["schemas"]),
             "output": pct(output),
             "reasoning": pct(reasoning),
         },

@@ -87,9 +87,6 @@ COMPLEX_TOOLS_WITH_WEB: list = [
     notebook_run,
     notebook_reset,
     notebook_vars,
-    read_ipynb,
-    write_ipynb,
-    export_ipynb_html,
     # Document generation
     create_docx,
     create_xlsx,
@@ -107,8 +104,6 @@ COMPLEX_TOOLS_WITH_WEB: list = [
     skill_view,
     skill_manage,
     render_interactive_block,
-    # Browser bridge (Kali tools are pentest-only — see TOOLBOX_REGISTRY.pentest)
-    *NORMAL_SCREEN_ASSIST_TOOLS,
     # HITL
     ask_user,
 ]
@@ -121,9 +116,6 @@ COMPLEX_TOOLS_NO_WEB: list = [
     notebook_run,
     notebook_reset,
     notebook_vars,
-    read_ipynb,
-    write_ipynb,
-    export_ipynb_html,
     create_docx,
     create_xlsx,
     create_pptx,
@@ -138,7 +130,6 @@ COMPLEX_TOOLS_NO_WEB: list = [
     skill_view,
     skill_manage,
     render_interactive_block,
-    *NORMAL_SCREEN_ASSIST_TOOLS,
     ask_user,
 ]
 

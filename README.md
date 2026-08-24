@@ -296,11 +296,15 @@ Open `http://127.0.0.1:5173`. Safe Mode and Screen Assist **preview** need Elect
 
 ### Electron desktop build
 
+Release steps (version bump, Gatekeeper, Podman/LM Studio): [`docs/guides/app-release.md`](docs/guides/app-release.md).
+
 ```bash
-cd frontend-v2 && npm run build
+cd frontend-v2
+rm -rf dist dist-electron
+npm run build
 ```
 
-Output: `frontend-v2/dist/` (`.app` / `.dmg` on macOS).
+Output: `frontend-v2/dist/Owlynn-0.3.1-arm64.dmg` (and `.app` / zip).
 
 ---
 

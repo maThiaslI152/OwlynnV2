@@ -1,7 +1,7 @@
 ---
 status: active
 category: architecture
-last_updated: 2026-07-12
+last_updated: 2026-08-24
 owner: ai-agent
 audience: agent
 ---
@@ -187,8 +187,8 @@ Defined in `src/agent/tool_sets.py`:
 
 | Set | Count | Tools |
 |-----|-------|-------|
-| `COMPLEX_TOOLS_WITH_WEB` | 22 | Full tool set including `web_search`, `fetch_webpage` |
-| `COMPLEX_TOOLS_NO_WEB` | 20 | All tools except web search |
+| `COMPLEX_TOOLS_WITH_WEB` | 25 | Lean chat core + web (`web_search`, `fetch_webpage`, …); no screen-assist / ipynb |
+| `COMPLEX_TOOLS_NO_WEB` | 21 | Same core without web search tools |
 
 ## Key Decisions
 

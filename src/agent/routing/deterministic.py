@@ -57,6 +57,12 @@ _WEBISH_HINTS = (
     "today's ",
     "right now",
     "live score",
+    "latest",
+    "newest",
+    "current version",
+    "release",
+    "changelog",
+    "update of",
 )
 
 _EXPLICIT_WEB_REQUESTS = (
@@ -80,6 +86,12 @@ _TIME_SENSITIVE_WEB_HINTS = (
     "today's ",
     "right now",
     "live score",
+    "latest",
+    "newest",
+    "current version",
+    "release",
+    "changelog",
+    "update of",
 )
 
 # ── File / screen / data-viz hints ───────────────────────────────────────

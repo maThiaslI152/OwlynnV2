@@ -65,6 +65,13 @@ interface MindmapCanvasProps {
   /** Clear/start a local session when the last active thread is deleted. */
   onNewChat?: () => void
   className?: string
+  /**
+   * `auto` — hide branches until the cursor nears the left edge (graph views).
+   * `docked` — keep branches always visible (chat-only layout).
+   */
+  branchSidebarMode?: 'auto' | 'docked'
+  /** When false, only the branches UI is shown (no force-graph canvas). */
+  showGraph?: boolean
 }
 
 interface FocusNodeOptions {
@@ -122,16 +129,24 @@ const ATTACK_GRAPH_NODE_TYPES: Record<string, { headerBg: string; border: string
   default: { headerBg: '#1e293b', border: '#64748b', headerText: 'ATTACK NODE' },
 }
 
+const BRANCH_SIDEBAR_WIDTH = 200
+const BRANCH_HOTZONE_WIDTH = 16
+const BRANCH_LEAVE_MS = 220
+
 export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
   activeNodeId,
   activeMode = 'normal',
   onSelectNode,
   onNewChat,
   className = '',
+  branchSidebarMode = 'auto',
+  showGraph = true,
 }) => {
   const activeEngagementId = useAppStore((s) => s.activeEngagementId)
   const fgRef = useRef<ForceGraphMethods | undefined>(undefined)
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const graphHostRef = useRef<HTMLDivElement | null>(null)
+  const branchLeaveTimerRef = useRef<number | null>(null)
   const userPannedAtRef = useRef<number>(0)
   const programmaticCameraRef = useRef<boolean>(false)
   const activeNodeIdRef = useRef<string | null | undefined>(activeNodeId)
@@ -147,6 +162,37 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
   const [focusRecent, setFocusRecent] = useState<boolean>(false)
   const [loading, setLoading] = useState<boolean>(true)
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 })
+  const [branchesOpen, setBranchesOpen] = useState(branchSidebarMode === 'docked')
+
+  const branchesDocked = branchSidebarMode === 'docked'
+  const branchesVisible = branchesDocked || branchesOpen
+
+  const clearBranchLeaveTimer = useCallback(() => {
+    if (branchLeaveTimerRef.current != null) {
+      window.clearTimeout(branchLeaveTimerRef.current)
+      branchLeaveTimerRef.current = null
+    }
+  }, [])
+
+  const openBranches = useCallback(() => {
+    clearBranchLeaveTimer()
+    setBranchesOpen(true)
+  }, [clearBranchLeaveTimer])
+
+  const scheduleCloseBranches = useCallback(() => {
+    if (branchesDocked) return
+    clearBranchLeaveTimer()
+    branchLeaveTimerRef.current = window.setTimeout(() => {
+      setBranchesOpen(false)
+      branchLeaveTimerRef.current = null
+    }, BRANCH_LEAVE_MS)
+  }, [branchesDocked, clearBranchLeaveTimer])
+
+  useEffect(() => {
+    setBranchesOpen(branchSidebarMode === 'docked')
+  }, [branchSidebarMode])
+
+  useEffect(() => () => clearBranchLeaveTimer(), [clearBranchLeaveTimer])
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(searchQuery.trim()), 300)
@@ -208,6 +254,7 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
     if (!coords) return false
     // Re-check after await — user may have panned while coords resolved
     if (panBlocksFocus()) return false
+    if (!fgRef.current) return false
 
     programmaticCameraRef.current = true
     fgRef.current.centerAt(coords.cx, coords.cy, FOCUS_ANIM_MS)
@@ -331,20 +378,47 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
     applyOrganicForces()
   }, [applyOrganicForces, filterMode, graphData.nodes, loading])
 
-  // Track container dimensions for responsive canvas
+  // Track canvas host dimensions for responsive force-graph
   useEffect(() => {
+    if (!showGraph) return
+
+    let ro: ResizeObserver | null = null
+    let raf = 0
+    let host: HTMLDivElement | null = null
+    let cancelled = false
+
     const updateSize = () => {
-      if (containerRef.current) {
-        setDimensions({
-          width: containerRef.current.clientWidth || 800,
-          height: containerRef.current.clientHeight || 600,
-        })
+      if (cancelled || !host) return
+      const next = {
+        width: Math.max(1, Math.floor(host.clientWidth) || 800),
+        height: Math.max(1, Math.floor(host.clientHeight) || 600),
       }
+      setDimensions((prev) =>
+        prev.width === next.width && prev.height === next.height ? prev : next,
+      )
     }
-    updateSize()
-    window.addEventListener('resize', updateSize)
-    return () => window.removeEventListener('resize', updateSize)
-  }, [])
+
+    const attach = () => {
+      host = graphHostRef.current
+      if (!host) {
+        raf = window.requestAnimationFrame(attach)
+        return
+      }
+      updateSize()
+      ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updateSize) : null
+      ro?.observe(host)
+      window.addEventListener('resize', updateSize)
+    }
+
+    attach()
+
+    return () => {
+      cancelled = true
+      window.cancelAnimationFrame(raf)
+      ro?.disconnect()
+      window.removeEventListener('resize', updateSize)
+    }
+  }, [showGraph, branchesDocked])
 
   // Filter nodes & edges
   const filteredNodes = graphData.nodes.filter((n) => {
@@ -804,9 +878,12 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
           right: 12,
           zIndex: 10,
           display: 'flex',
-          alignItems: 'center',
+          alignItems: 'flex-start',
           justifyContent: 'space-between',
-          gap: 10,
+          flexWrap: 'wrap',
+          gap: 8,
+          minWidth: 0,
+          maxWidth: '100%',
           pointerEvents: 'none',
         }}
       >
@@ -823,6 +900,7 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
             backdropFilter: 'blur(12px)',
             pointerEvents: 'auto',
             boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+            flexShrink: 0,
           }}
         >
           <button
@@ -904,7 +982,19 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
         </div>
 
         {/* Action Controls */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, pointerEvents: 'auto' }}>
+        <div
+          data-testid="mindmap-action-bar"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            justifyContent: 'flex-end',
+            gap: 6,
+            minWidth: 0,
+            flex: '1 1 220px',
+            pointerEvents: 'auto',
+          }}
+        >
           <input
             type="text"
             placeholder="Search mindmap..."
@@ -918,7 +1008,9 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
               border: '1px solid rgba(255, 255, 255, 0.1)',
               borderRadius: 8,
               outline: 'none',
-              width: 150,
+              flex: '1 1 110px',
+              minWidth: 90,
+              maxWidth: 160,
               boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
             }}
           />
@@ -939,6 +1031,8 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
                 borderRadius: 8,
                 cursor: 'pointer',
                 boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                flexShrink: 0,
+                whiteSpace: 'nowrap',
               }}
               title="Hide faded dormant threads; keep pinned and the active chat"
             >
@@ -963,6 +1057,8 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
               cursor: activeMode === 'pentest' ? 'not-allowed' : 'pointer',
               opacity: activeMode === 'pentest' ? 0.5 : 1,
               boxShadow: '0 4px 12px rgba(2, 132, 199, 0.3)',
+              flexShrink: 0,
+              whiteSpace: 'nowrap',
             }}
             title={activeMode === 'pentest' ? 'Pentest graph is derived from engagement state' : 'Create a new root thread'}
           >
@@ -987,6 +1083,8 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
               cursor: activeMode === 'pentest' ? 'not-allowed' : 'pointer',
               opacity: activeMode === 'pentest' ? 0.5 : 1,
               boxShadow: '0 4px 12px rgba(2, 132, 199, 0.3)',
+              flexShrink: 0,
+              whiteSpace: 'nowrap',
             }}
             title={activeMode === 'pentest' ? 'Pentest graph is derived from engagement state' : 'Create a child branch from the active thread'}
           >
@@ -1007,35 +1105,85 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
           >
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
           </button>
-          <button
-            onClick={() => fgRef.current?.zoomToFit(400, 50)}
-            style={{
-              padding: '5px 8px',
-              background: 'rgba(13, 26, 45, 0.95)',
-              color: '#94a3b8',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: 8,
-              cursor: 'pointer',
-            }}
-            title="Fit to screen"
-          >
-            <Maximize2 size={13} />
-          </button>
+          {showGraph ? (
+            <button
+              onClick={() => fgRef.current?.zoomToFit(400, 50)}
+              style={{
+                padding: '5px 8px',
+                background: 'rgba(13, 26, 45, 0.95)',
+                color: '#94a3b8',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: 8,
+                cursor: 'pointer',
+              }}
+              title="Fit to screen"
+            >
+              <Maximize2 size={13} />
+            </button>
+          ) : null}
         </div>
       </div>
 
       {/* Branch picker + Force Graph 2D Canvas */}
-      <div style={{ flex: 1, display: 'flex', width: '100%', minHeight: 0, overflow: 'hidden' }}>
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          width: '100%',
+          minHeight: 0,
+          overflow: 'hidden',
+          position: 'relative',
+        }}
+      >
+        {!branchesDocked && showGraph ? (
+          <div
+            data-testid="branches-hotzone"
+            onMouseEnter={openBranches}
+            style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: BRANCH_HOTZONE_WIDTH,
+              zIndex: 6,
+              pointerEvents: branchesVisible ? 'none' : 'auto',
+            }}
+            title="Branches"
+          />
+        ) : null}
         <aside
+          data-testid="branches-sidebar"
+          data-mode={branchSidebarMode}
+          data-open={branchesVisible ? 'true' : 'false'}
+          onMouseEnter={openBranches}
+          onMouseLeave={scheduleCloseBranches}
           style={{
-            width: 200,
             flexShrink: 0,
             display: 'flex',
             flexDirection: 'column',
             borderRight: '1px solid rgba(255, 255, 255, 0.08)',
-            background: 'rgba(13, 26, 45, 0.85)',
-            backdropFilter: 'blur(8px)',
-            zIndex: 5,
+            background: 'rgba(13, 26, 45, 0.92)',
+            backdropFilter: 'blur(10px)',
+            zIndex: 7,
+            ...(branchesDocked
+              ? {
+                  position: 'relative' as const,
+                  width: showGraph ? BRANCH_SIDEBAR_WIDTH : '100%',
+                  height: '100%',
+                  transform: 'none',
+                  boxShadow: 'none',
+                }
+              : {
+                  position: 'absolute' as const,
+                  width: BRANCH_SIDEBAR_WIDTH,
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  transform: branchesVisible ? 'translateX(0)' : 'translateX(-100%)',
+                  transition: 'transform 180ms ease',
+                  boxShadow: branchesVisible ? '8px 0 24px rgba(0, 0, 0, 0.35)' : 'none',
+                  pointerEvents: branchesVisible ? 'auto' : 'none',
+                }),
           }}
         >
           <div style={{ padding: '8px 10px', fontSize: 10, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
@@ -1147,7 +1295,12 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
             )}
           </div>
         </aside>
-        <div className="flex-1 w-full h-full cursor-grab active:cursor-grabbing">
+        {showGraph ? (
+        <div
+          ref={graphHostRef}
+          className="flex-1 w-full h-full cursor-grab active:cursor-grabbing"
+          style={{ minWidth: 0, minHeight: 0, position: 'relative', overflow: 'hidden' }}
+        >
         <ForceGraph2D
           ref={fgRef as any}
           width={dimensions.width}
@@ -1212,9 +1365,11 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
           d3VelocityDecay={0.25}
         />
         </div>
+        ) : null}
       </div>
 
       {/* Bottom Info HUD */}
+      {showGraph ? (
       <div
         style={{
           position: 'absolute',
@@ -1238,6 +1393,7 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
             ? 'Focus recent'
             : 'Bright = active · Dim = dormant · Groups = related'}
       </div>
+      ) : null}
     </div>
   )
 }

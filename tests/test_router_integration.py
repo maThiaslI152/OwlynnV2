@@ -192,7 +192,7 @@ async def test_router_skill_hitl_resume(
         best_score=0.55,
     )
 
-    state = _make_text_state("find the latest AI papers")
+    state = _make_text_state("find AI research papers on transformer models")
 
     # ── Act ──────────────────────────────────────────────────────────
     with patch("src.agent.routing.router._check_cloud_available", return_value=True):
@@ -314,7 +314,7 @@ async def test_router_confident_aligned_skill_no_hitl(
         best_score=0.91,
     )
 
-    state = _make_text_state("research the latest deep learning trends")
+    state = _make_text_state("research deep learning trends for my report")
 
     # ── Act ──────────────────────────────────────────────────────────
     result = await router_node(state)

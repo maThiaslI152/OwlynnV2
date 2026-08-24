@@ -448,7 +448,6 @@ export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitl
             onClick={toggleListening}
             title={isListening ? "Stop dictation" : "Start dictation"}
             disabled={disabled || hitlBlocked || !recognitionRef.current}
-            style={{ padding: '0 8px', background: 'none', border: 'none', cursor: 'pointer' }}
           >
             {isListening ? <MicOff size={18} /> : <Mic size={18} />}
           </button>
@@ -473,28 +472,26 @@ export function Composer({ onSend, onStop, disabled, isGenerating, compact, hitl
               rows={1}
               disabled={disabled || hitlBlocked || isCapturing}
             />
+            {isGenerating ? (
+              <button
+                type="button"
+                className="composer-send is-stop"
+                onClick={onStop}
+                title="Stop generation"
+              >
+                <Square size={14} style={{ fill: 'currentColor' }} />
+              </button>
+            ) : (
+              <button
+                type="submit"
+                className="composer-send"
+                disabled={disabled || (!value.trim() && attachedFiles.length === 0)}
+                title="Send (Enter)"
+              >
+                <ArrowUp size={15} />
+              </button>
+            )}
           </div>
-          {isGenerating ? (
-            <button
-              type="button"
-              className="composer-send is-stop"
-              onClick={onStop}
-              title="Stop generation"
-              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-            >
-              <Square size={14} style={{ fill: 'currentColor' }} />
-            </button>
-          ) : (
-            <button
-              type="submit"
-              className="composer-send"
-              disabled={disabled || (!value.trim() && attachedFiles.length === 0)}
-              title="Send (Enter)"
-              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-            >
-              <ArrowUp size={18} />
-            </button>
-          )}
         </div>
       </form>
     </div>

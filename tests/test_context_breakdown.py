@@ -25,6 +25,29 @@ def test_estimate_context_breakdown_categories():
     assert 0 < bd["used_pct"] <= 100
 
 
+def test_schemas_included_in_input_estimated_and_total_used():
+    from types import SimpleNamespace
+
+    tools = [
+        SimpleNamespace(name="web_search", description="Search the live web."),
+        SimpleNamespace(name="ask_user", description="Ask a clarifying question."),
+    ]
+    messages = [HumanMessage(content="hello")]
+    with_schemas = estimate_context_breakdown(
+        messages, max_context=100_000, bound_tools=tools
+    )
+    without_schemas = estimate_context_breakdown(messages, max_context=100_000)
+    assert (
+        with_schemas["categories"]["schemas"] == with_schemas["tool_schema_tokens_est"]
+    )
+    assert with_schemas["categories"]["schemas"] > 0
+    assert with_schemas["input_estimated"] == (
+        without_schemas["input_estimated"] + with_schemas["tool_schema_tokens_est"]
+    )
+    assert with_schemas["total_used"] == with_schemas["input_estimated"]
+    assert with_schemas["category_pct"]["schemas"] > 0
+
+
 def test_enrich_scales_categories_to_actual_prompt_tokens():
     messages = [
         SystemMessage(content="sys"),

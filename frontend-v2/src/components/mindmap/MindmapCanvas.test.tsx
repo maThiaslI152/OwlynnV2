@@ -688,3 +688,77 @@ describe('MindmapCanvas organic decay and search', () => {
     expect(particles!({ source: 'node-dormant', target: 'node-active' })).toBe(0)
   })
 })
+
+describe('MindmapCanvas branch sidebar modes', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    latestForceGraphProps.current = null
+    mockAppStoreState.activeEngagementId = null
+    mockGraphResponse()
+  })
+
+  afterEach(() => {
+    vi.runOnlyPendingTimers()
+    vi.useRealTimers()
+    vi.clearAllMocks()
+  })
+
+  it('auto-hides branches until the left hotzone is hovered', async () => {
+    render(<MindmapCanvas onSelectNode={() => {}} branchSidebarMode="auto" />)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('branches-sidebar')).toBeTruthy()
+    })
+
+    const sidebar = screen.getByTestId('branches-sidebar')
+    expect(sidebar.getAttribute('data-mode')).toBe('auto')
+    expect(sidebar.getAttribute('data-open')).toBe('false')
+    expect(screen.getByTestId('branches-hotzone')).toBeTruthy()
+    expect(screen.getByTestId('force-graph')).toBeTruthy()
+
+    await act(async () => {
+      fireEvent.mouseEnter(screen.getByTestId('branches-hotzone'))
+    })
+    expect(sidebar.getAttribute('data-open')).toBe('true')
+
+    await act(async () => {
+      fireEvent.mouseLeave(sidebar)
+      await vi.advanceTimersByTimeAsync(250)
+    })
+    expect(sidebar.getAttribute('data-open')).toBe('false')
+  })
+
+  it('keeps branches docked and hides the graph in chat-only mode', async () => {
+    render(
+      <MindmapCanvas
+        onSelectNode={() => {}}
+        branchSidebarMode="docked"
+        showGraph={false}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByTestId('branches-sidebar')).toBeTruthy()
+    })
+
+    const sidebar = screen.getByTestId('branches-sidebar')
+    expect(sidebar.getAttribute('data-mode')).toBe('docked')
+    expect(sidebar.getAttribute('data-open')).toBe('true')
+    expect(screen.queryByTestId('branches-hotzone')).toBeNull()
+    expect(screen.queryByTestId('force-graph')).toBeNull()
+  })
+
+  it('keeps the action bar from overflowing its canvas host', async () => {
+    const { container } = render(<MindmapCanvas onSelectNode={() => {}} />)
+    const host = container.querySelector('.mindmap-container') as HTMLElement
+    Object.defineProperty(host, 'clientWidth', { configurable: true, value: 420 })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('mindmap-action-bar')).toBeTruthy()
+    })
+
+    const bar = screen.getByTestId('mindmap-action-bar')
+    expect(getComputedStyle(bar).flexWrap).toBe('wrap')
+    expect(screen.getByRole('button', { name: /new branch/i })).toBeTruthy()
+  })
+})

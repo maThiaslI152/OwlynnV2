@@ -29,6 +29,8 @@ from src.agent.core.complex_executor import (
     _invoke_local_fallback,
     _invoke_local_path,
     _invoke_pentest_path,
+    _rerank_local_tools,
+    _rerank_tools_for_bind,
     _vision_telemetry,
 )
 from src.agent.core.complex_prompt import (
@@ -179,6 +181,27 @@ def _apply_web_budget_to_tools(
                 tools_for_invoke = filtered
 
     return tools_for_invoke, effective_tools_bound, volatile_extra, web_budget
+
+
+def _rerank_tools_for_invoke(
+    *,
+    tools_for_invoke: list | None,
+    tools_bound: bool,
+    route: str,
+    prompt_messages: list,
+    state: dict,
+) -> list | None:
+    """Cap the bind list before invoke and context telemetry (shared list)."""
+    if not tools_bound or not tools_for_invoke:
+        return tools_for_invoke
+    if route == "complex-cloud":
+        return _rerank_tools_for_bind(
+            tools_for_invoke,
+            prompt_messages=prompt_messages,
+            state=state,
+            top_k=_TOOL_RERANK_TOP_K,
+        )
+    return _rerank_local_tools(tools_for_invoke, prompt_messages, state=state)
 
 
 def _clean_ai_message(msg: AIMessage, *, is_length_cutoff: bool = False) -> AIMessage:
@@ -453,6 +476,14 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     cloud_brief_tokens_est = payload.cloud_brief_tokens_est
     anonymization_placeholders_count = payload.anonymization_placeholders_count
     vision_intake_mode = payload.vision_intake_mode
+
+    tools_for_invoke = _rerank_tools_for_invoke(
+        tools_for_invoke=tools_for_invoke,
+        tools_bound=tools_bound,
+        route=route,
+        prompt_messages=prompt_messages,
+        state=state,
+    )
 
     if not payload.vision_proxy_ok and has_images:
         logger.warning("[complex] vision_proxy failed; attempting local fallback")

@@ -1,7 +1,7 @@
 # Model Quirks & Routing Setup
 
 **Date:** August 2026  
-**Last updated:** 2026-08-23
+**Last updated:** 2026-08-24
 
 This document details the local LLM routing stack, model-specific quirks, and the reasoning behind our configuration choices.
 
@@ -100,8 +100,9 @@ Model: `gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m` (`models.mai
 
 - **Normal complex (`complex-default`)**: `COMPLEX_TOOL_GUIDANCE_WEB_LOCAL` — "Use web_search once, then synthesize" instead of exhaustive multi-tool research loops.
 - **Forced synthesis hop**: `COMPLEX_TOOL_GUIDANCE_LOCAL_SYNTHESIS` injected into volatile suffix when web budget is exhausted.
-- **Tool rerank**: When >10 tools bound, `complex.local_tool_rerank_top_k` (default 8) via `rerank_tools` in `_invoke_local_path`.
-- **Kali tools**: Gated to pentest scenario only (`KALI_SCREEN_ASSIST_TOOLS` excluded from `COMPLEX_TOOLS_WITH_WEB`).
+- **Local-first toolbox**: `_toolbox_for_local_first` picks a narrow set (live-data → `web_search` only; else lean `web_search`+`memory`+`productivity`) — never implicit `["all"]`.
+- **Tool rerank**: Shared `_rerank_tools_for_invoke` caps the bind list before invoke **and** context telemetry (`bound_tool_count` / Schemas). Local top_k = `complex.local_tool_rerank_top_k` (default 8); second pass in `_invoke_local_path` is a no-op when already ≤ min_count.
+- **Kali tools**: Gated to pentest scenario only (`KALI_SCREEN_ASSIST_TOOLS` excluded from `COMPLEX_TOOLS_WITH_WEB`). Screen-assist / ipynb also omitted from the lean `"all"` catalog (named toolboxes only).
 
 ### Context window
 
