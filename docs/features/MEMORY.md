@@ -1,7 +1,7 @@
 ---
 status: active
 category: architecture
-last_updated: 2026-08-23
+last_updated: 2026-08-24
 owner: ai-agent
 audience: agent
 ---
@@ -18,7 +18,7 @@ Owlynn uses layered memory (STM, LTM, personal context, scenarios) with a **spli
 |------|---------|---------------|-----------|
 | **Short-Term (STM)** | PostgreSQL (`memories` table) | Important facts from recent conversations | Keyword search via `memory_manager.py`. |
 | **Long-Term (LTM)** | PostgreSQL pgvector (`memory_vectors` table) | Embedding-indexed facts + L1 atoms | Semantic search (gated via text-embedding-mxbai-embed-large-v1, 1024-dim) |
-| **Thought Graph** | PostgreSQL (`thought_nodes`, `thought_edges` tables) | Interconnected mindmap thoughts, attack chains, and knowledge relations | Graph traversal, node clustering, REST API (`/api/graph/data`) |
+| **Thought Graph** | PostgreSQL (`thought_nodes`, `thought_edges` tables) | Interconnected mindmap thoughts, attack chains, and knowledge relations | Graph traversal, semantic topic clusters (no thread-ID merge), dormancy fade/drift signals, REST API (`/api/graph/data`) |
 | **Personal** | `data/topics.json`, `data/interests.json`, `data/conversations.json` | User topics, interests, conversation history | Time-decay-weighted relevance |
 | **L2/L3 scenarios** | `scenarios/*/playbook.md`, `constraints.md` | Pentest / research workflows | Router `scenario_id` + markdown loader |
 | **Semantic Cache** | Redis (`redisvl`) / pgvector | Previous AI answers keyed by prompt embedding | Vector similarity (`>= 0.92`) — bypasses graph entirely |
@@ -115,6 +115,7 @@ The summarization system compresses older conversation turns when token usage ex
 
 The `VectorLifecycleManager` orchestrates insertion and deletion of vector data in Mem0 and Qdrant. **Normal/Study are chat-only** (no file watcher / durable project folders); uploads are inlined into the turn. Pentest evidence remains under engagement-scoped paths.
 - **Conversation identity**: `ThoughtNode.id` = LangGraph `thread_id`. `MemoryContextCache` keys by `thread_id`.
+- **Organic map shaping**: `/api/graph/data` ranks nodes by recency + dormancy (pinned resist fade). Related threads share `topic_cluster_id` / `topic_label` via semantic edges; IDs are never merged (`merges_with` is an edge label only). Manual `canvas_x`/`canvas_y` suppress `allow_radial_drift`. Selecting or `get_or_create` immediately revives `last_active_at`. Title (+ tags) is the embedding fallback when summary is empty. The Mindmap Canvas applies `fade_alpha` / reduced link particles, optional radial drift for unplaced nodes, cluster cohesion, backend `search=` (override fade + beyond the 300-node cap), and a **Focus recent** control (`show_dormant=false`). Pentest stays off the shared graph.
 - **Mem0 user id**: profile name (or `"owner"`) — not `project:{id}` silos.
 - **Deduplication** (when vectors are written): updates replace old chunks before embedding new ones.
 - **`recall_all_memories`**: binds search to the active thread via `ContextVar` where applicable.

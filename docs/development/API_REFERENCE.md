@@ -1,7 +1,7 @@
 ---
 status: active
 category: reference
-last_updated: 2026-07-10
+last_updated: 2026-08-24
 owner: human
 ---
 
@@ -301,6 +301,20 @@ Project-scoping handled by `get_project_workspace(project_id)` with path-prefix 
 
 `GET /api/export/chat/{thread_id}`
 - Export chat thread history.
+
+### Thought Graph
+
+`GET /api/graph/data`
+- Shared Normal/Study mindmap payload (pentest `mode` returns 400).
+- Query: `mode`, `clustered` (default true), `show_dormant` (default true), `focus_node_id` (revives that node), `max_nodes` (default 300), `max_edges_per_node` (default 8), `search` (includes matches outside the recency cap).
+- Nodes include `topic_cluster_id`, `topic_label`, `dormancy_score`, `importance_score`, `is_dormant`, `fade_alpha`, `radial_tier`, `allow_radial_drift`, `radial_multiplier`, `visual_mode`.
+- Edges are pruned to the returned node set, then degree-capped by weight. `clusters` is a derived grouping; thread IDs are never merged.
+
+`GET /api/graph/nodes/{node_id}`
+- Fetch one node and immediately revive dormancy (`last_active_at` bump).
+
+`POST /api/graph/nodes` / `PUT /api/graph/nodes/{node_id}` / `DELETE /api/graph/nodes/{node_id}`
+- Create (optional `parent_id` → `branches_to`), update, delete. Canvas-only PUTs do not revive. Pentest creates are rejected.
 
 ## Key Decisions
 

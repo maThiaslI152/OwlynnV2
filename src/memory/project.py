@@ -273,8 +273,8 @@ class ProjectManager:
             logger.warning("Failed to remove knowledge vectors for %s: %s", name, exc)
 
     async def _get_hidden_chat_ids(self, session) -> set[str]:
-        result = await session.execute(select(PentestEngagement.id))
-        return set(result.scalars().all())
+        result = await session.execute(select(PentestEngagement))
+        return {e.id for e in result.scalars().all()}
 
     def _to_dict(self, proj: Project, hidden_chat_ids: set[str] | None = None) -> dict:
         hidden_chat_ids = hidden_chat_ids or set()

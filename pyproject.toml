@@ -78,6 +78,8 @@ viz = [
 [tool.ruff]
 line-length = 88
 target-version = "py312"
+# Nested vendor repo; CLI paths like `src/` would otherwise bypass exclude.
+force-exclude = true
 exclude = [
     ".git",
     ".venv",
@@ -88,6 +90,7 @@ exclude = [
     "frontend-v2",
     "scratch",
     "scripts/archive",
+    "src/deepseek-cursor-proxy",
 ]
 
 [tool.ruff.lint]

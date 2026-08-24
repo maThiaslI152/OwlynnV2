@@ -17,15 +17,31 @@ router = APIRouter(prefix="/api/graph", tags=["thought_graph"])
 
 
 @router.get("/data")
-async def api_get_graph_data(mode: str | None = None) -> dict[str, Any]:
-    """Get all thought nodes and valid edges for the Mindmap Canvas."""
+async def api_get_graph_data(
+    mode: str | None = None,
+    clustered: bool = True,
+    show_dormant: bool = True,
+    focus_node_id: str | None = None,
+    max_nodes: int | None = None,
+    max_edges_per_node: int = 8,
+    search: str | None = None,
+) -> dict[str, Any]:
+    """Get thought nodes and valid edges for the Mindmap Canvas."""
     try:
         if mode == "pentest":
             raise HTTPException(
                 status_code=400,
                 detail="Pentest graph data must be requested from pentest-specific endpoints",
             )
-        data = await thought_graph_manager.get_graph_data(mode=mode)
+        data = await thought_graph_manager.get_graph_data(
+            mode=mode,
+            clustered=clustered,
+            show_dormant=show_dormant,
+            focus_node_id=focus_node_id,
+            max_nodes=max_nodes,
+            max_edges_per_node=max_edges_per_node,
+            search=search,
+        )
         return {"status": "ok", **data}
     except HTTPException:
         raise
@@ -87,9 +103,9 @@ async def api_create_node(body: dict[str, Any]) -> dict[str, Any]:
 
 @router.get("/nodes/{node_id}")
 async def api_get_node(node_id: str) -> dict[str, Any]:
-    """Get a specific thought node."""
+    """Get a specific thought node. Selection immediately revives dormancy."""
     try:
-        node = await thought_graph_manager.get_node(node_id)
+        node = await thought_graph_manager.get_node(node_id, touch_active=True)
         if not node:
             raise HTTPException(status_code=404, detail="Thought node not found")
         return {"status": "ok", "node": node}

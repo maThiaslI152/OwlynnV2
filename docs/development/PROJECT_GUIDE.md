@@ -2,7 +2,7 @@
 status: active
 category: reference
 audience: agent
-last_updated: 2026-08-23
+last_updated: 2026-08-24
 owner: ai-agent
 ---
 
@@ -125,9 +125,10 @@ Do **not** add new `.py` test or patch scripts at repo root.
 | `src/agent/nodes/memory.py` | `memory_inject_lite`, `memory_retrieve`, `memory_write` |
 | `src/models/` | PostgreSQL SQLAlchemy models (Project, Chat) |
 | `src/memory/` | STM/LTM/personal managers, Mem0/Qdrant, PostgreSQL managers |
-| `src/memory/thought_graph.py` | `ThoughtNode` & `ThoughtEdge` graph models, auto-seeding, relations |
+| `src/memory/thought_graph.py` | `ThoughtNode` & `ThoughtEdge` graph, auto-seeding, cluster/dormancy shaping |
 | `src/api/routes/thought_graph.py` | `/api/graph` REST API routes (data, nodes, edges) |
 | `frontend-v2/src/components/mindmap/MindmapCanvas.tsx` | Coggle Organic Mindmap & Autodesk Maya Hypershade Node Editor |
+| `frontend-v2/src/components/mindmap/organicMap.ts` | Fade/drift, cluster grouping, revive helpers for organic map |
 | `data/topics.json` | Personal topic decay (runtime data) |
 | `docs/features/MEMORY.md` | Memory tier contract |
 | `tests/test_memory_nodes.py` | Memory node tests |

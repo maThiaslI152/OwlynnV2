@@ -1,7 +1,7 @@
 ---
 status: active
 category: reference
-last_updated: 2026-08-23
+last_updated: 2026-08-24
 owner: ai-agent
 audience: agent
 ---
@@ -12,14 +12,14 @@ audience: agent
 
 ```yaml
 manifest:
-  version: 26
-  generated: "2026-08-23T03:20:00Z"
+  version: 28
+  generated: "2026-08-24T10:00:00Z"
   files:
     - path: AGENTS.md
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-08-23
+      last_updated: 2026-08-24
     - path: docs/ADR.md
       status: active
       category: architecture
@@ -39,7 +39,7 @@ manifest:
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-07-10
+      last_updated: 2026-08-24
     - path: docs/BUG-ANALYSIS.md
       status: active
       category: audit
@@ -94,12 +94,12 @@ manifest:
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-08-23
+      last_updated: 2026-08-24
     - path: docs/features/MEMORY.md
       status: active
       category: architecture
       audience: agent
-      last_updated: 2026-08-23
+      last_updated: 2026-08-24
     - path: docs/features/SEMANTIC_CACHE.md
       status: active
       category: performance
@@ -115,7 +115,7 @@ manifest:
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-08-22
+      last_updated: 2026-08-24
     - path: docs/architecture/PROJECT_OVERVIEW.md
       status: active
       category: reference
@@ -155,6 +155,11 @@ manifest:
       category: changelog
       audience: agent
       last_updated: 2026-08-23
+    - path: docs/changes/organic-map-scaling/CHANGELOG.md
+      status: active
+      category: changelog
+      audience: agent
+      last_updated: 2026-08-24
     - path: docs/changes/unified-12b-agentic-optimization/CHANGELOG.md
       status: active
       category: changelog
@@ -249,7 +254,7 @@ manifest:
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-08-23
+      last_updated: 2026-08-24
     - path: docs/archive/AGENT_RESUME_PLAYBOOK.md
       status: archived
       category: archive

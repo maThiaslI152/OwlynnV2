@@ -37,7 +37,6 @@ from src.tools.pentest_reporting import PENTEST_REPORTING_TOOLS
 from src.tools.pentest_tools import PENTEST_TOOLS
 from src.tools.pentest_vuln import PENTEST_VULN_TOOLS
 from src.tools.pentest_web import PENTEST_WEB_TOOLS
-from src.tools.rag_tools import search_workspace_docs
 from src.tools.screen_assist.tools import (
     NORMAL_SCREEN_ASSIST_TOOLS,
     SCREEN_ASSIST_TOOLS,

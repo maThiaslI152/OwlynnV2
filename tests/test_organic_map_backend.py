@@ -42,8 +42,14 @@ def test_tool_workspace_root_is_ephemeral_outside_pentest(tmp_path, monkeypatch)
 def test_complex_tools_exclude_workspace_file_crud():
     from src.agent.tool_sets import COMPLEX_TOOLS_NO_WEB, COMPLEX_TOOLS_WITH_WEB
 
-    names_web = {getattr(t, "name", None) or getattr(t, "__name__", "") for t in COMPLEX_TOOLS_WITH_WEB}
-    names_no = {getattr(t, "name", None) or getattr(t, "__name__", "") for t in COMPLEX_TOOLS_NO_WEB}
+    names_web = {
+        getattr(t, "name", None) or getattr(t, "__name__", "")
+        for t in COMPLEX_TOOLS_WITH_WEB
+    }
+    names_no = {
+        getattr(t, "name", None) or getattr(t, "__name__", "")
+        for t in COMPLEX_TOOLS_NO_WEB
+    }
     banned = {
         "read_workspace_file",
         "write_workspace_file",

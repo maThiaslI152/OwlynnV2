@@ -371,6 +371,7 @@ export function AppShell({
   onHitlSelectChoice,
   onHitlSkip,
   onSelectChat,
+  onNewChat,
   onStop,
   activeMode = 'normal',
   onModeChange,
@@ -738,6 +739,7 @@ export function AppShell({
               activeNodeId={currentThreadId}
               activeMode={activeMode}
               onSelectNode={handleSelectGraphNode}
+              onNewChat={onNewChat}
             />
             {currentThreadId && (
               <div
@@ -777,6 +779,7 @@ export function AppShell({
                   activeNodeId={currentThreadId}
                   activeMode={activeMode}
                   onSelectNode={handleSelectGraphNode}
+                  onNewChat={onNewChat}
                 />
               </div>
             )}

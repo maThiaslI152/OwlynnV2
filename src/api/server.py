@@ -38,7 +38,6 @@ from src.api.routes import (
     study,
     thought_graph,
 )
-from src.api.routes.files import notify_file_processed
 from src.api.shared import _stringify_lc_message_content
 from src.api.ws import handler as ws_handler
 from src.config.settings import WORKSPACE_DIR

@@ -80,7 +80,7 @@
 | Change chat export API | — | `src/api/routes/export.py` |
 | Change tool reranking | — | `src/agent/tool_reranker.py`, `src/agent/core/complex.py` |
 | Change data connectors | — | `src/tools/data_connectors.py` |
-| Change Thought Graph / Mindmap Canvas | — | `src/memory/thought_graph.py`, `src/api/routes/thought_graph.py`, `frontend-v2/src/components/mindmap/MindmapCanvas.tsx` |
+| Change Thought Graph / Mindmap Canvas | — | `src/memory/thought_graph.py`, `src/api/routes/thought_graph.py`, `frontend-v2/src/components/mindmap/MindmapCanvas.tsx`, `frontend-v2/src/components/mindmap/organicMap.ts` |
 
 ## Mode System
 
@@ -96,7 +96,7 @@ Owlynn has three modes that change the UI, tools, and system prompt:
 - Mode switcher is centered in top `MacMenuBar.tsx` (`[ ✨ Normal ] [ 🎓 Study ] [ 🛡️ Pentest ]`)
 - Mode → WS payload: frontend sends `scenario_id` to backend
 - Backend maps `scenario_id` to forced response_style and scenario injection
-- `src/memory/thought_graph.py`: Persistent shared `ThoughtNode` / `ThoughtEdge` graph for Normal and Study; **ThoughtNode is the conversation identity** (chat-only). Pentest stays engagement-scoped. No durable `workspace/projects/{id}` folders or file watcher for Normal/Study — uploads are inlined into the turn.
+- `src/memory/thought_graph.py`: Persistent shared `ThoughtNode` / `ThoughtEdge` graph for Normal and Study; **ThoughtNode is the conversation identity** (chat-only). Topic clusters and dormancy fade/drift are API metadata only — thread IDs are never merged. Pentest stays engagement-scoped. No durable `workspace/projects/{id}` folders or file watcher for Normal/Study — uploads are inlined into the turn.
 
 ## Unified Local Model Architecture & Pentest Mode
 
@@ -266,6 +266,7 @@ When generating cache keys for chat histories or context gatekeepers (e.g., in `
 - [`docs/README.md`](docs/README.md) — full documentation map
 - [`docs/INDEX.md`](docs/INDEX.md) — machine-readable manifest (filter by `audience`)
 
+2026-08-24 — Organic map scaling: Thought Graph cluster/dormancy metadata + Mindmap Canvas fade/drift, cluster cohesion, search override, Focus recent, branch-list grouping; New Thread/Delete lifecycle. Changelog at docs/changes/organic-map-scaling/CHANGELOG.md.
 2026-08-23 — Self-Contained MVP Packaging (v0.3.0): Bundled Python backend (`.venv`, alembic, compose) into `.app` via `scripts/build_backend_bundle.sh`; first-launch extraction to `~/.owlynn/runtime/`; Podman/Docker splash blocking; Brave extension hint toast; version bump to 0.3.0. Changelog at docs/changes/self-contained-mvp/CHANGELOG.md.
 2026-08-23 — Offline HTML/Chart.js Local Visualization (v0.2.3): Vendored Chart.js 4.4.1 at `/vendor/chart.umd.min.js` for offline workspace HTML charts via `write_workspace_file` (no CDN, no `notebook_run` for simple comparisons). Added `html_comparison_chart` skill, local prompt guidance, WS `chart_artifact` auto-embed on `.html` writes, and E2E Step E update. Changelog at docs/changes/offline-html-chartjs/CHANGELOG.md.
 2026-08-23 — Mindmap Viewport Automation, Internet Search & Graph Generation E2E: Automated browser E2E testing via Playwright in Brave (`scratch/test_mindmap_search_graph_e2e.py`). Validated Mindmap Canvas interactive viewport controls (zoom in/out, pan, fit-to-window), live internet search conversation with autonomous `web_search` execution, matplotlib data visualization graph synthesis, and Thought Graph node synchronization with active glowing highlight (21 nodes in database). Preserved 14 visual screenshots in `assets/mindmap_e2e_screenshots/`. Changelog at docs/changes/mindmap-browser-e2e-automation/CHANGELOG.md and evaluation report at docs/evaluations/mindmap-browser-e2e-2026-08-23.md.

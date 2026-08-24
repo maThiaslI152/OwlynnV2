@@ -91,17 +91,15 @@ def test_long_prose_returns_false_on_current_code():
 # ── Test 3: Tool guidance gap — no explicit read_workspace_file instruction ──
 
 
-def test_tool_guidance_missing_explicit_read_workspace_file_instruction():
+def test_tool_guidance_mentions_chat_attachments_not_workspace_crud():
     """
-    **Validates: Requirements 1.4, 1.5**
+    **Validates: Requirements 1.4, 1.5** (updated for chat-only organic map)
 
-    After the fix: COMPLEX_TOOL_GUIDANCE_WEB MUST contain an explicit
-    instruction to call read_workspace_file when workspace files are mentioned.
+    Normal/Study guidance must tell the model to use inlined chat attachments
+    and must not advertise durable workspace file CRUD tools.
     """
-    # Current guidance lists read_workspace_file in the tool list (item 2) but
-    # does not contain the explicit "MUST call" prose. This assertion is updated
-    # to match the current guidance text.
-    assert "read_workspace_file" in COMPLEX_TOOL_GUIDANCE_WEB
+    assert "Chat attachments" in COMPLEX_TOOL_GUIDANCE_WEB
+    assert "read_workspace_file" not in COMPLEX_TOOL_GUIDANCE_WEB
 
 
 # ── Test 4: Tool guidance gap — no explicit create_pdf instruction ──

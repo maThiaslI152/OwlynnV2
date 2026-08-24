@@ -449,6 +449,10 @@ class ThoughtNode(Base):
     embedding: Any = Column(VECTOR_TYPE, nullable=True)
     created_at: float = Column(Float, nullable=False)
     last_active_at: float = Column(Float, nullable=False)
+    topic_cluster_id: str | None = Column(String(128), nullable=True)
+    topic_label: str | None = Column(String(256), nullable=True)
+    dormancy_score: float | None = Column(Float, nullable=True)
+    importance_score: float | None = Column(Float, nullable=True)
 
 
 class ThoughtEdge(Base):

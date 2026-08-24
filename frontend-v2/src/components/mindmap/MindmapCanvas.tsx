@@ -1,9 +1,20 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react'
 import ForceGraph2D, { type ForceGraphMethods } from 'react-force-graph-2d'
-import { Sparkles, Shield, GraduationCap, Plus, RefreshCw, Maximize2 } from 'lucide-react'
+import { Sparkles, Shield, GraduationCap, Plus, RefreshCw, Maximize2, GitBranch, Trash2 } from 'lucide-react'
 import { fetchWithAuth } from '../../lib/localRunToken'
 import { useAppStore } from '../../state/useAppStore'
 import toast from 'react-hot-toast'
+import {
+  branchRowOpacity,
+  createClusterCohesionForce,
+  createDormancyRadialForce,
+  groupBranchNodes,
+  hexToRgba,
+  linkIsDormant,
+  linkParticleCount,
+  mergeRevivedNode,
+  nodeDisplayAlpha,
+} from './organicMap'
 
 export interface GraphNode {
   id: string
@@ -18,6 +29,18 @@ export interface GraphNode {
   canvas_x?: number | null
   canvas_y?: number | null
   pinned?: boolean
+  /** Backend dormancy/cluster fields (optional until graph API ships them). */
+  is_dormant?: boolean
+  fade_alpha?: number
+  dormancy_score?: number
+  importance_score?: number
+  topic_cluster_id?: string | null
+  topic_label?: string | null
+  visual_mode?: string
+  radial_tier?: number
+  allow_radial_drift?: boolean
+  radial_multiplier?: number
+  last_active_at?: number
   x?: number
   y?: number
   fx?: number
@@ -39,6 +62,8 @@ interface MindmapCanvasProps {
   activeNodeId?: string | null
   activeMode?: 'normal' | 'pentest' | 'study' | string
   onSelectNode: (node: GraphNode) => void
+  /** Clear/start a local session when the last active thread is deleted. */
+  onNewChat?: () => void
   className?: string
 }
 
@@ -101,6 +126,7 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
   activeNodeId,
   activeMode = 'normal',
   onSelectNode,
+  onNewChat,
   className = '',
 }) => {
   const activeEngagementId = useAppStore((s) => s.activeEngagementId)
@@ -117,8 +143,15 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
   })
   const [filterMode, setFilterMode] = useState<string>(activeMode || 'all')
   const [searchQuery, setSearchQuery] = useState<string>('')
+  const [debouncedSearch, setDebouncedSearch] = useState<string>('')
+  const [focusRecent, setFocusRecent] = useState<boolean>(false)
   const [loading, setLoading] = useState<boolean>(true)
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 })
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(searchQuery.trim()), 300)
+    return () => window.clearTimeout(timer)
+  }, [searchQuery])
 
   useEffect(() => {
     if (activeMode) {
@@ -200,6 +233,21 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
     }
   }, [])
 
+  const applyOrganicForces = useCallback(() => {
+    const fg = fgRef.current
+    if (!fg) return
+    const pentest = filterMode === 'pentest'
+    fg.d3Force('charge')?.strength(pentest ? -800 : -450)
+    fg.d3Force('link')?.distance(pentest ? 150 : 110)
+    if (pentest) {
+      fg.d3Force('dormancyRadial', null)
+      fg.d3Force('cluster', null)
+      return
+    }
+    fg.d3Force('dormancyRadial', createDormancyRadialForce())
+    fg.d3Force('cluster', createClusterCohesionForce())
+  }, [filterMode])
+
   // Fetch graph data from backend
   const loadGraph = useCallback(async () => {
     try {
@@ -220,7 +268,15 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
         if (filterMode !== 'all') {
           params.set('mode', filterMode)
         }
-        const url = params.toString() ? `/api/graph/data?${params.toString()}` : '/api/graph/data'
+        params.set('clustered', 'true')
+        params.set('show_dormant', focusRecent ? 'false' : 'true')
+        if (activeNodeIdRef.current) {
+          params.set('focus_node_id', activeNodeIdRef.current)
+        }
+        if (debouncedSearch) {
+          params.set('search', debouncedSearch)
+        }
+        const url = `/api/graph/data?${params.toString()}`
         const res = await fetchWithAuth(url)
         if (!res.ok) throw new Error('Failed to load mindmap graph')
         const data = await res.json()
@@ -230,8 +286,7 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
       setGraphData(nextGraph)
       setTimeout(() => {
         if (!fgRef.current) return
-        fgRef.current.d3Force('charge')?.strength(filterMode === 'pentest' ? -800 : -450)
-        fgRef.current.d3Force('link')?.distance(filterMode === 'pentest' ? 150 : 100)
+        applyOrganicForces()
         if (activeNodeIdRef.current) {
           const node = nextGraph.nodes.find((n) => n.id === activeNodeIdRef.current)
           if (node) {
@@ -241,7 +296,7 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
         }
         fgRef.current.zoomToFit(400, 60)
       }, 300)
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('[Mindmap] Load error:', err)
       toast.error(activeMode === 'pentest' ? 'Failed to load pentest graph' : 'Failed to load thought graph')
     } finally {
@@ -251,7 +306,10 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
     activeEngagementId,
     activeMode,
     applyNodeFocus,
+    applyOrganicForces,
+    debouncedSearch,
     filterMode,
+    focusRecent,
     normalizePentestGraph,
     normalizeSharedGraph,
   ])
@@ -267,6 +325,11 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
     if (!exists) return
     void focusNode(activeNodeId)
   }, [activeNodeId, graphData.nodes, focusNode])
+
+  useEffect(() => {
+    if (loading || filterMode === 'pentest') return
+    applyOrganicForces()
+  }, [applyOrganicForces, filterMode, graphData.nodes, loading])
 
   // Track container dimensions for responsive canvas
   useEffect(() => {
@@ -300,19 +363,43 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
 
   const filteredNodeIds = new Set(filteredNodes.map((n) => n.id))
   const filteredLinks = graphData.links.filter((l) => {
-    const sId = typeof l.source === 'object' ? (l.source as any).id : l.source
-    const tId = typeof l.target === 'object' ? (l.target as any).id : l.target
+    const sId = typeof l.source === 'object' ? (l.source as GraphNode).id : l.source
+    const tId = typeof l.target === 'object' ? (l.target as GraphNode).id : l.target
     return filteredNodeIds.has(sId) && filteredNodeIds.has(tId)
   })
+  const searching = Boolean(searchQuery.trim())
+  const nodeById = new Map(filteredNodes.map((n) => [n.id, n]))
+  const branchGroups = groupBranchNodes(filteredNodes)
 
   const selectNodeById = useCallback(
-    (nodeId: string) => {
+    async (nodeId: string) => {
       const node = graphData.nodes.find((n) => n.id === nodeId)
       if (!node) return
-      onSelectNode(node)
+
+      let selected: GraphNode = node
+      if (activeMode !== 'pentest' && node.is_dormant) {
+        try {
+          const res = await fetchWithAuth(`/api/graph/nodes/${encodeURIComponent(nodeId)}`)
+          if (!res.ok) throw new Error('Failed to revive thread')
+          const data = await res.json()
+          const revived = data.node as GraphNode | undefined
+          if (revived) {
+            selected = mergeRevivedNode(node, revived)
+            setGraphData((prev) => ({
+              ...prev,
+              nodes: prev.nodes.map((n) => (n.id === nodeId ? selected : n)),
+            }))
+          }
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : 'Failed to revive thread'
+          toast.error(message)
+        }
+      }
+
+      onSelectNode(selected)
       void focusNode(nodeId, { force: true })
     },
-    [graphData.nodes, onSelectNode, focusNode],
+    [activeMode, focusNode, graphData.nodes, onSelectNode],
   )
 
   const getGraphViewport = useCallback(
@@ -418,44 +505,108 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
     })
   }, [activeMode])
 
-  // Create a new thought node
-  const handleCreateNewNode = async () => {
-    if (activeMode === 'pentest') {
-      toast.error('Pentest graph branches must come from pentest engagement workflows')
-      return
-    }
-    const title = prompt('Enter title for new thought branch:', 'Investigation')
-    if (!title) return
-
-    try {
+  const createThoughtNode = useCallback(
+    async (title: string, parentId?: string | null) => {
+      const mode = filterMode !== 'all' ? filterMode : activeMode && activeMode !== 'pentest' ? activeMode : 'normal'
+      const body: Record<string, unknown> = { title, mode }
+      if (parentId) {
+        body.parent_id = parentId
+      }
       const res = await fetchWithAuth('/api/graph/nodes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title,
-          mode: filterMode !== 'all' ? filterMode : 'normal',
-          parent_id: activeNodeId || undefined,
-        }),
+        body: JSON.stringify(body),
       })
       if (!res.ok) throw new Error('Failed to create node')
       const data = await res.json()
-      toast.success(`Created node "${title}"`)
+      toast.success(parentId ? `Created branch "${title}"` : `Created thread "${title}"`)
       await loadGraph()
       if (data.node) {
         onSelectNode(data.node)
         void focusNode(data.node.id, { force: true })
       }
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to create thought node')
+    },
+    [activeMode, filterMode, focusNode, loadGraph, onSelectNode],
+  )
+
+  const handleCreateNewThread = useCallback(async () => {
+    if (activeMode === 'pentest') {
+      toast.error('Pentest graph threads must come from pentest engagement workflows')
+      return
     }
-  }
+    const title = prompt('Enter title for new thread:', 'New Thread')
+    if (!title) return
+    try {
+      await createThoughtNode(title)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to create thought thread'
+      toast.error(message)
+    }
+  }, [activeMode, createThoughtNode])
+
+  const handleCreateNewBranch = useCallback(async () => {
+    if (activeMode === 'pentest') {
+      toast.error('Pentest graph branches must come from pentest engagement workflows')
+      return
+    }
+    if (!activeNodeId) {
+      toast.error('Select a thread to branch from')
+      return
+    }
+    const title = prompt('Enter title for new thought branch:', 'Investigation')
+    if (!title) return
+    try {
+      await createThoughtNode(title, activeNodeId)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to create thought node'
+      toast.error(message)
+    }
+  }, [activeMode, activeNodeId, createThoughtNode])
+
+  const handleDeleteNode = useCallback(
+    async (nodeId: string) => {
+      if (activeMode === 'pentest') {
+        toast.error('Pentest graph nodes must be managed from pentest engagement workflows')
+        return
+      }
+      const node = graphData.nodes.find((n) => n.id === nodeId)
+      const label = node?.title || 'this thread'
+      if (!window.confirm(`Delete "${label}"? This cannot be undone.`)) return
+
+      try {
+        const res = await fetchWithAuth(`/api/graph/nodes/${encodeURIComponent(nodeId)}`, {
+          method: 'DELETE',
+        })
+        if (!res.ok) throw new Error('Failed to delete node')
+        toast.success(`Deleted "${label}"`)
+        const remaining = graphData.nodes.filter((n) => n.id !== nodeId)
+        await loadGraph()
+        if (nodeId === activeNodeId) {
+          if (remaining[0]) {
+            onSelectNode(remaining[0])
+            void focusNode(remaining[0].id, { force: true })
+          } else {
+            onNewChat?.()
+          }
+        }
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to delete thread'
+        toast.error(message)
+      }
+    },
+    [activeMode, activeNodeId, focusNode, graphData.nodes, loadGraph, onNewChat, onSelectNode],
+  )
 
   // ── 1. Coggle Style Organic Mindmap Renderer (Normal & Study Mode) ──
-  const drawCoggleNode = (node: any, ctx: CanvasRenderingContext2D, globalScale: number, colorIdx: number) => {
+  const drawCoggleNode = (node: GraphNode, ctx: CanvasRenderingContext2D, globalScale: number, colorIdx: number) => {
     const isActive = node.id === activeNodeId
     const branchColor = COGGLE_COLORS[colorIdx % COGGLE_COLORS.length]
     const label = node.title || 'Thought'
     const fontSize = Math.max(13 / globalScale, 4.5)
+    const fade = nodeDisplayAlpha(node, { isActive, searching })
+    const dormantLook = !searching && !isActive && (node.is_dormant || node.visual_mode === 'dormant')
+    ctx.save()
+    ctx.globalAlpha = fade
 
     ctx.font = `${isActive ? 'bold' : '500'} ${fontSize}px system-ui, -apple-system, sans-serif`
     const textWidth = ctx.measureText(label).width
@@ -475,26 +626,31 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
 
     // Pill background
     ctx.beginPath()
-    ctx.roundRect(node.x - boxW / 2, node.y - boxH / 2, boxW, boxH, radius)
-    ctx.fillStyle = isActive ? 'rgba(15, 23, 42, 0.95)' : 'rgba(13, 26, 45, 0.88)'
+    ctx.roundRect(node.x! - boxW / 2, node.y! - boxH / 2, boxW, boxH, radius)
+    ctx.fillStyle = isActive
+      ? 'rgba(15, 23, 42, 0.95)'
+      : dormantLook
+        ? 'rgba(13, 26, 45, 0.55)'
+        : 'rgba(13, 26, 45, 0.88)'
     ctx.fill()
-    ctx.lineWidth = isActive ? 2.5 : 1.5
-    ctx.strokeStyle = branchColor
+    ctx.lineWidth = isActive ? 2.5 : dormantLook ? 1 : 1.5
+    ctx.strokeStyle = dormantLook ? hexToRgba(branchColor, 0.55) : branchColor
     ctx.stroke()
     ctx.shadowBlur = 0
 
     // Label text
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillStyle = isActive ? '#ffffff' : '#e2e8f0'
-    ctx.fillText(label, node.x, node.y)
+    ctx.fillStyle = isActive ? '#ffffff' : dormantLook ? '#94a3b8' : '#e2e8f0'
+    ctx.fillText(label, node.x!, node.y!)
 
     // Mode mini badge
     if (node.mode === 'study' && globalScale > 0.7) {
       ctx.font = `600 ${fontSize * 0.7}px sans-serif`
       ctx.fillStyle = '#c084fc'
-      ctx.fillText('STUDY', node.x, node.y + boxH / 2 + 8)
+      ctx.fillText('STUDY', node.x!, node.y! + boxH / 2 + 8)
     }
+    ctx.restore()
   }
 
   // ── 2. Attack Graph / Blueprint Style Node Renderer (Pentest Mode) ──
@@ -585,16 +741,18 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
 
   // Custom node rendering router
   const drawNode = useCallback(
-    (node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
+    (node: GraphNode, ctx: CanvasRenderingContext2D, globalScale: number) => {
       const isPentest = filterMode === 'pentest' || node.mode === 'pentest'
       if (isPentest) {
         drawAttackGraphNode(node, ctx, globalScale)
       } else {
-        const idx = Math.abs(hashCode(node.id || '0'))
+        const colorKey = node.topic_cluster_id || node.id || '0'
+        const idx = Math.abs(hashCode(colorKey))
         drawCoggleNode(node, ctx, globalScale, idx)
       }
     },
-    [activeNodeId, filterMode]
+    // drawCoggleNode closes over activeNodeId / searching
+    [activeNodeId, filterMode, searching],
   )
 
   // Custom background renderer for CAD grid in pentest mode
@@ -764,8 +922,56 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
               boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
             }}
           />
+          {activeMode !== 'pentest' ? (
+            <button
+              type="button"
+              data-testid="focus-recent"
+              onClick={() => setFocusRecent((v) => !v)}
+              style={{
+                padding: '5px 10px',
+                fontSize: 11,
+                fontWeight: 600,
+                background: focusRecent ? 'rgba(56, 189, 248, 0.25)' : 'rgba(13, 26, 45, 0.95)',
+                color: focusRecent ? '#38bdf8' : '#94a3b8',
+                border: focusRecent
+                  ? '1px solid rgba(56, 189, 248, 0.45)'
+                  : '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: 8,
+                cursor: 'pointer',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+              }}
+              title="Hide faded dormant threads; keep pinned and the active chat"
+            >
+              Focus recent
+            </button>
+          ) : null}
           <button
-            onClick={handleCreateNewNode}
+            type="button"
+            onClick={() => void handleCreateNewThread()}
+            disabled={activeMode === 'pentest'}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: '5px 12px',
+              fontSize: 11,
+              fontWeight: 600,
+              background: '#0369a1',
+              color: '#ffffff',
+              borderRadius: 8,
+              border: 'none',
+              cursor: activeMode === 'pentest' ? 'not-allowed' : 'pointer',
+              opacity: activeMode === 'pentest' ? 0.5 : 1,
+              boxShadow: '0 4px 12px rgba(2, 132, 199, 0.3)',
+            }}
+            title={activeMode === 'pentest' ? 'Pentest graph is derived from engagement state' : 'Create a new root thread'}
+          >
+            <Plus size={13} />
+            New Thread
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleCreateNewBranch()}
             disabled={activeMode === 'pentest'}
             style={{
               display: 'flex',
@@ -782,9 +988,9 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
               opacity: activeMode === 'pentest' ? 0.5 : 1,
               boxShadow: '0 4px 12px rgba(2, 132, 199, 0.3)',
             }}
-            title={activeMode === 'pentest' ? 'Pentest graph is derived from engagement state' : 'Create a new thought branch'}
+            title={activeMode === 'pentest' ? 'Pentest graph is derived from engagement state' : 'Create a child branch from the active thread'}
           >
-            <Plus size={13} />
+            <GitBranch size={13} />
             New Branch
           </button>
           <button
@@ -841,47 +1047,103 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
                 No branches match
               </div>
             ) : (
-              filteredNodes.map((node) => {
-                const isActive = node.id === activeNodeId
-                return (
-                  <button
-                    key={node.id}
-                    type="button"
-                    data-testid={`branch-option-${node.id}`}
-                    onClick={() => selectNodeById(node.id)}
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'flex-start',
-                      gap: 4,
-                      width: '100%',
-                      padding: '7px 8px',
-                      marginBottom: 2,
-                      borderRadius: 6,
-                      border: isActive ? '1px solid rgba(56, 189, 248, 0.45)' : '1px solid transparent',
-                      background: isActive ? 'rgba(56, 189, 248, 0.12)' : 'transparent',
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                    }}
-                  >
-                    <span
+              branchGroups.map((group) => (
+                <div key={group.id} data-testid={`cluster-group-${group.id}`}>
+                  {branchGroups.length > 1 || group.id !== '_ungrouped' ? (
+                    <div
                       style={{
-                        fontSize: 11,
-                        fontWeight: isActive ? 600 : 500,
-                        color: isActive ? '#f1f5f9' : '#cbd5e1',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        width: '100%',
+                        padding: '6px 8px 2px',
+                        fontSize: 9,
+                        fontWeight: 600,
+                        color: '#64748b',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.04em',
                       }}
-                      title={node.title}
                     >
-                      {node.title || 'Thought'}
-                    </span>
-                    {renderModePill(node.mode || 'normal')}
-                  </button>
-                )
-              })
+                      {group.label}
+                    </div>
+                  ) : null}
+                  {group.nodes.map((node) => {
+                    const isActive = node.id === activeNodeId
+                    const allowDelete = activeMode !== 'pentest'
+                    const rowOpacity = branchRowOpacity(node, { isActive, searching })
+                    const dormant = Boolean(node.is_dormant || node.visual_mode === 'dormant')
+                    return (
+                      <div
+                        key={node.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'stretch',
+                          gap: 2,
+                          marginBottom: 2,
+                          opacity: rowOpacity,
+                        }}
+                      >
+                        <button
+                          type="button"
+                          data-testid={`branch-option-${node.id}`}
+                          data-dormant={dormant ? 'true' : 'false'}
+                          onClick={() => void selectNodeById(node.id)}
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'flex-start',
+                            gap: 4,
+                            flex: 1,
+                            minWidth: 0,
+                            padding: '7px 8px',
+                            borderRadius: 6,
+                            border: isActive ? '1px solid rgba(56, 189, 248, 0.45)' : '1px solid transparent',
+                            background: isActive ? 'rgba(56, 189, 248, 0.12)' : 'transparent',
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize: 11,
+                              fontWeight: isActive ? 600 : 500,
+                              color: isActive ? '#f1f5f9' : dormant && !searching ? '#94a3b8' : '#cbd5e1',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              width: '100%',
+                            }}
+                            title={node.title}
+                          >
+                            {node.title || 'Thought'}
+                            {dormant && !searching && !isActive ? ' · dormant' : ''}
+                          </span>
+                          {renderModePill(node.mode || 'normal')}
+                        </button>
+                        {allowDelete ? (
+                          <button
+                            type="button"
+                            data-testid={`delete-branch-${node.id}`}
+                            aria-label={`Delete ${node.title || 'thread'}`}
+                            onClick={() => void handleDeleteNode(node.id)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              width: 26,
+                              flexShrink: 0,
+                              border: 'none',
+                              borderRadius: 6,
+                              background: 'transparent',
+                              color: '#64748b',
+                              cursor: 'pointer',
+                            }}
+                            title="Delete thread"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        ) : null}
+                      </div>
+                    )
+                  })}
+                </div>
+              ))
             )}
           </div>
         </aside>
@@ -908,19 +1170,38 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
           }}
           onRenderFramePre={drawBackground}
           linkCurvature={0.25}
-          linkColor={(link: any) =>
-            filterMode === 'pentest'
-              ? '#f59e0b'
-              : COGGLE_COLORS[Math.abs(hashCode(String(link.id || '0'))) % COGGLE_COLORS.length]
+          linkColor={(link: GraphEdge) => {
+            const base =
+              filterMode === 'pentest'
+                ? '#f59e0b'
+                : COGGLE_COLORS[Math.abs(hashCode(String(link.id || '0'))) % COGGLE_COLORS.length]
+            const dormant = linkIsDormant(link, nodeById)
+            const alpha = filterMode === 'pentest' || searching ? 1 : dormant ? 0.22 : 0.85
+            return hexToRgba(base, alpha)
+          }}
+          linkWidth={(link: GraphEdge) => {
+            if (filterMode === 'pentest') return 2
+            return linkIsDormant(link, nodeById) && !searching ? 1.2 : 2.5
+          }}
+          linkDirectionalParticles={(link: GraphEdge) =>
+            linkParticleCount({
+              pentest: filterMode === 'pentest',
+              searching,
+              dormantLink: linkIsDormant(link, nodeById),
+            })
           }
-          linkWidth={filterMode === 'pentest' ? 2 : 2.5}
-          linkDirectionalParticles={filterMode === 'pentest' ? 3 : 2}
           linkDirectionalParticleSpeed={0.006}
           linkDirectionalParticleWidth={filterMode === 'pentest' ? 3 : 2}
           linkDirectionalParticleColor={() => (filterMode === 'pentest' ? '#10b981' : '#ffffff')}
-          onNodeClick={(node: any) => {
+          onNodeClick={(node: GraphNode) => {
             if (node?.id) {
-              selectNodeById(node.id)
+              void selectNodeById(node.id)
+            }
+          }}
+          onNodeRightClick={(node: GraphNode, event: MouseEvent) => {
+            event.preventDefault()
+            if (node?.id) {
+              void handleDeleteNode(node.id)
             }
           }}
           onZoom={handleCameraInteraction}
@@ -951,7 +1232,11 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
         }}
       >
         {filteredNodes.length} Nodes • {filteredLinks.length} Connections •{' '}
-        {filterMode === 'pentest' ? 'Attack Graph Active' : 'Organic Mindmap Active'}
+        {filterMode === 'pentest'
+          ? 'Attack Graph Active'
+          : focusRecent
+            ? 'Focus recent'
+            : 'Bright = active · Dim = dormant · Groups = related'}
       </div>
     </div>
   )

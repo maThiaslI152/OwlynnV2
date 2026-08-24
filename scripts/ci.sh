@@ -55,21 +55,21 @@ if ! $FRONTEND_ONLY; then
   fi
 
   info "Running Python Linter (ruff)…"
-  if python -m ruff check --config pyproject.toml src/ tests/; then
+  if python -m ruff check --config pyproject.toml --force-exclude src/ tests/; then
     pass "Ruff lint checks passed"
   else
     fail "Ruff lint checks failed"; EXIT_CODE=1
   fi
 
   info "Running Python Formatter Check (ruff format)…"
-  if python -m ruff format --check src/ tests/; then
+  if python -m ruff format --check --config pyproject.toml --force-exclude src/ tests/; then
     pass "Ruff format checks passed"
   else
     fail "Ruff format checks failed"; EXIT_CODE=1
   fi
 
   info "Running Static Type Checking (mypy)…"
-  if python -m mypy src/ --ignore-missing-imports; then
+  if python -m mypy src/ --ignore-missing-imports --exclude '(^|/)src/deepseek-cursor-proxy/'; then
     pass "Mypy type checks passed"
   else
     fail "Mypy type checks failed"; EXIT_CODE=1

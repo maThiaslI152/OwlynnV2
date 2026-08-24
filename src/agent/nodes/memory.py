@@ -112,9 +112,7 @@ class MemoryContextCache:
         """Invalidate cache when memory updates."""
         with cls._lock:
             cls._cache.pop(str(thread_id), None)
-            keys_to_delete = [
-                k for k in cls._cache if k.startswith(f"{thread_id}:")
-            ]
+            keys_to_delete = [k for k in cls._cache if k.startswith(f"{thread_id}:")]
             for k in keys_to_delete:
                 del cls._cache[k]
 

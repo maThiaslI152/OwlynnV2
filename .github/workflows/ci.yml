@@ -31,11 +31,11 @@ jobs:
 
       - name: Lint with Ruff
         run: |
-          python -m ruff check .
-          python -m ruff format --check .
+          python -m ruff check --force-exclude .
+          python -m ruff format --check --force-exclude .
 
       - name: Type Check with Mypy
-        run: python -m mypy src/
+        run: python -m mypy src/ --exclude '(^|/)src/deepseek-cursor-proxy/'
 
       - name: Run Pytest
         run: python -m pytest -n auto -q -m "not network and not benchmark" --tb=short --cov=src --cov-report=xml

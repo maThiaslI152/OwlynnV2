@@ -405,8 +405,9 @@ class TestMemoryWriteNode:
                 new_callable=__import__("unittest").mock.AsyncMock,
                 return_value=True,
             ),
-            patch("src.memory.thought_graph.thought_graph_manager.get_or_create_node")
-            as mock_get_or_create,
+            patch(
+                "src.memory.thought_graph.thought_graph_manager.get_or_create_node"
+            ) as mock_get_or_create,
             patch(
                 "src.memory.thought_graph.thought_graph_manager.auto_link_node",
                 new=MagicMock(return_value=None),

@@ -24,7 +24,9 @@ from src.config.settings import get_project_workspace
 from src.tools.core_tools import read_workspace_file
 from src.tools.workspace_context import (
     reset_active_project,
+    reset_active_scenario,
     set_active_project_for_run,
+    set_active_scenario_for_run,
 )
 
 PROBE_NAME = "_owlynn_automation_workspace_probe_.txt"
@@ -33,7 +35,9 @@ PROBE_TEXT = "Owlynn workspace tool probe — OK\nLine 2 for integration test.\n
 
 @pytest.fixture
 def workspace_probe_file():
-    """Create a file under projects/default with active project context set."""
+    """Create a file under projects/default in pentest durable workspace context."""
+    # File CRUD tools resolve via tool_workspace_root(); durable paths are pentest-only.
+    tok_scenario = set_active_scenario_for_run("pentest")
     tok = set_active_project_for_run("default")
     root = get_project_workspace("default")
     path = os.path.join(root, PROBE_NAME)
@@ -43,6 +47,7 @@ def workspace_probe_file():
         yield path, PROBE_NAME
     finally:
         reset_active_project(tok)
+        reset_active_scenario(tok_scenario)
         try:
             os.remove(path)
         except OSError:
@@ -51,6 +56,7 @@ def workspace_probe_file():
 
 def test_read_workspace_file_invokes_with_project_context(workspace_probe_file):
     _root, rel = workspace_probe_file
+    tok_scenario = set_active_scenario_for_run("pentest")
     tok = set_active_project_for_run("default")
     try:
         out = read_workspace_file.invoke({"filename": rel})
@@ -58,18 +64,21 @@ def test_read_workspace_file_invokes_with_project_context(workspace_probe_file):
         assert "Line 2" in out
     finally:
         reset_active_project(tok)
+        reset_active_scenario(tok_scenario)
 
 
 @pytest.mark.anyio
 async def test_read_workspace_file_ainvoke_async_path(workspace_probe_file):
     """Same as sync test but via BaseTool.ainvoke (matches LangChain tool execution)."""
     _root, rel = workspace_probe_file
+    tok_scenario = set_active_scenario_for_run("pentest")
     tok = set_active_project_for_run("default")
     try:
         out = await read_workspace_file.ainvoke({"filename": rel})
         assert "Owlynn workspace tool probe" in str(out)
     finally:
         reset_active_project(tok)
+        reset_active_scenario(tok_scenario)
 
 
 @pytest.mark.llm
