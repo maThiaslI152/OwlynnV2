@@ -264,18 +264,8 @@ async def lifespan(app: FastAPI):
     # Embedding models are pre-pulled manually via `ollama pull` or LM Studio UI.
     # The app relies on them being already available; no auto-load at startup.
 
-    # Start background file watcher
-    try:
-        from src.api.file_processor import start_watcher
-
-        app.state.file_watcher = start_watcher(
-            WORKSPACE_DIR,
-            main_loop=asyncio.get_running_loop(),
-            on_processed_callback=notify_file_processed,
-        )
-    except Exception as e:
-        logger.warning("Failed to start file watcher: %s", e)
-        app.state.file_watcher = None
+    # Chat-only organic map: no persistent workspace file watcher.
+    app.state.file_watcher = None
 
     from src.config.trace_pruner import start_trace_pruner
 

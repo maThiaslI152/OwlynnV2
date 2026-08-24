@@ -147,42 +147,11 @@ def _filter_memories_by_tags(results: list, tags: list[str]) -> list:
 async def _auto_create_study_project(
     course_id: str, name: str, files: list[str]
 ) -> str | None:
-    """Create a study workspace project for a course and index linked files."""
-    try:
-        import asyncio
-        import shutil
+    """Legacy helper — study workspaces are retired (chat-only organic map).
 
-        from src.config.settings import get_project_workspace
-        from src.memory.project import project_manager
-
-        project_name = f"{course_id} — {name}"
-        instructions = (
-            f"You are a study tutor for {name} ({course_id}). "
-            f"Use the knowledge files as source material. "
-            f"When the user asks about this course, reference the indexed documents."
-        )
-        project = await project_manager.create_project(project_name, instructions)
-        project_id = project["id"]
-
-        workspace = get_project_workspace(project_id)
-        for fname in files:
-            src = Path(get_project_workspace("default")) / fname
-            if src.is_file():
-                dst = Path(workspace) / fname
-                dst.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(src, dst)
-                # Index as knowledge in Qdrant (non-blocking best-effort)
-                try:
-                    content = dst.read_text(encoding="utf-8", errors="replace")[:32000]
-                    # Since we are now in an async function, we can just spawn a task
-                    asyncio.create_task(
-                        project_manager.add_knowledge(project_id, fname, content)
-                    )
-                except Exception:
-                    pass  # Non-critical — files are still in workspace
-        return project_id
-    except Exception:
-        return None
+    Courses keep linked_files as metadata; material is attached in chat turns.
+    """
+    return None
 
 
 @tool
@@ -195,43 +164,32 @@ async def course_register(
     """
     Register or update a course for study tracking.
 
-    When linked_files are provided, automatically creates a dedicated study
-    workspace project and indexes the files as knowledge.
+    linked_files are stored as metadata only (chat-only mode — no project
+    workspace folders). Attach PDFs/notes on the study thought node when chatting.
 
     Args:
         course_id: Short code (e.g. UID10667).
         name: Full course name.
         exam_date: Optional ISO date YYYY-MM-DD.
-        linked_files: Comma-separated workspace PDF paths.
+        linked_files: Comma-separated file names (metadata only).
     """
     courses = _read_json(_COURSES_PATH, [])
     files = [f.strip() for f in linked_files.split(",") if f.strip()]
     cid = course_id.strip()
-
-    # Preserve existing project_id if course already exists
-    existing_project_id = None
-    for c in courses:
-        if c.get("course_id") == cid:
-            existing_project_id = c.get("project_id")
-            break
-
-    project_id = existing_project_id
-
-    # Auto-create study workspace when linked files are provided and no project exists
-    if files and not project_id:
-        project_id = await _auto_create_study_project(cid, name.strip(), files)
 
     entry = {
         "course_id": cid,
         "name": name.strip(),
         "exam_date": exam_date.strip() or None,
         "linked_files": files,
-        "project_id": project_id,
+        "project_id": None,
         "updated_at": datetime.now().isoformat(timespec="seconds"),
     }
     replaced = False
     for i, c in enumerate(courses):
         if c.get("course_id") == cid:
+            # Preserve any historical project_id but do not create new ones
+            entry["project_id"] = c.get("project_id")
             courses[i] = {**c, **entry}
             replaced = True
             break
@@ -240,8 +198,8 @@ async def course_register(
     _write_json(_COURSES_PATH, courses)
 
     msg = f"✅ Course registered: {cid} — {name}"
-    if project_id:
-        msg += f"\n📁 Study workspace created (project: {project_id})"
+    if files:
+        msg += f"\n📎 {len(files)} linked file name(s) saved as metadata (attach files in chat to use them)."
     return msg
 
 
@@ -275,11 +233,9 @@ def course_get(course_id: str) -> str:
 @tool
 async def course_workspace_create(course_id: str, linked_files: str = "") -> str:
     """
-    Create a study workspace project for an existing course.
+    Study project workspaces are retired (chat-only organic map).
 
-    Args:
-        course_id: Course code to create workspace for.
-        linked_files: Comma-separated workspace PDF paths to index.
+    Prefer attaching course materials on a Study-mode thought node in chat.
     """
     courses = _read_json(_COURSES_PATH, [])
     target = None
@@ -292,40 +248,33 @@ async def course_workspace_create(course_id: str, linked_files: str = "") -> str
             f"Course '{course_id}' not found. Register it first with course_register."
         )
 
-    if target.get("project_id"):
-        return f"Course '{course_id}' already has a workspace (project: {target['project_id']})."
-
     files = [f.strip() for f in linked_files.split(",") if f.strip()] or target.get(
         "linked_files", []
     )
-    if not files:
-        return "No files to index. Provide linked_files or register the course with files first."
+    if files:
+        for i, c in enumerate(courses):
+            if c.get("course_id") == course_id.strip():
+                courses[i]["linked_files"] = files
+                courses[i]["updated_at"] = datetime.now().isoformat(timespec="seconds")
+                break
+        _write_json(_COURSES_PATH, courses)
 
-    project_id = await _auto_create_study_project(
-        target["course_id"], target["name"], files
+    return (
+        f"ℹ️ Study workspaces are no longer created on disk. "
+        f"Course '{course_id}' metadata is saved"
+        + (f" ({len(files)} linked file names)." if files else ".")
+        + " Attach materials in a Study chat on the mindmap instead."
     )
-    if not project_id:
-        return "Failed to create study workspace."
-
-    # Update course entry with project_id and files
-    for i, c in enumerate(courses):
-        if c.get("course_id") == course_id.strip():
-            courses[i]["project_id"] = project_id
-            courses[i]["linked_files"] = files
-            courses[i]["updated_at"] = datetime.now().isoformat(timespec="seconds")
-            break
-    _write_json(_COURSES_PATH, courses)
-    return f"✅ Study workspace created for {course_id} (project: {project_id}, {len(files)} files indexed)"
 
 
 @tool
 async def course_chat_create(course_id: str, chat_name: str) -> str:
     """
-    Create a named chat in a course's study workspace project.
+    Create a Study-mode thought node for a course (organic map).
 
     Args:
         course_id: Course code.
-        chat_name: Name for the new chat (e.g. "Chapter 1 — Intro").
+        chat_name: Name for the new branch (e.g. "Chapter 1 — Intro").
     """
     courses = _read_json(_COURSES_PATH, [])
     target = None
@@ -335,22 +284,27 @@ async def course_chat_create(course_id: str, chat_name: str) -> str:
             break
     if not target:
         return f"Course '{course_id}' not found."
-    if not target.get("project_id"):
-        return f"Course '{course_id}' has no study workspace. Use course_workspace_create first."
 
     try:
         import uuid
 
-        from src.memory.project import project_manager
+        from src.memory.thought_graph import thought_graph_manager
 
-        chat_id = f"thread-{uuid.uuid4()}"
-        await project_manager.add_chat_to_project(
-            target["project_id"],
-            {"id": chat_id, "name": chat_name.strip(), "created_at": time.time()},
+        chat_id = f"thread-{uuid.uuid4().hex[:12]}"
+        await thought_graph_manager.get_or_create_node(
+            node_id=chat_id,
+            title=chat_name.strip() or f"{course_id} study",
+            mode="study",
+            scenario_id="study",
+            course_id=course_id.strip(),
+            tags=["study", course_id.strip()],
         )
-        return f"✅ Chat '{chat_name}' created in {course_id} workspace (id: {chat_id})"
+        return (
+            f"✅ Created study branch '{chat_name}' (node {chat_id}) for {course_id}. "
+            f"Open it from the mindmap."
+        )
     except Exception as e:
-        return f"Failed to create chat: {e}"
+        return f"Failed to create study branch: {e}"
 
 
 @tool

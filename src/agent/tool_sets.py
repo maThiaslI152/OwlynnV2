@@ -73,26 +73,18 @@ from src.tools.web_tools import (
     web_search,
 )
 
-# Full tool set with web search enabled
+# Full tool set with web search enabled (chat-only: no workspace file CRUD)
 COMPLEX_TOOLS_WITH_WEB: list = [
     # Web
     web_search,
     fetch_webpage,
     browser_background_fetch,
     deep_research,
-    # File management
-    read_workspace_file,
-    write_workspace_file,
-    edit_workspace_file,
-    list_workspace_files,
-    delete_workspace_file,
-    download_to_workspace,
     # Memory
     recall_memories,
     recall_all_memories,
     forget_memory,
-    search_workspace_docs,
-    # Computation
+    # Computation (ephemeral scratch via tool_workspace_root)
     notebook_run,
     notebook_reset,
     notebook_vars,
@@ -124,16 +116,9 @@ COMPLEX_TOOLS_WITH_WEB: list = [
 
 # Tool set without web search
 COMPLEX_TOOLS_NO_WEB: list = [
-    read_workspace_file,
-    write_workspace_file,
-    edit_workspace_file,
-    list_workspace_files,
-    delete_workspace_file,
-    download_to_workspace,
     recall_memories,
     recall_all_memories,
     forget_memory,
-    search_workspace_docs,
     notebook_run,
     notebook_reset,
     notebook_vars,
@@ -236,12 +221,8 @@ _PENTEST_TOOLBOX: list = [
 TOOLBOX_REGISTRY: dict[str, list] = {
     "web_search": [web_search, fetch_webpage, deep_research, browser_background_fetch],
     "file_ops": [
-        read_workspace_file,
-        write_workspace_file,
-        edit_workspace_file,
-        list_workspace_files,
-        delete_workspace_file,
-        download_to_workspace,
+        # Workspace file CRUD is pentest-only (see TOOLBOX_REGISTRY["pentest"]).
+        # Normal/Study are chat-only — attachments are inlined into the turn.
         ingest_github_repo,
         ingest_youtube_transcript,
         ingest_obsidian_vault,
@@ -273,7 +254,6 @@ TOOLBOX_REGISTRY: dict[str, list] = {
         recall_memories,
         recall_all_memories,
         forget_memory,
-        search_workspace_docs,
     ],
     "screen_assist": list(
         NORMAL_SCREEN_ASSIST_TOOLS if _is_packaged_build() else SCREEN_ASSIST_TOOLS

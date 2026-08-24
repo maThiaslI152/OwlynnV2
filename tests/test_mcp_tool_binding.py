@@ -47,7 +47,9 @@ class TestMergeMcpTools:
             merged = merge_mcp_tools(base, toolbox_names=["all"])
             names = {getattr(t, "name", "") for t in merged}
             assert "pentest_execute" in names
-            assert "read_workspace_file" in names
+            # file_ops is chat-only connectors (no durable workspace CRUD)
+            assert "ingest_github_repo" in names
+            assert "read_workspace_file" not in names
 
     def test_skips_when_mcp_disabled(self):
         with (

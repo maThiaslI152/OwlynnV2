@@ -44,19 +44,10 @@ def _get_mem0_user_id(state: dict) -> str:
     """
     Return a STABLE user identifier for Mem0.
 
-    Memory scoping strategy:
-    - Non-default project → "project:<project_id>" (isolated per project)
-    - Default project     → user profile name or "owner" (shared global memory)
-
-    This means project-specific conversations stay within that project's
-    knowledge silo, while general chats share a common memory pool.
+    Organic-map / chat-only: all Normal/Study conversations share the user's
+    global memory pool. Project-scoped silos are retired (project folders
+    are no longer the conversation identity).
     """
-    # Project-scoped isolation
-    project_id = state.get("project_id")
-    if project_id and project_id != "default":
-        return f"project:{project_id}"
-
-    # Global memory: use stable user identity
     try:
         profile = get_profile()
         name = (profile.get("name") or "").strip()
@@ -83,9 +74,9 @@ class MemoryContextCache:
     _lock = __import__("threading").Lock()
 
     @classmethod
-    def get(cls, thread_id: str, project_id: str) -> tuple[str, str] | None:
-        """Get cached context if still valid."""
-        cache_key = f"{thread_id}:{project_id}"
+    def get(cls, thread_id: str, project_id: str = "default") -> tuple[str, str] | None:
+        """Get cached context if still valid (keyed by thought-node thread_id)."""
+        cache_key = str(thread_id)
         with cls._lock:
             if cache_key in cls._cache:
                 cached_at, context_tuple = cls._cache[cache_key]
@@ -111,8 +102,8 @@ class MemoryContextCache:
 
     @classmethod
     def set(cls, thread_id: str, project_id: str, context_tuple: tuple[str, str]):
-        """Cache context tuple with timestamp."""
-        cache_key = f"{thread_id}:{project_id}"
+        """Cache context tuple with timestamp (keyed by thought-node thread_id)."""
+        cache_key = str(thread_id)
         with cls._lock:
             cls._cache[cache_key] = (datetime.now(), context_tuple)
 
@@ -120,8 +111,9 @@ class MemoryContextCache:
     def invalidate(cls, thread_id: str):
         """Invalidate cache when memory updates."""
         with cls._lock:
+            cls._cache.pop(str(thread_id), None)
             keys_to_delete = [
-                k for k in cls._cache.keys() if k.startswith(f"{thread_id}:")
+                k for k in cls._cache if k.startswith(f"{thread_id}:")
             ]
             for k in keys_to_delete:
                 del cls._cache[k]
@@ -230,26 +222,8 @@ async def _build_memory_context_async(
         logger.warning("[memory] Failed to get memory context for prompt: %s", e)
         enhanced_context = ""
 
+    # Chat-only organic map: no project-folder knowledge injection.
     project_instructions = ""
-    if project_id and project_id != "default":
-        try:
-            from src.memory.project import project_manager
-
-            project = await project_manager.get_project(project_id)
-            if project:
-                parts = []
-                if project.get("instructions"):
-                    parts.append(project["instructions"])
-                if project.get("name"):
-                    parts.insert(0, f"Active project: {project['name']}")
-                file_count = len(project.get("files", []))
-                if file_count:
-                    parts.append(
-                        f"This project has {file_count} knowledge file(s) indexed."
-                    )
-                project_instructions = "\n".join(parts)
-        except Exception as e:
-            logger.warning("[project] instructions fetch failed: %s", e)
 
     knowledge_facts = []
     standard_results = []
@@ -1034,31 +1008,30 @@ async def memory_write_node(state: AgentState) -> AgentState:
         await _evaluate_and_cache_knowledge(messages, mem0_uid, memory)
 
         # Auto-Cartographer: update thought node summary & link to related graph nodes
-        try:
-            from src.memory.thought_graph import thought_graph_manager
+        if state.get("scenario_id") != "pentest":
+            try:
+                from src.memory.thought_graph import thought_graph_manager
 
-            summary_snippet = (
-                f"User: {str(last_human)[:120]} | AI: {str(last_ai)[:200]}"
-            )
-            node_mode = (
-                "pentest"
-                if state.get("scenario_id") == "pentest"
-                else ("study" if study_scenario else (state.get("mode") or "normal"))
-            )
-            await thought_graph_manager.get_or_create_node(
-                node_id=thread_id,
-                mode=node_mode,
-                scenario_id=state.get("scenario_id"),
-                engagement_id=state.get("engagement_id"),
-                course_id=state.get("course_id"),
-            )
-            asyncio.create_task(
-                thought_graph_manager.auto_link_node(
-                    node_id=thread_id,
-                    summary_text=summary_snippet,
+                summary_snippet = (
+                    f"User: {str(last_human)[:120]} | AI: {str(last_ai)[:200]}"
                 )
-            )
-        except Exception as e:
-            logger.debug("[AutoCartographer] Failed to link thought node: %s", e)
+                node_mode = (
+                    "study" if study_scenario else (state.get("mode") or "normal")
+                )
+                await thought_graph_manager.get_or_create_node(
+                    node_id=thread_id,
+                    mode=node_mode,
+                    scenario_id=state.get("scenario_id"),
+                    engagement_id=state.get("engagement_id"),
+                    course_id=state.get("course_id"),
+                )
+                asyncio.create_task(
+                    thought_graph_manager.auto_link_node(
+                        node_id=thread_id,
+                        summary_text=summary_snippet,
+                    )
+                )
+            except Exception as e:
+                logger.debug("[AutoCartographer] Failed to link thought node: %s", e)
 
     return {"memory_invalidated": True}

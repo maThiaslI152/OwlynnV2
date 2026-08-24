@@ -46,17 +46,24 @@ def _last_ai_message(messages: list) -> AIMessage | None:
     return None
 
 
-def _files_for_message_content(files: list, base_dir: str) -> list:
-    """Expand workspace_ref vision files into inline attachments for multimodal intake."""
+def _files_for_message_content(files: list, base_dir: str = "") -> list:
+    """Pass through chat attachments; optionally expand workspace_ref from disk.
+
+    Chat-only organic map does not require disk files. When base_dir is empty,
+    workspace_ref entries are left unchanged (text note only).
+    """
     import base64
     import urllib.parse
 
     from src.api.attachment_intake import infer_mime_from_name, is_vision_filename
 
     enriched: list = []
-    abs_base = os.path.abspath(base_dir)
+    abs_base = os.path.abspath(base_dir) if base_dir else ""
     for f in files or []:
         if f.get("type") != "workspace_ref":
+            enriched.append(f)
+            continue
+        if not abs_base:
             enriched.append(f)
             continue
         rel_path = f.get("path") or f.get("name") or ""

@@ -113,10 +113,11 @@ The summarization system compresses older conversation turns when token usage ex
 
 ## Vector Lifecycle Management
 
-The `VectorLifecycleManager` orchestrates the insertion and deletion of vector data within Mem0 and Qdrant. It is hooked into the file watcher events to ensure data integrity:
-- **Orphan Prevention**: Deleting a workspace file instantly drops its vectors from Qdrant.
-- **Deduplication Check**: When a file is updated, the system natively deletes the old chunks before embedding the new ones, preventing a `1+N` vector explosion per save.
-- **Project Scope Isolation**: `MemoryContextCache` explicitly keys memories to `thread_id:project_id` to strictly prevent bleeding context when a user switches workspaces. Additionally, the `recall_all_memories` tool dynamically binds its search queries to the current active project via `ContextVar`.
+The `VectorLifecycleManager` orchestrates insertion and deletion of vector data in Mem0 and Qdrant. **Normal/Study are chat-only** (no file watcher / durable project folders); uploads are inlined into the turn. Pentest evidence remains under engagement-scoped paths.
+- **Conversation identity**: `ThoughtNode.id` = LangGraph `thread_id`. `MemoryContextCache` keys by `thread_id`.
+- **Mem0 user id**: profile name (or `"owner"`) — not `project:{id}` silos.
+- **Deduplication** (when vectors are written): updates replace old chunks before embedding new ones.
+- **`recall_all_memories`**: binds search to the active thread via `ContextVar` where applicable.
 
 ## Known Issues
 

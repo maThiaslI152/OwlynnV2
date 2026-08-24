@@ -212,8 +212,9 @@ def notebook_run(code: str) -> str:
 
     The environment is non-interactive: do NOT use input() or any blocking calls.
 
-    IMPORTANT: Files are in the workspace directory. Use the pre-defined
-    WORKSPACE_DIR variable to build file paths, e.g.:
+    IMPORTANT: Scratch files live in an ephemeral WORKSPACE_DIR for this turn
+    (not a durable project folder). Use the pre-defined WORKSPACE_DIR variable,
+    e.g.:
         df = pd.read_csv(f"{WORKSPACE_DIR}/myfile.csv")
 
     Args:

@@ -313,18 +313,16 @@ async def build_message_content(text: str, files: list):
                 excerpt = pdf_text[:MAX_INLINE_PDF_CHARS]
                 if len(pdf_text) > MAX_INLINE_PDF_CHARS:
                     excerpt += (
-                        "\n\n[PDF truncated in this prompt for size; full file is on disk — "
-                        "call read_workspace_file as a real tool if you need the rest.]"
+                        "\n\n[PDF truncated in this prompt for size; "
+                        "only the extracted excerpt is available in chat.]"
                     )
                 text_injections.append(
-                    f"[Workspace file `{name}` — text extracted from PDF below. "
-                    f"Use this to answer when it is enough; if not, call read_workspace_file with that path "
-                    f"(function/tool call, not instructions to the user).]\n\n---\n{excerpt}\n---"
+                    f"[Attached file `{name}` — text extracted from PDF below. "
+                    f"Answer from this excerpt.]\n\n---\n{excerpt}\n---"
                 )
             else:
                 text_injections.append(
-                    f"[Workspace file `{name}` — little or no extractable text in upload preview. "
-                    f"You must invoke read_workspace_file for `{name}` as a tool/function call before answering.]"
+                    f"[Attached file `{name}` — little or no extractable text in upload preview.]"
                 )
 
         elif name.lower().endswith(".docx"):
@@ -335,17 +333,16 @@ async def build_message_content(text: str, files: list):
                 excerpt = docx_text[:MAX_INLINE_PDF_CHARS]
                 if len(docx_text) > MAX_INLINE_PDF_CHARS:
                     excerpt += (
-                        "\n\n[DOCX truncated in this prompt for size; full file is on disk — "
-                        "call read_workspace_file as a real tool if you need the rest.]"
+                        "\n\n[DOCX truncated in this prompt for size; "
+                        "only the extracted excerpt is available in chat.]"
                     )
                 text_injections.append(
-                    f"[Workspace file `{name}` — text extracted from DOCX below. "
-                    f"Use this to answer when it is enough; if not, call read_workspace_file with that path.]\n\n---\n{excerpt}\n---"
+                    f"[Attached file `{name}` — text extracted from DOCX below. "
+                    f"Answer from this excerpt.]\n\n---\n{excerpt}\n---"
                 )
             else:
                 text_injections.append(
-                    f"[Workspace file `{name}` — little or no extractable text in upload preview. "
-                    f"You must invoke read_workspace_file for `{name}` as a tool/function call before answering.]"
+                    f"[Attached file `{name}` — little or no extractable text in upload preview.]"
                 )
 
         elif name.lower().endswith(".doc"):
@@ -356,17 +353,16 @@ async def build_message_content(text: str, files: list):
                 excerpt = doc_text[:MAX_INLINE_PDF_CHARS]
                 if len(doc_text) > MAX_INLINE_PDF_CHARS:
                     excerpt += (
-                        "\n\n[DOC truncated in this prompt for size; full file is on disk — "
-                        "call read_workspace_file as a real tool if you need the rest.]"
+                        "\n\n[DOC truncated in this prompt for size; "
+                        "only the extracted excerpt is available in chat.]"
                     )
                 text_injections.append(
-                    f"[Workspace file `{name}` — text extracted from DOC below. "
-                    f"Use this to answer when it is enough; if not, call read_workspace_file with that path.]\n\n---\n{excerpt}\n---"
+                    f"[Attached file `{name}` — text extracted from DOC below. "
+                    f"Answer from this excerpt.]\n\n---\n{excerpt}\n---"
                 )
             else:
                 text_injections.append(
-                    f"[Workspace file `{name}` — little or no extractable text in upload preview. "
-                    f"You must invoke read_workspace_file for `{name}` as a tool/function call before answering.]"
+                    f"[Attached file `{name}` — little or no extractable text in upload preview.]"
                 )
 
         else:
@@ -379,11 +375,12 @@ async def build_message_content(text: str, files: list):
                 )
             except UnicodeDecodeError:
                 logger.info(
-                    "Uploaded '%s' is binary. Adding workspace reference.", name
+                    "Uploaded '%s' is binary. No text extractable for chat-only mode.",
+                    name,
                 )
                 text_injections.append(
-                    f"[Workspace file `{name}` saved. Invoke read_workspace_file as a tool with that path if you need contents — "
-                    f"do not answer with only a suggestion to use the tool.]"
+                    f"[Attached file `{name}` is binary and was not saved to disk. "
+                    f"Ask the user to paste text or re-upload a text/PDF extract.]"
                 )
 
     # Build final content

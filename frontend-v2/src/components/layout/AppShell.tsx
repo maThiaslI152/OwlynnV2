@@ -414,25 +414,27 @@ export function AppShell({
   const ensureGraphChatRegistered = useCallback(
     async (node: GraphNode) => {
       if (activeMode === 'pentest') return
-      const project = projects.find((p) => p.id === activeProjectId)
-      const exists = project?.chats?.some((c) => c.id === node.id)
-      if (exists) return
+      // Organic-map backend: ThoughtNode is the conversation identity.
+      // Ensure the node exists via graph API (no project chat registration).
       try {
-        const res = await fetchWithAuth(
-          `/api/projects/${encodeURIComponent(activeProjectId)}/chats`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: node.id, name: node.title || 'New Chat' }),
-          },
-        )
+        const res = await fetchWithAuth('/api/graph/nodes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: node.id,
+            title: node.title || 'New Thought',
+            mode: node.mode || activeMode || 'normal',
+            scenario_id: node.scenario_id || undefined,
+            course_id: node.course_id || undefined,
+            tags: node.tags || [],
+          }),
+        })
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        onRefreshProjects?.()
       } catch {
-        toast.error('Failed to register branch in workspace')
+        toast.error('Failed to register thought branch')
       }
     },
-    [activeMode, activeProjectId, projects, onRefreshProjects],
+    [activeMode],
   )
 
   // Mode switch with confirmation modal (only for pentest transitions)

@@ -125,10 +125,13 @@ class TestGetMem0UserId:
             uid = _get_mem0_user_id(state)
             assert uid == "owner"
 
-    def test_non_default_project_uses_project_prefix(self):
-        state = _make_state(project_id="my-project")
-        uid = _get_mem0_user_id(state)
-        assert uid == "project:my-project"
+    def test_any_project_uses_profile_name(self):
+        """Organic-map: Mem0 is profile-scoped, not project-siloed."""
+        with patch("src.agent.nodes.memory.get_profile") as mock:
+            mock.return_value = {"name": "Alice"}
+            state = _make_state(project_id="my-project")
+            uid = _get_mem0_user_id(state)
+            assert uid == "Alice"
 
     def test_exception_falls_back_to_owner(self):
         with patch(
@@ -268,10 +271,10 @@ class TestMemoryInjectNode:
             result = await memory_inject_node(state)
             # The cache should have been populated by memory_inject_node
             # Use MemoryContextCache._cache directly to verify
-            assert "test_thread_1:default" in MemoryContextCache._cache, (
-                f"Cache should have key 'test_thread_1:default'. Keys: {list(MemoryContextCache._cache.keys())}"
+            assert "test_thread_1" in MemoryContextCache._cache, (
+                f"Cache should have key 'test_thread_1'. Keys: {list(MemoryContextCache._cache.keys())}"
             )
-            cached_entry = MemoryContextCache._cache.get("test_thread_1:default")
+            cached_entry = MemoryContextCache._cache.get("test_thread_1")
             cached_tuple = cached_entry[1] if cached_entry else None
             assert cached_tuple == (
                 result["memory_context"],

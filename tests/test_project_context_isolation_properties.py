@@ -1,18 +1,9 @@
 """
-Property-based tests for project context isolation.
+Property-based tests for conversation memory identity (organic-map backend).
 
-# Feature: productivity-workspace-overhaul, Property 25: Project context isolation
-# **Validates: Requirements 11.1**
-
-Property 25 states:
-    For any project switch, the backend should load the new project's custom
-    instructions and knowledge base context. The loaded context should not
-    contain any data from the previously active project.
-
-We test the core isolation mechanisms:
-1. _get_mem0_user_id() returns project-scoped user IDs that differ between projects
-2. format_memory_context() only includes the supplied project's instructions
-3. Simulated project switches produce context that contains only the new project's data
+Historically this covered project-folder silos. Normal/Study now use ThoughtNode
+as conversation identity; Mem0 is profile-scoped (not project:{id}).
+format_memory_context still only includes the data passed into it.
 """
 
 import os
@@ -24,11 +15,10 @@ from hypothesis import HealthCheck, assume, given, settings
 from hypothesis import strategies as st
 
 from src.agent.nodes.memory import _get_mem0_user_id, format_memory_context
-from src.memory.project import ProjectManager
 
 # ── Strategies ───────────────────────────────────────────────────────────
 
-# Project IDs: short alphanumeric strings (mimics uuid[:8] from create_project)
+# Project IDs: short alphanumeric strings (legacy soft default / cache key)
 _id_chars = st.sampled_from("abcdefghijklmnopqrstuvwxyz0123456789")
 project_id_st = st.text(_id_chars, min_size=3, max_size=8)
 
@@ -90,13 +80,10 @@ def _simulate_context_load(project_name: str, instructions: str, memories: list)
 # ═════════════════════════════════════════════════════════════════════════
 
 
-class TestProjectContextIsolation:
+class TestOrganicMapMemoryIdentity:
     """
-    Property 25: For any project switch, the backend should load the new
-    project's custom instructions and knowledge base context. The loaded
-    context should not contain any data from the previously active project.
-
-    **Validates: Requirements 11.1**
+    Organic-map: Mem0 user id is profile-scoped (not project:{id}).
+    format_memory_context only includes data passed into it.
     """
 
     @given(
@@ -104,10 +91,9 @@ class TestProjectContextIsolation:
         pid_b=project_id_st,
     )
     @settings(max_examples=100, suppress_health_check=[HealthCheck.too_slow])
-    def test_mem0_user_ids_differ_between_projects(self, pid_a, pid_b):
+    def test_mem0_user_ids_stable_across_project_ids(self, pid_a, pid_b):
         """
-        _get_mem0_user_id returns different scoped IDs for different
-        non-default projects, ensuring memory isolation.
+        Soft project_id values must not create separate Mem0 silos.
         """
         assume(pid_a != pid_b)
         assume(pid_a != "default" and pid_b != "default")
@@ -118,23 +104,19 @@ class TestProjectContextIsolation:
         uid_a = _get_mem0_user_id(state_a)
         uid_b = _get_mem0_user_id(state_b)
 
-        assert uid_a != uid_b, (
-            f"Projects '{pid_a}' and '{pid_b}' got the same mem0 user_id: '{uid_a}'"
-        )
+        assert uid_a == uid_b
+        assert not uid_a.startswith("project:")
 
     @given(pid=project_id_st)
     @settings(max_examples=100, suppress_health_check=[HealthCheck.too_slow])
-    def test_mem0_user_id_is_project_scoped(self, pid):
-        """
-        For any non-default project, the mem0 user_id should contain
-        the project ID, ensuring it's scoped to that project.
-        """
+    def test_mem0_user_id_is_not_project_prefixed(self, pid):
+        """Mem0 user id must not embed project_id."""
         assume(pid != "default")
 
         state = _build_state_for_project(pid)
         uid = _get_mem0_user_id(state)
 
-        assert pid in uid, f"mem0 user_id '{uid}' does not contain project_id '{pid}'"
+        assert not uid.startswith("project:")
 
     @given(
         name_a=project_name_st,

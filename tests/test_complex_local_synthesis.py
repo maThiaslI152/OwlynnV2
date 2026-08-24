@@ -122,14 +122,11 @@ async def test_blank_web_search_uses_fallback_prose():
     assert first_call_tools is None or isinstance(first_call_tools, list)
 
 
-def test_local_chart_guidance_uses_offline_chartjs():
-    assert "/vendor/chart.umd.min.js" in _LOCAL_HTML_CHART_GUIDANCE
-    assert (
-        "no CDN" in _LOCAL_HTML_CHART_GUIDANCE.lower()
-        or "no cdn" in _LOCAL_HTML_CHART_GUIDANCE.lower()
-    )
-    assert "cdn.jsdelivr" not in _LOCAL_HTML_CHART_GUIDANCE
-    assert "write_workspace_file" in _LOCAL_HTML_CHART_GUIDANCE
+def test_local_chart_guidance_uses_ephemeral_notebook():
+    assert "notebook_run" in _LOCAL_HTML_CHART_GUIDANCE
+    assert "no durable project folder" in _LOCAL_HTML_CHART_GUIDANCE.lower()
+    assert "write_workspace_file" not in _LOCAL_HTML_CHART_GUIDANCE
     for guidance in (COMPLEX_TOOL_GUIDANCE_WEB_LOCAL, COMPLEX_TOOL_GUIDANCE_NO_WEB):
-        assert "/vendor/chart.umd.min.js" in guidance
+        assert "notebook_run" in guidance
+        assert "write_workspace_file" not in guidance
         assert "SVG" not in guidance or "inline SVG" not in guidance

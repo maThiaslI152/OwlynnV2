@@ -1,6 +1,14 @@
-"""Per-request project scope for workspace tools (matches WS/API project uploads)."""
+"""Per-request workspace scope for tools.
 
+Normal/Study use an ephemeral per-thread scratch directory (chat-only organic map).
+Pentest keeps a durable project workspace so report/file tools still have a path.
+"""
+
+from __future__ import annotations
+
+import tempfile
 from contextvars import ContextVar, Token
+from pathlib import Path
 
 from src.config.settings import get_project_workspace, normalize_project_id
 
@@ -12,11 +20,32 @@ _active_scenario_id: ContextVar[str | None] = ContextVar(
     "owlynn_active_scenario_id", default=None
 )
 
+_scratch_dirs: dict[str, str] = {}
+
+
+def _ephemeral_scratch_dir() -> str:
+    """Return a durable-for-this-process temp dir keyed by conversation thread."""
+    from src.config.audit_log import get_thread_id
+
+    tid = get_thread_id() or "default"
+    key = str(tid)
+    existing = _scratch_dirs.get(key)
+    if existing and Path(existing).is_dir():
+        return existing
+    path = tempfile.mkdtemp(prefix=f"owlynn-scratch-{key[:24]}-")
+    _scratch_dirs[key] = path
+    return path
+
 
 def tool_workspace_root() -> str:
-    """Directory where chat uploads and project files for this turn live."""
-    raw = _active_project_id.get()
-    return get_project_workspace(raw)
+    """Directory tools may write into for this turn.
+
+    Pentest keeps project folders for engagement artifacts.
+    Normal/Study use ephemeral scratch (no workspace/projects tree).
+    """
+    if get_active_scenario_id() == "pentest":
+        return get_project_workspace(_active_project_id.get())
+    return _ephemeral_scratch_dir()
 
 
 def get_active_project_id() -> str:

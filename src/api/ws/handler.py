@@ -42,8 +42,6 @@ from src.api.shared import (
     serialize_message,
 )
 from src.config.audit_log import audit_info
-from src.config.settings import get_project_workspace
-from src.memory.project import project_manager
 from src.memory.semantic_cache import check_semantic_cache, store_semantic_cache
 from src.tools.notebook_libs import parse_chart_artifact
 
@@ -995,7 +993,8 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
             response_style = (payload.get("response_style") or "normal").strip()
             project_id = payload.get("project_id", "default")
             persona_id = payload.get("persona_id", "default")
-            base_dir = get_project_workspace(project_id)
+            # Organic-map backend: conversations are ThoughtNodes. project_id remains
+            # a soft compatibility field (usually "default") for semantic cache keys.
 
             # Mode → scenario mapping: frontend sends scenario_id for explicit modes
             client_scenario_id = payload.get("scenario_id")
@@ -1008,54 +1007,14 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
             else:
                 scenario_id = None  # Let the router detect it
 
-            # Handle Workspace References
+            # Soft-note workspace refs (chat-only mode does not load them from disk)
             for f in files:
                 if f.get("type") == "workspace_ref":
                     prompt_path = f.get("path")
                     user_input += f"\n\n[Attached Workspace File: {prompt_path}]"
 
-            # Save uploaded files into the agent workspace so tools can read them
-            for f in files:
-                if f.get("type") == "workspace_ref":
-                    continue  # Skip saving workspace references they already exist on disk
-                name = f.get("name")
-                if not name:
-                    continue
-                try:
-                    import urllib.parse
-
-                    from src.api.attachment_intake import normalize_file_attachment
-
-                    normalized = normalize_file_attachment(f)
-                    if not normalized:
-                        continue
-
-                    raw_bytes = normalized["raw_bytes"]
-                    safe_name = urllib.parse.unquote(name).lstrip("/")
-                    filepath = os.path.abspath(os.path.join(base_dir, safe_name))
-                    if not filepath.startswith(os.path.abspath(base_dir)):
-                        logger.warning(
-                            "Access denied for file %s (outside workspace)", name
-                        )
-                        continue
-
-                    with open(filepath, "wb") as file_out:
-                        file_out.write(raw_bytes)
-                    logger.info("Saved file to %s", filepath)
-                except Exception as e:
-                    logger.error("Failed to save file %s: %s", name, e)
-                    try:
-                        await websocket.send_json(
-                            {
-                                "type": "error",
-                                "content": f"Failed to save attachment '{name}': {e}",
-                            }
-                        )
-                    except Exception:
-                        pass  # WS already closed
-
-            # On first user message in a thread, register the chat in the project
-            # Note: We skip this for pentest mode to maintain isolation from standard projects
+            # On first user message, register the ThoughtNode (not a project chat).
+            # Pentest stays engagement-scoped and skips the shared graph.
             if scenario_id != "pentest" and (
                 thread_id not in sessions or not sessions[thread_id].event_buffer
             ):
@@ -1068,27 +1027,11 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                 except Exception as e:
                     logger.warning("Error suppressed: %s", e)
                     title = ""
-                # Register chat in project manager (idempotent — dedups by chat_id)
-                import time as time_module
 
-                await project_manager.add_chat_to_project(
-                    project_id,
-                    {
-                        "id": chat_id,
-                        "name": title or "New Chat",
-                        "created_at": time_module.time(),
-                    },
-                )
-
-                # Sync title with ThoughtGraph and create branch edge if branched from parent
                 try:
                     from src.memory.thought_graph import thought_graph_manager
 
-                    node_mode = (
-                        "pentest"
-                        if scenario_id == "pentest"
-                        else ("study" if scenario_id == "study" else "normal")
-                    )
+                    node_mode = "study" if scenario_id == "study" else "normal"
                     await thought_graph_manager.get_or_create_node(
                         node_id=chat_id,
                         title=title or "New Thought",
@@ -1115,14 +1058,14 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                     )
 
                 logger.info(
-                    "Registered chat %s in project %s (title=%s)",
+                    "Registered thought node %s (title=%s)",
                     chat_id,
-                    project_id,
                     title or "New Chat",
                 )
 
+            # Chat-only: extract attachments in memory (no disk write)
             message_content = await build_message_content(
-                user_input, _files_for_message_content(files, base_dir)
+                user_input, _files_for_message_content(files, "")
             )
             if not message_content:
                 continue

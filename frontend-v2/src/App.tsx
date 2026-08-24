@@ -1072,36 +1072,36 @@ function App() {
 
   const handleDeleteChat = useCallback(async (chatId: string) => {
     try {
-      const url = `/api/projects/${encodeURIComponent(activeProjectId)}/chats/${encodeURIComponent(chatId)}`
+      // Organic-map: ThoughtNode is the conversation identity
+      const url = `/api/graph/nodes/${encodeURIComponent(chatId)}`
       const response = await fetchWithAuth(url, {
         method: 'DELETE',
       })
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      await loadProjects()
       if (chatId === activeChatId) {
         handleNewChat()
       } else {
-        setOperatorNote('Chat deleted.')
+        setOperatorNote('Branch deleted.')
       }
     } catch (e: any) {
-      toast.error('Failed to delete chat.')
-      setOperatorNote('Failed to delete chat.')
+      toast.error('Failed to delete branch.')
+      setOperatorNote('Failed to delete branch.')
     }
-  }, [activeProjectId, activeChatId, loadProjects, handleNewChat])
+  }, [activeChatId, handleNewChat])
 
   const handleRenameChat = useCallback(async (chatId: string, newName: string) => {
     try {
-      await fetchWithAuth(`/api/projects/${encodeURIComponent(activeProjectId)}/chats/${encodeURIComponent(chatId)}`, {
+      await fetchWithAuth(`/api/graph/nodes/${encodeURIComponent(chatId)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newName }),
+        body: JSON.stringify({ title: newName }),
       })
-      await loadProjects()
+      setOperatorNote(`Renamed branch to “${newName}”.`)
     } catch (e) {
       console.warn('[renameChat]', e)
-      toast.error('Failed to rename chat.')
+      toast.error('Failed to rename branch.')
     }
-  }, [activeProjectId, loadProjects])
+  }, [])
 
   const handleSelectChat = useCallback((chatId: string) => {
     if (chatId === activeChatId) return

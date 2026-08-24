@@ -1,7 +1,7 @@
 ---
 status: active
 category: architecture
-last_updated: 2026-08-23
+last_updated: 2026-08-24
 owner: ai-agent
 audience: agent
 ---
@@ -69,7 +69,7 @@ Browser (http://127.0.0.1:5173)
 | **Scheduler** | `src/api/scheduler_manager.py` | APScheduler for autonomous background jobs |
 | **Power monitor** | `src/api/power_monitor.py` | Async battery status watcher via pmset, handles Eco-Mode transitions |
 | **Idle manager** | `src/api/idle_manager.py` | Resource optimization watcher (LLM model unload, StirlingPDF shutdown) |
-| **Thought Graph** | `src/memory/thought_graph.py` | Thought Node and Edge graph persistence, auto-seeding, relations, and REST API |
+| **Thought Graph** | `src/memory/thought_graph.py` | Conversation identity for Normal/Study (ThoughtNode = LangGraph thread). Chat-only: no project folders / file watcher; uploads inlined into turns. Pentest uses isolated engagement graph endpoints. |
 | **Frontend** | `frontend-v2/` | React 19 + Vite + Zustand + ForceGraph2D (Coggle Organic Mindmap + Maya Node Editor) + Electron |
 
 ## Agent Flow

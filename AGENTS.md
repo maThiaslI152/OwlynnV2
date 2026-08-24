@@ -96,7 +96,7 @@ Owlynn has three modes that change the UI, tools, and system prompt:
 - Mode switcher is centered in top `MacMenuBar.tsx` (`[ ✨ Normal ] [ 🎓 Study ] [ 🛡️ Pentest ]`)
 - Mode → WS payload: frontend sends `scenario_id` to backend
 - Backend maps `scenario_id` to forced response_style and scenario injection
-- `src/memory/thought_graph.py`: Persistent `ThoughtNode` and `ThoughtEdge` with live auto-seeding
+- `src/memory/thought_graph.py`: Persistent shared `ThoughtNode` / `ThoughtEdge` graph for Normal and Study; **ThoughtNode is the conversation identity** (chat-only). Pentest stays engagement-scoped. No durable `workspace/projects/{id}` folders or file watcher for Normal/Study — uploads are inlined into the turn.
 
 ## Unified Local Model Architecture & Pentest Mode
 
