@@ -7,10 +7,11 @@ import time
 import uuid
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import selectinload
 
 from src.config.settings import get_project_workspace
+from src.memory.db_models import PentestEngagement
 from src.models.db import AsyncSessionLocal
 from src.models.project import Chat, KnowledgeFile, Project
 
@@ -69,6 +70,7 @@ class ProjectManager:
     async def get_project(self, project_id: str) -> dict | None:
         await self._ensure_default()
         async with AsyncSessionLocal() as session:
+            hidden_chat_ids = await self._get_hidden_chat_ids(session)
             stmt = (
                 select(Project)
                 .options(selectinload(Project.chats), selectinload(Project.files))
@@ -78,16 +80,17 @@ class ProjectManager:
             proj = result.scalars().first()
             if not proj:
                 return None
-            return self._to_dict(proj)
+            return self._to_dict(proj, hidden_chat_ids)
 
     async def list_projects(self) -> list[dict]:
         await self._ensure_default()
         async with AsyncSessionLocal() as session:
+            hidden_chat_ids = await self._get_hidden_chat_ids(session)
             stmt = select(Project).options(
                 selectinload(Project.chats), selectinload(Project.files)
             )
             result = await session.execute(stmt)
-            return [self._to_dict(p) for p in result.scalars().all()]
+            return [self._to_dict(p, hidden_chat_ids) for p in result.scalars().all()]
 
     async def update_project(self, project_id: str, **kwargs) -> dict | None:
         async with AsyncSessionLocal() as session:
@@ -105,8 +108,6 @@ class ProjectManager:
     async def delete_project(self, project_id: str) -> bool:
         if project_id == _DEFAULT_PROJECT_ID:
             return False
-        from sqlalchemy import delete
-
         async with AsyncSessionLocal() as session:
             stmt = select(Project).filter_by(id=project_id)
             result = await session.execute(stmt)
@@ -156,6 +157,13 @@ class ProjectManager:
         except IntegrityError:
             # Another concurrent request already inserted this chat, safe to ignore
             pass
+
+    async def remove_chat_references(self, chat_ids: set[str]) -> None:
+        """Delete hidden/system chat references from all projects."""
+        if not chat_ids:
+            return
+        async with AsyncSessionLocal() as session, session.begin():
+            await session.execute(delete(Chat).where(Chat.id.in_(chat_ids)))
 
     async def delete_chat_from_project(self, project_id: str, chat_id: str) -> None:
         async with AsyncSessionLocal() as session:
@@ -264,7 +272,12 @@ class ProjectManager:
         except Exception as exc:
             logger.warning("Failed to remove knowledge vectors for %s: %s", name, exc)
 
-    def _to_dict(self, proj: Project) -> dict:
+    async def _get_hidden_chat_ids(self, session) -> set[str]:
+        result = await session.execute(select(PentestEngagement.id))
+        return set(result.scalars().all())
+
+    def _to_dict(self, proj: Project, hidden_chat_ids: set[str] | None = None) -> dict:
+        hidden_chat_ids = hidden_chat_ids or set()
         return {
             "id": proj.id,
             "name": proj.name,
@@ -280,6 +293,7 @@ class ProjectManager:
                     "tags": c.tags,
                 }
                 for c in proj.chats
+                if c.id not in hidden_chat_ids
             ],
             "files": [
                 {"name": f.name, "type": f.type, "added_at": f.added_at}

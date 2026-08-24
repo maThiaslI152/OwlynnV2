@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react'
 import ForceGraph2D, { type ForceGraphMethods } from 'react-force-graph-2d'
 import { Sparkles, Shield, GraduationCap, Plus, RefreshCw, Maximize2 } from 'lucide-react'
 import { fetchWithAuth } from '../../lib/localRunToken'
+import { useAppStore } from '../../state/useAppStore'
 import toast from 'react-hot-toast'
 
 export interface GraphNode {
@@ -102,6 +103,7 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
   onSelectNode,
   className = '',
 }) => {
+  const activeEngagementId = useAppStore((s) => s.activeEngagementId)
   const fgRef = useRef<ForceGraphMethods | undefined>(undefined)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const userPannedAtRef = useRef<number>(0)
@@ -123,6 +125,42 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
       setFilterMode(activeMode)
     }
   }, [activeMode])
+
+  const normalizeSharedGraph = useCallback((data: any) => {
+    const nodes: GraphNode[] = (data.nodes || []).map((n: GraphNode) => {
+      const node = { ...n }
+      if (n.canvas_x != null && n.canvas_y != null) {
+        node.fx = n.canvas_x
+        node.fy = n.canvas_y
+      }
+      return node
+    })
+    const links: GraphEdge[] = (data.edges || []).map((e: any) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      relation: e.relation,
+      weight: e.weight,
+    }))
+    return { nodes, links }
+  }, [])
+
+  const normalizePentestGraph = useCallback((data: any) => {
+    const nodes: GraphNode[] = (data.nodes || []).map((n: GraphNode) => ({
+      ...n,
+      fx: n.canvas_x ?? n.fx,
+      fy: n.canvas_y ?? n.fy,
+    }))
+    const links: GraphEdge[] = (data.edges || []).map((e: any, idx: number) => ({
+      id: e.id ?? `pentest-edge-${idx}`,
+      source: e.source,
+      target: e.target,
+      relation: e.relation ?? 'depends_on',
+      weight: e.weight,
+      auto_generated: e.auto_generated,
+    }))
+    return { nodes, links }
+  }, [])
 
   const applyNodeFocus = useCallback(async (node: GraphNode, opts?: FocusNodeOptions) => {
     const panBlocksFocus = () =>
@@ -166,33 +204,36 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
   const loadGraph = useCallback(async () => {
     try {
       setLoading(true)
-      const res = await fetchWithAuth('/api/graph/data')
-      if (!res.ok) throw new Error('Failed to load mindmap graph')
-      const data = await res.json()
+      let nextGraph: { nodes: GraphNode[]; links: GraphEdge[] }
 
-      const nodes: GraphNode[] = (data.nodes || []).map((n: GraphNode) => {
-        const node = { ...n }
-        if (n.canvas_x != null && n.canvas_y != null) {
-          node.fx = n.canvas_x
-          node.fy = n.canvas_y
+      if (activeMode === 'pentest' && !activeEngagementId) {
+        nextGraph = { nodes: [], links: [] }
+      } else if (activeMode === 'pentest' && activeEngagementId) {
+        const res = await fetchWithAuth(
+          `/api/pentest/engagements/${encodeURIComponent(activeEngagementId)}/graph`,
+        )
+        if (!res.ok) throw new Error('Failed to load pentest graph')
+        const data = await res.json()
+        nextGraph = normalizePentestGraph(data.graph || {})
+      } else {
+        const params = new URLSearchParams()
+        if (filterMode !== 'all') {
+          params.set('mode', filterMode)
         }
-        return node
-      })
-      const links: GraphEdge[] = (data.edges || []).map((e: any) => ({
-        id: e.id,
-        source: e.source,
-        target: e.target,
-        relation: e.relation,
-        weight: e.weight,
-      }))
+        const url = params.toString() ? `/api/graph/data?${params.toString()}` : '/api/graph/data'
+        const res = await fetchWithAuth(url)
+        if (!res.ok) throw new Error('Failed to load mindmap graph')
+        const data = await res.json()
+        nextGraph = normalizeSharedGraph(data)
+      }
 
-      setGraphData({ nodes, links })
+      setGraphData(nextGraph)
       setTimeout(() => {
         if (!fgRef.current) return
         fgRef.current.d3Force('charge')?.strength(filterMode === 'pentest' ? -800 : -450)
         fgRef.current.d3Force('link')?.distance(filterMode === 'pentest' ? 150 : 100)
         if (activeNodeIdRef.current) {
-          const node = nodes.find((n) => n.id === activeNodeIdRef.current)
+          const node = nextGraph.nodes.find((n) => n.id === activeNodeIdRef.current)
           if (node) {
             void applyNodeFocus(node, { force: true })
             return
@@ -202,11 +243,18 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
       }, 300)
     } catch (err: any) {
       console.error('[Mindmap] Load error:', err)
-      toast.error('Failed to load thought graph')
+      toast.error(activeMode === 'pentest' ? 'Failed to load pentest graph' : 'Failed to load thought graph')
     } finally {
       setLoading(false)
     }
-  }, [applyNodeFocus, filterMode])
+  }, [
+    activeEngagementId,
+    activeMode,
+    applyNodeFocus,
+    filterMode,
+    normalizePentestGraph,
+    normalizeSharedGraph,
+  ])
 
   useEffect(() => {
     void loadGraph()
@@ -237,6 +285,7 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
 
   // Filter nodes & edges
   const filteredNodes = graphData.nodes.filter((n) => {
+    if (activeMode !== 'pentest' && n.mode === 'pentest') return false
     if (filterMode !== 'all' && n.mode !== filterMode) return false
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
@@ -358,6 +407,7 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
 
   // Handle node drag coordinate save
   const handleNodeDragEnd = useCallback((node: any) => {
+    if (activeMode === 'pentest') return
     if (!node || !node.id) return
     node.fx = node.x
     node.fy = node.y
@@ -366,10 +416,14 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ canvas_x: node.x, canvas_y: node.y }),
     })
-  }, [])
+  }, [activeMode])
 
   // Create a new thought node
   const handleCreateNewNode = async () => {
+    if (activeMode === 'pentest') {
+      toast.error('Pentest graph branches must come from pentest engagement workflows')
+      return
+    }
     const title = prompt('Enter title for new thought branch:', 'Investigation')
     if (!title) return
 
@@ -614,7 +668,7 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
           }}
         >
           <button
-            onClick={() => setFilterMode('all')}
+            onClick={() => setFilterMode(activeMode === 'pentest' ? 'pentest' : 'all')}
             style={{
               padding: '4px 10px',
               fontSize: 11,
@@ -712,6 +766,7 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
           />
           <button
             onClick={handleCreateNewNode}
+            disabled={activeMode === 'pentest'}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -723,10 +778,11 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
               color: '#ffffff',
               borderRadius: 8,
               border: 'none',
-              cursor: 'pointer',
+              cursor: activeMode === 'pentest' ? 'not-allowed' : 'pointer',
+              opacity: activeMode === 'pentest' ? 0.5 : 1,
               boxShadow: '0 4px 12px rgba(2, 132, 199, 0.3)',
             }}
-            title="Create a new thought branch"
+            title={activeMode === 'pentest' ? 'Pentest graph is derived from engagement state' : 'Create a new thought branch'}
           >
             <Plus size={13} />
             New Branch

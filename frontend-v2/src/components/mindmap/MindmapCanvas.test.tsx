@@ -13,6 +13,7 @@ const mockD3Force = vi.hoisted(() =>
 )
 const mockGraph2ScreenCoords = vi.hoisted(() => vi.fn().mockReturnValue({ x: 400, y: 300 }))
 const latestForceGraphProps = vi.hoisted(() => ({ current: null as Record<string, unknown> | null }))
+const mockAppStoreState = vi.hoisted(() => ({ activeEngagementId: null as string | null }))
 
 vi.mock('react-hot-toast', () => ({
   default: {
@@ -23,6 +24,11 @@ vi.mock('react-hot-toast', () => ({
 
 vi.mock('../../lib/localRunToken', () => ({
   fetchWithAuth: vi.fn(),
+}))
+
+vi.mock('../../state/useAppStore', () => ({
+  useAppStore: (selector: (state: { activeEngagementId: string | null }) => unknown) =>
+    selector(mockAppStoreState),
 }))
 
 vi.mock('react-force-graph-2d', () => ({
@@ -62,6 +68,7 @@ describe('MindmapCanvas focus behavior', () => {
     mockZoomToFit.mockClear()
     mockD3Force.mockClear()
     latestForceGraphProps.current = null
+    mockAppStoreState.activeEngagementId = null
     mockGraphResponse()
   })
 
@@ -204,5 +211,26 @@ describe('MindmapCanvas focus behavior', () => {
 
     expect(mockCenterAt).toHaveBeenCalledWith(220, 140, 400)
     expect(mockZoom).toHaveBeenCalledWith(1.4, 400)
+  })
+
+  it('loads pentest graph from engagement endpoint', async () => {
+    mockAppStoreState.activeEngagementId = 'eng-123'
+    vi.mocked(fetchWithAuth).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        graph: {
+          nodes: [{ id: 'task-1', title: 'Scan target', mode: 'pentest' }],
+          edges: [],
+        },
+      }),
+    } as Response)
+
+    render(<MindmapCanvas activeMode="pentest" onSelectNode={() => {}} />)
+
+    await waitFor(() => {
+      expect(fetchWithAuth).toHaveBeenCalledWith('/api/pentest/engagements/eng-123/graph')
+    })
+
+    expect(screen.getByRole('button', { name: /new branch/i }).hasAttribute('disabled')).toBe(true)
   })
 })

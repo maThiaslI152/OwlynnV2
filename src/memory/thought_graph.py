@@ -11,12 +11,14 @@ import logging
 import time
 from typing import Any
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 
 from src.memory.db_models import Base, ThoughtEdge, ThoughtNode
 from src.models.db import AsyncSessionLocal, engine
 
 logger = logging.getLogger(__name__)
+
+_SHARED_GRAPH_MODES = {"normal", "study"}
 
 
 class ThoughtGraphManager:
@@ -58,88 +60,61 @@ class ThoughtGraphManager:
                             "[thought_graph] Seeded %d nodes from chats table.",
                             len(chats),
                         )
-                    # Also ensure sample pentest nodes exist
-                    p_res = await session.execute(
-                        select(ThoughtNode).filter_by(mode="pentest").limit(1)
-                    )
-                    if not p_res.scalar_one_or_none():
-                        p_nodes = [
-                            ThoughtNode(
-                                id="pentest-target-1",
-                                title="192.168.1.105 (Host)",
-                                summary="Target asset",
-                                mode="pentest",
-                                status="active",
-                                tags=["target"],
-                                created_at=time.time(),
-                                last_active_at=time.time(),
-                            ),
-                            ThoughtNode(
-                                id="pentest-recon-1",
-                                title="Port 80/443 (HTTP/TLS)",
-                                summary="Open web services",
-                                mode="pentest",
-                                status="active",
-                                tags=["recon"],
-                                created_at=time.time(),
-                                last_active_at=time.time(),
-                            ),
-                            ThoughtNode(
-                                id="pentest-vuln-1",
-                                title="CVE-2024-21413 RCE",
-                                summary="Critical Vulnerability",
-                                mode="pentest",
-                                status="active",
-                                tags=["vuln"],
-                                created_at=time.time(),
-                                last_active_at=time.time(),
-                            ),
-                            ThoughtNode(
-                                id="pentest-exploit-1",
-                                title="Meterpreter Session 1",
-                                summary="Reverse TCP Shell Established",
-                                mode="pentest",
-                                status="active",
-                                tags=["exploit"],
-                                created_at=time.time(),
-                                last_active_at=time.time(),
-                            ),
-                        ]
-                        for pn in p_nodes:
-                            session.add(pn)
-                        await session.commit()
-                        session.add(
-                            ThoughtEdge(
-                                source_id="pentest-target-1",
-                                target_id="pentest-recon-1",
-                                relation="hosts_service",
-                                weight=1.0,
-                                auto_generated=True,
-                            )
-                        )
-                        session.add(
-                            ThoughtEdge(
-                                source_id="pentest-recon-1",
-                                target_id="pentest-vuln-1",
-                                relation="vulnerable_to",
-                                weight=0.9,
-                                auto_generated=True,
-                            )
-                        )
-                        session.add(
-                            ThoughtEdge(
-                                source_id="pentest-vuln-1",
-                                target_id="pentest-exploit-1",
-                                relation="exploited_by",
-                                weight=0.95,
-                                auto_generated=True,
-                            )
-                        )
-                        await session.commit()
+                    await self.delete_legacy_pentest_graph_data(session=session)
             except Exception as e:
                 logger.debug("[thought_graph] Seed check skipped: %s", e)
         except Exception as e:
             logger.warning("[thought_graph] Table creation check: %s", e)
+
+    @staticmethod
+    def _shared_graph_stmt():
+        return select(ThoughtNode).where(
+            ThoughtNode.mode.in_(_SHARED_GRAPH_MODES),
+            or_(
+                ThoughtNode.scenario_id.is_(None),
+                ThoughtNode.scenario_id != "pentest",
+            ),
+        )
+
+    async def delete_legacy_pentest_graph_data(self, session=None) -> int:
+        """Delete legacy pentest rows from the shared thought graph tables."""
+        owns_session = session is None
+        if owns_session:
+            await self.ensure_tables()
+            session_ctx = AsyncSessionLocal()
+            session = await session_ctx.__aenter__()
+        try:
+            result = await session.execute(
+                select(ThoughtNode.id).where(
+                    or_(
+                        ThoughtNode.mode == "pentest",
+                        ThoughtNode.scenario_id == "pentest",
+                    )
+                )
+            )
+            node_ids = list(result.scalars().all())
+            if not node_ids:
+                if owns_session:
+                    await session.commit()
+                return 0
+            await session.execute(
+                delete(ThoughtEdge).where(
+                    (ThoughtEdge.source_id.in_(node_ids))
+                    | (ThoughtEdge.target_id.in_(node_ids))
+                )
+            )
+            await session.execute(
+                delete(ThoughtNode).where(ThoughtNode.id.in_(node_ids))
+            )
+            await session.commit()
+            logger.info(
+                "[thought_graph] Removed %d legacy pentest nodes from shared graph.",
+                len(node_ids),
+            )
+            return len(node_ids)
+        finally:
+            if owns_session:
+                await session_ctx.__aexit__(None, None, None)
 
     async def get_or_create_node(
         self,
@@ -205,9 +180,19 @@ class ThoughtGraphManager:
         """List thought nodes, optionally filtered by mode."""
         await self.ensure_tables()
         async with AsyncSessionLocal() as session:
-            stmt = select(ThoughtNode).order_by(ThoughtNode.last_active_at.desc())
-            if mode:
-                stmt = stmt.filter_by(mode=mode)
+            if mode == "pentest":
+                stmt = select(ThoughtNode).where(ThoughtNode.mode == "pentest")
+            elif mode in _SHARED_GRAPH_MODES:
+                stmt = select(ThoughtNode).where(
+                    ThoughtNode.mode == mode,
+                    or_(
+                        ThoughtNode.scenario_id.is_(None),
+                        ThoughtNode.scenario_id != "pentest",
+                    ),
+                )
+            else:
+                stmt = self._shared_graph_stmt()
+            stmt = stmt.order_by(ThoughtNode.last_active_at.desc())
             if limit:
                 stmt = stmt.limit(limit)
             result = await session.execute(stmt)
@@ -243,102 +228,6 @@ class ThoughtGraphManager:
                                     auto_generated=True,
                                 )
                             )
-                    # Seed sample pentest Maya attack chain
-                    p_nodes = [
-                        ThoughtNode(
-                            id="pentest-target-1",
-                            title="192.168.1.105 (Host)",
-                            summary="Target asset",
-                            mode="pentest",
-                            status="active",
-                            tags=["target"],
-                            created_at=time.time(),
-                            last_active_at=time.time(),
-                        ),
-                        ThoughtNode(
-                            id="pentest-recon-1",
-                            title="Port 80/443 (HTTP/TLS)",
-                            summary="Open web services",
-                            mode="pentest",
-                            status="active",
-                            tags=["recon"],
-                            created_at=time.time(),
-                            last_active_at=time.time(),
-                        ),
-                        ThoughtNode(
-                            id="pentest-vuln-1",
-                            title="CVE-2024-21413 RCE",
-                            summary="Critical Vulnerability",
-                            mode="pentest",
-                            status="active",
-                            tags=["vuln"],
-                            created_at=time.time(),
-                            last_active_at=time.time(),
-                        ),
-                        ThoughtNode(
-                            id="pentest-exploit-1",
-                            title="Meterpreter Session 1",
-                            summary="Reverse TCP Shell Established",
-                            mode="pentest",
-                            status="active",
-                            tags=["exploit"],
-                            created_at=time.time(),
-                            last_active_at=time.time(),
-                        ),
-                    ]
-                    for pn in p_nodes:
-                        existing = await session.execute(
-                            select(ThoughtNode).filter_by(id=pn.id)
-                        )
-                        if not existing.scalar_one_or_none():
-                            session.add(pn)
-                    await session.commit()
-                    # Add edges safely
-                    e1 = await session.execute(
-                        select(ThoughtEdge).filter_by(
-                            source_id="pentest-target-1", target_id="pentest-recon-1"
-                        )
-                    )
-                    if not e1.scalar_one_or_none():
-                        session.add(
-                            ThoughtEdge(
-                                source_id="pentest-target-1",
-                                target_id="pentest-recon-1",
-                                relation="hosts_service",
-                                weight=1.0,
-                                auto_generated=True,
-                            )
-                        )
-                    e2 = await session.execute(
-                        select(ThoughtEdge).filter_by(
-                            source_id="pentest-recon-1", target_id="pentest-vuln-1"
-                        )
-                    )
-                    if not e2.scalar_one_or_none():
-                        session.add(
-                            ThoughtEdge(
-                                source_id="pentest-recon-1",
-                                target_id="pentest-vuln-1",
-                                relation="vulnerable_to",
-                                weight=0.9,
-                                auto_generated=True,
-                            )
-                        )
-                    e3 = await session.execute(
-                        select(ThoughtEdge).filter_by(
-                            source_id="pentest-vuln-1", target_id="pentest-exploit-1"
-                        )
-                    )
-                    if not e3.scalar_one_or_none():
-                        session.add(
-                            ThoughtEdge(
-                                source_id="pentest-vuln-1",
-                                target_id="pentest-exploit-1",
-                                relation="exploited_by",
-                                weight=0.95,
-                                auto_generated=True,
-                            )
-                        )
                     await session.commit()
                     # Re-fetch
                     result = await session.execute(stmt)

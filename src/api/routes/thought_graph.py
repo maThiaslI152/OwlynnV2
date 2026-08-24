@@ -20,8 +20,15 @@ router = APIRouter(prefix="/api/graph", tags=["thought_graph"])
 async def api_get_graph_data(mode: str | None = None) -> dict[str, Any]:
     """Get all thought nodes and valid edges for the Mindmap Canvas."""
     try:
+        if mode == "pentest":
+            raise HTTPException(
+                status_code=400,
+                detail="Pentest graph data must be requested from pentest-specific endpoints",
+            )
         data = await thought_graph_manager.get_graph_data(mode=mode)
         return {"status": "ok", **data}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("[graph_api] Failed to get graph data: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
@@ -45,6 +52,11 @@ async def api_create_node(body: dict[str, Any]) -> dict[str, Any]:
     tags = body.get("tags", [])
 
     try:
+        if mode == "pentest" or scenario_id == "pentest":
+            raise HTTPException(
+                status_code=400,
+                detail="Pentest graph nodes are managed through pentest engagement APIs",
+            )
         node = await thought_graph_manager.get_or_create_node(
             node_id=node_id,
             title=title,
@@ -66,6 +78,8 @@ async def api_create_node(body: dict[str, Any]) -> dict[str, Any]:
             )
 
         return {"status": "ok", "node": node}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("[graph_api] Failed to create node: %s", e)
         raise HTTPException(status_code=500, detail=str(e))

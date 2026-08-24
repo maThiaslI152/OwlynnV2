@@ -70,3 +70,33 @@ async def test_update_and_delete_node(graph_mgr):
 
     fetched = await graph_mgr.get_node(node_id)
     assert fetched is None
+
+
+@pytest.mark.asyncio
+async def test_shared_graph_excludes_pentest_nodes(graph_mgr):
+    await graph_mgr.get_or_create_node("shared-normal", title="Shared", mode="normal")
+    await graph_mgr.get_or_create_node(
+        "legacy-pentest",
+        title="Legacy Pentest",
+        mode="pentest",
+        scenario_id="pentest",
+    )
+
+    graph = await graph_mgr.get_graph_data()
+
+    assert any(node["id"] == "shared-normal" for node in graph["nodes"])
+    assert all(node["mode"] != "pentest" for node in graph["nodes"])
+
+
+@pytest.mark.asyncio
+async def test_delete_legacy_pentest_graph_data_removes_shared_pentest_rows(graph_mgr):
+    await graph_mgr.get_or_create_node(
+        "cleanup-pentest",
+        title="Cleanup Node",
+        mode="pentest",
+        scenario_id="pentest",
+    )
+    removed = await graph_mgr.delete_legacy_pentest_graph_data()
+
+    assert removed >= 1
+    assert await graph_mgr.get_node("cleanup-pentest") is None
