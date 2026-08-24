@@ -481,8 +481,8 @@ app.add_middleware(LocalAuthMiddleware)
 
 # Serve frontend static files from frontend-v2 dist only.
 _ROOT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-FRONTEND_V2_DIST_DIR = os.path.join(_ROOT_DIR, "frontend-v2", "dist")
-FRONTEND_DIR = FRONTEND_V2_DIST_DIR
+_DEFAULT_FRONTEND_DIR = os.path.join(_ROOT_DIR, "frontend-v2", "dist")
+FRONTEND_DIR = os.environ.get("OWLYNN_FRONTEND_DIR", _DEFAULT_FRONTEND_DIR)
 
 
 @app.get("/")

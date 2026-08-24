@@ -41,6 +41,39 @@ interface MindmapCanvasProps {
   className?: string
 }
 
+interface FocusNodeOptions {
+  /** Bypass the user-pan debounce (clicks, programmatic post-create). */
+  force?: boolean
+}
+
+const FOCUS_ZOOM = 1.4
+const FOCUS_ANIM_MS = 400
+const FOCUS_RETRY_MAX_MS = 500
+const USER_PAN_DEBOUNCE_MS = 3000
+
+function resolveNodeCoords(node: GraphNode): { cx?: number; cy?: number } {
+  const cx = node.fx ?? node.x
+  const cy = node.fy ?? node.y
+  return {
+    cx: typeof cx === 'number' ? cx : undefined,
+    cy: typeof cy === 'number' ? cy : undefined,
+  }
+}
+
+async function waitForNodeCoords(node: GraphNode, maxMs = FOCUS_RETRY_MAX_MS): Promise<{ cx: number; cy: number } | null> {
+  const start = Date.now()
+  while (Date.now() - start < maxMs) {
+    const { cx, cy } = resolveNodeCoords(node)
+    if (typeof cx === 'number' && typeof cy === 'number') {
+      return { cx, cy }
+    }
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => resolve())
+    })
+  }
+  return null
+}
+
 // Coggle Mindmap Branch Colors for Normal & Study modes
 const COGGLE_COLORS = [
   '#84cc16', // Lime green
@@ -71,6 +104,10 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
 }) => {
   const fgRef = useRef<ForceGraphMethods | undefined>(undefined)
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const userPannedAtRef = useRef<number>(0)
+  const programmaticCameraRef = useRef<boolean>(false)
+  const activeNodeIdRef = useRef<string | null | undefined>(activeNodeId)
+  activeNodeIdRef.current = activeNodeId
 
   const [graphData, setGraphData] = useState<{ nodes: GraphNode[]; links: GraphEdge[] }>({
     nodes: [],
@@ -86,6 +123,43 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
       setFilterMode(activeMode)
     }
   }, [activeMode])
+
+  const applyNodeFocus = useCallback(async (node: GraphNode, opts?: FocusNodeOptions) => {
+    if (
+      !opts?.force &&
+      userPannedAtRef.current > 0 &&
+      Date.now() - userPannedAtRef.current < USER_PAN_DEBOUNCE_MS
+    ) {
+      return false
+    }
+    if (!fgRef.current) return false
+
+    const coords = await waitForNodeCoords(node)
+    if (!coords) return false
+
+    programmaticCameraRef.current = true
+    fgRef.current.centerAt(coords.cx, coords.cy, FOCUS_ANIM_MS)
+    fgRef.current.zoom(FOCUS_ZOOM, FOCUS_ANIM_MS)
+    window.setTimeout(() => {
+      programmaticCameraRef.current = false
+    }, FOCUS_ANIM_MS + 50)
+    return true
+  }, [])
+
+  const focusNode = useCallback(
+    async (nodeId: string, opts?: FocusNodeOptions) => {
+      const node = graphData.nodes.find((n) => n.id === nodeId)
+      if (!node) return false
+      return applyNodeFocus(node, opts)
+    },
+    [applyNodeFocus, graphData.nodes],
+  )
+
+  const handleCameraInteraction = useCallback(() => {
+    if (!programmaticCameraRef.current) {
+      userPannedAtRef.current = Date.now()
+    }
+  }, [])
 
   // Fetch graph data from backend
   const loadGraph = useCallback(async () => {
@@ -113,11 +187,17 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
 
       setGraphData({ nodes, links })
       setTimeout(() => {
-        if (fgRef.current) {
-          fgRef.current.d3Force('charge')?.strength(filterMode === 'pentest' ? -800 : -450)
-          fgRef.current.d3Force('link')?.distance(filterMode === 'pentest' ? 150 : 100)
-          fgRef.current.zoomToFit(400, 60)
+        if (!fgRef.current) return
+        fgRef.current.d3Force('charge')?.strength(filterMode === 'pentest' ? -800 : -450)
+        fgRef.current.d3Force('link')?.distance(filterMode === 'pentest' ? 150 : 100)
+        if (activeNodeIdRef.current) {
+          const node = nodes.find((n) => n.id === activeNodeIdRef.current)
+          if (node) {
+            void applyNodeFocus(node, { force: true })
+            return
+          }
         }
+        fgRef.current.zoomToFit(400, 60)
       }, 300)
     } catch (err: any) {
       console.error('[Mindmap] Load error:', err)
@@ -125,11 +205,19 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
     } finally {
       setLoading(false)
     }
-  }, [filterMode])
+  }, [applyNodeFocus, filterMode])
 
   useEffect(() => {
     void loadGraph()
   }, [loadGraph])
+
+  // Auto-focus when activeNodeId changes externally (new turn, branch picker, reload)
+  useEffect(() => {
+    if (!activeNodeId) return
+    const exists = graphData.nodes.some((n) => n.id === activeNodeId)
+    if (!exists) return
+    void focusNode(activeNodeId)
+  }, [activeNodeId, graphData.nodes, focusNode])
 
   // Track container dimensions for responsive canvas
   useEffect(() => {
@@ -172,26 +260,78 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
       const node = graphData.nodes.find((n) => n.id === nodeId)
       if (!node) return
       onSelectNode(node)
-      const cx = node.fx ?? node.x
-      const cy = node.fy ?? node.y
-      if (fgRef.current && typeof cx === 'number' && typeof cy === 'number') {
-        fgRef.current.centerAt(cx, cy, 400)
+      void focusNode(nodeId, { force: true })
+    },
+    [graphData.nodes, onSelectNode, focusNode],
+  )
+
+  const getGraphViewport = useCallback(
+    (nodeId?: string) => {
+      const fg = fgRef.current
+      if (!fg) return { ok: false, reason: 'no_graph' as const }
+
+      const zoom = fg.zoom()
+      const center = fg.centerAt()
+      const canvas = containerRef.current?.querySelector('canvas')
+      const rect = canvas?.getBoundingClientRect()
+      const canvasCenterX = rect ? rect.width / 2 : dimensions.width / 2
+      const canvasCenterY = rect ? rect.height / 2 : dimensions.height / 2
+
+      if (!nodeId) {
+        return { ok: true, zoom, center, canvasCenterX, canvasCenterY }
+      }
+
+      const node = graphData.nodes.find((n) => n.id === nodeId)
+      if (!node) return { ok: false, reason: 'node_not_found' as const }
+
+      const { cx, cy } = resolveNodeCoords(node)
+      if (typeof cx !== 'number' || typeof cy !== 'number') {
+        return { ok: false, reason: 'no_coords' as const, zoom, center }
+      }
+
+      const screen = fg.graph2ScreenCoords(cx, cy)
+      const dist = Math.hypot(screen.x - canvasCenterX, screen.y - canvasCenterY)
+      const maxDist = Math.min(dimensions.width, dimensions.height) * 0.25
+      const focused = zoom >= 1.2 && dist <= maxDist
+
+      return {
+        ok: focused,
+        zoom,
+        center,
+        screen,
+        dist,
+        maxDist,
+        nodeId,
       }
     },
-    [graphData.nodes, onSelectNode],
+    [dimensions.height, dimensions.width, graphData.nodes],
   )
 
   useEffect(() => {
     if (!import.meta.env.DEV) return
-    const w = window as Window & { __OWLYNN_TEST__?: { selectGraphNode?: (id: string) => void } }
+    const w = window as Window & {
+      __OWLYNN_TEST__?: {
+        selectGraphNode?: (id: string) => void
+        focusGraphNode?: (id: string) => Promise<boolean>
+        getGraphViewport?: (nodeId?: string) => ReturnType<typeof getGraphViewport>
+      }
+    }
     w.__OWLYNN_TEST__ = w.__OWLYNN_TEST__ ?? {}
     w.__OWLYNN_TEST__.selectGraphNode = selectNodeById
+    w.__OWLYNN_TEST__.focusGraphNode = (id: string) => focusNode(id, { force: true })
+    w.__OWLYNN_TEST__.getGraphViewport = getGraphViewport
     return () => {
       if (w.__OWLYNN_TEST__?.selectGraphNode === selectNodeById) {
         delete w.__OWLYNN_TEST__.selectGraphNode
       }
+      if (w.__OWLYNN_TEST__?.focusGraphNode) {
+        delete w.__OWLYNN_TEST__.focusGraphNode
+      }
+      if (w.__OWLYNN_TEST__?.getGraphViewport === getGraphViewport) {
+        delete w.__OWLYNN_TEST__.getGraphViewport
+      }
     }
-  }, [selectNodeById])
+  }, [focusNode, getGraphViewport, selectNodeById])
 
   const renderModePill = (mode: string) => {
     if (mode === 'pentest') {
@@ -248,6 +388,7 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
       await loadGraph()
       if (data.node) {
         onSelectNode(data.node)
+        void focusNode(data.node.id, { force: true })
       }
     } catch (err: any) {
       toast.error(err.message || 'Failed to create thought node')
@@ -721,13 +862,12 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
           linkDirectionalParticleWidth={filterMode === 'pentest' ? 3 : 2}
           linkDirectionalParticleColor={() => (filterMode === 'pentest' ? '#10b981' : '#ffffff')}
           onNodeClick={(node: any) => {
-            if (node) {
-              onSelectNode(node)
-              if (fgRef.current && typeof node.x === 'number' && typeof node.y === 'number') {
-                fgRef.current.centerAt(node.x, node.y, 400)
-              }
+            if (node?.id) {
+              selectNodeById(node.id)
             }
           }}
+          onZoom={handleCameraInteraction}
+          onBackgroundClick={handleCameraInteraction}
           onNodeDragEnd={handleNodeDragEnd}
           cooldownTicks={120}
           d3AlphaDecay={0.02}

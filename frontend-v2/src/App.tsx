@@ -761,6 +761,25 @@ function App() {
     }
   }, [activeProjectId, addMessage, appendStreamChunk, applyBrowserPageContext, effectiveThreadId, executionPolicy, localRunToken, pushToolExecution, setConnection, setLatestToolExecution, setPendingCorrelationId, setMemoryUpdatedAt, setModelInfo, setContextCompression, setContextBreakdown, setCloudUsage, setCoherenceRetryActive, setCloudFallback, setOperatorNote, setRouterMetadata, setSafeMode, setScreenAssistMode, setScreenAssistPreviewPath, setScreenAssistSource, setTtsSpeaking, upsertActionProposal, updateActionProposalStatus, isTauriRuntime, wsBaseUrl])
 
+  // Listen for Electron runtime events (extension hint, screen assist, etc.)
+  useEffect(() => {
+    if (typeof (window as any).electronAPI === 'undefined') return
+
+    const handler = (payload: { type: string; path?: string }) => {
+      if (payload.type === 'extension.hint') {
+        toast(
+          'Load the bundled Brave extension for web search: brave://extensions → Load unpacked',
+          { duration: 10000, icon: '🌐' }
+        )
+      }
+    }
+
+    const unsub = (window as any).electronAPI.on('runtime-event', handler)
+    return () => {
+      if (typeof unsub === 'function') unsub()
+    }
+  }, [])
+
   // Listen for Tauri runtime events (TTS state, screen assist, etc.)
   useEffect(() => {
     let unlisten: (() => void) | undefined

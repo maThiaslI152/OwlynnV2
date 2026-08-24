@@ -1,0 +1,44 @@
+version: '3.8'
+
+# Personal MVP — Postgres (pgvector) + StirlingPDF only (no Qdrant/Redis)
+services:
+  postgres:
+    image: pgvector/pgvector:pg15
+    container_name: owlynn_postgres
+    environment:
+      POSTGRES_USER: owlynn
+      POSTGRES_PASSWORD: owlynn_password
+      POSTGRES_DB: owlynn
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U owlynn -d owlynn"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  stirling-pdf:
+    image: stirlingtools/stirling-pdf:latest
+    container_name: owlynn_stirling_pdf
+    ports:
+      - "127.0.0.1:8090:8080"
+    volumes:
+      - stirling_tessdata:/usr/share/tessdata
+      - stirling_configs:/configs
+      - stirling_logs:/logs
+    environment:
+      - SECURITY_ENABLELOGIN=false
+      - SECURITY_CUSTOMGLOBALAPIKEY=${STIRLING_PDF_API_KEY:-owlynn-local-dev}
+      - LANGS=en_GB
+      - JAVA_TOOL_OPTIONS=-Xms128m -Xmx512m
+    restart: unless-stopped
+    mem_limit: 2g
+
+volumes:
+  postgres_data:
+  stirling_tessdata:
+  stirling_configs:
+  stirling_logs:

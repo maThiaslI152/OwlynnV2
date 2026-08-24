@@ -418,6 +418,23 @@ async def select_graph_node_programmatic(page: Page, node_id: str) -> bool:
         return False
 
 
+async def assert_active_node_in_viewport(page: Page, node_id: str, timeout_ms: int = 1200) -> dict:
+    """Assert mindmap camera focused on node (readable zoom + near canvas center)."""
+    await page.wait_for_timeout(timeout_ms)
+    try:
+        result = await page.evaluate(
+            """(nodeId) => {
+                const api = window.__OWLYNN_TEST__;
+                if (!api?.getGraphViewport) return { ok: false, reason: 'no_hook' };
+                return api.getGraphViewport(nodeId);
+            }""",
+            node_id,
+        )
+        return result if isinstance(result, dict) else {"ok": False, "reason": "invalid_result"}
+    except Exception as exc:
+        return {"ok": False, "reason": str(exc)[:200]}
+
+
 async def click_different_mindmap_node(
     page: Page, current_thread: str, graph_nodes: list[dict] | None = None
 ) -> dict:
@@ -1140,6 +1157,24 @@ async def run_e2e() -> dict:
                 switch_result["switched"] = True
                 switch_result["to"] = hud_after
                 switch_result["method"] = switch_result.get("method") or "hud_data_node_id"
+
+            focus_node_id = switch_result.get("to") or hud_after
+            if focus_node_id:
+                viewport_check = await assert_active_node_in_viewport(page, focus_node_id)
+                switch_result["viewport_focus"] = viewport_check
+                if viewport_check.get("ok"):
+                    print(
+                        f"  ✅ Active node in viewport (zoom={viewport_check.get('zoom', '?')}, "
+                        f"dist={viewport_check.get('dist', '?')})",
+                        flush=True,
+                    )
+                else:
+                    print(
+                        f"  ⚠️  Viewport focus check failed: "
+                        f"{viewport_check.get('reason', viewport_check)}",
+                        flush=True,
+                    )
+
             print(
                 f"  {'✅' if switch_result.get('switched') else '⚠️ '} Mindmap node switch: "
                 f"{switch_result.get('from', '?')} → {switch_result.get('to') or 'unchanged'} "

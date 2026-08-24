@@ -10,12 +10,15 @@ echo "════════════════════════�
 echo ""
 
 # ═══════════════════════════════════════════════════════════════════
-# [1/4] Start containers — Qdrant, Redis, StirlingPDF (SearXNG opt-in)
+# [1/4] Start MVP containers — Postgres (pgvector) + StirlingPDF
 # ═══════════════════════════════════════════════════════════════════
-_CORE_SERVICES="qdrant redis stirling-pdf"
+_MVP_COMPOSE="docker-compose.mvp.yml"
+_CORE_SERVICES="postgres stirling-pdf"
 echo "[1/4] Starting containers..."
 podman machine start 2>/dev/null || true
-podman compose up -d $_CORE_SERVICES 2>/dev/null || podman-compose up -d $_CORE_SERVICES 2>/dev/null || docker compose up -d $_CORE_SERVICES 2>/dev/null || {
+podman compose -f "$_MVP_COMPOSE" up -d $_CORE_SERVICES 2>/dev/null || \
+podman-compose -f "$_MVP_COMPOSE" up -d $_CORE_SERVICES 2>/dev/null || \
+docker compose -f "$_MVP_COMPOSE" up -d $_CORE_SERVICES 2>/dev/null || {
     echo "      ERROR: Could not start containers. Is Podman/Docker installed?"
     exit 1
 }

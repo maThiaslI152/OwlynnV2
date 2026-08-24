@@ -1,12 +1,12 @@
 {
   "name": "frontend-v2",
   "private": true,
-  "version": "0.2.3",
+  "version": "0.3.0",
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build && electron-builder",
+    "build": "tsc -b && vite build && bash ../scripts/build_backend_bundle.sh && electron-builder",
     "test": "vitest run",
     "lint": "eslint .",
     "preview": "vite preview",

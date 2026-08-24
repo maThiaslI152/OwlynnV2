@@ -45,16 +45,18 @@ echo "════════════════════════�
 echo ""
 
 # ═══════════════════════════════════════════════════════════════════
-# [1/3] PostgreSQL Database (containers preferred)
+# [1/3] MVP containers — Postgres (pgvector) + StirlingPDF
 # ═══════════════════════════════════════════════════════════════════
-echo "[1/3] PostgreSQL Database..."
+_MVP_COMPOSE="docker-compose.mvp.yml"
+_CORE_SERVICES="postgres stirling-pdf"
+echo "[1/3] PostgreSQL + StirlingPDF..."
 
-# Try containers first (postgres with pgvector)
-if podman machine start 2>/dev/null || true; then
-    podman-compose up -d postgres 2>/dev/null || \
-    docker-compose up -d postgres 2>/dev/null || \
-    docker compose up -d postgres 2>/dev/null || true
-fi
+podman machine start 2>/dev/null || true
+podman compose -f "$_MVP_COMPOSE" up -d $_CORE_SERVICES 2>/dev/null || \
+podman-compose -f "$_MVP_COMPOSE" up -d $_CORE_SERVICES 2>/dev/null || \
+docker compose -f "$_MVP_COMPOSE" up -d $_CORE_SERVICES 2>/dev/null || {
+    echo "      WARNING: Could not start containers. Is Podman/Docker installed?"
+}
 
 echo "      Ready."
 
@@ -105,6 +107,12 @@ export DATABASE_URL="${DATABASE_URL:-postgresql+asyncpg://owlynn:owlynn_password
 if ! command -v uv &>/dev/null; then
     echo "      ERROR: uv is not installed. Please install uv first."
     exit 1
+fi
+
+# Database migrations (matches Electron runMigrations in main.ts)
+echo "      Running database migrations..."
+if ! uv run python -m alembic upgrade head; then
+    echo "      WARNING: Database migration failed. Backend may start with degraded memory."
 fi
 
 # Kill stale ports

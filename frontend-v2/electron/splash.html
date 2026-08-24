@@ -175,6 +175,10 @@
         <span class="icon pending"></span>
         <span class="step-text">Starting containers...</span>
       </div>
+      <div class="step" id="step-database">
+        <span class="icon pending"></span>
+        <span class="step-text">Preparing database...</span>
+      </div>
       <div class="step" id="step-lmstudio">
         <span class="icon pending"></span>
         <span class="step-text">Connecting to LM Studio...</span>
@@ -183,9 +187,9 @@
         <span class="icon pending"></span>
         <span class="step-text">Starting backend server...</span>
       </div>
-      <div class="step" id="step-health">
+      <div class="step" id="step-ready">
         <span class="icon pending"></span>
-        <span class="step-text">Initializing AI engine...</span>
+        <span class="step-text">Initializing Owlynn...</span>
       </div>
     </div>
 
@@ -200,9 +204,10 @@
   <script>
     const stepLabels = {
       containers: 'Containers',
+      database: 'Database',
       lmstudio: 'LM Studio',
       backend: 'Backend',
-      health: 'AI Engine'
+      ready: 'Ready'
     }
 
     function updateStep(name, status, message) {
@@ -250,7 +255,11 @@
       }
       if (step === 'lmstudio' && status === 'active') {
         setHint('Waiting for LM Studio on :1234...')
-      } else if (step === 'health' && status === 'active') {
+      } else if (step === 'containers' && status === 'error') {
+        setHint('Install Podman Desktop or Docker Desktop, then relaunch Owlynn.')
+      } else if (step === 'database' && status === 'active') {
+        setHint('Running Alembic migrations...')
+      } else if (step === 'ready' && status === 'active') {
         setHint('Loading LangGraph & local models...')
       } else if (status === 'done' || status === 'error') {
         setHint('')

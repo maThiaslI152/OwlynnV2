@@ -11,6 +11,7 @@ const ALLOWED_INVOKE_CHANNELS = [
   'set_window_size',
   'launch_browser',
   'get_app_version',
+  'is_packaged',
   'hide_to_tray',
   'get_extension_path',
   'open_extension_folder',

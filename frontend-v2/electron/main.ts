@@ -53,8 +53,14 @@ let backendProcess: ChildProcess | null = null
 let isQuitting = false
 
 const CONFIG_PATH = path.join(app.getPath('home'), '.owlynn', 'config.json')
-const PID_PATH = path.join(app.getPath('home'), '.owlynn', 'backend.pid')
-const SECRETS_PATH = path.join(app.getPath('home'), '.owlynn', 'secrets.env')
+const OWLYNN_DIR = path.join(app.getPath('home'), '.owlynn')
+const RUNTIME_DIR = path.join(OWLYNN_DIR, 'runtime')
+const EXTENSION_HINT_FLAG = path.join(OWLYNN_DIR, '.extension_hint_shown')
+const PID_PATH = path.join(OWLYNN_DIR, 'backend.pid')
+const SECRETS_PATH = path.join(OWLYNN_DIR, 'secrets.env')
+const MVP_COMPOSE_FILE = 'docker-compose.mvp.yml'
+const MVP_SERVICES = ['postgres', 'stirling-pdf'] as const
+const MVP_CONTAINER_NAMES = ['owlynn_postgres', 'owlynn_stirling_pdf'] as const
 
 interface ActionProposal {
   id: string
@@ -67,17 +73,16 @@ const proposals: ActionProposal[] = []
 
 // ── Helpers ──────────────────────────────────────────────────────
 
-function findPythonOrUv(projectRoot: string): { cmd: string; args: string[] } {
-  // 1. Direct venv python if available
+function findPythonCmd(projectRoot: string): { cmd: string; prefixArgs: string[] } {
   const venvPython = path.join(projectRoot, '.venv', 'bin', 'python')
   if (fs.existsSync(venvPython)) {
-    return {
-      cmd: venvPython,
-      args: ['-m', 'uvicorn', 'src.api.server:app', '--host', '127.0.0.1', '--port', '8000', '--ws-max-size', '16777216', '--no-access-log']
-    }
+    return { cmd: venvPython, prefixArgs: [] }
   }
 
-  // 2. uv run
+  if (app.isPackaged) {
+    throw new Error(`Bundled Python not found at ${venvPython}. Try reinstalling Owlynn.`)
+  }
+
   const uvCandidates = [
     path.join(os.homedir(), 'homebrew', 'bin', 'uv'),
     '/opt/homebrew/bin/uv',
@@ -88,22 +93,153 @@ function findPythonOrUv(projectRoot: string): { cmd: string; args: string[] } {
   ]
   for (const p of uvCandidates) {
     if (p === 'uv' || fs.existsSync(p)) {
-      return {
-        cmd: p,
-        args: ['run', 'python', '-m', 'uvicorn', 'src.api.server:app', '--host', '127.0.0.1', '--port', '8000', '--ws-max-size', '16777216', '--no-access-log']
-      }
+      return { cmd: p, prefixArgs: ['run', 'python'] }
     }
   }
 
-  // 3. Fallback: python3
+  return { cmd: 'python3', prefixArgs: [] }
+}
+
+function findPythonOrUv(projectRoot: string): { cmd: string; args: string[] } {
+  const { cmd, prefixArgs } = findPythonCmd(projectRoot)
   return {
-    cmd: 'python3',
-    args: ['-m', 'uvicorn', 'src.api.server:app', '--host', '127.0.0.1', '--port', '8000', '--ws-max-size', '16777216', '--no-access-log']
+    cmd,
+    args: [
+      ...prefixArgs,
+      '-m',
+      'uvicorn',
+      'src.api.server:app',
+      '--host',
+      '127.0.0.1',
+      '--port',
+      '8000',
+      '--ws-max-size',
+      '16777216',
+      '--no-access-log',
+    ],
   }
 }
 
+function getMvpComposePath(projectRoot: string): string {
+  return path.join(projectRoot, MVP_COMPOSE_FILE)
+}
+
+function ensureOwlynnConfig(runtimeRoot: string): void {
+  const owlynnDir = path.dirname(CONFIG_PATH)
+  fs.mkdirSync(owlynnDir, { recursive: true })
+
+  let runtimeVersion = 'dev'
+  try {
+    const pkgPath = path.join(process.env.APP_ROOT || '', 'package.json')
+    if (fs.existsSync(pkgPath)) {
+      runtimeVersion = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')).version || runtimeVersion
+    }
+  } catch { /* ignore */ }
+
+  const config = {
+    project_root: runtimeRoot,
+    runtime_version: runtimeVersion,
+    written_at: new Date().toISOString(),
+  }
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8')
+  console.log('[startup] Wrote config.json →', CONFIG_PATH)
+}
+
+async function areMvpContainersRunning(projectRoot: string): Promise<string[]> {
+  for (const cmd of ['podman', 'docker']) {
+    try {
+      const filters = MVP_CONTAINER_NAMES.flatMap((name) => ['--filter', `name=${name}`])
+      const stdout = await execFileAsync(cmd, ['ps', ...filters, '--format', '{{.Names}}'], {
+        cwd: projectRoot,
+      })
+      const running = stdout.trim().split('\n').filter(Boolean)
+      if (running.length >= MVP_CONTAINER_NAMES.length) {
+        return running
+      }
+    } catch { /* ignore */ }
+  }
+  return []
+}
+
+async function isPostgresReady(): Promise<boolean> {
+  for (const cmd of ['podman', 'docker']) {
+    try {
+      await execFileAsync(cmd, ['exec', 'owlynn_postgres', 'pg_isready', '-U', 'owlynn', '-d', 'owlynn'])
+      return true
+    } catch { /* ignore */ }
+  }
+  return false
+}
+
+function getBundledBackendPath(): string | null {
+  if (!app.isPackaged) return null
+  const bundled = path.join(process.resourcesPath, 'owlynn-backend')
+  return fs.existsSync(bundled) ? bundled : null
+}
+
+function readRuntimeVersion(runtimeRoot: string): string | null {
+  const versionFile = path.join(runtimeRoot, 'VERSION')
+  if (!fs.existsSync(versionFile)) return null
+  try {
+    return fs.readFileSync(versionFile, 'utf-8').trim() || null
+  } catch {
+    return null
+  }
+}
+
+async function extractRuntimeBundle(): Promise<void> {
+  const bundled = getBundledBackendPath()
+  if (!bundled) return
+
+  const appVersion = app.getVersion()
+  const runtimeVersion = fs.existsSync(RUNTIME_DIR) ? readRuntimeVersion(RUNTIME_DIR) : null
+  const runtimeFrontendIndex = path.join(RUNTIME_DIR, 'frontend-v2', 'dist', 'index.html')
+  const runtimeReady =
+    runtimeVersion === appVersion &&
+    fs.existsSync(path.join(RUNTIME_DIR, '.venv', 'bin', 'python')) &&
+    fs.existsSync(runtimeFrontendIndex)
+
+  if (runtimeReady) {
+    console.log('[runtime] Already extracted at version', appVersion)
+    return
+  }
+
+  sendSplash('containers', 'active', 'Preparing backend runtime...', `Extracting bundled backend v${appVersion}`)
+
+  const modelsBackup = path.join(OWLYNN_DIR, '.runtime_models_backup')
+  const runtimeModels = path.join(RUNTIME_DIR, '.models')
+  if (fs.existsSync(runtimeModels)) {
+    fs.rmSync(modelsBackup, { recursive: true, force: true })
+    fs.cpSync(runtimeModels, modelsBackup, { recursive: true })
+  }
+
+  if (fs.existsSync(RUNTIME_DIR)) {
+    fs.rmSync(RUNTIME_DIR, { recursive: true, force: true })
+  }
+  fs.mkdirSync(OWLYNN_DIR, { recursive: true })
+
+  await execFileAsync('cp', ['-R', bundled, RUNTIME_DIR])
+
+  if (fs.existsSync(modelsBackup)) {
+    fs.cpSync(modelsBackup, path.join(RUNTIME_DIR, '.models'), { recursive: true })
+    fs.rmSync(modelsBackup, { recursive: true, force: true })
+  }
+
+  fs.writeFileSync(path.join(RUNTIME_DIR, 'VERSION'), appVersion, 'utf-8')
+  console.log('[runtime] Extracted backend to', RUNTIME_DIR)
+  sendSplash('containers', 'active', 'Backend runtime ready', `Extracted v${appVersion} to ~/.owlynn/runtime`)
+}
+
 function getProjectRoot(): string {
-  // Packaged app: read from ~/.owlynn/config.json
+  if (app.isPackaged) {
+    if (fs.existsSync(RUNTIME_DIR)) {
+      return RUNTIME_DIR
+    }
+    const bundled = getBundledBackendPath()
+    if (bundled) return bundled
+  }
+
+  // Dev mode: prefer config.json, then repo root
   try {
     if (fs.existsSync(CONFIG_PATH)) {
       const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'))
@@ -112,7 +248,6 @@ function getProjectRoot(): string {
       }
     }
   } catch { /* ignore */ }
-  // Dev mode: fallback to repo root (two levels up from electron/)
   return path.join(__dirname, '..', '..')
 }
 
@@ -176,39 +311,105 @@ function fetchJson(url: string, timeoutMs = 3000): Promise<any> {
 
 // ── Startup Sequence ─────────────────────────────────────────────
 
-async function startContainers(projectRoot: string): Promise<void> {
-  sendSplash('containers', 'active', 'Checking container status...', 'Checking Qdrant & Redis containers...')
-  // Check if containers are already running (idempotent — works with start.sh)
-  for (const cmd of ['podman', 'docker']) {
+async function findContainerRuntime(): Promise<'podman' | 'docker' | null> {
+  for (const cmd of ['podman', 'docker'] as const) {
     try {
-      const stdout = await execFileAsync(cmd, [
-        'ps', '--filter', 'name=owlynn_qdrant', '--filter', 'name=owlynn_redis',
-        '--format', '{{.Names}}',
-      ], { cwd: projectRoot })
-      const running = stdout.trim().split('\n').filter(Boolean)
-      if (running.length >= 2) {
-        console.log('[startup] Containers already running:', running.join(', '))
-        sendSplash('containers', 'done', 'Containers ready', `Running: ${running.join(', ')}`)
-        return
-      }
+      await execFileAsync(cmd, ['--version'])
+      return cmd
     } catch { /* ignore */ }
   }
+  return null
+}
 
-  sendSplash('containers', 'active', 'Starting Podman/Docker compose...', 'Starting Qdrant and Redis services...')
-  const cmds = [
-    ['podman', ['compose', 'up', '-d', 'qdrant', 'redis']],
-    ['docker', ['compose', 'up', '-d', 'qdrant', 'redis']],
-    ['podman-compose', ['up', '-d', 'qdrant', 'redis']],
+async function startContainers(projectRoot: string): Promise<void> {
+  sendSplash('containers', 'active', 'Checking container runtime...', 'Looking for Podman or Docker...')
+
+  const runtime = await findContainerRuntime()
+  if (!runtime) {
+    const msg = 'Install Podman Desktop (podman-desktop.io) or Docker Desktop (docker.com)'
+    console.error('[startup] No container runtime found')
+    sendSplash('containers', 'error', 'Podman or Docker required', msg)
+    if (app.isPackaged) {
+      throw new Error(`Container runtime not found. ${msg}`)
+    }
+    sendSplash('containers', 'done', 'Containers skipped', msg)
+    return
+  }
+
+  sendSplash('containers', 'active', 'Checking container status...', `Using ${runtime} — Postgres & StirlingPDF`)
+
+  try {
+    await execFileAsync('podman', ['machine', 'start'])
+  } catch { /* docker desktop or podman already running */ }
+
+  const running = await areMvpContainersRunning(projectRoot)
+  if (running.length >= MVP_CONTAINER_NAMES.length) {
+    console.log('[startup] MVP containers already running:', running.join(', '))
+    sendSplash('containers', 'done', 'Containers ready', `Running: ${running.join(', ')}`)
+    return
+  }
+
+  const composePath = getMvpComposePath(projectRoot)
+  if (!fs.existsSync(composePath)) {
+    console.warn('[startup] Missing compose file:', composePath)
+  }
+
+  sendSplash('containers', 'active', 'Starting Podman/Docker compose...', 'Starting Postgres & StirlingPDF...')
+  const composeArgs = ['-f', MVP_COMPOSE_FILE, 'up', '-d', ...MVP_SERVICES]
+  const cmds: [string, string[]][] = [
+    ['podman', ['compose', ...composeArgs]],
+    ['docker', ['compose', ...composeArgs]],
+    ['podman-compose', ['-f', MVP_COMPOSE_FILE, 'up', '-d', ...MVP_SERVICES]],
   ]
   for (const [cmd, args] of cmds) {
     try {
-      await execFileAsync(cmd as string, args as string[], { cwd: projectRoot })
-      sendSplash('containers', 'done', 'Containers started', 'Qdrant & Redis started successfully')
+      await execFileAsync(cmd, args, { cwd: projectRoot })
+      sendSplash('containers', 'done', 'Containers started', 'Postgres & StirlingPDF started')
       return
-    } catch { /* ignore */ }
+    } catch { /* try next */ }
   }
-  console.warn('[startup] Could not start containers (podman/docker not found). Qdrant/Redis may be unavailable.')
-  sendSplash('containers', 'done', 'Containers skipped', 'Containers not started — using local memory storage')
+  console.warn('[startup] Could not start MVP containers (podman/docker not found).')
+  sendSplash('containers', 'done', 'Containers skipped', 'Postgres/StirlingPDF not started — install Podman or Docker')
+}
+
+async function waitForPostgres(timeoutMs = 90_000): Promise<void> {
+  const startTime = Date.now()
+  sendSplash('database', 'active', 'Waiting for PostgreSQL...', 'Checking pg_isready on owlynn_postgres')
+
+  while (Date.now() - startTime < timeoutMs) {
+    if (await isPostgresReady()) {
+      return
+    }
+    await new Promise((r) => setTimeout(r, 1000))
+  }
+  throw new Error('PostgreSQL did not become ready within 90 seconds')
+}
+
+async function runMigrations(projectRoot: string): Promise<void> {
+  sendSplash('database', 'active', 'Running database migrations...', 'alembic upgrade head')
+
+  const env = { ...process.env }
+  env.PYTHONPATH = `${projectRoot}${path.delimiter}${env.PYTHONPATH || ''}`
+  env.DATABASE_URL =
+    env.DATABASE_URL || 'postgresql+asyncpg://owlynn:owlynn_password@127.0.0.1:5432/owlynn'
+
+  const { cmd, prefixArgs } = findPythonCmd(projectRoot)
+  const args = [...prefixArgs, '-m', 'alembic', 'upgrade', 'head']
+
+  try {
+    const output = await new Promise<string>((resolve, reject) => {
+      execFile(cmd, args, { cwd: projectRoot, env }, (error, stdout, stderr) => {
+        if (error) reject(new Error(stderr || error.message))
+        else resolve(stdout || stderr)
+      })
+    })
+    const summary = output.trim().split('\n').filter(Boolean).slice(-1)[0] || 'Schema up to date'
+    sendSplash('database', 'done', 'Database ready', summary.slice(0, 90))
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    sendSplash('database', 'error', 'Migration failed', msg.slice(0, 90))
+    throw err
+  }
 }
 
 async function waitForLMStudio(): Promise<void> {
@@ -282,9 +483,15 @@ async function spawnBackend(projectRoot: string): Promise<void> {
     Object.assign(env, readEnvFile(envFile))
   }
   env.PYTHONPATH = `${projectRoot}${path.delimiter}${env.PYTHONPATH || ''}`
+  env.DATABASE_URL =
+    env.DATABASE_URL || 'postgresql+asyncpg://owlynn:owlynn_password@127.0.0.1:5432/owlynn'
   env.STIRLING_PDF_URL = env.STIRLING_PDF_URL || 'http://localhost:8090'
   env.STIRLING_PDF_API_KEY = env.STIRLING_PDF_API_KEY || 'owlynn-local-dev'
-  env.DOCLING_ARTIFACTS_PATH = env.DOCLING_ARTIFACTS_PATH || path.join(projectRoot, '.models', 'docling')
+  env.DOCLING_ARTIFACTS_PATH =
+    env.DOCLING_ARTIFACTS_PATH || path.join(projectRoot, '.models', 'docling')
+  if (app.isPackaged) {
+    env.OWLYNN_PACKAGED = '1'
+  }
 
   const { cmd, args } = findPythonOrUv(projectRoot)
   console.log('[startup] Launching backend:', cmd, args.join(' '))
@@ -357,7 +564,7 @@ async function waitForHealth(): Promise<void> {
   const timeout = 180_000
   let consecutiveReady = 0
 
-  sendSplash('health', 'active', 'Initializing AI engine...', 'Compiling LangGraph nodes and memory pools...')
+  sendSplash('ready', 'active', 'Initializing AI engine...', 'Compiling LangGraph nodes and memory pools...')
 
   while (Date.now() - startTime < timeout) {
     try {
@@ -365,16 +572,16 @@ async function waitForHealth(): Promise<void> {
       if (data.agent === 'ready') {
         consecutiveReady++
         if (consecutiveReady >= 2) {
-          sendSplash('health', 'done', 'AI Engine ready', 'LangGraph pipeline and tools initialized')
+          sendSplash('ready', 'done', 'Owlynn ready', 'LangGraph pipeline and tools initialized')
           return
         }
       } else {
         consecutiveReady = 0
         const statusMsg = data.agent ? `Initializing AI (${data.agent})...` : 'Initializing AI engine...'
-        sendSplash('health', 'active', statusMsg, `State: ${data.agent || 'loading'}`)
+        sendSplash('ready', 'active', statusMsg, `State: ${data.agent || 'loading'}`)
       }
     } catch {
-      sendSplash('health', 'active', 'Waiting for backend HTTP server...', 'Connecting to http://127.0.0.1:8000/api/health')
+      sendSplash('ready', 'active', 'Waiting for backend HTTP server...', 'Connecting to http://127.0.0.1:8000/api/health')
     }
     await new Promise(r => setTimeout(r, 1000))
   }
@@ -473,6 +680,8 @@ function createTray() {
 
 function registerIpcHandlers() {
   ipcMain.handle('get_app_version', () => app.getVersion())
+
+  ipcMain.handle('is_packaged', () => app.isPackaged)
 
   ipcMain.handle('hide_to_tray', () => {
     win?.hide()
@@ -654,12 +863,13 @@ async function gracefulShutdown(): Promise<void> {
   }
   try { fs.unlinkSync(PID_PATH) } catch { /* ignore */ }
 
-  // 3. Stop Podman/Docker containers
+  // 3. Stop MVP Podman/Docker containers
   try {
+    const stopArgs = ['-f', MVP_COMPOSE_FILE, 'stop', ...MVP_SERVICES]
     for (const cmd of ['podman', 'docker']) {
       try {
-        await execFileAsync(cmd, ['compose', 'stop', 'qdrant', 'redis'], { cwd: projectRoot })
-        console.log(`[shutdown] Stopped containers via ${cmd}`)
+        await execFileAsync(cmd, ['compose', ...stopArgs], { cwd: projectRoot })
+        console.log(`[shutdown] Stopped MVP containers via ${cmd}`)
         break
       } catch { /* try next */ }
     }
@@ -670,11 +880,33 @@ async function gracefulShutdown(): Promise<void> {
   console.log('[shutdown] Graceful shutdown complete.')
 }
 
+function maybeShowExtensionHint(): void {
+  if (!app.isPackaged || !win) return
+  if (fs.existsSync(EXTENSION_HINT_FLAG)) return
+
+  const extensionPath = getExtensionPath()
+  const showHint = (): void => {
+    if (!win || win.isDestroyed()) return
+    win.webContents.send('runtime-event', {
+      type: 'extension.hint',
+      path: extensionPath,
+    })
+    try {
+      fs.mkdirSync(OWLYNN_DIR, { recursive: true })
+      fs.writeFileSync(EXTENSION_HINT_FLAG, new Date().toISOString(), 'utf-8')
+    } catch { /* ignore */ }
+  }
+
+  if (win.webContents.isLoading()) {
+    win.webContents.once('did-finish-load', showHint)
+  } else {
+    showHint()
+  }
+}
 function launchBraveBrowser(): void {
   try {
     const extensionPath = getExtensionPath()
     const candidates = [
-      '/Volumes/KNV3_1TB/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
       '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
       path.join(app.getPath('home'), 'Applications', 'Brave Browser.app', 'Contents', 'MacOS', 'Brave Browser'),
     ]
@@ -686,16 +918,37 @@ function launchBraveBrowser(): void {
       }
     }
 
-    if (braveBin && fs.existsSync(extensionPath)) {
-      console.log('[startup] Launching Brave Browser with extension:', extensionPath)
-      const braveProc = spawn(braveBin, [`--load-extension=${extensionPath}`], {
-        detached: true,
-        stdio: 'ignore',
+    if (!braveBin) {
+      if (process.platform === 'darwin') {
+        execFile('open', ['-a', 'Brave Browser'], () => {})
+      }
+      return
+    }
+
+    if (!fs.existsSync(extensionPath)) {
+      console.warn('[startup] Extension path missing:', extensionPath)
+      execFile('open', ['-a', 'Brave Browser'], () => {})
+      return
+    }
+
+    // --load-extension fails with "unexpected error" when Brave is already running.
+    execFile('pgrep', ['-x', 'Brave Browser'], (pgrepErr) => {
+      if (!pgrepErr) {
+        console.log('[startup] Brave already running — skipping --load-extension (load unpacked extension manually if needed)')
+        return
+      }
+
+      console.log('[startup] Launching Brave with extension:', extensionPath)
+      const braveProc = spawn(
+        braveBin,
+        [`--load-extension=${extensionPath}`, '--no-first-run', '--no-default-browser-check'],
+        { detached: true, stdio: 'ignore' },
+      )
+      braveProc.on('error', (err) => {
+        console.warn('[startup] Brave spawn failed:', err.message)
       })
       braveProc.unref()
-    } else if (process.platform === 'darwin') {
-      execFile('open', ['-a', 'Brave Browser'], () => {})
-    }
+    })
   } catch (err) {
     console.warn('[startup] Could not auto-launch Brave Browser:', err)
   }
@@ -706,16 +959,44 @@ function launchBraveBrowser(): void {
 app.whenReady().then(async () => {
   registerIpcHandlers()
 
-  const projectRoot = getProjectRoot()
-
   // 1. Splash screen — await load so IPC listener is ready
   await createSplashWindow()
   const splashStartTime = Date.now()
 
-  // 2. Start containers
-  await startContainers(projectRoot)
+  // 2. Packaged app: extract bundled backend to ~/.owlynn/runtime
+  if (app.isPackaged) {
+    try {
+      await extractRuntimeBundle()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      sendSplash('containers', 'error', 'Runtime extraction failed', msg.slice(0, 90))
+      return
+    }
+  }
 
-  // 3. Wait for LM Studio
+  const projectRoot = getProjectRoot()
+  ensureOwlynnConfig(projectRoot)
+
+  // 3. Start MVP containers (Postgres + StirlingPDF)
+  try {
+    await startContainers(projectRoot)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    sendSplash('containers', 'error', 'Container runtime required', msg.slice(0, 90))
+    return
+  }
+
+  // 4. Database — wait for Postgres, then run Alembic migrations
+  try {
+    await waitForPostgres()
+    await runMigrations(projectRoot)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    sendSplash('database', 'error', 'Database setup failed', msg)
+    // Continue — backend may still start with degraded memory
+  }
+
+  // 5. Wait for LM Studio
   try {
     await waitForLMStudio()
   } catch (err) {
@@ -724,7 +1005,7 @@ app.whenReady().then(async () => {
     // Continue anyway — backend can start and fall back to cloud/local
   }
 
-  // 4. Start backend
+  // 6. Start backend
   try {
     await killStaleBackend()
     await spawnBackend(projectRoot)
@@ -735,27 +1016,28 @@ app.whenReady().then(async () => {
     return // Stay on splash — don't transition to broken main window
   }
 
-  // 5. Wait for health
+  // 7. Wait for readiness
   try {
     await waitForHealth()
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
-    sendSplash('health', 'error', `AI init timed out: ${msg}`, `Timeout waiting for agent readiness: ${msg}`)
+    sendSplash('ready', 'error', `Startup timed out: ${msg}`, `Timeout waiting for agent readiness: ${msg}`)
     return // Stay on splash — don't transition to broken main window
   }
 
-  // 6. Ensure splash was visible for at least 1.5s so user can read status
+  // 8. Ensure splash was visible for at least 1.5s so user can read status
   const splashElapsed = Date.now() - splashStartTime
   if (splashElapsed < 1500) {
     await new Promise(r => setTimeout(r, 1500 - splashElapsed))
   }
 
-  // 7. Switch to main window
+  // 9. Switch to main window
   splashWin?.close()
   splashWin = null
   createMainWindow()
   createTray()
   launchBraveBrowser()
+  maybeShowExtensionHint()
 })
 
 // ── Shutdown ─────────────────────────────────────────────────────

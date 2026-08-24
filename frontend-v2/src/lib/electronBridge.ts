@@ -76,6 +76,7 @@ export const electronBridge = {
   setWindowSize: (width: number, height: number) => invokeOrResult<string>('set_window_size', width, height),
   launchBrowser: () => invokeOrResult<string>('launch_browser'),
   getAppVersion: () => invokeOrResult<string>('get_app_version'),
+  isPackaged: () => invokeOrResult<boolean>('is_packaged'),
   hideToTray: () => invokeOrResult<string>('hide_to_tray'),
   getBrowserExtensionPath: () => invokeOrResult<string>('get_extension_path'),
   openExtensionFolder: () => invokeOrResult<string>('open_extension_folder'),

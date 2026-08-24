@@ -22,7 +22,16 @@ interface MacMenuBarProps {
 export function MacMenuBar({ isCompact, onToggleMode, activeMode = 'normal', onModeChange }: MacMenuBarProps) {
   const [activeMenu, setActiveMenu] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
+  const [isPackaged, setIsPackaged] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    void electronBridge.isPackaged().then((result) => {
+      if (result.ok && result.data) {
+        setIsPackaged(true)
+      }
+    })
+  }, [])
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -200,6 +209,7 @@ export function MacMenuBar({ isCompact, onToggleMode, activeMode = 'normal', onM
             >
               <GraduationCap size={11} /> Study
             </button>
+            {!isPackaged && (
             <button
               type="button"
               onClick={() => onModeChange('pentest')}
@@ -223,6 +233,7 @@ export function MacMenuBar({ isCompact, onToggleMode, activeMode = 'normal', onM
             >
               <Shield size={11} /> Pentest
             </button>
+            )}
           </div>
         )}
       </div>

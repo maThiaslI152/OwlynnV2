@@ -18,6 +18,9 @@ vi.mock('../../lib/electronBridge', () => ({
     startScreenPreview: vi.fn().mockResolvedValue({ ok: true }),
     stopScreenPreview: vi.fn().mockResolvedValue({ ok: true }),
     convertFileSrc: vi.fn().mockImplementation((path) => path),
+    isPackaged: vi.fn().mockResolvedValue({ ok: true, data: false }),
+    hideToTray: vi.fn().mockResolvedValue({ ok: true }),
+    quitApp: vi.fn().mockResolvedValue({ ok: true }),
   },
   electronAvailable: vi.fn().mockReturnValue(true)
 }))
