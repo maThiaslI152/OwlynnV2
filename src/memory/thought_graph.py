@@ -21,6 +21,15 @@ logger = logging.getLogger(__name__)
 _SHARED_GRAPH_MODES = {"normal", "study"}
 
 
+def _normalize_graph_mode(mode: str | None, scenario_id: str | None) -> str:
+    """Map internal execution modes back to the user-facing graph modes."""
+    if scenario_id == "pentest" or mode == "pentest":
+        return "pentest"
+    if scenario_id == "study" or mode == "study":
+        return "study"
+    return "normal"
+
+
 class ThoughtGraphManager:
     """Async PostgreSQL / SQLite graph manager for thought nodes and semantic edges."""
 
@@ -69,7 +78,7 @@ class ThoughtGraphManager:
     @staticmethod
     def _shared_graph_stmt():
         return select(ThoughtNode).where(
-            ThoughtNode.mode.in_(_SHARED_GRAPH_MODES),
+            ThoughtNode.mode != "pentest",
             or_(
                 ThoughtNode.scenario_id.is_(None),
                 ThoughtNode.scenario_id != "pentest",
@@ -181,14 +190,8 @@ class ThoughtGraphManager:
         await self.ensure_tables()
         async with AsyncSessionLocal() as session:
             if mode == "pentest":
-                stmt = select(ThoughtNode).where(ThoughtNode.mode == "pentest")
-            elif mode in _SHARED_GRAPH_MODES:
                 stmt = select(ThoughtNode).where(
-                    ThoughtNode.mode == mode,
-                    or_(
-                        ThoughtNode.scenario_id.is_(None),
-                        ThoughtNode.scenario_id != "pentest",
-                    ),
+                    or_(ThoughtNode.mode == "pentest", ThoughtNode.scenario_id == "pentest")
                 )
             else:
                 stmt = self._shared_graph_stmt()
@@ -235,7 +238,10 @@ class ThoughtGraphManager:
                 except Exception as e:
                     logger.debug("[thought_graph] Seed error: %s", e)
 
-            return [self._node_to_dict(n) for n in rows]
+            nodes = [self._node_to_dict(n) for n in rows]
+            if mode in _SHARED_GRAPH_MODES:
+                nodes = [n for n in nodes if n["mode"] == mode]
+            return nodes
 
     async def list_edges(self) -> list[dict[str, Any]]:
         """List all thought edges."""
@@ -438,7 +444,7 @@ class ThoughtGraphManager:
             "id": n.id,
             "title": n.title or "New Thought",
             "summary": n.summary or "",
-            "mode": n.mode or "normal",
+            "mode": _normalize_graph_mode(n.mode, n.scenario_id),
             "scenario_id": n.scenario_id,
             "engagement_id": n.engagement_id,
             "course_id": n.course_id,

@@ -383,3 +383,37 @@ class TestMemoryWriteNode:
             mock_mem.add = MagicMock()
             await memory_write_node(state)
         assert MemoryContextCache.get("test_thread_1", "default") is None
+
+    @pytest.mark.asyncio
+    async def test_autocartographer_normalizes_internal_modes(
+        self, mock_personal_assistant
+    ):
+        state = _make_state(
+            messages=[
+                _human_msg("Tell me what's new in Python 3.14"),
+                _ai_msg("Python 3.14 adds several new features."),
+            ],
+            mode="tools_on",
+        )
+        with (
+            patch("src.memory.long_term.memory", MagicMock()),
+            patch("src.agent.nodes.memory._should_save_memory", return_value=True),
+            patch("src.agent.nodes.memory.record_conversation"),
+            patch("src.agent.nodes.memory._evaluate_and_cache_knowledge"),
+            patch(
+                "src.memory.extraction.queue.enqueue_extraction",
+                new_callable=__import__("unittest").mock.AsyncMock,
+                return_value=True,
+            ),
+            patch("src.memory.thought_graph.thought_graph_manager.get_or_create_node")
+            as mock_get_or_create,
+            patch(
+                "src.memory.thought_graph.thought_graph_manager.auto_link_node",
+                new=MagicMock(return_value=None),
+            ),
+            patch("src.agent.nodes.memory.asyncio.create_task"),
+        ):
+            await memory_write_node(state)
+
+        mock_get_or_create.assert_called_once()
+        assert mock_get_or_create.call_args.kwargs["mode"] == "normal"

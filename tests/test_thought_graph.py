@@ -89,6 +89,36 @@ async def test_shared_graph_excludes_pentest_nodes(graph_mgr):
 
 
 @pytest.mark.asyncio
+async def test_shared_graph_includes_internal_non_pentest_modes(graph_mgr):
+    await graph_mgr.get_or_create_node(
+        "shared-tools-on",
+        title="Python 3.14 News",
+        mode="tools_on",
+    )
+    await graph_mgr.get_or_create_node(
+        "shared-normal-2",
+        title="Python 3.14 Features",
+        mode="normal",
+    )
+    await graph_mgr.create_edge(
+        source_id="shared-tools-on",
+        target_id="shared-normal-2",
+        relation="relates_to",
+        weight=0.71,
+        auto_generated=True,
+    )
+
+    graph = await graph_mgr.get_graph_data()
+
+    tools_node = next(node for node in graph["nodes"] if node["id"] == "shared-tools-on")
+    assert tools_node["mode"] == "normal"
+    assert any(
+        e["source"] == "shared-tools-on" and e["target"] == "shared-normal-2"
+        for e in graph["edges"]
+    )
+
+
+@pytest.mark.asyncio
 async def test_delete_legacy_pentest_graph_data_removes_shared_pentest_rows(graph_mgr):
     await graph_mgr.get_or_create_node(
         "cleanup-pentest",

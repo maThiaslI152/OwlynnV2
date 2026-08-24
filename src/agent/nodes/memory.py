@@ -1015,9 +1015,9 @@ async def memory_write_node(state: AgentState) -> AgentState:
                 summary_snippet = (
                     f"User: {str(last_human)[:120]} | AI: {str(last_ai)[:200]}"
                 )
-                node_mode = (
-                    "study" if study_scenario else (state.get("mode") or "normal")
-                )
+                # Thought graph uses user-facing modes, not internal execution modes
+                # like "tools_on" or "research", so semantic links remain visible.
+                node_mode = "study" if study_scenario else "normal"
                 await thought_graph_manager.get_or_create_node(
                     node_id=thread_id,
                     mode=node_mode,
