@@ -137,28 +137,37 @@ describe('MindmapCanvas focus behavior', () => {
       expect(latestForceGraphProps.current).toBeTruthy()
     })
 
-    // Let load + initial focus finish and release programmatic camera lock
+    // Let load + async focus finish, then flush unlock timeouts scheduled after awaits
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1200)
+    })
+    await act(async () => {
+      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(600)
     })
 
     mockCenterAt.mockClear()
     mockZoom.mockClear()
 
-    const settledAt = Date.now()
-    vi.setSystemTime(settledAt)
+    const panAt = 1_700_000_000_000
+    vi.setSystemTime(panAt)
 
     const onZoom = latestForceGraphProps.current?.onZoom as (() => void) | undefined
+    const onBackgroundClick = latestForceGraphProps.current?.onBackgroundClick as
+      | (() => void)
+      | undefined
     expect(onZoom).toBeTypeOf('function')
     act(() => {
+      onBackgroundClick?.()
       onZoom?.()
     })
 
     rerender(<MindmapCanvas activeNodeId="node-b" onSelectNode={() => {}} />)
 
     await act(async () => {
-      vi.setSystemTime(settledAt + 50)
+      vi.setSystemTime(panAt + 50)
       await vi.advanceTimersByTimeAsync(50)
+      await Promise.resolve()
     })
 
     expect(mockCenterAt).not.toHaveBeenCalled()

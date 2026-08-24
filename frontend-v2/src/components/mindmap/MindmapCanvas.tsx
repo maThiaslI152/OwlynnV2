@@ -125,17 +125,18 @@ export const MindmapCanvas: React.FC<MindmapCanvasProps> = ({
   }, [activeMode])
 
   const applyNodeFocus = useCallback(async (node: GraphNode, opts?: FocusNodeOptions) => {
-    if (
+    const panBlocksFocus = () =>
       !opts?.force &&
       userPannedAtRef.current > 0 &&
       Date.now() - userPannedAtRef.current < USER_PAN_DEBOUNCE_MS
-    ) {
-      return false
-    }
+
+    if (panBlocksFocus()) return false
     if (!fgRef.current) return false
 
     const coords = await waitForNodeCoords(node)
     if (!coords) return false
+    // Re-check after await — user may have panned while coords resolved
+    if (panBlocksFocus()) return false
 
     programmaticCameraRef.current = true
     fgRef.current.centerAt(coords.cx, coords.cy, FOCUS_ANIM_MS)
