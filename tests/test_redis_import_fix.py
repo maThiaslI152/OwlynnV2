@@ -27,7 +27,15 @@ class TestAsyncRedisSaverImport:
     """Verify AsyncRedisSaver is importable from the primary module path."""
 
     def test_import_from_primary_path(self):
-        """AsyncRedisSaver should be importable from langgraph.checkpoint.redis."""
+        """AsyncRedisSaver should be importable from langgraph.checkpoint.redis.
+
+        Owlynn now uses PostgreSQL checkpointer; Redis saver is optional legacy.
+        Skip when the optional package is not installed.
+        """
+        pytest.importorskip(
+            "langgraph.checkpoint.redis",
+            reason="langgraph-checkpoint-redis not installed (Postgres checkpointer is primary)",
+        )
         from langgraph.checkpoint.redis import AsyncRedisSaver
 
         assert AsyncRedisSaver is not None

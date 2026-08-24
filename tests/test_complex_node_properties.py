@@ -105,6 +105,8 @@ async def _passthrough_local_path(
     budget,
     max_context,
     is_fallback=False,
+    state=None,
+    **_kwargs,
 ):
     """Fast mock for local complex path — avoids real LLM pool."""
     from src.agent.llm import get_fallback_llm

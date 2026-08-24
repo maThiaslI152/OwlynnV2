@@ -3,6 +3,8 @@
 See docs/TOOLS.md; implement tools in src/tools/ and register here.
 """
 
+import os
+
 from src.tools.ask_user import ask_user
 from src.tools.core_tools import (
     delete_workspace_file,
@@ -181,6 +183,55 @@ STUDY_TOOLS: list = [
 ]
 
 
+def _is_packaged_build() -> bool:
+    return os.environ.get("OWLYNN_PACKAGED") == "1"
+
+
+_PENTEST_TOOLBOX: list = [
+    *PENTEST_TOOLS,
+    *PENTEST_NETWORK_TOOLS,
+    *PENTEST_WEB_TOOLS,
+    *PENTEST_VULN_TOOLS,
+    *PENTEST_EXPLOIT_TOOLS,
+    *PENTEST_POST_TOOLS,
+    *PENTEST_OSINT_TOOLS,
+    *PENTEST_AD_TOOLS,
+    *PENTEST_PASSWORD_TOOLS,
+    *PENTEST_CLOUD_TOOLS,
+    *PENTEST_REPORTING_TOOLS,
+    # File ops
+    read_workspace_file,
+    write_workspace_file,
+    edit_workspace_file,
+    list_workspace_files,
+    delete_workspace_file,
+    download_to_workspace,
+    # Screen assist / Kali
+    *SCREEN_ASSIST_TOOLS,
+    # Web (recon)
+    web_search,
+    fetch_webpage,
+    deep_research,
+    browser_background_fetch,
+    # Report generation
+    create_pdf,
+    create_docx,
+    # Data analysis
+    notebook_run,
+    notebook_reset,
+    notebook_vars,
+    # Task tracking
+    todo_add,
+    todo_list,
+    todo_complete,
+    todo_update,
+    todo_filter,
+    # Skills
+    list_skills,
+    invoke_skill,
+]
+
+
 # ─── Dynamic Tool Loading: Toolbox Registry ─────────────────────────────
 TOOLBOX_REGISTRY: dict[str, list] = {
     "web_search": [web_search, fetch_webpage, deep_research, browser_background_fetch],
@@ -224,53 +275,15 @@ TOOLBOX_REGISTRY: dict[str, list] = {
         forget_memory,
         search_workspace_docs,
     ],
-    "screen_assist": list(SCREEN_ASSIST_TOOLS),
-    "pentest": [
-        *PENTEST_TOOLS,
-        *PENTEST_NETWORK_TOOLS,
-        *PENTEST_WEB_TOOLS,
-        *PENTEST_VULN_TOOLS,
-        *PENTEST_EXPLOIT_TOOLS,
-        *PENTEST_POST_TOOLS,
-        *PENTEST_OSINT_TOOLS,
-        *PENTEST_AD_TOOLS,
-        *PENTEST_PASSWORD_TOOLS,
-        *PENTEST_CLOUD_TOOLS,
-        *PENTEST_REPORTING_TOOLS,
-        # File ops
-        read_workspace_file,
-        write_workspace_file,
-        edit_workspace_file,
-        list_workspace_files,
-        delete_workspace_file,
-        download_to_workspace,
-        # Screen assist / Kali
-        *SCREEN_ASSIST_TOOLS,
-        # Web (recon)
-        web_search,
-        fetch_webpage,
-        deep_research,
-        browser_background_fetch,
-        # Report generation
-        create_pdf,
-        create_docx,
-        # Data analysis
-        notebook_run,
-        notebook_reset,
-        notebook_vars,
-        # Task tracking
-        todo_add,
-        todo_list,
-        todo_complete,
-        todo_update,
-        todo_filter,
-        # Skills
-        list_skills,
-        invoke_skill,
-    ],
+    "screen_assist": list(
+        NORMAL_SCREEN_ASSIST_TOOLS if _is_packaged_build() else SCREEN_ASSIST_TOOLS
+    ),
     # MCP tools are loaded at runtime from mcp_config.json — see merge_mcp_tools()
     "mcp": [],
 }
+
+if not _is_packaged_build():
+    TOOLBOX_REGISTRY["pentest"] = _PENTEST_TOOLBOX
 
 # Auto-register all tools into global ToolRegistry
 from src.tools.registry import registry
@@ -295,15 +308,30 @@ def should_include_mcp_tools(toolbox_names: list[str] | None) -> bool:
     return "mcp" in names
 
 
-def merge_mcp_tools(tools: list, *, toolbox_names: list[str] | None = None) -> list:
-    """Append LangChain tools discovered from mcp_config.json (deduped by name)."""
+def merge_mcp_tools(
+    tools: list,
+    *,
+    toolbox_names: list[str] | None = None,
+    query: str | None = None,
+) -> list:
+    """Append LangChain tools discovered from mcp_config.json (deduped by name).
+
+    Caps merged MCP tools to ``mcp.max_tools_per_turn``, preferring tools whose
+    names overlap query keywords when a query is provided.
+    """
     if not should_include_mcp_tools(toolbox_names):
         return tools
+    from src.config.config_loader import config
     from src.tools.mcp_client import get_mcp_tools
 
     mcp_tools = get_mcp_tools()
     if not mcp_tools:
         return tools
+
+    max_mcp = int(config.get("mcp.max_tools_per_turn", 8))
+    if max_mcp > 0 and len(mcp_tools) > max_mcp:
+        mcp_tools = _prefer_mcp_tools_for_query(mcp_tools, query, max_mcp)
+
     seen = {getattr(t, "name", "") for t in tools}
     merged = list(tools)
     for tool in mcp_tools:
@@ -312,6 +340,24 @@ def merge_mcp_tools(tools: list, *, toolbox_names: list[str] | None = None) -> l
             seen.add(name)
             merged.append(tool)
     return merged
+
+
+def _prefer_mcp_tools_for_query(
+    mcp_tools: list, query: str | None, max_count: int
+) -> list:
+    """Prefer MCP tools whose names match query keywords; fill remainder alphabetically."""
+    if not query or not str(query).strip():
+        return sorted(mcp_tools, key=lambda t: getattr(t, "name", str(t)))[:max_count]
+
+    tokens = {t.lower() for t in str(query).split() if len(t) > 2}
+    scored: list[tuple[int, str, object]] = []
+    for tool in mcp_tools:
+        name = getattr(tool, "name", "") or ""
+        name_l = name.lower()
+        hit = sum(1 for tok in tokens if tok in name_l)
+        scored.append((-hit, name_l, tool))
+    scored.sort()
+    return [t for _, _, t in scored[:max_count]]
 
 
 def resolve_tools(toolbox_names: list[str], web_search_enabled: bool = True) -> list:

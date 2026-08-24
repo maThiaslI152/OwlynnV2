@@ -203,6 +203,9 @@ routing:
     tie_margin: 0.15
     tie_min_top_score: 0.3
     vague_word_count: 3
+    apply_toolbox_on_match: true          # Wire skill_matched.toolbox → selected_toolboxes
+    auto_inject_enabled: false            # Opt-in: inject compact skill body on high confidence
+    auto_inject_max_chars: 1500
 
 # ── Router LLM (classifier) ──────────────────────────────────────────────────
 router_llm:
@@ -245,6 +248,7 @@ mcp:
   enabled: true
   include_on_all: false                    # Only merge MCP tools when toolbox explicitly requires "mcp" or pentest
   auto_toolbox_on_pentest: true            # Append toolbox "mcp" on pentest scenario_id
+  max_tools_per_turn: 8                    # Cap MCP tools merged into bind list per turn
   sensitive_name_prefixes:                 # HITL approval required (server_key + "_" + tool)
     - "pentest_"
     - "burp_"
@@ -326,7 +330,12 @@ complex:
   max_cutoff_retries: 1                   # Auto-continuation rounds (reduced for faster UX)
   max_cloud_retries: 3                    # Cloud LLM retries with backoff
   max_web_tool_rounds: 3                  # After N tool-calling turns, force synthesis (no more web tools)
-  local_tool_rerank_top_k: 8              # Rerank cap when local complex path binds >10 tools
+  tool_rerank_enabled: true               # Embedding rerank before bind_tools (local/cloud/pentest)
+  tool_rerank_top_k: 12                   # Cloud (and default) bind cap after rerank
+  tool_rerank_min_count: 10               # Only rerank when tool count exceeds this
+  local_tool_rerank_top_k: 8              # Rerank cap when local/pentest complex path binds tools
+  pinned_tools:                           # Always kept during rerank (plus prior-turn tools)
+    - ask_user
   web_tool_budgets:
     default:
       web_search: 2

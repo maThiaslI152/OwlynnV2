@@ -23,6 +23,29 @@ def _chars_to_tokens(chars: int) -> int:
     return max(0, int(chars / 3.5))
 
 
+def estimate_tool_schema_tokens(tools: list | None) -> int:
+    """Rough schema token estimate for bound tools (chars/3.5 heuristic)."""
+    if not tools:
+        return 0
+    total_chars = 0
+    for tool in tools:
+        name = getattr(tool, "name", "") or ""
+        desc = getattr(tool, "description", "") or ""
+        total_chars += len(str(name)) + len(str(desc)) + 80  # schema/overhead
+        args_schema = getattr(tool, "args_schema", None)
+        if args_schema is not None:
+            try:
+                schema = (
+                    args_schema.model_json_schema()
+                    if hasattr(args_schema, "model_json_schema")
+                    else getattr(args_schema, "schema", lambda: {})()
+                )
+                total_chars += len(str(schema))
+            except Exception:
+                total_chars += 120
+    return _chars_to_tokens(total_chars)
+
+
 def estimate_message_category_tokens(msg) -> tuple[str, int]:
     """Return (category, estimated_tokens) for one LangChain message."""
     tokens = _chars_to_tokens(_message_char_count(msg))
@@ -42,6 +65,7 @@ def estimate_context_breakdown(
     output_tokens: int = 0,
     reasoning_tokens: int = 0,
     input_actual: int | None = None,
+    bound_tools: list | None = None,
 ) -> dict:
     """
     Build OpenCode-style context breakdown: system / conversation / tools / output
@@ -51,6 +75,8 @@ def estimate_context_breakdown(
     for msg in prompt_messages or []:
         cat, n = estimate_message_category_tokens(msg)
         categories[cat] = categories.get(cat, 0) + n
+
+    tool_schema_tokens_est = estimate_tool_schema_tokens(bound_tools)
 
     input_estimated = sum(categories.values())
     if input_actual and input_actual > 0 and input_estimated > 0:
@@ -82,6 +108,8 @@ def estimate_context_breakdown(
             "output": pct(output),
             "reasoning": pct(reasoning),
         },
+        "tool_schema_tokens_est": tool_schema_tokens_est,
+        "bound_tool_count": len(bound_tools) if bound_tools else 0,
         "input_estimated": input_estimated,
         "total_used": total_used,
         "used_pct": pct(total_used),
@@ -93,6 +121,7 @@ def enrich_token_usage_with_breakdown(
     prompt_messages: list,
     *,
     max_context: int,
+    bound_tools: list | None = None,
 ) -> dict | None:
     """Attach context_breakdown to api_tokens_used payload for the UI."""
     if not api_tokens:
@@ -104,5 +133,6 @@ def enrich_token_usage_with_breakdown(
         output_tokens=int(enriched.get("completion_tokens") or 0),
         reasoning_tokens=int(enriched.get("reasoning_tokens") or 0),
         input_actual=int(enriched.get("prompt_tokens") or 0) or None,
+        bound_tools=bound_tools,
     )
     return enriched

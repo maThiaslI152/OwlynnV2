@@ -16,11 +16,11 @@ from src.agent.core.complex_utils.formatter import (
 from src.agent.tool_sets import (
     COMPLEX_TOOLS_NO_WEB,
     COMPLEX_TOOLS_WITH_WEB,
-    all_complex_tools,
     merge_mcp_tools,
     resolve_tools,
 )
 from src.config.config_loader import config
+from src.tools.registry import registry as tool_registry
 
 logger = logging.getLogger(__name__)
 
@@ -196,6 +196,15 @@ You are equipped with powerful tools that override your standard AI limitations.
 
 ### Rules
 Summarize tool results clearly for the user."""
+    + _TOOL_CALL_DISCIPLINE
+)
+
+COMPLEX_TOOL_GUIDANCE_COMPACT = (
+    """
+### Tools
+A focused tool set is bound for this turn. Use native function calling for any tool you need.
+Prefer the most direct tool; call `ask_user` if requirements are unclear.
+Summarize results clearly. Do not invent tool outputs."""
     + _TOOL_CALL_DISCIPLINE
 )
 
@@ -585,17 +594,18 @@ def _resolve_complex_tools(
     if scenario_id != "pentest":
         tools = _strip_kali_tools(tools)
 
-    prev_tool_names: set[str] = set()
-    for msg in thread_messages:
-        if hasattr(msg, "tool_calls") and msg.tool_calls:
-            for tc in msg.tool_calls:
-                prev_tool_names.add(tc.get("name", ""))
+    # Do NOT re-add prior-turn tools from the full catalog — that undoes
+    # router/skill toolbox narrowing. Previously-used tools already in the
+    # resolved set are kept; tools outside the current toolbox are dropped.
+    # Prior-turn pinning for bind happens in _rerank_tools_for_bind().
 
-    # Skip tool-history re-addition when router explicitly suppresses tools
-    if prev_tool_names and "none" not in (selected_toolboxes or []):
-        for t in all_complex_tools(web_on):
-            if getattr(t, "name", "") in prev_tool_names and t not in tools:
-                tools.append(t)
+    # Drop tools the registry knows are unavailable (check_fn gated).
+    # Unregistered tools and tools without check_fn stay (is_tool_available=True).
+    tools = [
+        t
+        for t in tools
+        if tool_registry.is_tool_available(getattr(t, "name", "") or "")
+    ]
 
     # Sort deterministically by tool name to preserve byte-stable prompt caching
     tools.sort(key=lambda t: getattr(t, "name", str(t)))

@@ -32,6 +32,7 @@ from src.agent.core.complex_executor import (
     _vision_telemetry,
 )
 from src.agent.core.complex_prompt import (
+    COMPLEX_TOOL_GUIDANCE_COMPACT,
     COMPLEX_TOOL_GUIDANCE_LOCAL_SYNTHESIS,
     COMPLEX_TOOL_GUIDANCE_NO_WEB,
     COMPLEX_TOOL_GUIDANCE_PENTEST,
@@ -80,6 +81,7 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_TOKEN_BUDGET = int(config.get("complex.default_token_budget", 4096))
 _MAX_WEB_TOOL_ROUNDS = int(config.get("complex.max_web_tool_rounds", 3))
+_TOOL_RERANK_TOP_K = int(config.get("complex.tool_rerank_top_k", 12))
 
 
 def _resolve_tool_guidance(
@@ -88,7 +90,17 @@ def _resolve_tool_guidance(
     scenario_id: str | None,
     vision_task: bool,
     web_on: bool,
+    bound_tool_count: int | None = None,
 ) -> str:
+    # Compact guidance when the resolved set is already small (≈ rerank top_k).
+    if (
+        bound_tool_count is not None
+        and bound_tool_count > 0
+        and bound_tool_count <= _TOOL_RERANK_TOP_K
+        and scenario_id != "pentest"
+        and not vision_task
+    ):
+        return COMPLEX_TOOL_GUIDANCE_COMPACT
     if scenario_id == "pentest":
         return COMPLEX_TOOL_GUIDANCE_PENTEST
     if vision_task:
@@ -96,6 +108,43 @@ def _resolve_tool_guidance(
     if route == "complex-cloud":
         return COMPLEX_TOOL_GUIDANCE_WEB if web_on else COMPLEX_TOOL_GUIDANCE_NO_WEB
     return COMPLEX_TOOL_GUIDANCE_WEB_LOCAL if web_on else COMPLEX_TOOL_GUIDANCE_NO_WEB
+
+
+def _skill_matched_volatile_suffix(state: dict) -> str:
+    """Proactive skill hint (+ optional compact auto-inject) for volatile suffix."""
+    skill = state.get("skill_matched")
+    if not isinstance(skill, dict) or not skill.get("name"):
+        return ""
+    name = str(skill["name"])
+    parts = [
+        f"\n\n[SKILL HINT] Matched skill: {name}. "
+        f"Call invoke_skill('{name}', context=...) first."
+    ]
+    if not config.get("routing.skill.auto_inject_enabled", False):
+        return "".join(parts)
+
+    score = float(skill.get("score") or 0.0)
+    if score < 0.8:
+        return "".join(parts)
+
+    try:
+        from src.tools.skills import (
+            ContextInjector,
+            _default_loader,
+        )
+
+        skill_def = _default_loader.get_by_name(name)
+        if not skill_def:
+            return "".join(parts)
+        max_chars = int(config.get("routing.skill.auto_inject_max_chars", 1500))
+        rendered = ContextInjector().inject(skill_def, context="")
+        compact = rendered[:max_chars]
+        if len(rendered) > max_chars:
+            compact += "\n…[skill truncated]"
+        parts.append(f"\n\n[SKILL CONTEXT — {name}]\n{compact}")
+    except Exception as exc:
+        logger.debug("[complex] skill auto-inject skipped: %s", exc)
+    return "".join(parts)
 
 
 def _apply_web_budget_to_tools(
@@ -350,6 +399,8 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             "and memory context provided above. Do NOT attempt to call any tools."
         )
 
+    volatile_extra += _skill_matched_volatile_suffix(state)
+
     stable_core = COMPLEX_PROMPT_STABLE.format(style_hint=style_hint)
     if mode != "tools_off":
         stable_core += _resolve_tool_guidance(
@@ -357,6 +408,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             scenario_id=scenario_id,
             vision_task=vision_task,
             web_on=web_on,
+            bound_tool_count=len(tools) if tools else 0,
         )
 
     trimmed_messages = _trim_tool_history(thread_messages)
@@ -380,6 +432,9 @@ async def complex_llm_node(state: AgentState) -> AgentState:
 
     from src.agent.core.complex_utils.vision_proxy import process_vision_messages
 
+    async def _local_fallback_with_state(**kwargs):
+        return await _invoke_local_fallback(state=state, **kwargs)
+
     volatile_suffix = build_volatile_suffix(
         memory_context=str(memory_context),
         knowledge_context=str(knowledge_context),
@@ -402,7 +457,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     if not payload.vision_proxy_ok and has_images:
         logger.warning("[complex] vision_proxy failed; attempting local fallback")
         return await handle_cloud_fallback(
-            invoke_local_fallback=_invoke_local_fallback,
+            invoke_local_fallback=_local_fallback_with_state,
             fallback_chain=fallback_chain,
             reason="vision_proxy_failed",
             prompt_messages=prompt_messages,
@@ -435,7 +490,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         except CloudUnavailableError as e:
             logger.warning("[complex] Cloud unavailable: %s", e)
             return await handle_cloud_fallback(
-                invoke_local_fallback=_invoke_local_fallback,
+                invoke_local_fallback=_local_fallback_with_state,
                 fallback_chain=fallback_chain,
                 reason="cloud_unavailable",
                 prompt_messages=prompt_messages,
@@ -449,7 +504,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                 "[complex] Cloud invocation error (%s), attempting local fallback", exc
             )
             return await handle_cloud_fallback(
-                invoke_local_fallback=_invoke_local_fallback,
+                invoke_local_fallback=_local_fallback_with_state,
                 fallback_chain=fallback_chain,
                 reason=f"cloud_error_{type(exc).__name__}",
                 prompt_messages=prompt_messages,
@@ -501,11 +556,12 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                 tools=tools_for_invoke if tools_bound else None,
                 budget=budget,
                 max_context=local_max_context,
+                state=state,
             )
         except Exception as e:
             logger.warning("[complex] Pentest LLM failed: %s", e)
             return await handle_cloud_fallback(
-                invoke_local_fallback=_invoke_local_fallback,
+                invoke_local_fallback=_local_fallback_with_state,
                 fallback_chain=fallback_chain,
                 reason="pentest_llm_unavailable",
                 prompt_messages=prompt_messages,
@@ -532,7 +588,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             profile=profile,
             mode=mode,
             invoke_fn=_invoke_pentest_path,
-            invoke_kwargs={"max_context": local_max_context},
+            invoke_kwargs={"max_context": local_max_context, "state": state},
             synthesis_retry_done=synthesis_retry_done,
         )
     else:
@@ -544,11 +600,12 @@ async def complex_llm_node(state: AgentState) -> AgentState:
                 tools=tools_for_invoke if tools_bound else None,
                 budget=budget,
                 max_context=local_max_context,
+                state=state,
             )
         except Exception as e:
             logger.warning("[complex] Local main LLM failed: %s", e)
             return await handle_cloud_fallback(
-                invoke_local_fallback=_invoke_local_fallback,
+                invoke_local_fallback=_local_fallback_with_state,
                 fallback_chain=fallback_chain,
                 reason="local_main_error",
                 prompt_messages=prompt_messages,
@@ -575,7 +632,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             profile=profile,
             mode=mode,
             invoke_fn=_invoke_local_path,
-            invoke_kwargs={"max_context": local_max_context},
+            invoke_kwargs={"max_context": local_max_context, "state": state},
             synthesis_retry_done=synthesis_retry_done,
         )
 
@@ -605,7 +662,10 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             MAX_CUTOFF_RETRIES,
         )
         api_tokens = enrich_token_usage_with_breakdown(
-            api_tokens, prompt_messages, max_context=max_context
+            api_tokens,
+            prompt_messages,
+            max_context=max_context,
+            bound_tools=tools_for_invoke if tools_bound else None,
         )
         return {
             "messages": out_messages,
@@ -623,7 +683,10 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         }
 
     api_tokens = enrich_token_usage_with_breakdown(
-        api_tokens, prompt_messages, max_context=max_context
+        api_tokens,
+        prompt_messages,
+        max_context=max_context,
+        bound_tools=tools_for_invoke if tools_bound else None,
     )
     return {
         "messages": out_messages,

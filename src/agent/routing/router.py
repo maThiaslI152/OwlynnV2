@@ -408,6 +408,19 @@ async def router_node(state: AgentState) -> AgentState:
                 "toolbox": skill_toolbox,
                 "score": match_result.best_score,
             }
+            # Apply skill toolbox so bind_tools is narrowed (not left at ["all"]).
+            if config.get("routing.skill.apply_toolbox_on_match", True):
+                if skill_toolbox and "all" not in skill_toolbox:
+                    if not toolbox or toolbox == ["all"]:
+                        toolbox = list(skill_toolbox)
+                    else:
+                        toolbox = list(dict.fromkeys([*toolbox, *skill_toolbox]))
+                    logger.info(
+                        "[router] Applied skill toolbox %s from match %s (%.0f%%)",
+                        toolbox,
+                        match_result.top_match.name,
+                        match_result.best_score * 100,
+                    )
 
         # When the request is a build/create action, delegate to the
         # scope_clarify node instead of asking skill-routing questions.

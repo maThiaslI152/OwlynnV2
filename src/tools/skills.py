@@ -424,6 +424,7 @@ class SkillMatcher:
         self._tfidf_matrix = None
         self._vectorizer = None
         self._skill_names: list[str] = []
+        self._index_scan: float = -1.0
 
     def match(self, query: str, top_k: int = 3) -> list[tuple[SkillDefinition, float]]:
         """Return up to *top_k* skills whose combined score meets the threshold.
@@ -668,15 +669,27 @@ class SkillMatcher:
         return results
 
     def _rebuild_index(self) -> None:
-        """Rebuild the TF-IDF matrix from currently loaded skills."""
+        """Rebuild the TF-IDF matrix from currently loaded skills.
+
+        Rebuilds only when the loader cache generation (``_last_scan``) changes.
+        """
         if not _HAS_SKLEARN:
             return
 
         skills = self._loader.load_all()
+        last_scan = float(getattr(self._loader, "_last_scan", 0.0) or 0.0)
         if not skills:
             self._tfidf_matrix = None
             self._vectorizer = None
             self._skill_names = []
+            self._index_scan = last_scan
+            return
+
+        if (
+            self._tfidf_matrix is not None
+            and self._vectorizer is not None
+            and self._index_scan == last_scan
+        ):
             return
 
         self._skill_names = [s.file for s in skills]
@@ -684,6 +697,7 @@ class SkillMatcher:
 
         self._vectorizer = TfidfVectorizer()
         self._tfidf_matrix = self._vectorizer.fit_transform(corpus)
+        self._index_scan = last_scan
 
 
 class ContextInjector:
@@ -959,13 +973,20 @@ def list_skills(category: str = "") -> str:
 
 
 @tool
-def invoke_skill(skill_name: str, context: str = "", params: str = "") -> str:
+def invoke_skill(
+    skill_name: str,
+    context: str = "",
+    params: str = "",
+    detail: str = "full",
+) -> str:
     """Invokes a named skill with context and optional parameters.
 
     Args:
         skill_name: Name of the skill to invoke.
         context: Additional context to inject into the skill prompt.
         params: Optional JSON string of key-value parameters (e.g. '{"depth": "deep"}').
+        detail: ``summary`` returns description + first steps only; ``full`` (default)
+            returns the complete rendered skill prompt.
     """
     skill = _default_loader.get_by_name(skill_name)
     if not skill:
@@ -979,6 +1000,17 @@ def invoke_skill(skill_name: str, context: str = "", params: str = "") -> str:
             params_dict = json.loads(params)
         except (json.JSONDecodeError, TypeError) as exc:
             return f"Invalid params JSON: {exc}"
+
+    detail_mode = (detail or "full").strip().lower()
+    if detail_mode == "summary":
+        lines = [ln.strip() for ln in (skill.prompt or "").splitlines() if ln.strip()]
+        step_lines = [ln for ln in lines if ln[:1].isdigit() or ln.startswith("-")][:8]
+        summary_body = skill.description or ""
+        if step_lines:
+            summary_body = (
+                f"{summary_body}\n\nSteps:\n" + "\n".join(step_lines)
+            ).strip()
+        return f"[Skill: {skill.name} — summary]\n\n{summary_body}"
 
     try:
         rendered = _default_injector.inject(skill, context, params_dict)
