@@ -46,6 +46,7 @@ import {
   renderMarkdownSegment,
 } from '../../lib/interactiveBlocks'
 import { fetchWithAuth } from '../../lib/localRunToken'
+import { useSystemHealth } from '../../lib/useSystemHealth'
 
 interface ProjectChat {
   id: string
@@ -395,6 +396,7 @@ export function AppShell({
   const [pentestLoadingStatus, setPentestLoadingStatus] = useState('')
   const [viewLayout, setViewLayout] = useState<'chat' | 'mindmap' | 'split'>('split')
   const [activeBranchTitle, setActiveBranchTitle] = useState<string>('')
+  const health = useSystemHealth()
 
   const activeBranchDisplayTitle = useMemo(() => {
     if (activeBranchTitle) return activeBranchTitle
@@ -440,6 +442,10 @@ export function AppShell({
   // Mode switch with confirmation modal (only for pentest transitions)
   const handleModeSwitchRequest = useCallback((mode: 'normal' | 'study' | 'pentest') => {
     if (mode === activeMode) return
+    if (mode === 'pentest' && !health.pentestEnabled) {
+      toast.error('Pentest mode is disabled until Normal and Study are solid.')
+      return
+    }
     // Only show modal when switching to or from pentest mode
     if (mode === 'pentest' || activeMode === 'pentest') {
       setModeSwitchPending(mode)
@@ -447,7 +453,7 @@ export function AppShell({
       // Normal <-> Study: switch directly
       onModeChange?.(mode)
     }
-  }, [activeMode, onModeChange])
+  }, [activeMode, onModeChange, health.pentestEnabled])
 
   const handleSelectGraphNode = useCallback(
     (node: GraphNode) => {
@@ -472,6 +478,10 @@ export function AppShell({
     setModeSwitchPending(null)
 
     if (target === 'pentest') {
+      if (!health.pentestEnabled) {
+        toast.error('Pentest mode is disabled.')
+        return
+      }
       setPentestLoading(true)
       try {
         // Step 1: Stop StirlingPDF to free RAM
@@ -510,7 +520,7 @@ export function AppShell({
     }
 
     onModeChange(target)
-  }, [modeSwitchPending, onModeChange, activeMode])
+  }, [modeSwitchPending, onModeChange, activeMode, health.pentestEnabled])
 
   const handleModeSwitchCancel = useCallback(() => {
     setModeSwitchPending(null)

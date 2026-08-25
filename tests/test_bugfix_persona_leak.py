@@ -36,9 +36,16 @@ class TestCleanResponsePersonaEcho:
         assert "You are asking" in result
         assert "4" in result
 
-    def test_handles_empty_string(self):
-        """Empty input returns empty string."""
-        assert _clean_response("") == ""
+    def test_strips_gemma_pipe_tool_call_leak(self):
+        """Unbound Gemma <|tool_call> markup must not reach the user."""
+        leaked = (
+            "<|tool_call>call:GoogleSearch{queries:['Bangkok GDP 2024 estimate', "
+            "'GDP of Bangkok Thailand']}<tool_call|>"
+        )
+        result = _clean_response(leaked)
+        assert "<|tool_call" not in result
+        assert "GoogleSearch" not in result
+        assert "web" in result.lower() or "lookup" in result.lower()
 
     @pytest.mark.parametrize(
         "bad_input,expected_fragment",

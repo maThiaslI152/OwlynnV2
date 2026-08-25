@@ -63,6 +63,15 @@ _WEBISH_HINTS = (
     "release",
     "changelog",
     "update of",
+    # Live economic / statistical facts — must not hit no-tool simple path
+    "gdp",
+    "gni",
+    "gross domestic",
+    "inflation",
+    "unemployment",
+    "market cap",
+    "exchange rate",
+    "interest rate",
 )
 
 _EXPLICIT_WEB_REQUESTS = (
@@ -92,6 +101,14 @@ _TIME_SENSITIVE_WEB_HINTS = (
     "release",
     "changelog",
     "update of",
+    "gdp",
+    "gni",
+    "gross domestic",
+    "inflation",
+    "unemployment",
+    "market cap",
+    "exchange rate",
+    "interest rate",
 )
 
 # ── File / screen / data-viz hints ───────────────────────────────────────
@@ -527,18 +544,20 @@ async def check_deterministic_bypasses(
         except Exception as e:
             logger.warning("[router] Vision VLM load preflight failed: %s", e)
 
+        toolbox = list(_VISION_TOOLBOX)
+        # Honor local_only / cloud_first / battery via same path as other complex routes
+        route, toolbox = _resolve_complex_route(
+            user_text, state, toolbox, cloud_available=cloud_available
+        )
         if not vision_ready:
             logger.warning(
-                "[router] Vision VLM is not ready. Falling back to complex-cloud."
+                "[router] Vision VLM is not ready. Falling back "
+                "(route=%s; honors cloud_routing_mode).",
+                route,
             )
-            route = "complex-cloud"
-            toolbox = list(_VISION_TOOLBOX)
             task_category = "vision_fallback"
             reasoning = "image_attachment_vision_proxy_unavailable"
         else:
-            # Cloud available → use cloud vision proxy; else local VLM
-            route = "complex-cloud" if cloud_available else "complex-default"
-            toolbox = list(_VISION_TOOLBOX)
             task_category = "vision_cloud" if route == "complex-cloud" else "vision"
             reasoning = (
                 "image_attachment_cloud_proxy"
@@ -609,6 +628,66 @@ async def check_deterministic_bypasses(
             "router_metadata": metadata,
             "needs_memory_retrieval": False,
             "scenario_id": None,
+        }
+
+    # ── 2.4. Short trivia / no-tool Q&A → simple (skip tool-schema prefill)
+    if (
+        len(user_text) < 220
+        and not _has_tool_history(state)
+        and not _user_wants_file_work(user_text)
+        and not _user_wants_data_viz(user_text)
+        and not _user_wants_screen_assist(user_text)
+        and not (web_on and any(hint in user_lower for hint in _WEBISH_HINTS))
+        and (
+            _is_simple_informational_query(user_text)
+            or (
+                len(user_text) < 160
+                and any(
+                    hint in user_lower
+                    for hint in (
+                        "explain how",
+                        "explain the",
+                        "explain what",
+                        "what is the difference",
+                        "pros and cons",
+                        "compare ",
+                        " vs ",
+                        " vs. ",
+                    )
+                )
+            )
+        )
+    ):
+        route = "simple"
+        budget = 512
+        metadata = _build_router_metadata(
+            route,
+            confidence=0.92,
+            reasoning="simple_trivia_bypass",
+            classification_source="deterministic",
+            cloud_available=cloud_available,
+            has_images=has_images,
+            task_category="trivia",
+            estimated_tokens=budget,
+            web_on=web_on,
+        )
+        audit_info(
+            "agent.lifecycle",
+            "router_decision",
+            route=route,
+            confidence=0.92,
+            source="simple_trivia_bypass",
+            task_category="trivia",
+        )
+        return {
+            "route": route,
+            "token_budget": budget,
+            "selected_toolboxes": ["none"],
+            "router_clarification_used": False,
+            "skill_matched": None,
+            "router_metadata": metadata,
+            "needs_memory_retrieval": False,
+            "scenario_id": state.get("scenario_id"),
         }
 
     # ── 2.5. Follow-up continuation ─────────────────────────────────────
@@ -954,25 +1033,33 @@ async def check_deterministic_bypasses(
         }
 
     # ── 10. Code review patterns ─────────────────────────────────────────
-    _code_review_hints = (
-        "review my code",
-        "code review",
-        "check my code",
-        "look at this code",
-        "review this pr",
-        "review this pull request",
-        "review this commit",
-        "review this diff",
+    from src.agent.core.ask_user_guards import (
+        is_code_review_missing_code,
+        is_code_review_request,
     )
-    if any(hint in user_lower for hint in _code_review_hints):
-        route, toolbox = _resolve_complex_route(
-            user_text, state, ["file_ops"], cloud_available=cloud_available
+
+    if is_code_review_request(user_text):
+        missing_code = is_code_review_missing_code(
+            state.get("messages") or [], user_text=user_text
         )
+        # No pasted/attached code → no tools (avoids ask_user HITL loops).
+        toolbox_pref = ["none"] if missing_code else ["file_ops"]
+        route, toolbox = _resolve_complex_route(
+            user_text, state, toolbox_pref, cloud_available=cloud_available
+        )
+        if missing_code:
+            toolbox = ["none"]
         budget = estimate_token_budget(user_text, route)
+        if missing_code:
+            budget = min(int(budget or 512), 512)
         metadata = _build_router_metadata(
             route,
             confidence=0.9,
-            reasoning="code_review_bypass",
+            reasoning=(
+                "code_review_missing_code_bypass"
+                if missing_code
+                else "code_review_bypass"
+            ),
             classification_source="deterministic",
             cloud_available=cloud_available,
             has_images=has_images,
@@ -980,12 +1067,18 @@ async def check_deterministic_bypasses(
             estimated_tokens=budget,
             web_on=web_on,
         )
+        if isinstance(metadata, dict):
+            metadata["code_review_missing_code"] = missing_code
         audit_info(
             "agent.lifecycle",
             "router_decision",
             route=route,
             confidence=0.9,
-            source="code_review_bypass",
+            source=(
+                "code_review_missing_code_bypass"
+                if missing_code
+                else "code_review_bypass"
+            ),
             task_category="code_review",
         )
         return {
@@ -995,11 +1088,12 @@ async def check_deterministic_bypasses(
             "router_clarification_used": False,
             "skill_matched": None,
             "router_metadata": metadata,
-            "needs_memory_retrieval": True,
+            "needs_memory_retrieval": not missing_code,
             "scenario_id": state.get("scenario_id"),
         }
 
     # ── 11. Explain / compare patterns ───────────────────────────────────
+    # Short no-tool explains already hit simple via 2.4; longer ones stay complex.
     _explain_hints = (
         "explain how",
         "explain the",

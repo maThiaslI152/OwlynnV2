@@ -31,6 +31,46 @@ _embed_url: str = config.get_embedding_base_url()
 _CACHE_THRESHOLD: float = 0.08
 
 
+def _is_poisoned_cache_response(response: str | None) -> bool:
+    """True when a cached answer is unbound tool markup (must never be served)."""
+    if not response or not str(response).strip():
+        return True
+    try:
+        from src.agent.core.complex_utils.formatter import _content_has_dsml_tool_syntax
+
+        return bool(_content_has_dsml_tool_syntax(str(response)))
+    except Exception:
+        # Conservative: obvious gemma/qwen tool leaks
+        t = str(response)
+        return "<|tool_call" in t or "<tool_call>" in t or "<function=" in t
+
+
+async def purge_poisoned_cache_entries() -> int:
+    """Delete semantic_cache rows whose response is leaked tool-call markup."""
+    try:
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                text(
+                    """
+                    DELETE FROM semantic_cache
+                    WHERE response ILIKE '%tool_call%'
+                       OR response ILIKE '%<function=%'
+                       OR response ILIKE '%GoogleSearch%'
+                    """
+                )
+            )
+            await session.commit()
+            deleted = result.rowcount or 0
+        if deleted:
+            logger.info(
+                "[semantic_cache] Purged %d poisoned tool-leak cache entries", deleted
+            )
+        return int(deleted)
+    except Exception as exc:
+        logger.warning("[semantic_cache] purge_poisoned failed: %s", exc, exc_info=True)
+        return 0
+
+
 # ---------------------------------------------------------------------------
 # Internal helper
 # ---------------------------------------------------------------------------
@@ -98,6 +138,24 @@ async def check_semantic_cache(prompt: str, project_id: str = "default") -> str 
             row = result.fetchone()
 
         if row:
+            if _is_poisoned_cache_response(row.response):
+                logger.warning(
+                    "[semantic_cache] Ignoring poisoned cache hit for project=%s",
+                    project_id,
+                )
+                try:
+                    async with AsyncSessionLocal() as session:
+                        await session.execute(
+                            delete(SemanticCacheEntry).where(
+                                SemanticCacheEntry.response == row.response
+                            )
+                        )
+                        await session.commit()
+                except Exception as purge_exc:
+                    logger.debug(
+                        "[semantic_cache] poisoned row delete failed: %s", purge_exc
+                    )
+                return None
             logger.debug("[semantic_cache] Cache HIT for project=%s", project_id)
             return row.response
 
@@ -121,6 +179,9 @@ async def store_semantic_cache(
         response:   The LLM response to store.
         project_id: Project scope for the cache entry.
     """
+    if _is_poisoned_cache_response(response):
+        logger.warning("[semantic_cache] Refusing to store poisoned tool-leak response")
+        return
     try:
         scoped_prompt = f"[Project: {project_id}] {prompt}"
         embedding = await _get_embedding(scoped_prompt)

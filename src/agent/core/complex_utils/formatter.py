@@ -12,12 +12,21 @@ _DSML_ELEMENT_RE = re.compile(
 _DSML_MARKER_RE = re.compile(_DSML_TAG, re.IGNORECASE)
 
 
-_ALT_TOOL_SYNTAX_RE = re.compile(r"<tool_call>|<function=", re.IGNORECASE)
+_ALT_TOOL_SYNTAX_RE = re.compile(
+    r"<\|?tool_call\|?>|<tool_call\|>|<function=", re.IGNORECASE
+)
 _ALT_TOOL_CALL_BLOCK_RE = re.compile(
-    r"<tool_call>.*?(?:</tool_call>|$)", re.DOTALL | re.IGNORECASE
+    r"<\|?tool_call\|?>.*?(?:</tool_call>|<tool_call\|>|$)",
+    re.DOTALL | re.IGNORECASE,
 )
 _ALT_FUNCTION_BLOCK_RE = re.compile(
-    r"<function=[^>]*>.*?(?:</function>|(?=<tool_call>)|$)", re.DOTALL | re.IGNORECASE
+    r"<function=[^>]*>.*?(?:</function>|(?=<\|?tool_call)|$)",
+    re.DOTALL | re.IGNORECASE,
+)
+# Gemma/local sometimes emits: <|tool_call>call:GoogleSearch{...}<tool_call|>
+_PIPE_TOOL_CALL_BLOCK_RE = re.compile(
+    r"<\|tool_call\|>?.*?(?:<\|?/?tool_call\|?>|$)",
+    re.DOTALL | re.IGNORECASE,
 )
 
 
@@ -27,8 +36,11 @@ def _content_has_dsml_tool_syntax(text: str) -> bool:
     return bool(
         _DSML_MARKER_RE.search(t)
         or _ALT_TOOL_SYNTAX_RE.search(t)
+        or _PIPE_TOOL_CALL_BLOCK_RE.search(t)
         or "</tool_call>" in t
         or "</function>" in t
+        or "<|tool_call" in t
+        or "tool_call|>" in t
     )
 
 
@@ -45,7 +57,8 @@ def _strip_dsml_blocks(text: str) -> str:
     if _DSML_MARKER_RE.search(cleaned):
         cleaned = _DSML_MARKER_RE.split(cleaned, maxsplit=1)[0]
     for _ in range(4):
-        new = _ALT_TOOL_CALL_BLOCK_RE.sub("", cleaned)
+        new = _PIPE_TOOL_CALL_BLOCK_RE.sub("", cleaned)
+        new = _ALT_TOOL_CALL_BLOCK_RE.sub("", new)
         new = _ALT_FUNCTION_BLOCK_RE.sub("", new)
         if new == cleaned:
             break
@@ -58,6 +71,8 @@ def _strip_dsml_blocks(text: str) -> str:
         r"</tool_call>",
         r"</function>",
         r"<tool_call>",
+        r"<\|tool_call\|?>",
+        r"<tool_call\|>",
         r"<function=[^>]*>",
         r"<\s*[\uFF5C|]{1,3}\s*DSML\s*[\uFF5C|]{1,3}[^>]*>",
         r"</\s*[\uFF5C|]{1,3}\s*DSML\s*[\uFF5C|]{1,3}[^>]*>",

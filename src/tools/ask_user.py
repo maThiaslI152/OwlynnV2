@@ -15,6 +15,9 @@ def ask_user(question: str, choices: str = "") -> str:
     Asks the user a clarifying question and waits for their response.
     Use this ONCE when a request is clearly ambiguous. Don't over-ask.
 
+    Do NOT use this when the user asked for a code review but provided no code
+    or attachment — reply briefly that you need the code pasted/attached instead.
+
     The user sees the question with clickable choice buttons (if provided)
     plus a free-text input for custom answers.
 

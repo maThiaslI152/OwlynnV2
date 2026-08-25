@@ -48,8 +48,9 @@ echo ""
 # [1/3] MVP containers — Postgres (pgvector) + StirlingPDF
 # ═══════════════════════════════════════════════════════════════════
 _MVP_COMPOSE="docker-compose.mvp.yml"
-_CORE_SERVICES="postgres stirling-pdf"
-echo "[1/3] PostgreSQL + StirlingPDF..."
+# Lite default: Postgres only. StirlingPDF starts on-demand when PDF intake needs it.
+_CORE_SERVICES="postgres"
+echo "[1/3] PostgreSQL (StirlingPDF on-demand)..."
 
 podman machine start 2>/dev/null || true
 podman compose -f "$_MVP_COMPOSE" up -d $_CORE_SERVICES 2>/dev/null || \

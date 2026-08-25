@@ -14,6 +14,7 @@ router = APIRouter()
 
 import asyncio
 import json
+import time
 import uuid
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
@@ -43,6 +44,47 @@ from src.api.shared import (
 from src.config.audit_log import audit_info
 from src.memory.semantic_cache import check_semantic_cache, store_semantic_cache
 from src.tools.notebook_libs import parse_chart_artifact
+
+
+def _begin_turn_timing(timing: dict) -> None:
+    """Reset per-turn clocks for TTFT / turn_duration audit."""
+    timing["t0"] = time.monotonic()
+    timing["ttft_ms"] = None
+    timing["logged_complete"] = False
+
+
+def _stamp_ttft_if_needed(timing: dict, payload: dict, *, thread_id: str) -> None:
+    """On first non-empty WS chunk, record and audit ttft_ms."""
+    if timing.get("ttft_ms") is not None:
+        return
+    if payload.get("type") != "chunk":
+        return
+    if not payload.get("content"):
+        return
+    t0 = timing.get("t0")
+    if t0 is None:
+        return
+    ttft_ms = int((time.monotonic() - t0) * 1000)
+    timing["ttft_ms"] = ttft_ms
+    audit_info("api.ws", "ttft", ttft_ms=ttft_ms, thread_id=thread_id)
+
+
+def _finalize_turn_timing(timing: dict, *, thread_id: str) -> None:
+    """On idle, audit ttft_ms + turn_duration_ms (send → idle)."""
+    if timing.get("logged_complete"):
+        return
+    t0 = timing.get("t0")
+    if t0 is None:
+        return
+    turn_duration_ms = int((time.monotonic() - t0) * 1000)
+    timing["logged_complete"] = True
+    audit_info(
+        "api.ws",
+        "turn_complete",
+        ttft_ms=timing.get("ttft_ms"),
+        turn_duration_ms=turn_duration_ms,
+        thread_id=thread_id,
+    )
 
 
 @router.websocket("/ws/chat/{thread_id}")
@@ -86,6 +128,8 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
     # Mutable container shared between the message-receive loop and forward_events
     # closure so that the forwarder can populate the semantic cache on 'idle'.
     _pending_cache: dict = {"prompt": None, "project_id": "default"}
+    # Per-turn timing: t0 at user-message accept → first chunk (ttft) → idle.
+    _turn_timing: dict = {"t0": None, "ttft_ms": None, "logged_complete": False}
 
     # Task to listen to the session events and send them to the websocket
     async def forward_events():
@@ -133,6 +177,15 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                             )
 
                         await websocket.send_json(payload)
+                        if isinstance(payload, dict):
+                            _stamp_ttft_if_needed(
+                                _turn_timing, payload, thread_id=thread_id
+                            )
+                            if (
+                                payload.get("type") == "status"
+                                and payload.get("content") == "idle"
+                            ):
+                                _finalize_turn_timing(_turn_timing, thread_id=thread_id)
 
                         # Handle standard LangGraph events vs our custom wrapped events
 
@@ -1069,6 +1122,8 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
             if not message_content:
                 continue
 
+            _begin_turn_timing(_turn_timing)
+
             # ── Semantic Cache Check ───────────────────────────────────────
             # Skip cache for pentest mode (always local, no caching), multi-modal
             # payloads (images), or when files are attached.
@@ -1092,14 +1147,16 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                         _cache_payload({"type": "status", "content": "working"})
                     )
                     # Stream cached text in one shot so UI shows it as a normal reply
-                    await websocket.send_json(
-                        _cache_payload(
-                            {
-                                "type": "chunk",
-                                "content": cached_answer,
-                                "model": "cache",
-                            }
-                        )
+                    cache_chunk = _cache_payload(
+                        {
+                            "type": "chunk",
+                            "content": cached_answer,
+                            "model": "cache",
+                        }
+                    )
+                    await websocket.send_json(cache_chunk)
+                    _stamp_ttft_if_needed(
+                        _turn_timing, cache_chunk, thread_id=thread_id
                     )
                     await websocket.send_json(
                         _cache_payload(
@@ -1114,6 +1171,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                     await websocket.send_json(
                         _cache_payload({"type": "status", "content": "idle"})
                     )
+                    _finalize_turn_timing(_turn_timing, thread_id=thread_id)
                     continue
 
             # Write user message to trace (before graph run starts)

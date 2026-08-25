@@ -73,6 +73,14 @@ from src.agent.core.complex_utils.web_budget import (
     resolve_task_category,
 )
 from src.agent.core.state import AgentState
+from src.agent.core.tool_first_web import (
+    TOOL_FIRST_PHASE_DONE,
+    TOOL_FIRST_PHASE_SEARCH,
+    build_tool_first_web_search_message,
+    should_escalate_tool_first,
+    should_inject_tool_first_search,
+    should_synthesize_tool_first,
+)
 from src.agent.llm import CloudUnavailableError, get_cloud_llm
 from src.agent.response_styles import style_instruction_for_prompt
 from src.config.config_loader import config
@@ -305,6 +313,7 @@ async def _finalize_response(
     invoke_fn: Callable[..., Awaitable[tuple[Any, dict[str, int]]]],
     invoke_kwargs: dict[str, Any],
     synthesis_retry_done: bool,
+    allow_synthesis_retry: bool = True,
 ) -> tuple[Any, dict[str, int] | None, bool]:
     """Clean, optionally retry synthesis, and apply blank fallback."""
     if not isinstance(response, AIMessage):
@@ -319,8 +328,10 @@ async def _finalize_response(
     )
     response = _clean_ai_message(response, is_length_cutoff=is_length_cutoff)
 
+    # Tool-first web already did one unbound synthesis — never double the ~60–100s call.
     should_retry = (
-        not synthesis_retry_done
+        allow_synthesis_retry
+        and not synthesis_retry_done
         and (
             web_budget.force_synthesis or _current_turn_has_web_activity(turn_messages)
         )
@@ -381,7 +392,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         return {"messages": []}
 
     mode = state.get("mode") or "tools_on"
-    route = state.get("route") or "complex-cloud"
+    route = state.get("route") or "complex-default"
     scenario_id = state.get("scenario_id")
     profile = get_profile()
 
@@ -391,6 +402,30 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     web_on = bool(web_on)
 
     turn_messages = _messages_for_current_user_turn(thread_messages)
+
+    # ── Tool-first web: skip bind_tools planning prefill ─────────────────
+    if should_inject_tool_first_search(state, turn_messages):
+        tool_first_msg = build_tool_first_web_search_message(thread_messages)
+        logger.info("[complex] tool-first web: injecting web_search without bind_tools")
+        return {
+            "messages": [tool_first_msg],
+            "model_used": "tool-first-web",
+            "pending_tool_calls": True,
+            "security_decision": None,
+            "security_reason": None,
+            "_tool_first_web_phase": TOOL_FIRST_PHASE_SEARCH,
+            "_cutoff_pending": False,
+        }
+
+    tool_first_synth = should_synthesize_tool_first(state, turn_messages)
+    tool_first_escalated = False
+    if should_escalate_tool_first(state, turn_messages):
+        logger.info(
+            "[complex] tool-first web: search failed — escalating to bind_tools"
+        )
+        tool_first_escalated = True
+        state = {**state, "_tool_first_web_phase": None}
+
     has_images = _message_has_image_content(thread_messages) or bool(
         (state.get("router_metadata") or {}).get("has_images")
     )
@@ -422,10 +457,17 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             "and memory context provided above. Do NOT attempt to call any tools."
         )
 
+    if tool_first_synth:
+        volatile_extra += (
+            "\n\n[TOOL-FIRST WEB SYNTHESIS] web_search already ran. "
+            "Write a concise final answer from the tool results. "
+            "Do NOT call any more tools."
+        )
+
     volatile_extra += _skill_matched_volatile_suffix(state)
 
     stable_core = COMPLEX_PROMPT_STABLE.format(style_hint=style_hint)
-    if mode != "tools_off":
+    if mode != "tools_off" and not tool_first_synth:
         stable_core += _resolve_tool_guidance(
             route=route,
             scenario_id=scenario_id,
@@ -433,6 +475,8 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             web_on=web_on,
             bound_tool_count=len(tools) if tools else 0,
         )
+    elif tool_first_synth:
+        stable_core += COMPLEX_TOOL_GUIDANCE_LOCAL_SYNTHESIS
 
     trimmed_messages = _trim_tool_history(thread_messages)
     max_context = int(config.get("models.cloud.context_window", 1048576))
@@ -440,9 +484,11 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     model_label = "large-cloud"
     fallback_chain: list[dict] = []
 
-    tools_bound = mode != "tools_off" and (state.get("selected_toolboxes") or []) != [
-        "none"
-    ]
+    tools_bound = (
+        mode != "tools_off"
+        and (state.get("selected_toolboxes") or []) != ["none"]
+        and not tool_first_synth
+    )
     tools_for_invoke, tools_bound, volatile_extra, web_budget = (
         _apply_web_budget_to_tools(
             tools=tools,
@@ -452,6 +498,9 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             volatile_extra=volatile_extra,
         )
     )
+    if tool_first_synth:
+        tools_for_invoke = []
+        tools_bound = False
 
     from src.agent.core.complex_utils.vision_proxy import process_vision_messages
 
@@ -499,9 +548,14 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         )
 
     budget = state.get("token_budget") or _DEFAULT_TOKEN_BUDGET
+    if tool_first_synth:
+        # One concise synthesis round — avoid 4k+ decode windows after a 1–2s search.
+        synth_cap = int(config.get("complex.tool_first_synth_token_budget", 1024) or 1024)
+        budget = min(int(budget), max(256, synth_cap))
     api_tokens: dict[str, int] | None = None
     response: Any = None
     synthesis_retry_done = False
+    allow_synthesis_retry = not tool_first_synth
 
     if route == "complex-cloud":
         try:
@@ -577,6 +631,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             invoke_fn=_cloud_retry_invoke,
             invoke_kwargs={},
             synthesis_retry_done=synthesis_retry_done,
+            allow_synthesis_retry=allow_synthesis_retry,
         )
     elif scenario_id == "pentest":
         model_label = "pentest-local"
@@ -621,6 +676,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             invoke_fn=_invoke_pentest_path,
             invoke_kwargs={"max_context": local_max_context, "state": state},
             synthesis_retry_done=synthesis_retry_done,
+            allow_synthesis_retry=allow_synthesis_retry,
         )
     else:
         model_label = "main-local"
@@ -665,10 +721,47 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             invoke_fn=_invoke_local_path,
             invoke_kwargs={"max_context": local_max_context, "state": state},
             synthesis_retry_done=synthesis_retry_done,
+            allow_synthesis_retry=allow_synthesis_retry,
         )
 
     if anon_mapping:
         response = _deanonymize_ai_message(response, anon_mapping)
+
+    from src.agent.core.ask_user_guards import (
+        ai_message_asks_user,
+        is_code_review_missing_code,
+        missing_code_review_reply,
+    )
+
+    # Hard gate: never enter ask_user HITL when the user asked for a review
+    # but provided no code/attachment (prompt-only guidance is not enough).
+    meta = state.get("router_metadata") or {}
+    if (
+        isinstance(response, AIMessage)
+        and (
+            meta.get("code_review_missing_code")
+            or is_code_review_missing_code(thread_messages)
+        )
+        and ai_message_asks_user(response)
+    ):
+        logger.info(
+            "[complex] blocked ask_user on code-review-without-code; forcing prose reply"
+        )
+        response = AIMessage(content=missing_code_review_reply())
+
+    # Tool-first synthesis must end the turn — drop any stray tool_calls.
+    if (
+        tool_first_synth
+        and isinstance(response, AIMessage)
+        and getattr(response, "tool_calls", None)
+    ):
+        cleaned = str(getattr(response, "content", "") or "").strip()
+        if not cleaned:
+            response = _fallback_for_blank_response(
+                thread_messages, web_search_enabled=web_on
+            )
+        else:
+            response = AIMessage(content=cleaned)
 
     out_messages = [response]
     has_tool_calls = bool(getattr(response, "tool_calls", None))
@@ -719,7 +812,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         max_context=max_context,
         bound_tools=tools_for_invoke if tools_bound else None,
     )
-    return {
+    result: dict[str, Any] = {
         "messages": out_messages,
         "model_used": model_label,
         "pending_tool_calls": has_tool_calls,
@@ -733,6 +826,11 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         "anonymization_placeholders_count": anonymization_placeholders_count,
         **_vision_telemetry(vision_intake_mode),
     }
+    if tool_first_synth and not has_tool_calls:
+        result["_tool_first_web_phase"] = TOOL_FIRST_PHASE_DONE
+    elif tool_first_escalated:
+        result["_tool_first_web_phase"] = None
+    return result
 
 
 __all__ = [

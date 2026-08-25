@@ -123,21 +123,26 @@ class TestRouteDecisionDomain:
 
     def test_image_with_frontier_routes_cloud_for_vision_proxy(self):
         """Image + frontier task routes to cloud so vision proxy transcribes before DeepSeek."""
-        state = _make_image_state(
-            "Analyze this diagram and provide a formal proof of the theorem shown"
-        )
-        route, _ = _resolve_complex_route(
-            "Analyze this diagram and provide a formal proof of the theorem shown",
-            state,
-            ["all"],
-            cloud_available=True,
-        )
-        assert route == "complex-cloud"
+        with patch(
+            "src.agent.routing.resolver.get_profile",
+            return_value={"cloud_routing_mode": "auto"},
+        ):
+            state = _make_image_state(
+                "Analyze this diagram and provide a formal proof of the theorem shown"
+            )
+            route, _ = _resolve_complex_route(
+                "Analyze this diagram and provide a formal proof of the theorem shown",
+                state,
+                ["all"],
+                cloud_available=True,
+            )
+            assert route == "complex-cloud"
 
     def test_travel_mode_routes_to_cloud(self):
         """Travel mode (or battery power) routes complex tasks to cloud to save battery."""
         with patch(
-            "src.agent.routing.resolver.get_profile", return_value={"travel_mode": True}
+            "src.agent.routing.resolver.get_profile",
+            return_value={"travel_mode": True, "cloud_routing_mode": "auto"},
         ):
             state = _make_text_state("Refactor this python module")
             route, _ = _resolve_complex_route(
@@ -175,19 +180,35 @@ class TestRouteDecisionDomain:
         assert route == "complex-default"
 
     def test_frontier_hints_route_to_cloud(self):
-        """Text with frontier-quality indicators routes to complex-cloud."""
-        for hint in [
-            "prove this theorem",
-            "formal proof of convergence",
-            "solve this differential equation",
-        ]:
-            state = _make_text_state(hint)
+        """Text with frontier-quality indicators routes to complex-cloud when not local_only."""
+        with patch(
+            "src.agent.routing.resolver.get_profile",
+            return_value={"cloud_routing_mode": "auto"},
+        ):
+            for hint in [
+                "prove this theorem",
+                "formal proof of convergence",
+                "solve this differential equation",
+            ]:
+                state = _make_text_state(hint)
+                route, _ = _resolve_complex_route(
+                    hint, state, ["all"], cloud_available=True
+                )
+                assert route == "complex-cloud", (
+                    f"Frontier hint '{hint}' should route to cloud"
+                )
+
+    def test_frontier_hints_stay_local_when_local_only(self):
+        """local_only default keeps frontier prompts on complex-default."""
+        with patch(
+            "src.agent.routing.resolver.get_profile",
+            return_value={"cloud_routing_mode": "local_only"},
+        ):
+            state = _make_text_state("prove this theorem")
             route, _ = _resolve_complex_route(
-                hint, state, ["all"], cloud_available=True
+                "prove this theorem", state, ["all"], cloud_available=True
             )
-            assert route == "complex-cloud", (
-                f"Frontier hint '{hint}' should route to cloud"
-            )
+            assert route == "complex-default"
 
     @given(text=user_text_st)
     @settings(max_examples=100, deadline=None)

@@ -73,12 +73,36 @@ async def lifespan(app: FastAPI):
     from pathlib import Path
 
     _crash_log_dir = Path.home() / ".owlynn" / "logs"
-    _crash_log_dir.mkdir(parents=True, exist_ok=True)
     _crash_log_path = _crash_log_dir / "crash.log"
+    _crash_file = None
+    _crash_log_writable = False
 
-    # 2.1 faulthandler — captures segfaults, fatal Python errors, thread tracebacks
-    _crash_file = open(str(_crash_log_path), "a")
-    faulthandler.enable(file=_crash_file)
+    try:
+        _crash_log_dir.mkdir(parents=True, exist_ok=True)
+        _crash_file = open(str(_crash_log_path), "a")
+        faulthandler.enable(file=_crash_file)
+        _crash_log_writable = True
+    except OSError as e:
+        # Sandboxed pytest / read-only home: keep process alive; fall back to stderr.
+        logger.warning(
+            "Crash log unavailable at %s (%s); faulthandler using default stderr",
+            _crash_log_path,
+            e,
+        )
+        try:
+            faulthandler.enable()
+        except Exception:
+            pass
+
+    def _append_crash_log(header: str, write_fn) -> None:
+        if not _crash_log_writable:
+            return
+        try:
+            with open(str(_crash_log_path), "a") as f:
+                f.write(header)
+                write_fn(f)
+        except OSError:
+            pass
 
     # 2.2 sys.excepthook — captures unhandled exceptions on the main thread
     _crash_logger = logging.getLogger("system.crash")
@@ -89,9 +113,10 @@ async def lifespan(app: FastAPI):
 
         if exc_type is KeyboardInterrupt:
             return
-        with open(str(_crash_log_path), "a") as f:
-            f.write(f"\n--- {datetime.datetime.now()} [main thread] ---\n")
-            _tb.print_exception(exc_type, exc_value, exc_tb, file=f)
+        _append_crash_log(
+            f"\n--- {datetime.datetime.now()} [main thread] ---\n",
+            lambda f: _tb.print_exception(exc_type, exc_value, exc_tb, file=f),
+        )
         _crash_logger.critical(
             "Unhandled exception on main thread", exc_info=(exc_type, exc_value, exc_tb)
         )
@@ -102,11 +127,12 @@ async def lifespan(app: FastAPI):
         import datetime
         import traceback as _tb
 
-        with open(str(_crash_log_path), "a") as f:
-            f.write(f"\n--- {datetime.datetime.now()} [background thread] ---\n")
-            _tb.print_exception(
+        _append_crash_log(
+            f"\n--- {datetime.datetime.now()} [background thread] ---\n",
+            lambda f: _tb.print_exception(
                 args.exc_type, args.exc_value, args.exc_traceback, file=f
-            )
+            ),
+        )
         _crash_logger.critical(
             "Unhandled exception in background thread",
             exc_info=(args.exc_type, args.exc_value, args.exc_traceback),
@@ -124,11 +150,13 @@ async def lifespan(app: FastAPI):
         _crash_logger.error(
             "Async error: %s | exception: %s", msg, exc, exc_info=True if exc else None
         )
-        with open(str(_crash_log_path), "a") as f:
-            f.write(f"\n--- {datetime.datetime.now()} [asyncio] ---\n")
+
+        def _write(f):
             f.write(f"message: {msg}\n")
             if exc:
                 _tb.print_exception(type(exc), exc, exc.__traceback__, file=f)
+
+        _append_crash_log(f"\n--- {datetime.datetime.now()} [asyncio] ---\n", _write)
 
     loop = asyncio.get_running_loop()
     loop.set_exception_handler(_async_exception_handler)
@@ -611,8 +639,14 @@ async def api_health():
 
 @app.get("/api/system-info")
 async def api_system_info():
-    """Return live infrastructure status: Podman containers, LM Studio, Redis, Qdrant, and model name."""
+    """Return live infrastructure status: Postgres, LM Studio, optional Stirling.
+
+    Redis/Qdrant are reported when present but are not required for a healthy
+    local-first session (Postgres + LM Studio are the core dependencies).
+    """
     import asyncio
+    import os
+    import socket
     import subprocess
 
     import httpx
@@ -623,10 +657,15 @@ async def api_system_info():
         "model_name": cfg.get("models.main.model_name", ""),
         "lm_studio_url": cfg.get("models.main.base_url", "http://127.0.0.1:1234/v1"),
         "lm_studio": "error",
+        "postgres": "error",
+        "stirling": "off",
         "podman": "unavailable",
         "podman_containers": 0,
-        "redis": "error",
-        "qdrant": "error",
+        "redis": "off",
+        "qdrant": "off",
+        "features": {
+            "pentest_enabled": bool(cfg.get("features.pentest_enabled", False)),
+        },
     }
 
     # LM Studio check (OpenAI-compatible /v1/models)
@@ -641,32 +680,71 @@ async def api_system_info():
     except (httpx.HTTPError, OSError):
         result["lm_studio"] = "error"
 
-    # Podman check — run in thread pool to avoid blocking the event loop
-    def _run_podman() -> tuple[str, int]:
+    # Postgres check — TCP connect to DATABASE_URL host/port (default localhost:5432)
+    def _check_postgres() -> str:
         try:
-            proc = subprocess.run(
-                ["podman", "ps", "--format", "{{.Names}}"],
-                capture_output=True,
-                text=True,
-                timeout=4,
-                check=False,
-            )
-            if proc.returncode == 0:
-                containers = [c.strip() for c in proc.stdout.splitlines() if c.strip()]
-                return "running", len(containers)
-            return "stopped", 0
-        except FileNotFoundError:
-            return "unavailable", 0
+            dsn = os.environ.get("DATABASE_URL", "")
+            host, port = "127.0.0.1", 5432
+            if "://" in dsn:
+                # postgresql+asyncpg://user:pass@host:port/db
+                after = dsn.split("://", 1)[1]
+                if "@" in after:
+                    after = after.split("@", 1)[1]
+                hostport = after.split("/", 1)[0]
+                if ":" in hostport:
+                    host, port_s = hostport.rsplit(":", 1)
+                    port = int(port_s)
+                else:
+                    host = hostport or host
+            with socket.create_connection((host, port), timeout=2.0):
+                return "ok"
         except OSError:
-            return "stopped", 0
+            return "error"
+
+    result["postgres"] = await asyncio.get_event_loop().run_in_executor(
+        None, _check_postgres
+    )
+
+    # Optional StirlingPDF
+    stirling_url = cfg.get(
+        "external_services.stirling_pdf.url", "http://127.0.0.1:8090"
+    )
+    try:
+        async with httpx.AsyncClient(timeout=2.0) as client:
+            r = await client.get(f"{stirling_url.rstrip('/')}/api/v1/info")
+            result["stirling"] = "ok" if r.status_code < 400 else "error"
+    except (httpx.HTTPError, OSError):
+        result["stirling"] = "off"
+
+    # Podman/Docker check — run in thread pool to avoid blocking the event loop
+    def _run_container_cli() -> tuple[str, int]:
+        for cli in ("podman", "docker"):
+            try:
+                proc = subprocess.run(
+                    [cli, "ps", "--format", "{{.Names}}"],
+                    capture_output=True,
+                    text=True,
+                    timeout=4,
+                    check=False,
+                )
+                if proc.returncode == 0:
+                    containers = [
+                        c.strip() for c in proc.stdout.splitlines() if c.strip()
+                    ]
+                    return "running", len(containers)
+            except FileNotFoundError:
+                continue
+            except OSError:
+                return "stopped", 0
+        return "unavailable", 0
 
     podman_status, podman_count = await asyncio.get_event_loop().run_in_executor(
-        None, _run_podman
+        None, _run_container_cli
     )
     result["podman"] = podman_status
     result["podman_containers"] = podman_count
 
-    # Redis check
+    # Redis / Qdrant — optional (not required for health)
     try:
         import redis.asyncio as aioredis
 
@@ -675,18 +753,17 @@ async def api_system_info():
         await r_client.ping()
         await r_client.aclose()
         result["redis"] = "ok"
-    except (OSError, RuntimeError, ConnectionRefusedError):
-        result["redis"] = "error"
+    except Exception:
+        result["redis"] = "off"
 
-    # Qdrant check
     try:
         qdrant_host = cfg.get("external_services.qdrant.host", "localhost")
         qdrant_port = cfg.get("external_services.qdrant.port", 6333)
-        async with httpx.AsyncClient(timeout=3.0) as client:
+        async with httpx.AsyncClient(timeout=2.0) as client:
             r = await client.get(f"http://{qdrant_host}:{qdrant_port}/healthz")
-            result["qdrant"] = "ok" if r.status_code == 200 else "error"
+            result["qdrant"] = "ok" if r.status_code == 200 else "off"
     except (httpx.HTTPError, OSError):
-        result["qdrant"] = "error"
+        result["qdrant"] = "off"
 
     return result
 

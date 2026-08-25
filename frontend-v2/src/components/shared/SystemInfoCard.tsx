@@ -9,6 +9,7 @@ import {
   ChevronDown,
   ChevronRight,
   CircleDot,
+  FileText,
 } from 'lucide-react'
 import { useSystemHealth } from '../../lib/useSystemHealth'
 import { useAppStore } from '../../state/useAppStore'
@@ -79,6 +80,13 @@ function InfoRow({
   )
 }
 
+function serviceDot(status: string): Dot {
+  if (status === 'ok') return 'ok'
+  if (status === 'loading') return 'off'
+  if (status === 'off' || status === 'unavailable') return 'off'
+  return 'error'
+}
+
 export function SystemInfoCard() {
   const [open, setOpen] = useState(() => {
     try { return localStorage.getItem('sic-open') !== 'false' } catch { /* ignore */ return true }
@@ -94,13 +102,13 @@ export function SystemInfoCard() {
     try { localStorage.setItem('sic-open', String(next)) } catch { /* ignore */ }
   }
 
-  const lmDot: Dot = health.lmStudio === 'ok' ? 'ok' : health.lmStudio === 'loading' ? 'off' : 'error'
+  const lmDot = serviceDot(health.lmStudio)
+  const postgresDot = serviceDot(health.postgres)
+  const stirlingDot = serviceDot(health.stirling)
   const podmanDot: Dot =
     health.podman === 'running' ? 'ok' :
     health.podman === 'stopped' ? 'warn' :
     health.podman === 'unavailable' ? 'off' : 'off'
-  const redisDot: Dot = health.redis === 'ok' ? 'ok' : health.redis === 'loading' ? 'off' : 'error'
-  const qdrantDot: Dot = health.qdrant === 'ok' ? 'ok' : health.qdrant === 'loading' ? 'off' : 'error'
 
   const podmanLabel =
     health.podman === 'running'
@@ -112,6 +120,16 @@ export function SystemInfoCard() {
       : '…'
 
   const lmLabel = health.lmStudio === 'loading' ? '…' : health.lmStudio === 'ok' ? 'OK' : 'Offline'
+  const postgresLabel =
+    health.postgres === 'loading' ? '…' : health.postgres === 'ok' ? 'OK' : 'Offline'
+  const stirlingLabel =
+    health.stirling === 'loading'
+      ? '…'
+      : health.stirling === 'ok'
+      ? 'OK'
+      : health.stirling === 'off'
+      ? 'On-demand'
+      : 'Offline'
 
   const cloudDot: Dot = cloudStatus?.available ? 'ok' : cloudStatus ? 'error' : 'off'
   const sessionCost = cloudUsage?.session?.estimated_cost_usd
@@ -146,12 +164,6 @@ export function SystemInfoCard() {
             dot={health.modelName ? 'ok' : 'off'}
           />
           <InfoRow
-            icon={<Container size={11} />}
-            label="Podman"
-            value={podmanLabel}
-            dot={podmanDot}
-          />
-          <InfoRow
             icon={<Zap size={11} />}
             label="LM Studio"
             value={lmLabel}
@@ -159,15 +171,21 @@ export function SystemInfoCard() {
           />
           <InfoRow
             icon={<Database size={11} />}
-            label="Redis"
-            value={health.redis === 'loading' ? '…' : health.redis === 'ok' ? 'OK' : 'Offline'}
-            dot={redisDot}
+            label="Postgres"
+            value={postgresLabel}
+            dot={postgresDot}
           />
           <InfoRow
-            icon={<Database size={11} />}
-            label="Qdrant"
-            value={health.qdrant === 'loading' ? '…' : health.qdrant === 'ok' ? 'OK' : 'Offline'}
-            dot={qdrantDot}
+            icon={<FileText size={11} />}
+            label="Stirling"
+            value={stirlingLabel}
+            dot={stirlingDot}
+          />
+          <InfoRow
+            icon={<Container size={11} />}
+            label="Containers"
+            value={podmanLabel}
+            dot={podmanDot}
           />
           <InfoRow
             icon={cloudStatus?.available ? <Cloud size={11} /> : <CloudOff size={11} />}

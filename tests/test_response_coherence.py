@@ -59,10 +59,10 @@ async def test_coherence_check_node_coherent(monkeypatch):
     state: AgentState = {
         "messages": [
             HumanMessage(content="What is the weather today?"),
-            AIMessage(content="Today is sunny and warm."),
+            AIMessage(content="Today is sunny and warm. " * 80),
         ],
         "turn_start_time": time.time() - 2.0,
-        "route": "simple",
+        "route": "complex-default",
     }
 
     out = await coherence_check_node(state)
@@ -184,7 +184,7 @@ async def test_coherence_check_node_below_retry_threshold(monkeypatch):
     state: AgentState = {
         "messages": [
             HumanMessage(content="Explain quantum entanglement"),
-            AIMessage(content="It is fast."),
+            AIMessage(content="It is fast. " * 100),
         ],
         "turn_start_time": time.time() - 0.5,
         "route": "complex-cloud",
@@ -213,14 +213,14 @@ async def test_coherence_check_node_latency_warning(mock_audit_warn, monkeypatch
     monkeypatch.setattr("src.agent.nodes.coherence.get_main_llm", fake_get_small_llm)
     monkeypatch.setattr("src.agent.nodes.coherence.get_small_llm", fake_get_small_llm)
 
-    # Latency: 20 seconds ago
+    # Latency: 20 seconds ago — long answer so LLM path still runs when not simple-skip
     state: AgentState = {
         "messages": [
             HumanMessage(content="Hello"),
-            AIMessage(content="Hello there!"),
+            AIMessage(content="Hello there! " * 100),
         ],
         "turn_start_time": time.time() - 20.0,
-        "route": "simple",
+        "route": "complex-default",
     }
 
     out = await coherence_check_node(state)

@@ -115,7 +115,11 @@ function App() {
   const makeThreadId = () => `thread-${crypto.randomUUID()}`
   const initialThreadId = makeThreadId()
   const [projects, setProjects] = useState<ProjectSummary[]>([])
-  const [activeProjectId, setActiveProjectId] = useState('default')
+  // Eval / deep-link: ?project_id= selects workspace before projects fetch completes
+  const [activeProjectId, setActiveProjectId] = useState(() => {
+    if (typeof window === 'undefined') return 'default'
+    return new URLSearchParams(window.location.search).get('project_id') || 'default'
+  })
   const [activeChatId, setActiveChatId] = useState(initialThreadId)
   const [currentThreadId, setCurrentThreadId] = useState(initialThreadId)
   const [examCountdown, setExamCountdown] = useState<Array<{

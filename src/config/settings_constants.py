@@ -24,7 +24,7 @@ _ADVANCED_SETTINGS_DEFAULTS = {
     "show_thinking": False,
     "show_tool_execution": True,
     "travel_mode": False,
-    "cloud_routing_mode": "auto",
+    "cloud_routing_mode": "local_only",
     "cloud_escalation_enabled": True,
     "cloud_anonymization_enabled": True,
     "router_hitl_enabled": True,

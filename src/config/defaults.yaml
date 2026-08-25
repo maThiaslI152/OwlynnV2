@@ -41,19 +41,23 @@ external_services:
     base_url: "http://127.0.0.1:1234/v1"   # SMALL_LLM_BASE_URL / MEDIUM_LLM_BASE_URL env
     management_url: "http://127.0.0.1:1234"  # For SwapManager API calls
 
+# ── Feature flags ────────────────────────────────────────────────────────────
+features:
+  pentest_enabled: false  # Hide Pentest UI + block Kali until Normal+Study are solid
+
 # ── Startup preload ──────────────────────────────────────────────────────────
 startup:
   preload:
     - main       # Gemma 4 12B Agentic unified local model (routing, extraction, simple, pentest)
-    - vision     # Baidu OCR (specialized for image transcription)
     - embedding  # MXBAI embed (1024 dims) — always
+    # vision loaded on-demand when images are attached (saves ~1.5 GB on M4 Air)
   warmup: true
   idle_unload_minutes: 15  # Unload local LLM from LM Studio after N mins idle (0 = disabled)
 
 # ── Services ─────────────────────────────────────────────────────────────────
 services:
   stirling_pdf:
-    idle_shutdown: false  # Stop StirlingPDF container after idle; restart on-demand (saves ~200-300MB)
+    idle_shutdown: true   # Stop StirlingPDF after idle; restart on-demand (saves ~200-300MB)
     idle_minutes: 10      # How long to wait before stopping the container
 
 # ── Models — AI/LLM Configuration ────────────────────────────────────────────
@@ -323,6 +327,10 @@ summarization:
   keep_recent_turns: 10                   # Recent turns to preserve in full
   chars_per_token: 4                      # Rough estimation heuristic
 
+# ── Simple Node (fast local answers) ──────────────────────────────────────────
+simple:
+  max_tokens: 512                         # Cap completion window (do not inherit models.main.max_tokens)
+
 # ── Complex Node (LLM invocation) ─────────────────────────────────────────────
 complex:
   context_safety_margin: 256              # Tokens reserved to avoid hitting limit
@@ -330,6 +338,7 @@ complex:
   max_cutoff_retries: 1                   # Auto-continuation rounds (reduced for faster UX)
   max_cloud_retries: 3                    # Cloud LLM retries with backoff
   max_web_tool_rounds: 3                  # After N tool-calling turns, force synthesis (no more web tools)
+  tool_first_synth_token_budget: 1024     # Cap tool-first web synthesis (one round, no retry)
   tool_rerank_enabled: true               # Embedding rerank before bind_tools (local/cloud/pentest)
   tool_rerank_top_k: 12                   # Cloud (and default) bind cap after rerank
   tool_rerank_min_count: 10               # Only rerank when tool count exceeds this
@@ -370,7 +379,10 @@ coherence:
   retry_threshold: 0.4                    # Confidence below this triggers a retry
   max_retries: 1                          # Hard cap per turn (mirrors max_cutoff_retries)
   retry_token_budget: 2048                # Output budget for retry synthesis call
-  enabled: true                           # Set false to disable retry cycle (telemetry-only)
+  enabled: true                           # false = skip LLM check entirely (telemetry-only defaults)
+  skip_simple: true                       # Skip LLM check on simple route
+  skip_short_answer_chars: 800            # Skip LLM when answer shorter than this (and no tool failures)
+  skip_successful_web: true               # Skip LLM after successful web_search synthesis
 
 # ── Cloud ────────────────────────────────────────────────────────────────────
 cloud:

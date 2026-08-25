@@ -15,7 +15,7 @@ export function CloudSettingsPanel() {
   const [tier, setTier] = useState<CloudModelTier>('flash')
   const [thinkingMode, setThinkingMode] = useState<CloudThinkingMode>('auto')
   const [reasoningEffort, setReasoningEffort] = useState<CloudReasoningEffort>('high')
-  const [routingMode, setRoutingMode] = useState<CloudRoutingMode>('auto')
+  const [routingMode, setRoutingMode] = useState<CloudRoutingMode>('local_only')
   const [escalationEnabled, setEscalationEnabled] = useState(true)
   const [apiKey, setApiKey] = useState('')
   const [openrouterKey, setOpenrouterKey] = useState('')
@@ -37,8 +37,8 @@ export function CloudSettingsPanel() {
         else setThinkingMode('auto')
         const re = String(payload.cloud_reasoning_effort || 'high').toLowerCase()
         setReasoningEffort(re === 'max' ? 'max' : 'high')
-        const rm = String(payload.cloud_routing_mode || 'auto').toLowerCase() as CloudRoutingMode
-        setRoutingMode(rm === 'local_only' || rm === 'cloud_first' ? rm : 'auto')
+        const rm = String(payload.cloud_routing_mode || 'local_only').toLowerCase() as CloudRoutingMode
+        setRoutingMode(rm === 'auto' || rm === 'cloud_first' ? rm : 'local_only')
         setEscalationEnabled(payload.cloud_escalation_enabled !== false)
         
         setProvider(payload.cloud_provider === 'openrouter' ? 'openrouter' : 'deepseek')
@@ -86,7 +86,8 @@ export function CloudSettingsPanel() {
   return (
     <div className="cloud-settings-panel">
       <p className="safe-mode-info">
-        <strong>Local-First Architecture</strong> — Owlynn runs on your local Gemma 4 12B model by default. Cloud offloading to DeepSeek is used on battery power (Eco-Mode), for explicit escalation, or when configured below.
+        <strong>Local-only by default</strong> — Owlynn runs on your local Gemma 4 12B model.
+        Cloud (DeepSeek) is opt-in: flip Cloud Routing Policy below when you want offload.
       </p>
 
       <div className="settings-group api-key-group" style={{ marginBottom: '1.5rem', padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
@@ -173,8 +174,8 @@ export function CloudSettingsPanel() {
             void saveField({ cloud_routing_mode: next })
           }}
         >
+          <option value="local_only">Always Local (default — 100% offline)</option>
           <option value="auto">Auto (Local on AC, Cloud on Battery / Escalation)</option>
-          <option value="local_only">Always Local (100% Offline / Local Only)</option>
           <option value="cloud_first">Cloud-First (Prefer DeepSeek for complex tasks)</option>
         </select>
       </label>

@@ -5,9 +5,12 @@ from src.agent.core.simple import _simple_output_max_tokens, simple_node
 from src.agent.core.state import AgentState
 
 
-def test_simple_output_max_tokens_respects_minicpm_floor():
-    assert _simple_output_max_tokens(256) >= 512
-    assert _simple_output_max_tokens(1024) >= 1024
+def test_simple_output_max_tokens_caps_not_main_floor():
+    """Simple path must not inherit models.main.max_tokens (often 8192)."""
+    assert _simple_output_max_tokens(256) == 256
+    assert _simple_output_max_tokens(512) == 512
+    assert _simple_output_max_tokens(4096) <= 512
+    assert _simple_output_max_tokens(64) >= 64
 
 
 @pytest.mark.anyio

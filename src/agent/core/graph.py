@@ -77,7 +77,7 @@ def summarize_gate(state: AgentState) -> str:
 
 
 def route_decision(state: AgentState) -> str:
-    route = state.get("route", "complex-local")
+    route = state.get("route", "complex-default")
     set_route(route)
     if route == "simple":
         audit_debug(
@@ -92,7 +92,7 @@ def route_decision(state: AgentState) -> str:
             route=route,
         )
         return "browser_local"
-    # All complex routes go to scope_clarify → complex_llm (cloud-only)
+    # All complex routes go to scope_clarify → complex_llm
     audit_debug(
         "agent.lifecycle",
         "edge_traversal",
@@ -288,9 +288,9 @@ def build_graph():
     )
 
     def browser_local_next(state: AgentState) -> str:
-        # If route was changed to complex-cloud or complex-local (via handoff), go to scope_clarify
+        # If route was changed to complex-cloud or complex-default (via handoff), go to scope_clarify
         route = state.get("route")
-        if route in ("complex-cloud", "complex-local"):
+        if route in ("complex-cloud", "complex-default", "complex-local"):
             return "scope_clarify"
         # Otherwise, check if there are pending tool calls
         messages = list(state.get("messages") or [])

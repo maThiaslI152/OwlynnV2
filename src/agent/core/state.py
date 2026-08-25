@@ -136,3 +136,5 @@ class AgentState(TypedDict):
     _coherence_retry_round: int | None
     # Last coherence score observed before the retry; surfaced in WS event for UX
     coherence_retry_reason: str | None
+    # Tool-first web phase: "search" after synthetic tool call; "done" after synthesis
+    _tool_first_web_phase: str | None

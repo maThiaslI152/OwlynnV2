@@ -1,7 +1,7 @@
 ---
 status: active
 category: reference
-last_updated: 2026-08-24
+last_updated: 2026-08-25
 owner: ai-agent
 audience: agent
 ---
@@ -12,14 +12,14 @@ audience: agent
 
 ```yaml
 manifest:
-  version: 30
-  generated: "2026-08-24T14:10:00Z"
+  version: 31
+  generated: "2026-08-25T13:00:00Z"
   files:
     - path: AGENTS.md
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-08-24
+      last_updated: 2026-08-25
     - path: docs/ADR.md
       status: active
       category: architecture
@@ -29,7 +29,7 @@ manifest:
       status: active
       category: architecture
       audience: agent
-      last_updated: 2026-08-24
+      last_updated: 2026-08-25
     - path: docs/architecture/REDIS_LIFECYCLE.md
       status: active
       category: architecture
@@ -54,7 +54,7 @@ manifest:
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-07-10
+      last_updated: 2026-08-25
     - path: docs/architecture/CLOUD-LLM-ARCHITECTURE.md
       status: active
       category: reference
@@ -79,7 +79,7 @@ manifest:
       status: active
       category: guide
       audience: agent
-      last_updated: 2026-08-24
+      last_updated: 2026-08-25
     - path: docs/FUTURE_WORKS.md
       status: active
       category: planning
@@ -104,18 +104,18 @@ manifest:
       status: active
       category: performance
       audience: agent
-      last_updated: 2026-07-07
+      last_updated: 2026-08-25
 
     - path: docs/PERFORMANCE_SLOS.md
       status: active
       category: standards
       audience: agent
-      last_updated: 2026-07-07
+      last_updated: 2026-08-25
     - path: docs/development/PROJECT_GUIDE.md
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-08-24
+      last_updated: 2026-08-25
     - path: docs/architecture/PROJECT_OVERVIEW.md
       status: active
       category: reference
@@ -875,7 +875,7 @@ manifest:
       status: active
       category: standards
       audience: agent
-      last_updated: 2026-06-18
+      last_updated: 2026-08-25
     - path: docs/standards/coding-style.md
       status: active
       category: reference

@@ -367,11 +367,11 @@ describe('AppShell', () => {
     onRenameChat: vi.fn(),
   }
 
-  it('renders all panel sections', () => {
+  it('renders Normal and Study mode pills (Pentest hidden by default)', () => {
     render(<AppShell {...defaultProps} />)
     expect(screen.getByText('Normal')).toBeTruthy()
     expect(screen.getByText('Study')).toBeTruthy()
-    expect(screen.getByText('Pentest')).toBeTruthy()
+    expect(screen.queryByText('Pentest')).toBeNull()
   })
 
   it('renders composer', () => {
@@ -391,11 +391,11 @@ describe('AppShell', () => {
     expect(defaultProps.onSend).toHaveBeenCalledWith('Test message', undefined)
   })
 
-  it('renders mode switch pills in menu bar', () => {
+  it('renders mode switch pills in menu bar without Pentest by default', () => {
     render(<AppShell {...defaultProps} />)
     expect(screen.getByRole('button', { name: /Normal/i })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Study/i })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /Pentest/i })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Pentest/i })).toBeNull()
   })
 
   it('renders mindmap layout switch buttons', () => {

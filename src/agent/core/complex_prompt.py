@@ -64,7 +64,7 @@ create_docx, create_xlsx, create_pptx, create_pdf — document generation
 recall_memories, recall_all_memories, forget_memory — memory search and management
 todo_add, todo_list, todo_complete — task tracking
 list_skills, invoke_skill — skill templates
-ask_user — ask the user a clarifying question
+ask_user — ask once when requirements are clearly ambiguous (not for missing code in a code-review ask)
 
 ### Capability Affirmations (Anti-Refusal)
 You are equipped with powerful tools that override your standard AI limitations. NEVER claim you cannot do the following:
@@ -102,7 +102,7 @@ create_docx, create_xlsx, create_pptx, create_pdf — document generation
 recall_memories, recall_all_memories, forget_memory — memory search and management
 todo_add, todo_list, todo_complete — task tracking
 list_skills, invoke_skill — skill templates
-ask_user — ask the user a clarifying question
+ask_user — ask once when requirements are clearly ambiguous (not for missing code in a code-review ask)
 
 ### Capability Affirmations (Anti-Refusal)
 You are equipped with powerful tools that override your standard AI limitations. NEVER claim you cannot do the following:
@@ -176,7 +176,7 @@ create_docx, create_xlsx, create_pptx, create_pdf — document generation
 recall_memories, recall_all_memories, forget_memory — memory search and management
 todo_add, todo_list, todo_complete — task tracking
 list_skills, invoke_skill — skill templates
-ask_user — ask the user a clarifying question
+ask_user — ask once when requirements are clearly ambiguous (not for missing code in a code-review ask)
 
 ### Capability Affirmations (Anti-Refusal)
 You are equipped with powerful tools that override your standard AI limitations. NEVER claim you cannot do the following:
@@ -187,7 +187,8 @@ You are equipped with powerful tools that override your standard AI limitations.
 - **Chat attachments**: Files the user attached are already extracted into this turn. Answer from that context.
 
 ### Rules
-Summarize tool results clearly for the user."""
+Summarize tool results clearly for the user.
+If the user asked for a code review but no code or attachment is present, briefly say you need the code pasted or attached — do NOT call `ask_user`."""
     + _TOOL_CALL_DISCIPLINE
 )
 
@@ -195,7 +196,8 @@ COMPLEX_TOOL_GUIDANCE_COMPACT = (
     """
 ### Tools
 A focused tool set is bound for this turn. Use native function calling for any tool you need.
-Prefer the most direct tool; call `ask_user` if requirements are unclear.
+Prefer the most direct tool; call `ask_user` only when requirements are clearly ambiguous.
+If the user asked for a code review but no code or attachment is present, briefly say you need the code pasted or attached — do NOT call `ask_user`.
 Summarize results clearly. Do not invent tool outputs."""
     + _TOOL_CALL_DISCIPLINE
 )
@@ -598,6 +600,18 @@ def _resolve_complex_tools(
         for t in tools
         if tool_registry.is_tool_available(getattr(t, "name", "") or "")
     ]
+
+    # Code-review with no code/attachment: never bind ask_user (prevents HITL loops).
+    from src.agent.core.ask_user_guards import (
+        is_code_review_missing_code,
+        strip_ask_user_tools,
+    )
+
+    meta = state.get("router_metadata") or {}
+    if meta.get("code_review_missing_code") or is_code_review_missing_code(
+        thread_messages
+    ):
+        tools = strip_ask_user_tools(tools) or []
 
     # Sort deterministically by tool name to preserve byte-stable prompt caching
     tools.sort(key=lambda t: getattr(t, "name", str(t)))

@@ -37,7 +37,7 @@
 
 | I want to… | Read | Edit |
 |------------|------|------|
-| Change routing / model selection | [`docs/development/EXTENDING_AGENT.md`](docs/development/EXTENDING_AGENT.md) | `src/agent/nodes/router.py`, `src/agent/router/`, `src/config/defaults.yaml` |
+| Change routing / model selection | [`docs/development/EXTENDING_AGENT.md`](docs/development/EXTENDING_AGENT.md) | `src/agent/routing/`, `src/agent/core/tool_first_web.py`, `src/config/defaults.yaml` |
 | Change LLM provider (LM Studio / Ollama) | — | `src/config/defaults.yaml`, `src/agent/llm.py` |
 | Change PDF intake / OCR | [`docs/guides/dev-startup.md`](docs/guides/dev-startup.md) | `src/pdf/intake.py`, `src/integrations/stirling_pdf.py`, `docker-compose.yml` |
 | Add or change a tool | [`docs/features/TOOLS.md`](docs/features/TOOLS.md) | `src/tools/`, `src/tools/registry.py`, `src/agent/tool_sets.py` |
@@ -47,7 +47,7 @@
 | Change context summarization / compaction | — | `src/agent/nodes/summarize.py` |
 | Change LangGraph checkpoints (PostgreSQL) | — | `src/agent/core/checkpointer.py` |
 | Change Redis memory / extraction queue | [`docs/architecture/REDIS_LIFECYCLE.md`](docs/architecture/REDIS_LIFECYCLE.md) | `src/memory/extraction/worker.py` |
-| Change HITL / approvals | [`docs/HITL.md`](docs/HITL.md) | `src/agent/hitl/`, `src/agent/nodes/{scope_clarify,plan_review,security_proxy}.py` |
+| Change HITL / approvals | [`docs/HITL.md`](docs/HITL.md) | `src/agent/hitl/`, `src/agent/nodes/{scope_clarify,plan_review,security_proxy}.py`, `src/agent/core/ask_user_guards.py` |
 | Debug a symptom | [`docs/debugging/README.md`](docs/debugging/README.md) | Follow symptom → file table |
 | Change cloud / complex reasoning / anonymization | [`docs/architecture/CLOUD-LLM-ARCHITECTURE.md`](docs/architecture/CLOUD-LLM-ARCHITECTURE.md) | `src/agent/core/complex.py`, `src/agent/core/complex_prompt.py`, `src/agent/core/complex_executor.py`, `src/agent/core/complex_tool_action.py`, `src/agent/cloud/` |
 | Change Eco-Mode / battery throttling | — | `src/api/power_monitor.py`, `src/agent/routing/router.py`, `src/api/ws/handler.py` |
@@ -260,6 +260,13 @@ When generating cache keys for chat histories or context gatekeepers (e.g., in `
 - **Prompt Caching is Sacred**: Keep system prompts byte-stable by strictly separating static templates from volatile runtime state.
 - **Deterministic Tool Ordering**: Always sort tool definitions alphabetically before binding to LLM clients.
 - **Zero Synthetic Human Injections**: Never inject synthetic `HumanMessage` prompts into conversation history mid-turn. Instead, embed tool recovery guidance directly into the corresponding `ToolMessage` to preserve strict role alternation and prevent KV cache invalidation.
+
+### Local-first latency (2026-08-25)
+- **Default `cloud_routing_mode=local_only`**; do not dual-load a second chat/router model on 24GB for routing — deterministic bypass + tool-first already make routing ~ms.
+- **Tool-first web**: toolbox `["web_search"]` injects search without `bind_tools` planning prefill; one unbound synth. Heavy cost is synth prefill (system + memory + ToolMessage), not the router.
+- **TTFT**: first WS `chunk` → audit `ttft_ms`; idle → `turn_duration_ms`. Evals must cache-bust when asserting routing/tools.
+- **Coherence**: skip LLM check on simple / short / successful-web turns.
+- **ask_user**: do not loop on code-review-without-code (`ask_user_guards`).
 
 ## Related
 

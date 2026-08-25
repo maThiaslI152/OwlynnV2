@@ -123,6 +123,7 @@ def test_unparsed_vlm_prose_fallback():
 
 
 def test_image_routes_complex_cloud_for_vision_proxy():
+    """Frontier-quality image prompts route to cloud when mode allows (not local_only)."""
     state = {
         "messages": [
             HumanMessage(
@@ -136,13 +137,42 @@ def test_image_routes_complex_cloud_for_vision_proxy():
             )
         ],
     }
-    route, _ = _resolve_complex_route(
-        "Analyze this diagram and provide a formal proof of the theorem",
-        state,
-        ["all"],
-        cloud_available=True,
-    )
+    with patch(
+        "src.agent.routing.resolver.get_profile",
+        return_value={"cloud_routing_mode": "auto"},
+    ):
+        route, _ = _resolve_complex_route(
+            "Analyze this diagram and provide a formal proof of the theorem",
+            state,
+            ["all"],
+            cloud_available=True,
+        )
     assert route == "complex-cloud"
+
+
+def test_image_routes_local_default_when_local_only():
+    """local_only keeps image turns on complex-default even when cloud is available."""
+    state = {
+        "messages": [
+            HumanMessage(
+                content=[
+                    {"type": "text", "text": "What's in this image?"},
+                    {"type": "image_url", "image_url": {"url": DATA_URL}},
+                ]
+            )
+        ],
+    }
+    with patch(
+        "src.agent.routing.resolver.get_profile",
+        return_value={"cloud_routing_mode": "local_only"},
+    ):
+        route, _ = _resolve_complex_route(
+            "What's in this image?",
+            state,
+            ["all"],
+            cloud_available=True,
+        )
+    assert route == "complex-default"
 
 
 @pytest.mark.asyncio

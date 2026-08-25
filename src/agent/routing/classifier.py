@@ -104,6 +104,8 @@ def parse_classification(content: str) -> RouteClassification:
 
 
 # ── RouteClassifier ──────────────────────────────────────────────────────
+# LEGACY / QUARANTINED: not called by live router_node (hardcoded_local_first).
+# Retained for unit tests and offline benchmarks only.
 
 
 class RouteClassifier:

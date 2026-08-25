@@ -1,7 +1,7 @@
 ---
 status: active
 category: reference
-last_updated: 2026-07-10
+last_updated: 2026-08-25
 owner: ai-agent
 audience: agent
 ---
@@ -168,6 +168,8 @@ Cloud route (`complex-cloud`) with images: lazy-loaded Gemma 4 E2B (`models.visi
 - `tokens_used` — cumulative tokens consumed (estimated as `len(text) // 4` per chunk)
 - `budget_remaining` — tokens remaining in allocated budget
 - `metadata` is optional; frontend code not handling it continues to work
+
+**Latency audit (not a WS event):** On the first non-empty `chunk` of a turn, `handler.py` records `ttft_ms` (send → first token) to the audit log (`api.ws` / `ttft`). On `idle`, it also logs `turn_complete` with `ttft_ms` + `turn_duration_ms`. Eval harnesses (`e2e_gdp_followup_ws.py`, `run_local_frontier_eval.py`) mirror client-side `ttft_ms` from the same first-chunk timestamp.
 
 #### `assistant.message`
 

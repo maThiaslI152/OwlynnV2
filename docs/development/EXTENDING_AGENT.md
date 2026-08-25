@@ -1,7 +1,7 @@
 ---
 status: active
 category: guide
-last_updated: 2026-08-24
+last_updated: 2026-08-25
 owner: ai-agent
 audience: agent
 ---
@@ -17,7 +17,8 @@ Reference for developers modifying Owlynn's agent behavior. Covers the LangGraph
 Three subsystems must stay consistent when modifying agent behavior:
 
 - LangGraph execution flow (`src/agent/core/graph.py` and nodes under `src/agent/core/` and `src/agent/nodes/`)
-- Dynamic tool contract (`src/tools/registry.py`, `src/agent/tool_sets.py`, `src/agent/core/complex.py`, `src/agent/core/complex_tool_action.py`)
+- Routing (`src/agent/routing/` — deterministic bypasses; live path does not use RouteClassifier LLM)
+- Dynamic tool contract (`src/tools/registry.py`, `src/agent/tool_sets.py`, `src/agent/core/complex.py`, `src/agent/core/tool_first_web.py`, `src/agent/core/complex_tool_action.py`)
 - Frontend WebSocket event stream (`docs/development/CHAT_PROTOCOL.md`)
 
 ## Entry Points

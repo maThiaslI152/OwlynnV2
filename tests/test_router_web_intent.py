@@ -133,7 +133,7 @@ async def test_selected_toolboxes_always_present():
 
 @pytest.mark.anyio
 async def test_image_attachment_routes_to_vision():
-    """Image attachments should route to complex-cloud without router HITL."""
+    """Image attachments should route to complex-default under local_only without HITL."""
     state: AgentState = {
         "messages": [
             HumanMessage(
@@ -154,13 +154,17 @@ async def test_image_attachment_routes_to_vision():
     with (
         patch("src.agent.routing.router._check_cloud_available", return_value=True),
         patch(
+            "src.agent.routing.resolver.get_profile",
+            return_value={"cloud_routing_mode": "local_only"},
+        ),
+        patch(
             "src.agent.core.complex_utils.lm_studio_vision.ensure_vision_vlm_loaded",
             new_callable=AsyncMock,
             return_value=True,
         ),
     ):
         out = await router_node(state)
-    assert out["route"] == "complex-cloud"
+    assert out["route"] == "complex-default"
     assert out["router_clarification_used"] is False
     assert out["selected_toolboxes"] == ["file_ops", "memory"]
 
@@ -185,13 +189,17 @@ async def test_image_only_attachment_skips_hitl():
     with (
         patch("src.agent.routing.router._check_cloud_available", return_value=True),
         patch(
+            "src.agent.routing.resolver.get_profile",
+            return_value={"cloud_routing_mode": "local_only"},
+        ),
+        patch(
             "src.agent.core.complex_utils.lm_studio_vision.ensure_vision_vlm_loaded",
             new_callable=AsyncMock,
             return_value=True,
         ),
     ):
         out = await router_node(state)
-    assert out["route"] == "complex-cloud"
+    assert out["route"] == "complex-default"
     assert out["router_clarification_used"] is False
     assert out["selected_toolboxes"] == ["file_ops", "memory"]
 
@@ -220,6 +228,10 @@ async def test_image_with_frontier_routes_cloud_for_proxy():
     }
     with (
         patch("src.agent.routing.router._check_cloud_available", return_value=True),
+        patch(
+            "src.agent.routing.resolver.get_profile",
+            return_value={"cloud_routing_mode": "auto"},
+        ),
         patch(
             "src.agent.core.complex_utils.lm_studio_vision.ensure_vision_vlm_loaded",
             new_callable=AsyncMock,
@@ -262,6 +274,10 @@ async def test_frontier_quality_request_routes_cloud():
             return_value=mock_llm,
         ),
         patch("src.agent.routing.router._check_cloud_available", return_value=True),
+        patch(
+            "src.agent.routing.resolver.get_profile",
+            return_value={"cloud_routing_mode": "auto"},
+        ),
     ):
         out = await router_node(state)
     assert out["route"] == "complex-cloud"

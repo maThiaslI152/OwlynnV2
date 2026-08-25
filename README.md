@@ -6,7 +6,7 @@
 [![Frontend](https://img.shields.io/badge/frontend-React_19_%2B_Vite_8-61DAFB)](frontend-v2/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-A private, local-first AI productivity agent with **cloud-primary DeepSeek V4** routing and local fallback. Built on LangGraph orchestration with semantic memory, multi-tier web search, an Electron desktop UI, and a zero-overhead **semantic response cache** for near-instant replies. Optimized for Apple Silicon (M4 Air 24 GB).
+A private, local-first AI productivity agent. **Default is fully local** (`cloud_routing_mode=local_only`); DeepSeek cloud is opt-in. Built on LangGraph with a unified Gemma 4 12B local engine, semantic memory, multi-tier web search, and an Electron desktop UI. Optimized for Apple Silicon (M4 Air 24 GB).
 
 ---
 
@@ -23,13 +23,14 @@ Owlynn is a **desktop AI coworker** that keeps your data local. It reasons throu
 | Capability | Summary |
 |------------|---------|
 | **Semantic Cache** | Repeated questions answered in **< 100ms** — full LangGraph pipeline bypassed via Redis vector similarity |
-| **Routing** | Gemma-4-E2B router → `simple` \| `complex-cloud` (DeepSeek V4) |
-| **Memory orchestration** | Split inject (`memory_inject_lite` → router → gated `memory_retrieve`), async 8B extraction, PII scrub, pentest/research scenarios |
-| **Vision proxy** | Local Gemma-4-E2B VLM → JSON OCR → text-only DeepSeek path; lazy load + idle unload |
+| **Routing** | Deterministic + local-first → `simple` \| `complex-default` (12B) \| optional `complex-cloud` (DeepSeek) |
+| **Latency** | Simple/trivia: one 12B generate, no tool schemas, coherence skipped; web: tool-first search then short synthesis |
+| **Memory orchestration** | Split inject (`memory_inject_lite` → router → gated `memory_retrieve`), async extraction, PII scrub |
+| **Vision proxy** | On-demand Baidu OCR → text path; not preloaded by default |
 | **Screen assist** | macOS tmux capture, Accessibility API, browser tab, Kali SSH tmux (Python tools) |
 | **HITL** | Security proxy + plan review for sensitive tool calls; `require_approval` default; destructive command blocking |
 | **Search** | Browser extension (tier 0.2) → curl_cffi → DDGS → Playwright; SearXNG opt-in |
-| **Pentest mode** | Kali Linux via Lima VM; always uses local Gemma model — never cloud |
+| **Pentest mode** | Hidden by default (`features.pentest_enabled=false`); Kali via Lima when enabled — never cloud |
 | **Study mode** | 16 study tools, SM-2 flashcard review, quiz sessions, exam countdown |
 
 Full roadmap: [`docs/guides/memory-vision-screen-roadmap.md`](docs/guides/memory-vision-screen-roadmap.md)
@@ -53,28 +54,27 @@ Semantic Cache check (redisvl, 0.92 cosine similarity threshold)
 memory_inject_lite ──► profile, persona, topics (no vector search)
       │
       ▼
-router ──► simple | complex-cloud; memory gate + scenario id
+router ──► simple | complex-default | complex-cloud (opt-in); memory gate + scenario id
       │
       ▼
-memory_retrieve ──► gated Qdrant/Mem0 + scenario markdown (when needed)
+memory_retrieve ──► gated vector memory + scenario markdown; sets active_tokens
       │
       ▼
-auto_summarize? ──► if tokens > 85% context window
+auto_summarize? ──► if active_tokens > 85% context window
       │
-      ├── simple ──────────────────────────────────────────────► memory_write ──► END
+      ├── simple ──► coherence (skipped) ──────────────────────► memory_write ──► END
       │                                                                │
       └── scope_clarify ──► complex_llm ◄──────────────────┐         └──► store_semantic_cache()
                 │              │                             │
-                │    [images] vision_proxy → DeepSeek V4     │
+                │    tool-first web_search (no bind_tools)   │
+                │    or bind_tools planning                  │
                 │              │                             │
                 │    plan_review / security_proxy (HITL)     │
                 │              ▼                             │
                 │         tool_action ───────────────────────┘
                 │
                 ▼
-           memory_write ──► PII scrub → Redis extraction queue → END
-                │
-                └──► store_semantic_cache()
+           coherence_check (skipped on short/web success) → memory_write → END
 ```
 
 ### Tech Stack

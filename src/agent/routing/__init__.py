@@ -3,6 +3,11 @@ Multi-LLM Router package.
 
 Public API: data models for feature extraction, classification, configuration,
 and token budget estimation.
+
+NOTE: ``RouteClassifier``, ``extract_features``, and ``RouteSelector`` are
+legacy / quarantined. Live ``router_node`` uses deterministic bypasses +
+hardcoded local-first resolution — it does not call these. Kept for tests and
+benchmarks only.
 """
 
 from src.agent.routing.budget import estimate_token_budget

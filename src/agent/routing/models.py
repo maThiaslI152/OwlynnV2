@@ -16,7 +16,8 @@ VALID_TASK_CATEGORIES = frozenset({"general", "document", "vision", "code", "ana
 VALID_ROUTES = frozenset(
     {
         "simple",
-        "complex-local",
+        "complex-default",  # unified local complex path (live name)
+        "complex-local",  # legacy alias — treated as complex-default
         "complex-cloud",
         "browser_local",
     }

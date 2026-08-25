@@ -41,6 +41,12 @@ def _clean_response(text: str) -> str:
     """Strip thinking tokens, reasoning artifacts, and self-descriptive preambles from local model output."""
     if not text:
         return ""
+    from src.agent.core.complex_utils.formatter import (
+        _content_has_dsml_tool_syntax,
+        _strip_dsml_blocks,
+    )
+
+    had_tool_leak = _content_has_dsml_tool_syntax(text)
     # Remove <think>...</think> blocks
     out = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
     # Remove <｜end▁of▁thinking｜> blocks (Qwen3.5 alternate format)
@@ -49,6 +55,8 @@ def _clean_response(text: str) -> str:
     out = re.sub(
         r"Thinking Process:.*?(?=\n\n[^\d]|\Z)", "", out, flags=re.DOTALL
     ).strip()
+    # Local models sometimes emit unbound tool markup on the no-tools simple path
+    out = _strip_dsml_blocks(out).strip()
     # Strip self-descriptive preambles (model echoing system prompt folded into user message)
     out = re.sub(
         r"^\[SYSTEM INSTRUCTIONS BEGIN\].*?\[SYSTEM INSTRUCTIONS END\]\s*",
@@ -83,6 +91,11 @@ def _clean_response(text: str) -> str:
         # Fallback: extract quoted strings from reasoning
         quotes = re.findall(r'"([^"]{5,})"', out)
         result = quotes[-1] if quotes else out
+    if had_tool_leak and (not result.strip() or _content_has_dsml_tool_syntax(result)):
+        return (
+            "I need a live web lookup for that, but this turn ran on the "
+            "no-tools path. Please ask again (e.g. “search the web for Bangkok GDP”)."
+        )
     return result or text
 
 
@@ -99,10 +112,18 @@ def _extract_llm_text(chunk_or_message) -> str:
 
 
 def _simple_output_max_tokens(budget: int | None) -> int:
-    """Ensure local models have enough token budget for full generation."""
-    main_cfg = get_model_config("main")
-    floor = int(main_cfg.get("max_tokens") or 512)
-    return max(int(budget or 256), floor)
+    """Cap simple-path completion; never inherit models.main.max_tokens (often 8k).
+
+    A huge max_tokens window slows local decode and invites verbose greetings.
+    Router ``token_budget`` (typically 256–512) is honored within ``simple.max_tokens``.
+    """
+    from src.config.config_loader import config
+
+    requested = max(64, int(budget or 256))
+    cap = max(128, int(config.get("simple.max_tokens", 512) or 512))
+    # Small floor so tiny budgets still finish short answers; never exceed cap.
+    floor = min(256, cap)
+    return max(floor, min(requested, cap))
 
 
 async def _get_llm_response(runnable, prompt) -> str:

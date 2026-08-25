@@ -1,7 +1,7 @@
 ---
 status: active
 category: performance
-last_updated: 2026-07-07
+last_updated: 2026-08-25
 owner: ai-agent
 audience: agent
 ---
@@ -39,7 +39,8 @@ The cache is **project-scoped**: a question answered in Project A will not be se
 |----------|-------------|
 | `init_semantic_cache()` | Initialises the `redisvl` `SemanticCache` index. Called once at agent startup from `init_agent()`. |
 | `check_semantic_cache(prompt, project_id)` | Embeds the prompt and performs a vector similarity search against Redis. Returns the cached response string or `None`. |
-| `store_semantic_cache(prompt, response, project_id)` | Stores the prompt embedding + response text in Redis. Called asynchronously after the `idle` event fires. |
+| `store_semantic_cache(prompt, response, project_id)` | Stores the prompt embedding + response text in Redis. Called asynchronously after the `idle` event fires. **Refuses** responses that look like tool-call / DSML leaks (`<\|tool_call\|>`, etc.) so poison cannot be replayed. |
+| `purge` / poison helpers | Detect and drop poisoned cache entries that would re-emit raw tool syntax to the UI. |
 
 ### CustomOpenAIVectorizer
 
@@ -82,7 +83,7 @@ If Redis is unavailable or redisvl initialisation fails, the cache silently degr
 | Similarity threshold | `0.92` (distance `0.08`) | Minimum similarity required for a cache hit. Uses Redis COSINE distance where `0.0 = identical, 2.0 = opposite`. |
 | Cache TTL | `None` (no expiry) | Entries persist indefinitely. Redis eviction policy (`maxmemory-policy`) governs when entries are dropped. |
 | Redis index name | `owlynn_semantic_cache` | RedisVL search index name. |
-| Embedding model | `models.embedding.model_name` from `defaults.yaml` | Same nomic-embed model used for Mem0. |
+| Embedding model | `models.embedding.model_name` from `defaults.yaml` | Same MXBAI embed model used for LTM/pgvector. |
 | Embedding URL | `models.embedding.base_url` from `defaults.yaml` | LM Studio embedding endpoint. |
 
 ## Bypass Conditions
@@ -94,6 +95,8 @@ The semantic cache is **skipped** when:
 | `scenario_id == "pentest"` | Pentest sessions must never be cached — operational security |
 | `files` attached | Answers depend on file content, not just the question text |
 | `message_content` is not a plain string | Multi-modal (image) payloads are not cacheable |
+
+**Eval note:** Live routing/tool assertions (e.g. GDP follow-up E2E) must cache-bust (unique nonce / project) — a healthy HIT skips the graph and never emits `router_info` / `tool_execution`.
 
 ## Cache Population Flow
 

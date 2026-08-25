@@ -2,7 +2,7 @@
 status: active
 category: reference
 audience: agent
-last_updated: 2026-08-24
+last_updated: 2026-08-25
 owner: ai-agent
 ---
 
@@ -52,6 +52,11 @@ Do **not** add new `.py` test or patch scripts at repo root.
 | `src/config/defaults.yaml` | Model names, routing, `mcp.*`, `startup.preload` (source of truth) |
 | `tests/test_router_properties.py` | Router property tests |
 | `tests/test_router_web_intent.py` | Web-intent forcing tests |
+| `tests/test_tool_first_web.py` | Tool-first web inject / synth helpers |
+| `tests/test_simple_trivia_bypass.py` | Deterministic simple trivia bypass |
+| `tests/test_coherence_skip.py` | Coherence fast-path skip |
+| `tests/test_ask_user_guards.py` | Code-review-without-code ask_user guards |
+| `scripts/manual/e2e_gdp_followup_ws.py` | Live WS GDP follow-up (cache-bust, ttft_ms) |
 | `tests/test_llm_pool.py` | LLM pool tests |
 
 **Current models** (`defaults.yaml`): 4-model taxonomy — Main unified local model `gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m` (routing, direct answers, extraction, local complex reasoning, pentest mode), Vision proxy `baidu.unlimited-ocr`, Embedding `text-embedding-mxbai-embed-large-v1` (1024 dims), and complex cloud `deepseek-v4-flash`. Startup preloads local main model + embedding.

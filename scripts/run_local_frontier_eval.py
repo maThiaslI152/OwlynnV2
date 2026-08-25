@@ -58,6 +58,8 @@ SIMPLE_TIMEOUT_S = 180
 COMPLEX_TIMEOUT_S = 900
 # Idle polls (2s each) before accepting turn when expected tools never arrive.
 IDLE_TOOL_STALL_POLLS = 8
+# Abort wait when an ask_user / HITL card stays pending despite resolve attempts.
+HITL_STALL_S = 30
 
 CODEWORD = "ZEBRA-42"
 MARKERS = {
@@ -158,7 +160,7 @@ TEST_PROMPTS: list[dict[str, Any]] = [
         "expected_tier": "flash",
         "timeout_s": COMPLEX_TIMEOUT_S,
         "min_response_chars": 120,
-        "pipeline_notes": "frontier hint → complex-cloud; tier stays flash (profile default)",
+        "pipeline_notes": "frontier hint → complex-(cloud|default) by profile; tier stays flash",
     },
     {
         "id": "F7.2",
@@ -445,6 +447,18 @@ class WsEventLog:
                 return True
         return False
 
+    def first_chunk_ttft_ms(self, since_ts: float) -> float | None:
+        """Milliseconds from since_ts to first non-empty WS chunk (client-side TTFT)."""
+        for ev in self.events:
+            if ev["ts"] < since_ts:
+                continue
+            if ev["type"] != "chunk":
+                continue
+            payload = ev.get("payload") or {}
+            if payload.get("content"):
+                return round((ev["ts"] - since_ts) * 1000, 1)
+        return None
+
     def running_tools_since(self, since_ts: float) -> list[str]:
         """Tool names with a running tool_execution event and no success/error yet."""
         running: dict[str, bool] = {}
@@ -676,7 +690,8 @@ async def vision_available(profile: str) -> bool:
 
 def resolve_expected_route(expected: str, *, profile: str) -> str:
     if expected == "complex":
-        return "complex-cloud"
+        # local_only / --profile local keeps complex on the unified local engine
+        return "complex-default" if profile == "local" else "complex-cloud"
     if expected == "vision":
         return "vision_cloud" if profile == "cloud" else "vision"
     return expected
@@ -686,7 +701,12 @@ def route_matches(actual: str, expected: str, *, profile: str) -> bool:
     if not actual:
         return False
     if expected == "complex":
-        return actual == "complex-cloud"
+        if profile == "local":
+            return actual == "complex-default"
+        if profile == "cloud":
+            return actual == "complex-cloud"
+        # auto: either complex tier is acceptable at full credit
+        return actual in COMPLEX_ROUTES
     if expected == "vision":
         if profile == "cloud":
             return actual in VISION_ROUTES and actual == "vision_cloud"
@@ -725,17 +745,30 @@ async def delete_project(project_id: str) -> None:
 async def wait_for_ready(page: Page) -> None:
     print("[EVAL] Waiting for UI to be ready...")
     try:
-        await page.locator(".workspace-project-item").first.wait_for(
+        # Mindmap UI: composer is the readiness signal (sidebar project list removed)
+        await page.locator(".composer textarea, textarea").first.wait_for(
             state="visible", timeout=30000
         )
     except Exception as e:
-        print(f"Failed to find workspace item: {e}")
-    await page.wait_for_timeout(1000)
+        print(f"Failed to find composer: {e}")
+    # Prefer Chat layout so HITL cards / tool activity are in the DOM for automation
+    try:
+        chat_btn = page.get_by_role("button", name="Chat", exact=True)
+        if await chat_btn.count() > 0:
+            await chat_btn.first.click(timeout=3000)
+            await page.wait_for_timeout(400)
+    except Exception as e:
+        print(f"[EVAL] Chat layout switch skipped: {e}")
+    await page.wait_for_timeout(600)
 
 
 async def new_chat(page: Page) -> None:
     print("[EVAL] Starting new chat...")
-    await page.locator('button.workspace-refresh[title="New chat"]').click()
+    # Thought Graph "New Thread" uses window.prompt — accept via Playwright dialog
+    async with page.expect_dialog(timeout=5000) as dialog_info:
+        await page.get_by_role("button", name="New Thread").click()
+    dialog = await dialog_info.value
+    await dialog.accept(f"Eval-{uuid.uuid4().hex[:8]}")
     await page.wait_for_timeout(1500)
     await wait_for_ready(page)
 
@@ -764,6 +797,20 @@ async def resolve_hitl(page: Page, expected_tools: list[str] | None = None) -> i
         return 0
     print("\n[EVAL] HITL Prompt detected! Resolving...")
     pending_card = pending.last
+    try:
+        await pending_card.scroll_into_view_if_needed(timeout=3000)
+    except Exception:
+        pass
+
+    # Prefer Chat layout if HITL landed while still on mindmap (cards not interactive)
+    try:
+        chat_btn = page.get_by_role("button", name="Chat", exact=True)
+        if await chat_btn.count() > 0:
+            await chat_btn.first.click(timeout=2000)
+            await page.wait_for_timeout(200)
+    except Exception:
+        pass
+
     skip = pending_card.locator(".hitl-btn-skip")
     try:
         if await skip.count() > 0:
@@ -772,6 +819,22 @@ async def resolve_hitl(page: Page, expected_tools: list[str] | None = None) -> i
             return hitl_count
     except Exception as e:
         print(f"[EVAL-DEBUG] skip.click error: {e}")
+
+    async def _click_non_custom_choice() -> bool:
+        """Select a concrete choice; never open 'Type custom answer...'."""
+        choices = pending_card.locator(".hitl-choice-btn")
+        n = await choices.count()
+        if n <= 0:
+            return False
+        for i in range(n):
+            label = (await choices.nth(i).inner_text()).strip().lower()
+            if "custom" in label or label.startswith("type "):
+                continue
+            await choices.nth(i).click(force=True, timeout=3000)
+            return True
+        await choices.first.click(force=True, timeout=3000)
+        return True
+
     try:
         if await pending_card.locator(".hitl-scope-question").count() > 0:
             await page.evaluate(
@@ -780,8 +843,12 @@ async def resolve_hitl(page: Page, expected_tools: list[str] | None = None) -> i
                   if (cards.length > 0) {
                       const lastCard = cards[cards.length - 1];
                       lastCard.querySelectorAll('.hitl-scope-question').forEach((q) => {
-                          const btn = q.querySelector('.hitl-choice-btn');
-                          if (btn) btn.click();
+                          const btns = [...q.querySelectorAll('.hitl-choice-btn')];
+                          const pick = btns.find((b) => {
+                            const t = (b.innerText || '').toLowerCase();
+                            return !t.includes('custom') && !t.startsWith('type ');
+                          }) || btns[0];
+                          if (pick) pick.click();
                       });
                   }
                 }"""
@@ -805,9 +872,7 @@ async def resolve_hitl(page: Page, expected_tools: list[str] | None = None) -> i
                         '.hitl-choice-btn:has-text("Read terminal or screen context")'
                     ).first.click(force=True, timeout=3000)
                 else:
-                    await pending_card.locator(".hitl-choice-btn").first.click(
-                        force=True, timeout=3000
-                    )
+                    await _click_non_custom_choice()
             elif expected_tools and "browser_background_fetch" in expected_tools:
                 if (
                     await pending_card.locator(
@@ -819,9 +884,7 @@ async def resolve_hitl(page: Page, expected_tools: list[str] | None = None) -> i
                         '.hitl-choice-btn:has-text("Search the web")'
                     ).first.click(force=True, timeout=3000)
                 else:
-                    await pending_card.locator(".hitl-choice-btn").first.click(
-                        force=True, timeout=3000
-                    )
+                    await _click_non_custom_choice()
             elif expected_tools and "get_active_browser_context" in expected_tools:
                 if (
                     await pending_card.locator(
@@ -833,21 +896,41 @@ async def resolve_hitl(page: Page, expected_tools: list[str] | None = None) -> i
                         '.hitl-choice-btn:has-text("Just answer directly")'
                     ).first.click(force=True, timeout=3000)
                 else:
-                    await pending_card.locator(".hitl-choice-btn").first.click(
-                        force=True, timeout=3000
-                    )
+                    await _click_non_custom_choice()
             else:
-                await pending_card.locator(".hitl-choice-btn").first.click(
-                    force=True, timeout=3000
-                )
-            await page.wait_for_timeout(1000)
+                await _click_non_custom_choice()
+            await page.wait_for_timeout(400)
     except Exception as e:
         print(f"[EVAL-DEBUG] choice.click error: {e}")
     approve = pending_card.locator(".hitl-btn-approve")
     try:
         if await approve.count() > 0:
-            await approve.first.click(force=True, timeout=5000)
-            await page.wait_for_timeout(2000)
+            # ask_user Confirm Choice stays disabled until a choice is selected
+            for _ in range(12):
+                if not await approve.first.is_disabled():
+                    break
+                await _click_non_custom_choice()
+                await page.wait_for_timeout(150)
+            if await approve.first.is_disabled():
+                await page.evaluate(
+                    """() => {
+                      const cards = document.querySelectorAll('.hitl-prompt-card.hitl-pending');
+                      const card = cards[cards.length - 1];
+                      if (!card) return;
+                      const choices = [...card.querySelectorAll('.hitl-choice-btn')];
+                      const pick = choices.find((c) => {
+                        const t = (c.innerText || '').toLowerCase();
+                        return !t.includes('custom') && !t.startsWith('type ');
+                      }) || choices[0];
+                      if (pick) pick.click();
+                    }"""
+                )
+                await page.wait_for_timeout(250)
+            if not await approve.first.is_disabled():
+                await approve.first.click(force=True, timeout=5000)
+                await page.wait_for_timeout(2000)
+            else:
+                print("[EVAL] HITL approve still disabled after choice attempts")
     except Exception as e:
         print(f"[EVAL-DEBUG] approve.click error: {e}")
     return hitl_count
@@ -869,6 +952,7 @@ async def wait_for_turn_complete(
     last_print = start_time
     tool_stall_polls = 0
     _debug_ws_logged = False
+    hitl_pending_since: float | None = None
 
     async def _executed_tools() -> tuple[list[str], list[str]]:
         dom_tools = await scrape_executed_tools(page)
@@ -885,7 +969,50 @@ async def wait_for_turn_complete(
             print(
                 f"\n[EVAL] FAIL: Page deadlocked! Main thread is frozen (elapsed: {elapsed:.0f}s). Aborting test case."
             )
-            return False, 0
+            return {
+                "response_text": "",
+                "completed": False,
+                "graph_idle": False,
+                "premature_complete": True,
+                "hitl_resolves": hitl_resolves,
+                "busy_wait_seconds": round(elapsed, 2),
+                "executed_tools": [],
+                "executed_tools_ws": [],
+            }
+        try:
+            pending_n = await page.locator(".hitl-prompt-card.hitl-pending").count()
+        except Exception:
+            pending_n = 0
+        if pending_n > 0:
+            if hitl_pending_since is None:
+                hitl_pending_since = time.monotonic()
+            hitl_age = time.monotonic() - hitl_pending_since
+            if hitl_age > HITL_STALL_S:
+                print(
+                    f"\n[EVAL] HITL stall ({hitl_age:.0f}s > {HITL_STALL_S}s); "
+                    "aborting turn to avoid multi-minute hang"
+                )
+                ws_text = (
+                    ws_log.assistant_text_since(since_ts) if ws_log and since_ts else ""
+                )
+                if not ws_text and ws_log and since_ts:
+                    ws_text = ws_log.chunk_text_since(since_ts)
+                response_text = ws_text or await scrape_final_response(page)
+                tools, ws_tools = await _executed_tools()
+                return {
+                    "response_text": response_text,
+                    "completed": False,
+                    "graph_idle": False,
+                    "premature_complete": True,
+                    "hitl_resolves": hitl_resolves,
+                    "busy_wait_seconds": round(elapsed, 2),
+                    "executed_tools": tools,
+                    "executed_tools_ws": ws_tools,
+                    "hitl_stalled": True,
+                }
+        else:
+            hitl_pending_since = None
+
         try:
             hitl_resolves += await asyncio.wait_for(
                 resolve_hitl(page, expected_tools=expected_tools), timeout=25.0
@@ -1120,15 +1247,53 @@ async def scrape_executed_tools(page: Page) -> list[str]:
 
 
 async def get_orchestration_data(page: Page) -> dict:
+    """DOM fallback for model/route. Prefer WS router_info/model_info in run_turn.
+
+    Never scrape ConnectionDot ("Connected") — that was poisoning scores.
+    """
     try:
         model = await page.evaluate(
-            "() => document.querySelector('.sb-segment .sb-label')?.innerText || document.querySelector('.model-badge')?.innerText || ''"
+            """() => {
+              const badge = document.querySelector('.model-badge');
+              if (badge && badge.innerText && badge.innerText.trim()) {
+                return badge.innerText.trim();
+              }
+              // StatusBar model button: .sb-segment.sb-btn that also has .sb-route
+              // or sits after ConnectionDot (not the first connection segment).
+              const modelBtn = document.querySelector(
+                '.status-bar button.sb-segment.sb-btn .sb-label'
+              );
+              if (modelBtn && modelBtn.innerText) {
+                const t = modelBtn.innerText.trim();
+                if (t && t !== 'Connected' && t !== 'System' && t !== 'Brave Ext') {
+                  return t;
+                }
+              }
+              return '';
+            }"""
         )
         route = await page.evaluate(
-            "() => document.querySelector('.sb-route')?.innerText || document.querySelector('.route-badge')?.innerText || ''"
+            """() => {
+              const rb = document.querySelector('.route-badge');
+              if (rb && rb.innerText && rb.innerText.trim()) {
+                return rb.innerText.trim();
+              }
+              const sr = document.querySelector('.status-bar .sb-route');
+              if (sr && sr.innerText && sr.innerText.trim()) {
+                return sr.innerText.trim();
+              }
+              return '';
+            }"""
         )
         confidence = await page.evaluate(
-            "() => document.querySelector('.sb-confidence')?.innerText || document.querySelector('.orchestration-gauge-value')?.innerText || ''"
+            """() => {
+              const sb = document.querySelector('.status-bar .sb-confidence');
+              if (sb && sb.innerText && sb.innerText.trim()) {
+                return sb.innerText.trim();
+              }
+              const gauge = document.querySelector('.orchestration-gauge-value');
+              return (gauge && gauge.innerText) ? gauge.innerText.trim() : '';
+            }"""
         )
         classification_source = await page.evaluate(
             """() => {
@@ -1352,7 +1517,12 @@ def score_exchange(exchange: dict, expected: dict, *, profile: str) -> dict:
     if route_matches(exchange.get("route", ""), expected_route, profile=profile):
         scores["route_match"] = True
         scores["grade"] += route_pts
-    elif expected_route == "complex" and exchange.get("route") in COMPLEX_ROUTES:
+    elif (
+        expected_route == "complex"
+        and profile != "local"
+        and exchange.get("route") in COMPLEX_ROUTES
+    ):
+        # Partial credit when cloud expected but local complex-default ran (or vice versa on auto)
         scores["route_match"] = True
         scores["grade"] += max(20, route_pts - 10)
     elif expected_route == "vision" and exchange.get("route") in VISION_ROUTES:
@@ -1363,7 +1533,7 @@ def score_exchange(exchange: dict, expected: dict, *, profile: str) -> dict:
         and exchange.get("route") in COMPLEX_ROUTES
         and _vision_route_acceptable(exchange)
     ):
-        # Router uses complex-cloud for images; task_category marks vision work.
+        # Router uses complex-(cloud|default) for images; task_category marks vision work.
         scores["route_match"] = True
         scores["vision_route_ok"] = True
         scores["grade"] += max(20, route_pts - 10)
@@ -1592,6 +1762,7 @@ async def run_turn(
         "ws_events_seen": ws_since,
         "ws_events_captured": ws_log.types_since(turn_start),
         "file_processed": file_processed,
+        "ttft_ms": ws_log.first_chunk_ttft_ms(turn_start),
         "duration_seconds": round(duration, 2),
         "approx_tps": round((len(response_text) / 4.0) / duration, 2)
         if duration > 0
@@ -1764,15 +1935,13 @@ async def main() -> None:
                 f"[EVAL] Profile: {profile} | cloud_escalation={runtime['cloud_escalation_enabled']} "
                 f"| strict_cloud={use_strict}"
             )
-            await page.goto(BASE_URL, wait_until="load")
-            await wait_for_ready(page)
-
-            await (
-                page.locator(".workspace-project-item")
-                .filter(has_text=project_name)
-                .first.click()
+            # Select eval project via query param (mindmap UI has no project sidebar)
+            await page.goto(
+                f"{BASE_URL}?project_id={project_id}",
+                wait_until="load",
             )
-            await page.wait_for_timeout(3000)
+            await wait_for_ready(page)
+            await page.wait_for_timeout(1500)
             await wait_for_ready(page)
 
             for index, item in enumerate(TEST_PROMPTS):

@@ -1,17 +1,21 @@
 import { MessageSquare, BookOpen, ShieldAlert } from 'lucide-react'
+import { useSystemHealth } from '../../lib/useSystemHealth'
 
 interface ModeSwitcherProps {
   activeMode: 'normal' | 'study' | 'pentest'
   onModeChange: (mode: 'normal' | 'study' | 'pentest') => void
 }
 
-const modes = [
+const ALL_MODES = [
   { id: 'normal' as const, label: 'Normal', icon: <MessageSquare size={14} /> },
   { id: 'study' as const, label: 'Study', icon: <BookOpen size={14} /> },
   { id: 'pentest' as const, label: 'Pentest', icon: <ShieldAlert size={14} /> },
 ]
 
 export function ModeSwitcher({ activeMode, onModeChange }: ModeSwitcherProps) {
+  const health = useSystemHealth()
+  const modes = ALL_MODES.filter((m) => m.id !== 'pentest' || health.pentestEnabled)
+
   return (
     <div
       style={{

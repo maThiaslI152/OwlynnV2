@@ -88,6 +88,7 @@ async def test_router_skill_hitl_round_trip(
     mock_get_profile.return_value = {
         "execution_policy": "interactive",
         "cloud_escalation_enabled": False,
+        "cloud_routing_mode": "auto",
     }
     mock_get_llm.return_value = _make_mock_llm(
         '{"routing":"complex","confidence":0.45,"toolbox":"all"}'
@@ -166,6 +167,7 @@ async def test_router_skill_hitl_resume(
     mock_get_profile.return_value = {
         "execution_policy": "interactive",
         "cloud_escalation_enabled": False,
+        "cloud_routing_mode": "auto",
     }
     mock_get_llm.return_value = _make_mock_llm(
         '{"routing":"complex","confidence":0.40,"toolbox":"all"}'
@@ -233,6 +235,7 @@ async def test_router_confident_ambiguous_skill_hitl(
     mock_get_profile.return_value = {
         "execution_policy": "interactive",
         "cloud_escalation_enabled": False,
+        "cloud_routing_mode": "auto",
     }
     mock_get_llm.return_value = _make_mock_llm(
         '{"routing":"complex","confidence":0.85,"toolbox":"data_viz"}'  # HIGH confidence

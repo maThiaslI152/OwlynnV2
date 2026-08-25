@@ -1,7 +1,7 @@
 ---
 status: active
 category: standards
-last_updated: 2026-07-09
+last_updated: 2026-08-25
 owner: human
 ---
 
@@ -14,6 +14,8 @@ Target hardware: **Mac Air M4 (24 GB unified memory)**. These SLOs define the ex
 ## Overview
 
 Measured periodically and checked before major releases. SLOs cover response latency, memory budget, storage, CPU/thermal, throughput, and availability.
+
+**Local-first envelope (2026-08-25):** Default `cloud_routing_mode=local_only`. Preload **main + embedding only** (vision/Stirling on-demand). Core health = Postgres + LM Studio (+ optional Stirling). Redis/Qdrant are optional. Pentest/Kali stays off until `features.pentest_enabled`.
 
 ## Entry Points
 
@@ -28,11 +30,11 @@ tests/test_frontend_cutover_serving.py
 
 ### Degradation Ladder (Memory Approaches Limit at 14/16 GB)
 
-1. Unload vision VLM from LM Studio (Gemma 4 E2B, ~3 GB — largest model)
-2. Unload extraction model from LM Studio (Gemma 4 E2B, ~5 GB)
-3. Reduce context window to 50K tokens
-4. Disable auto-summarize (keep full context at reduced window)
-5. If below 1 GB free, optionally stop SearXNG manually (`podman stop owlynn_searxng`) — not automated in application code
+1. Keep vision VLM unloaded (already on-demand)
+2. Stop StirlingPDF container (idle_shutdown default on)
+3. Reduce context window / trigger auto-summarize earlier
+4. If below 1 GB free, unload main LLM via idle manager
+5. Optionally stop SearXNG manually — not automated in application code
 
 ## API
 
@@ -41,37 +43,44 @@ tests/test_frontend_cutover_serving.py
 | Metric | Target | Degraded | Unacceptable |
 |--------|--------|----------|--------------|
 | **Semantic cache hit (repeated question)** | **< 100ms** | **100-500ms** | **> 500ms** |
-| Simple query (keyword-matched) | < 2s | 2-5s | > 5s |
-| Complex query (cloud DeepSeek V4) | < 15s | 15-30s | > 30s |
-| Streaming first token | < 3s | 3-8s | > 8s |
+| Simple / trivia (deterministic → simple, no coherence LLM) | < 3s | 3-6s | > 8s |
+| Web tool-first (search then one synthesis) | < 8s | 8-15s | > 25s |
+| Complex local (bind_tools rounds) | < 20s | 20-40s | > 60s |
+| Complex cloud (DeepSeek, when flipped) | < 15s | 15-30s | > 30s |
+| Streaming first token (simple) | < 2s | 2-5s | > 8s |
 | Tool execution (single call) | < 5s | 5-15s | > 15s |
 | WebSocket connect | < 1s | 1-3s | > 3s |
 
 Measured from: user sends message → assistant first token received (streaming), or final message received (non-streaming).
+
+**Instrumentation:** Audit `api.ws` / `ttft` (`ttft_ms`) and `turn_complete` (`ttft_ms` + `turn_duration_ms`). E2E/frontier JSON include `ttft_ms`.
+
+**12B call budget (warm, local_only):** simple ≈ 1 generate (`simple.max_tokens` default 512); web tool-first ≈ inject search + 1 unbound synthesis (`complex.tool_first_synth_token_budget` 1024, no synth retry); avoid always-on coherence.
+
+**Heavy prefill (web synth):** Not routing — system prompt + memory volatile suffix + thread + `web_search` ToolMessage. Tool schemas are unbound on tool-first synth. Truncating search ToolMessages is the main remaining prefill lever.
 
 ### Memory Budget
 
 | Component | Budget | Notes |
 |-----------|--------|-------|
 | Python agent (langgraph + LLM pool) | 2 GB | Peak during complex reasoning + tool execution |
-| Local Main LLM (`gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m`, LM Studio) | ~7.5 GB | Unified engine: Router, direct responses, memory extraction, local complex reasoning, pentest mode |
-| Local Vision LLM (`baidu.unlimited-ocr`, LM Studio) | 1.5 GB | Dedicated OCR / visual transcription proxy |
-| MXBAI embedding (`text-embedding-mxbai-embed-large-v1`, LM Studio) | 670 MB | PostgreSQL pgvector / memory / semantic cache embeddings (1024 dims) |
+| Local Main LLM (`gemma-4-12b-agentic-…@q4_k_m`, LM Studio) | ~7.5 GB | Unified engine: simple, complex-default, extraction |
+| MXBAI embedding (`text-embedding-mxbai-embed-large-v1`) | 670 MB | Preloaded with main |
+| Vision OCR (`baidu.unlimited-ocr`) | 1.5 GB | On-demand only (not in startup.preload) |
 | PostgreSQL + pgvector | 512 MB | State checkpoints + vector memory |
-| Redis (Docker) | 128 MB | Semantic cache + extraction queue |
+| StirlingPDF | ~250 MB | On-demand; idle_shutdown default true |
 | Frontend (Electron + React) | 256 MB | Desktop shell + rendered UI |
-| **Total sustained** | **~8.3 GB** | All models loaded, all services running |
-| **Total peak** | **~9.3 GB** | During complex reasoning + web search + memory save |
+| **Total sustained (lite)** | **~11 GB** | main + embed + Postgres + UI |
+| **Total peak** | **~13 GB** | + vision/Stirling/web during PDF/vision turns |
 
 ### Storage
 
 | Resource | Budget | Notes |
 |----------|--------|-------|
 | Codebase + build artifacts | ~500 MB | Python venv, node_modules, dist |
-| Qdrant vectors | ~200 MB | Per ~50K memory entries |
-| Redis RDB snapshots | ~100 MB | Session checkpoints |
+| Postgres vectors | ~200 MB | Per ~50K memory entries |
 | Audit logs | ~50 MB | JSONL audit bundles |
-| **Total** | **~850 MB** | |
+| **Total** | **~750 MB** | |
 
 ### CPU / Thermal
 
@@ -87,8 +96,8 @@ Measured from: user sends message → assistant first token received (streaming)
 | Metric | Target |
 |--------|--------|
 | Concurrent sessions | 1 (active) + unlimited (idle, checkpointed) |
-| Streaming tokens/second (cloud model) | > 30 tok/s |
-| Streaming tokens/second (router model) | > 80 tok/s |
+| Streaming tokens/second (main 12B local) | > 40 tok/s |
+| Streaming tokens/second (cloud when enabled) | > 30 tok/s |
 | WebSocket reconnect | < 2s |
 | Project switch latency | < 500ms |
 
@@ -96,8 +105,9 @@ Measured from: user sends message → assistant first token received (streaming)
 
 | Metric | Target |
 |--------|--------|
-| Services uptime (Qdrant, Redis, SearxNG) | 99.9% per session |
-| Non-graceful degradation rate | < 1% of queries |
+| Core services (Postgres, LM Studio) | Required for healthy session |
+| StirlingPDF | Optional / on-demand |
+| Redis / Qdrant | Optional (not required in System health UI) |
 | Graph execution error rate | < 0.5% of queries |
 | WS disconnect rate | < 1 per 100 queries |
 
@@ -108,6 +118,7 @@ Measured from: user sends message → assistant first token received (streaming)
 | Hard memory budget at 14 GB (2 GB headroom) | Prevents swap thrashing on 24 GB system | Reduces model size or disables features when budget exceeded |
 | Latency regressions > 20% block next phase | Maintains UX quality during development | Slows feature velocity |
 | Thermal throttling during idle is a release blocker | Indicates resource leak or misconfiguration | Requires investigation before release |
+| local_only + lite preload | Fit Normal/Study on M4 Air beside Cursor | Cloud/Eco and Pentest are explicit opt-in |
 
 ## Testing
 
@@ -116,8 +127,7 @@ Measured from: user sends message → assistant first token received (streaming)
 ```bash
 ps -o rss,pid -p $(pgrep -f "python.*uvicorn" | head -1)
 ps -o rss,pid -p $(pgrep -f "LM Studio" | head -1) 2>/dev/null || echo "LM Studio not running"
-docker stats --no-stream qdrant redis searxng 2>/dev/null
-ls -lh frontend-v2/dist/assets/index-*.js frontend-v2/dist/assets/index-*.css
+./scripts/ci.sh --quick
 ```
 
 ### Full SLO Check (Pre-Release)
@@ -126,37 +136,3 @@ ls -lh frontend-v2/dist/assets/index-*.js frontend-v2/dist/assets/index-*.css
 cd frontend-v2 && npm run build
 cd .. && python3 -m pytest tests/test_websocket_event_contract.py tests/test_verify_report_fixture.py tests/test_frontend_cutover_serving.py --tb=short
 ```
-
-Manual latency check (requires LM Studio + containers running):
-
-```bash
-time python3 -c "
-import asyncio
-from src.agent.llm import get_small_llm
-loop = asyncio.get_event_loop()
-llm = loop.run_until_complete(get_small_llm())
-result = loop.run_until_complete(llm.ainvoke(['hello']))
-print(result.content[:100])
-"
-```
-
-## Configuration
-
-No specific env vars for SLOs. Enforced via policy rules:
-
-1. Memory budget is hard — if sum of all services exceeds 14 GB (2 GB headroom), reduce model size or disable features before releasing
-2. Latency regressions > 20% require investigation and documentation before proceeding
-3. Thermal throttling during normal use (non-query idle) is a blocker
-4. SLOs checked manually before phase transitions (no automated SLO gate yet)
-
-## Related
-
-- [`docs/standards/documentation.md`](standards/documentation.md) — doc structure rules
-- [`docs/standards/coding-style.md`](standards/coding-style.md) — coding conventions
-- [`docs/features/SEMANTIC_CACHE.md`](features/SEMANTIC_CACHE.md) — semantic cache (< 100ms TTFT for cache hits)
-- [`docs/architecture/REDIS_LIFECYCLE.md`](architecture/REDIS_LIFECYCLE.md) — Redis memory management
-
-## Last updated
-
-2026-07-07 — Added semantic cache hit SLO (< 100ms). Redis budget note updated.
-2026-05-31 — `docs-standards-timeline` added frontmatter, purpose blockquote

@@ -432,6 +432,7 @@ async def memory_retrieve_node(state: AgentState) -> AgentState:
             "memory_context": merged,
             "knowledge_context": "",
             "scenario_context": scenario_block or None,
+            **_token_budget_fields(state),
         }
 
     # Normal/study mode: global memory retrieval
@@ -503,12 +504,25 @@ async def memory_retrieve_node(state: AgentState) -> AgentState:
         "memory_context": merged_context,
         "knowledge_context": knowledge_context,
         "scenario_context": scenario_block or None,
+        **_token_budget_fields(state),
     }
     if is_struggle_recall_query(user_message):
         out["needs_memory_retrieval"] = True
         if scenario_id:
             out["scenario_id"] = scenario_id
     return out
+
+
+def _token_budget_fields(state: AgentState) -> dict:
+    """Populate active_tokens so summarize_gate can fire when context is near full."""
+    from src.agent.nodes.summarize import _estimate_messages_tokens
+
+    messages = list(state.get("messages") or [])
+    return {
+        "active_tokens": _estimate_messages_tokens(messages),
+        "context_window": state.get("context_window")
+        or config.get_main_model_context_window(),
+    }
 
 
 @log_node("memory_inject")

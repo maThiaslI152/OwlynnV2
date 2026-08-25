@@ -101,7 +101,11 @@ async def ensure_llm_loaded() -> None:
     if not _llm_unloaded:
         return
     base = await _get_lm_studio_base_url()
-    model_key = config.get("models.small.lm_studio_model_key", "")
+    model_key = (
+        config.get("models.main.lm_studio_model_key")
+        or config.get("models.main.model_name")
+        or ""
+    )
     try:
         logger.info("[idle] Reloading LLM model '%s' before inference...", model_key)
         async with httpx.AsyncClient(timeout=20) as client:
@@ -120,18 +124,37 @@ async def ensure_llm_loaded() -> None:
 # ── StirlingPDF idle-shutdown ─────────────────────────────────────────────────
 
 
+async def _container_cli() -> list[str]:
+    """Prefer podman when available, else docker."""
+    import shutil
+
+    if shutil.which("podman"):
+        return ["podman"]
+    if shutil.which("docker"):
+        return ["docker"]
+    return []
+
+
 async def _stop_stirling() -> None:
-    """Stop the owlynn_stirling_pdf Docker container."""
+    """Stop the owlynn_stirling_pdf container (Podman or Docker)."""
+    cli = await _container_cli()
+    if not cli:
+        logger.warning(
+            "[idle] Neither podman nor docker found; cannot stop StirlingPDF."
+        )
+        return
     try:
         proc = await asyncio.create_subprocess_exec(
-            "docker",
+            *cli,
             "stop",
             "owlynn_stirling_pdf",
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
         )
         await proc.wait()
-        logger.info("[idle] StirlingPDF container stopped (idle timeout).")
+        logger.info(
+            "[idle] StirlingPDF container stopped via %s (idle timeout).", cli[0]
+        )
     except Exception as e:
         logger.warning("[idle] Failed to stop StirlingPDF: %s", e)
 
@@ -143,7 +166,9 @@ async def ensure_stirling_running() -> None:
     """
     if not config.get("services.stirling_pdf.idle_shutdown", False):
         return
-    stirling_url = config.get("stirlingpdf.url", "http://127.0.0.1:8090")
+    stirling_url = config.get("external_services.stirling_pdf.url") or config.get(
+        "stirlingpdf.url", "http://127.0.0.1:8090"
+    )
     try:
         async with httpx.AsyncClient(timeout=2) as client:
             resp = await client.get(f"{stirling_url}/api/v1/info")
@@ -153,16 +178,22 @@ async def ensure_stirling_running() -> None:
         pass  # Container is down — start it
 
     record_pdf_activity()  # reset timer before start
+    cli = await _container_cli()
+    if not cli:
+        logger.warning(
+            "[idle] Neither podman nor docker found; cannot start StirlingPDF."
+        )
+        return
     try:
         proc = await asyncio.create_subprocess_exec(
-            "docker",
+            *cli,
             "start",
             "owlynn_stirling_pdf",
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
         )
         await proc.wait()
-        logger.info("[idle] Starting StirlingPDF container on-demand...")
+        logger.info("[idle] Starting StirlingPDF container via %s on-demand...", cli[0])
     except Exception as e:
         logger.warning("[idle] Failed to start StirlingPDF: %s", e)
         return
@@ -222,7 +253,9 @@ async def idle_watcher_loop() -> None:
         if stirling_shutdown_enabled:
             pdf_idle_secs = now - _last_pdf_activity
             if pdf_idle_secs >= stirling_idle_minutes * 60:
-                stirling_url = config.get("stirlingpdf.url", "http://127.0.0.1:8090")
+                stirling_url = config.get(
+                    "external_services.stirling_pdf.url"
+                ) or config.get("stirlingpdf.url", "http://127.0.0.1:8090")
                 try:
                     async with httpx.AsyncClient(timeout=2) as client:
                         resp = await client.get(f"{stirling_url}/api/v1/info")

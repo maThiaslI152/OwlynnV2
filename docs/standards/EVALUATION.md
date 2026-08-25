@@ -1,14 +1,14 @@
 ---
 status: active
 category: standards
-last_updated: 2026-06-18
+last_updated: 2026-08-25
 owner: ai-agent
 audience: agent
 ---
 
 # Evaluation Standard
 
-> **Purpose:** How to run automated browser evaluations against the **current** Owlynn stack (cloud-primary routing, ToolActivityCard UI, memory, vision proxy, file watcher).
+> **Purpose:** How to run automated browser evaluations against the **current** Owlynn stack (local-first routing, ToolActivityCard UI, memory, vision proxy, file watcher).
 
 ## CI vs evaluation
 
@@ -18,6 +18,7 @@ audience: agent
 | Live cloud | `./scripts/ci.sh --network` | DeepSeek E2E, KV cache, chat matrix (`DEEPSEEK_API_KEY`) |
 | Benchmarks | `./scripts/ci.sh --benchmarks` | Router/complex/memory latency → `tests/benchmarks/benchmark_report.json` |
 | **Frontier eval** | `python scripts/run_local_frontier_eval.py` | ~19-turn scored routing + tools + memory + vision + formats |
+| **GDP follow-up E2E** | `python scripts/manual/e2e_gdp_followup_ws.py` | WS-only: capital → GDP follow-up; cache-bust; requires live `web_search`; records `ttft_ms` |
 | **Educator eval** | `python scripts/run_educator_eval.py` | 8-turn UID10667 study session (EDU1–EDU8); optional, needs fixtures |
 | **Frontier comparison** | `python scripts/run_frontier_comparison_eval.py` | Quality A/B: Owlynn vs raw DeepSeek V4 + blind pro judge |
 | **Conversation eval** | `python scripts/run_browser_eval.py` | 12-prompt multi-topic run (qualitative) |
@@ -172,20 +173,26 @@ HITL is resolved in-loop: scope → first `.hitl-choice-btn` + approve; plan/sec
 
 ## Frontier evaluation (`run_local_frontier_eval.py`)
 
-### Turn matrix (cloud-auto)
+### Profile expectations (local-first)
 
-| ID | Topic | Expected route | Key asserts |
-|----|-------|----------------|-------------|
+Default product profile is `cloud_routing_mode=local_only`. With `--profile local`, unresolved `complex` expectations score as **`complex-default`** (not `complex-cloud`). Prefer WS `router_info` / `model_info`; DOM fallback uses `.model-badge` / StatusBar model control (never the Connection `"Connected"` label). Each exchange records `ttft_ms` when chunks arrive. Pending HITL that cannot be confirmed aborts after ~30s.
+
+Mindmap UI: open via `?project_id=` (no sidebar project list); switch to Chat layout for HITL cards; New Thread uses a dialog accept.
+
+### Turn matrix (cloud-auto / historical)
+
+| ID | Topic | Expected route (auto) | Key asserts |
+|----|-------|----------------------|-------------|
 | F1.1 | Simple greeting | `simple` | no tools |
-| F2.1 | Code review | `complex-cloud` | response quality |
+| F2.1 | Code review | `complex-cloud` (→ `complex-default` under `--profile local`) | response quality; avoid endless `ask_user` when no code attached |
 | F3.1 | Web + file write | `complex-cloud` | `web_search`, `write_workspace_file`, HITL |
 | F4.1 | Read file | `complex-cloud` | `read_workspace_file` |
 | F5.1 | React codegen | `complex-cloud` | long response |
 | F6.1 | Conversation recall | `complex-cloud` | Tokyo/tokyo_weather.txt in answer |
 | F7.1 | Frontier quality | `complex-cloud` | `model_tier == flash` (frontier hints do **not** auto-escalate tier) |
 | F7.2 | Pro tier path | `complex-cloud` | `model_tier == pro` after profile bump |
-| F8.1 | Router LLM | `complex-cloud` | `classification_source == llm_classifier` (Gemma 4 26B) |
-| F9.1 | Vision OCR | `vision_cloud` | OCR marker in answer (`baidu.unlimited-ocr`) |
+| F8.1 | Router LLM | `complex-cloud` | live path is deterministic; treat as complex quality check |
+| F9.1 | Vision OCR | `vision_cloud` | OCR marker in answer (`baidu.unlimited-ocr`); `local_only` keeps complex-default when cloud off |
 | M1.1 | Memory seed | `complex-cloud` | WS `memory_updated` |
 | M1.2 | Session recall | `complex-cloud` | codeword ZEBRA-42 |
 | M2.1 | LTM cross-thread | `complex-cloud` | codeword in new chat (PostgreSQL pgvector 1024-dim) |
@@ -195,6 +202,14 @@ HITL is resolved in-loop: scope → first `.hitl-choice-btn` + approve; plan/sec
 
 Fixtures: `assets/eval_fixtures/` (generate via `python scripts/generate_eval_fixtures.py`).
 
+### Manual WS regression (GDP follow-up)
+
+```bash
+PYTHONPATH=. python scripts/manual/e2e_gdp_followup_ws.py
+```
+
+Cache-busts T2; requires live `web_search`; asserts no tool-leak syntax; prints `ttft_ms` / `elapsed_s`.
+
 ### Source of truth: WebSocket stream
 
 Routing, tools, and task category are scored from **captured WS events**, not DOM scrapes
@@ -203,8 +218,9 @@ Routing, tools, and task category are scored from **captured WS events**, not DO
 - `tool_execution` (status != error) → `executed_tools`
 - `router_info` `metadata.route` / `classification_source` → route + source
 - `router_info` `metadata.features.task_category` → vision detection (`vision`/`vision_cloud`)
+- first `chunk` timestamp → `ttft_ms`
 
-DOM scrape is kept only as a fallback. Both are stored (`executed_tools_ws`, `executed_tools_dom`).
+DOM scrape is kept only as a fallback (model badge / route — never Connection status). Both are stored (`executed_tools_ws`, `executed_tools_dom`).
 
 ### Scoring (`eval_version: 2026-06-11`, per turn /100)
 

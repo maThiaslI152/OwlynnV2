@@ -172,7 +172,7 @@ def _should_route_to_cloud(user_text: str = "", *, cloud_available: bool) -> boo
         return False
 
     profile = get_profile()
-    cloud_routing_mode = str(profile.get("cloud_routing_mode", "auto")).lower()
+    cloud_routing_mode = str(profile.get("cloud_routing_mode", "local_only")).lower()
 
     # 1. User explicitly forced local only
     if cloud_routing_mode == "local_only":

@@ -6,6 +6,7 @@ import { SettingsPanel } from '../shared/SettingsPanel'
 import { CloudSettingsPanel } from '../shared/CloudSettingsPanel'
 import { MemoryPanel } from '../shared/MemoryPanel'
 import { electronBridge } from '../../lib/electronBridge'
+import { useSystemHealth } from '../../lib/useSystemHealth'
 
 const IconFolder = () => <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
 const IconDatabase = () => <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></svg>
@@ -22,16 +23,9 @@ interface MacMenuBarProps {
 export function MacMenuBar({ isCompact, onToggleMode, activeMode = 'normal', onModeChange }: MacMenuBarProps) {
   const [activeMenu, setActiveMenu] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
-  const [isPackaged, setIsPackaged] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    void electronBridge.isPackaged().then((result) => {
-      if (result.ok && result.data) {
-        setIsPackaged(true)
-      }
-    })
-  }, [])
+  const health = useSystemHealth()
+  const pentestEnabled = health.pentestEnabled
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -209,7 +203,7 @@ export function MacMenuBar({ isCompact, onToggleMode, activeMode = 'normal', onM
             >
               <GraduationCap size={11} /> Study
             </button>
-            {!isPackaged && (
+            {pentestEnabled && (
             <button
               type="button"
               onClick={() => onModeChange('pentest')}

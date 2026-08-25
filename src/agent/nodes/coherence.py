@@ -3,6 +3,9 @@ Coherence Checker Node — Evaluates answer coherence and turn latency.
 
 Calculates turn duration, checks response coherence using the main local LLM,
 and calibrates confidence based on coherence scores and tool execution failures.
+
+Fast paths (simple route, short answers, successful web synthesis) skip the LLM
+check to avoid a second 12B prefill on every turn.
 """
 
 import json
@@ -18,6 +21,7 @@ from src.agent.llm import get_main_llm
 
 get_small_llm = get_main_llm
 from src.config.audit_log import audit_info, audit_warn
+from src.config.config_loader import config
 from src.config.log_middleware import log_node
 
 logger = logging.getLogger(__name__)
@@ -69,6 +73,58 @@ def _parse_coherence_json(content: str) -> dict[str, Any]:
         "score": 1.0,
         "reason": "Failed to parse coherence check JSON response; defaulted to coherent.",
     }
+
+
+def _turn_has_successful_web_search(messages: list) -> bool:
+    from src.agent.core.complex_utils.helpers import _web_search_tool_output_has_results
+
+    for msg in messages:
+        name = getattr(msg, "name", None) or ""
+        if name != "web_search":
+            continue
+        content = getattr(msg, "content", "") or ""
+        if _web_search_tool_output_has_results(str(content)):
+            return True
+    return False
+
+
+def should_skip_coherence_llm(
+    state: AgentState,
+    *,
+    response_content: str,
+    tool_failures: int,
+    current_turn_messages: list,
+) -> tuple[bool, str]:
+    """Decide whether to skip the coherence LLM call.
+
+    Returns ``(skip, reason)``. When ``coherence.enabled`` is false, the check
+    itself is skipped (not only the retry gate).
+    """
+    if not bool(config.get("coherence.enabled", True)):
+        return True, "coherence_disabled"
+
+    route = str(state.get("route") or "")
+    if bool(config.get("coherence.skip_simple", True)) and route == "simple":
+        return True, "simple_route"
+
+    if tool_failures > 0:
+        return False, ""
+
+    short_limit = int(config.get("coherence.skip_short_answer_chars", 800))
+    route_is_complex = route.startswith("complex")
+    # Keep extremely short complex answers on the LLM/penalty path (quality gate)
+    if (
+        short_limit > 0
+        and 10 <= len(response_content) < short_limit
+        and not (route_is_complex and len(response_content) < 10)
+    ):
+        return True, "short_answer"
+
+    if bool(config.get("coherence.skip_successful_web", True)):
+        if _turn_has_successful_web_search(current_turn_messages) and response_content:
+            return True, "successful_web_synthesis"
+
+    return False, ""
 
 
 @log_node("coherence_check")
@@ -156,13 +212,25 @@ async def coherence_check_node(state: AgentState) -> dict[str, Any]:
             ):
                 tool_failures += 1
 
-    # Check coherence with small LLM
+    # Check coherence with small LLM (skipped on fast paths)
     coherence_data = {
         "coherent": True,
         "score": 1.0,
         "reason": "Default / skipped check",
     }
-    if query_content and response_content:
+    skip_llm, skip_reason = should_skip_coherence_llm(
+        state,
+        response_content=response_content,
+        tool_failures=tool_failures,
+        current_turn_messages=current_turn_messages,
+    )
+    if skip_llm:
+        coherence_data = {
+            "coherent": True,
+            "score": 1.0,
+            "reason": f"Skipped LLM coherence check ({skip_reason})",
+        }
+    elif query_content and response_content:
         try:
             main_llm = await get_main_llm()
             # Bind low temperature to ensure consistent evaluations
@@ -227,6 +295,8 @@ async def coherence_check_node(state: AgentState) -> dict[str, Any]:
         confidence=confidence,
         tool_failures=tool_failures,
         duration_ms=turn_duration_ms,
+        skipped_llm=skip_llm,
+        skip_reason=skip_reason or None,
     )
 
     return {
