@@ -204,8 +204,6 @@ def turn_has_successful_workspace_write(messages: list) -> bool:
 
 
 _CLEAR_LIST_READ_HINTS = (
-    "list_workspace_files",
-    "read_workspace_file",
     "list workspace files and read",
     "list workspace files and then read",
     "list my workspace and read",

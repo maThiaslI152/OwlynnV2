@@ -492,8 +492,10 @@ class LocalAuthMiddleware(BaseHTTPMiddleware):
         token_ok = isinstance(token, str) and secrets.compare_digest(token, expected)
 
         # Browser extension control-plane REST: also accept extension WS token
-        if not token_ok and path.startswith(self._EXTENSION_REST_PREFIX) and isinstance(
-            token, str
+        if (
+            not token_ok
+            and path.startswith(self._EXTENSION_REST_PREFIX)
+            and isinstance(token, str)
         ):
             from src.api.routes.browser_extension import get_extension_auth_token
 

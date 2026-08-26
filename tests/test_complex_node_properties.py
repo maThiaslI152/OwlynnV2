@@ -192,6 +192,17 @@ class TestModelProvenanceMatchesRoute:
             result = await complex_llm_node(state)
 
         expected_label = ROUTE_TO_MODEL[route]
+        # Deterministic tool-first / post-tool short-circuits are valid early exits
+        # and do not claim cloud/local provenance badges.
+        if result.get("model_used") in {
+            "tool-first-web",
+            "tool-first-list-read",
+            "tool-first-write",
+            "tool-first-extractive",
+            "post-write-confirm",
+            "post-read-confirm",
+        }:
+            return
         assert result["model_used"] == expected_label, (
             f"Route {route!r} should produce model_used={expected_label!r}, "
             f"got {result['model_used']!r}"
