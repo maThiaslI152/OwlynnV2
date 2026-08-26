@@ -30,6 +30,16 @@ _embed_url: str = config.get_embedding_base_url()
 # Cosine distance threshold: < 0.08 ≈ >92% similar → cache hit
 _CACHE_THRESHOLD: float = 0.08
 
+# In-memory exact-match cache: (project_id, normalized_prompt) -> (cached_at, response)
+_exact_cache: dict[tuple[str, str], tuple[datetime, str]] = {}
+_EXACT_CACHE_MAX_ENTRIES = 1000
+_EXACT_CACHE_TTL_SECONDS = 3600 * 24  # 24 hours
+
+
+def _normalize_exact_prompt(prompt: str) -> str:
+    """Normalize prompt for exact in-memory hash matching."""
+    return " ".join(prompt.strip().lower().split())
+
 
 def _is_poisoned_cache_response(response: str | None) -> bool:
     """True when a cached answer is unbound tool markup (must never be served)."""
@@ -100,8 +110,8 @@ async def init_semantic_cache() -> None:
 async def check_semantic_cache(prompt: str, project_id: str = "default") -> str | None:
     """Look up a semantically similar prompt in the cache.
 
-    The lookup is scoped to *project_id* so that caches from different
-    projects don't bleed into each other.
+    First checks the ultra-fast in-memory exact-match cache (<1ms TTFT).
+    If missed, falls back to pgvector cosine distance search.
 
     Args:
         prompt:     The raw user prompt to look up.
@@ -110,6 +120,24 @@ async def check_semantic_cache(prompt: str, project_id: str = "default") -> str 
     Returns:
         The cached response string, or ``None`` if no hit was found.
     """
+    # ── Fast path: In-memory exact match (<1ms) ───────────────────────────
+    norm_prompt = _normalize_exact_prompt(prompt)
+    cache_key = (project_id, norm_prompt)
+    if cache_key in _exact_cache:
+        cached_at, cached_res = _exact_cache[cache_key]
+        if datetime.now(UTC) - cached_at < timedelta(seconds=_EXACT_CACHE_TTL_SECONDS):
+            if not _is_poisoned_cache_response(cached_res):
+                logger.info(
+                    "[semantic_cache] Exact in-memory Cache HIT for project=%s",
+                    project_id,
+                )
+                return cached_res
+            else:
+                _exact_cache.pop(cache_key, None)
+        else:
+            _exact_cache.pop(cache_key, None)
+
+    # ── Fallback path: pgvector cosine similarity search ──────────────────
     from src.memory.postgres_health import (
         is_postgres_available,
         record_postgres_failure,
@@ -166,7 +194,11 @@ async def check_semantic_cache(prompt: str, project_id: str = "default") -> str 
                     )
                 return None
             record_postgres_success()
-            logger.debug("[semantic_cache] Cache HIT for project=%s", project_id)
+            logger.debug(
+                "[semantic_cache] pgvector Cache HIT for project=%s", project_id
+            )
+            # Warm up the in-memory exact cache with this hit
+            _exact_cache[cache_key] = (datetime.now(UTC), row.response)
             return row.response
 
         record_postgres_success()
@@ -186,6 +218,8 @@ async def store_semantic_cache(
 ) -> None:
     """Embed *prompt* and INSERT a new entry into ``semantic_cache``.
 
+    Also populates the in-memory exact cache for instant subsequent hits.
+
     Args:
         prompt:     The raw user prompt to cache.
         response:   The LLM response to store.
@@ -200,6 +234,19 @@ async def store_semantic_cache(
     if _is_poisoned_cache_response(response):
         logger.warning("[semantic_cache] Refusing to store poisoned tool-leak response")
         return
+
+    # Update in-memory exact cache
+    norm_prompt = _normalize_exact_prompt(prompt)
+    cache_key = (project_id, norm_prompt)
+    if len(_exact_cache) >= _EXACT_CACHE_MAX_ENTRIES:
+        # Evict oldest 10%
+        oldest_keys = sorted(_exact_cache.keys(), key=lambda k: _exact_cache[k][0])[
+            : _EXACT_CACHE_MAX_ENTRIES // 10
+        ]
+        for ok in oldest_keys:
+            _exact_cache.pop(ok, None)
+    _exact_cache[cache_key] = (datetime.now(UTC), response)
+
     if not is_postgres_available():
         return
     try:

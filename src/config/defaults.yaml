@@ -408,7 +408,7 @@ cloud:
 tool_output:
   max_tool_output_chars: 20000
   # Multi-turn prefills: prior-turn tool blobs dominate TTFT (topic-drift E2E T3 ~137s).
-  prior_turn_max_chars: 400               # Soft-cap ToolMessages before latest human
+  prior_turn_max_chars: 150               # Soft-cap ToolMessages before latest human
   current_turn_max_chars: 2000            # Cap in-turn tool payloads sent to the LLM
   max_api_tool_arg_chars: 2048          # Cap tool-call arg strings in cloud API replay
   max_read_chars: 20000

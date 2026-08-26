@@ -24,9 +24,11 @@ WebSocket intake
       ▼
 check_semantic_cache(prompt, project_id)
       │
-      ├─ MISS → session.start_run() → [full LangGraph graph] → on idle: store_semantic_cache()
+      ├─ In-memory exact match HIT (<1ms TTFT) ──► stream cached answer ──► done
       │
-      └─ HIT  → stream cached answer → send idle event → done (graph never executes)
+      ├─ pgvector embedding similarity HIT (<150ms TTFT) ──► stream cached answer ──► done
+      │
+      └─ MISS ──► session.start_run() ──► [full LangGraph graph] ──► on idle: store_semantic_cache()
 ```
 
 The cache is **project-scoped**: a question answered in Project A will not be served to Project B, ensuring contextual isolation.
@@ -38,8 +40,8 @@ The cache is **project-scoped**: a question answered in Project A will not be se
 | Function | Description |
 |----------|-------------|
 | `init_semantic_cache()` | Ensures the `semantic_cache` table / index path is ready. Called once at agent startup from `init_agent()`. |
-| `check_semantic_cache(prompt, project_id)` | Embeds the prompt and performs a pgvector similarity search. Returns the cached response string or `None`. |
-| `store_semantic_cache(prompt, response, project_id)` | Stores the prompt embedding + response text in Postgres. Called asynchronously after the `idle` event fires. **Refuses** responses that look like tool-call / DSML leaks (`<\|tool_call\|>`, etc.) so poison cannot be replayed. |
+| `check_semantic_cache(prompt, project_id)` | First checks the ultra-fast in-memory exact-match cache (<1ms). On miss, embeds the prompt and performs a pgvector cosine similarity search (<150ms). Returns the cached response string or `None`. |
+| `store_semantic_cache(prompt, response, project_id)` | Stores normalized prompt in the in-memory exact cache and persists the prompt embedding + response text in Postgres pgvector. Called asynchronously after the `idle` event fires. **Refuses** responses that look like tool-call / DSML leaks (`<\|tool_call\|>`, etc.) so poison cannot be replayed. |
 | `purge` / poison helpers | Detect and drop poisoned cache entries that would re-emit raw tool syntax to the UI. |
 
 Embeddings use the **LM Studio embedding endpoint** (`text-embedding-mxbai-embed-large-v1`, 1024 dims) via the shared helper in `long_term.py` — the same model as LTM.

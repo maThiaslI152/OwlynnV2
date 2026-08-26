@@ -26,10 +26,11 @@ logger = logging.getLogger(__name__)
 
 SIMPLE_PROMPT = (
     "Today is {current_date}. "
-    "Give short, direct answers (1-3 sentences). "
+    "Give short, direct answers (1-2 sentences). "
     "No reasoning steps, no preamble, no meta commentary. "
     "Minimize markdown formatting (bolding, headers, lists) to save output tokens. Use plain text where possible. "
     "Never describe, repeat, or reference your own identity, role, purpose, or persona — just answer the question directly. "
+    "Do NOT call tools, emit XML markup, or describe tool syntax. "
     "Do not start responses with 'You are', 'I am', or any self-description."
     "{style_hint}"
     "{memory_hint}"
@@ -216,8 +217,8 @@ async def simple_node(state: AgentState) -> AgentState:
     prompt = with_system_for_local_server(system, messages)
 
     # Direct response via main local model
-    budget = state.get("token_budget") or 256
-    output_tokens = _simple_output_max_tokens(budget)
+    budget = state.get("token_budget") or 128
+    output_tokens = min(_simple_output_max_tokens(budget), 128)
     main_extra = dict(get_model_config("main").get("extra_body") or {})
     fallback_chain: list[dict] = []
     try:
@@ -225,7 +226,7 @@ async def simple_node(state: AgentState) -> AgentState:
         llm = await get_small_llm()
         response_content = await _get_llm_response(
             llm.bind(
-                temperature=0.4,
+                temperature=0.1,
                 max_tokens=output_tokens,
                 extra_body=main_extra,
             ),

@@ -22,6 +22,34 @@ TOOL_FIRST_PHASE_DONE = "done"
 _PRONOUN_FOLLOWUP_RE = re.compile(
     r"\b(it|its|it's|they|their|them|this|that)\b", re.IGNORECASE
 )
+_TEMPORAL_PHRASES_RE = re.compile(
+    r"\b(this|that)\s+(year|month|week|day|morning|afternoon|evening|weekend|quarter|decade|century|time|season|moment)\b",
+    re.IGNORECASE,
+)
+_EVAL_TAG_RE = re.compile(r"\[eval-nonce=[^\]]+\]|\[Attached[^\]]+\]", re.IGNORECASE)
+
+
+def _clean_query_text(text: str) -> str:
+    """Strip eval nonces, attachment tags, and collapse extra whitespace."""
+    cleaned = _EVAL_TAG_RE.sub("", text).strip()
+    return " ".join(cleaned.split())
+
+
+def _is_true_pronoun_followup(query: str) -> bool:
+    """True when the query has an unresolved pronoun needing prior entity context."""
+    cleaned = _clean_query_text(query)
+    # Remove temporal phrases like "this year" before checking for standalone pronouns
+    without_temporal = _TEMPORAL_PHRASES_RE.sub("", cleaned)
+    match = _PRONOUN_FOLLOWUP_RE.search(without_temporal)
+    if not match:
+        return False
+    # If the query is already detailed (>10 words) and not starting with a pronoun, treat as self-contained
+    words = cleaned.split()
+    if len(words) > 10 and not any(
+        w.lower() in ("it", "its", "it's", "they", "their", "them") for w in words[:3]
+    ):
+        return False
+    return True
 
 
 def is_web_search_only_toolbox(state: dict[str, Any]) -> bool:
@@ -125,13 +153,14 @@ def _prior_human_text(messages: list) -> str:
 
 def resolve_tool_first_search_query(messages: list) -> str:
     """Build a search query; expand short pronoun follow-ups with prior human context."""
-    query = (latest_user_text(messages) or "").strip()
+    raw_query = (latest_user_text(messages) or "").strip()
+    query = _clean_query_text(raw_query)
     if len(query) > 400:
         query = query[:400]
     if not query:
-        return query
-    if _PRONOUN_FOLLOWUP_RE.search(query):
-        prior = _prior_human_text(messages)
+        return raw_query[:400]
+    if _is_true_pronoun_followup(raw_query):
+        prior = _clean_query_text(_prior_human_text(messages))
         if prior and prior.lower() not in query.lower():
             combined = f"{prior} — {query}"
             return combined[:400]

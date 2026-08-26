@@ -13,7 +13,7 @@ owner: human
 
 `web_search` is the agent's single entry point for internet search. Uses a multi-tier fallback pipeline with progressively more resilient (but slower) strategies. No API keys required.
 
-**Tool-first path (router):** When `selected_toolboxes=["web_search"]`, `complex_llm` injects a synthetic `web_search` call without `bind_tools` planning (`src/agent/core/tool_first_web.py`). After results, extractive synthesis is preferred (`complex.tool_first_extractive_synth`). Checkpointed `_tool_first_web_phase=done` is cleared on a new user turn that has not searched yet so mid-thread digressions (T3/T6) still inject search.
+**Tool-first path (router):** When `selected_toolboxes=["web_search"]`, `complex_llm` injects a synthetic `web_search` call without `bind_tools` planning (`src/agent/core/tool_first_web.py`). Queries are resolved with pronoun-expansion intelligence: true pronoun follow-ups (`it`, `its`, `they`) are prepended with cleaned prior turn context, while temporal phrases (`this year`, `this month`, `today`) and self-contained queries remain unpolluted. After results, extractive synthesis is preferred (`complex.tool_first_extractive_synth`). Checkpointed `_tool_first_web_phase=done` is cleared on a new user turn that has not searched yet so mid-thread digressions (T3/T6) still inject search.
 
 ## Entry Points
 
@@ -206,14 +206,14 @@ API-key-based providers removed from pipeline:
 
 If web search runs but the UI never gets a written answer (tool loop, DSML markup, raw excerpt dump), see the fix log:
 
-- [`docs/changes/web-search-synthesis-fix/CHANGELOG.md`](changes/web-search-synthesis-fix/CHANGELOG.md) — BUG-WS-1..6, config `complex.max_web_tool_rounds`
-- [`docs/BUG-TRACKER.md`](BUG-TRACKER.md) — BUG-13 summary
+- [`docs/changes/web-search-synthesis-fix/CHANGELOG.md`](../changes/backbone-modernization/CHANGELOG.md) — BUG-WS-1..6, config `complex.max_web_tool_rounds`
+- [`docs/BUG-TRACKER.md`](../archive/BUG-TRACKER.md) — BUG-13 summary
 
 ## Related
 
-- [`docs/architecture/overview.md`](architecture/overview.md) — system architecture
+- [`docs/architecture/overview.md`](../architecture/overview.md) — system architecture
 - [`docs/architecture/AGENT_FLOW.md`](../architecture/AGENT_FLOW.md) — tool-first web inject / sticky phase
-- [`docs/README.md`](README.md) — project documentation map
+- [`docs/README.md`](../README.md) — project documentation map
 
 ## Last updated
 
