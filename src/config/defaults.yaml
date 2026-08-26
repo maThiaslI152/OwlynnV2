@@ -83,6 +83,8 @@ models:
     extra_body:
       flash_attention: true
       top_p: 0.95
+      top_k: 64
+      repeat_penalty: 1.1
       keep_alive: -1                          # Keep loaded in LM Studio
 
   # ── 2. Vision Transcription Proxy Model ────────────────────────────────────
@@ -128,6 +130,8 @@ models:
       keep_alive: -1                          # Unified with main model; stays loaded
       flash_attention: true
       top_p: 0.95
+      top_k: 64
+      repeat_penalty: 1.1
     note: "Cloud APIs refuse security content. Pentest mode always uses this local model."
     cloud_proxy:
       enabled: true

@@ -59,15 +59,23 @@ download_models(output_dir=Path('$MODEL_DIR'))
 fi
 
 # ═══════════════════════════════════════════════════════════════════
-# [4/5] Vendor offline Chart.js (workspace HTML charts)
+# [4/6] Vendor offline Chart.js (workspace HTML charts)
 # ═══════════════════════════════════════════════════════════════════
-echo "[4/5] Chart.js vendor bundle..."
+echo "[4/6] Chart.js vendor bundle..."
 bash scripts/vendor_chartjs.sh
 
 # ═══════════════════════════════════════════════════════════════════
-# [5/5] Copy .env.example → .env if missing
+# [5/6] Build in-project llama.cpp (verified build b9553 + MTP)
 # ═══════════════════════════════════════════════════════════════════
-echo "[5/5] Configuration..."
+echo "[5/6] Building in-project llama.cpp..."
+bash scripts/setup_llama_cpp.sh || {
+    echo "      WARNING: llama.cpp build failed. You can build it later with ./scripts/setup_llama_cpp.sh"
+}
+
+# ═══════════════════════════════════════════════════════════════════
+# [6/6] Copy .env.example → .env if missing
+# ═══════════════════════════════════════════════════════════════════
+echo "[6/6] Configuration..."
 if [ ! -f .env ]; then
     cp .env.example .env
     echo "      Created .env from .env.example — edit as needed."
@@ -79,7 +87,5 @@ echo ""
 echo "═══ Setup complete ═══"
 echo ""
 echo "   Next steps:"
-echo "   1. Edit .env and set MEDIUM_LLM_MODEL_NAME to your LM Studio model"
-echo "   2. Start LM Studio with your models loaded"
-echo "   3. Run ./start.sh to launch Owlynn"
+echo "   1. Run ./start.sh to launch Owlynn (auto-starts llama-server with MTP draft)"
 echo ""

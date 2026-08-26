@@ -62,19 +62,47 @@ docker compose -f "$_MVP_COMPOSE" up -d $_CORE_SERVICES 2>/dev/null || {
 echo "      Ready."
 
 # ═══════════════════════════════════════════════════════════════════
-# [2/3] LM Studio — wait for user to launch it
+# [2/3] Local LLM Engine (llama-server with MTP Speculative Decoding)
 # ═══════════════════════════════════════════════════════════════════
-echo "[2/3] LM Studio..."
+echo "[2/3] Local LLM Engine (Port 1234)..."
 if curl -sf http://127.0.0.1:1234/v1/models >/dev/null 2>&1; then
-    echo "      Ready."
+    echo "      LLM Server already active on port 1234."
 else
-    echo "      Not responding on port 1234."
-    echo "      Please open LM Studio and start the server."
-    read -r -p "      Press Enter when ready... "
-    curl -sf http://127.0.0.1:1234/v1/models >/dev/null 2>&1 || {
-        echo "      Still not available. Exiting."
-        exit 1
-    }
+    mkdir -p "${HOME}/.owlynn/logs"
+    if [ -f "./scripts/run_llama_server.sh" ]; then
+        echo "      Starting in-project llama-server with MTP draft speculative decoding (~180 tok/s)..."
+        ./scripts/run_llama_server.sh > "${HOME}/.owlynn/logs/llama_server.log" 2>&1 &
+        _LLAMA_PID=$!
+        _PIDS+=("$_LLAMA_PID")
+        
+        echo "      Waiting for llama-server to load models..."
+        _READY=0
+        for i in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:1234/v1/models >/dev/null 2>&1; then
+                _READY=1
+                echo "      llama-server ready (PID $_LLAMA_PID). Log: ~/.owlynn/logs/llama_server.log"
+                break
+            fi
+            if ! kill -0 "$_LLAMA_PID" 2>/dev/null; then
+                echo "      ERROR: llama-server process exited unexpectedly."
+                cat "${HOME}/.owlynn/logs/llama_server.log" | tail -n 20
+                exit 1
+            fi
+            sleep 1
+        done
+        if [ "$_READY" -eq 0 ]; then
+            echo "      ERROR: Timed out waiting for llama-server to initialize."
+            cat "${HOME}/.owlynn/logs/llama_server.log" | tail -n 20
+            exit 1
+        fi
+    else
+        echo "      Not responding on port 1234. Please start LM Studio or llama-server."
+        read -r -p "      Press Enter when ready... "
+        curl -sf http://127.0.0.1:1234/v1/models >/dev/null 2>&1 || {
+            echo "      Still not available. Exiting."
+            exit 1
+        }
+    fi
 fi
 
 # ═══════════════════════════════════════════════════════════════════

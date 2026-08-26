@@ -93,7 +93,8 @@ Model: `gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m` (`models.mai
 | Gemma stop tokens (`<end_of_turn>`, etc.) | Passed via `models.main.stop` / `models.pentest.stop` in `_invoke_local_path` and `_invoke_pentest_path` (not `_invoke_cloud_path`) |
 | Prose tool stall ("I will now search…") | `_looks_like_prose_tool_stall` triggers one local synthesis retry with tools unbound |
 | Multi-hop `notebook_run` for charts stalls turns | Local path uses **HTML + offline Chart.js via `write_workspace_file`** for default charts (`/vendor/chart.umd.min.js`, no CDN); `notebook_run` only when user explicitly asks for matplotlib/PNG |
-| LM Studio MTP speculative decode crashes | `model_swap.py` sets `speculative_draft_simple: False` on model load |
+| MTP speculative decode crashes on newer builds | Upstream regression in llama.cpp `gemma4-assistant` loader (`invalid vector subscript` on b9702+). **Verified working on `llama.cpp b9553` (commit `9e3b928fd`)** with `MTP/gemma-4-12B-it-MTP-Q8_0.gguf` accelerating throughput from ~88 tok/s to ~180 tok/s. Use `./scripts/run_llama_server.sh` for in-project high-throughput serving. |
+| Author-tuned sampling params | Configured in `defaults.yaml` (`top_p: 0.95`, `top_k: 64`, `repeat_penalty: 1.1`, `flash_attention: true`, `temperature: 0.1`). |
 | KV cache: no synthetic `HumanMessage` mid-turn | Web/fetch nudges appended to `ToolMessage.content`; synthesis hints via volatile suffix (`build_volatile_suffix`) |
 
 ### Local prompt patterns

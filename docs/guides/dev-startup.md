@@ -21,7 +21,7 @@ Install these before anything else. All commands are for **macOS** (the primary 
 | Python | ≥3.11 | `brew install python@3.12` | Backend runtime |
 | Node.js | ≥20 | `brew install node` | Frontend build/dev |
 | Podman or Docker | Podman 5+ or Docker 25+ | `brew install podman` (or Docker Desktop) | Postgres (pgvector) + optional StirlingPDF |
-| LM Studio | latest | Download from [lmstudio.ai](https://lmstudio.ai) | Local LLM inference |
+| CMake | ≥3.28 | `brew install cmake` | In-tree `llama.cpp` compilation (MTP draft speculative decoding) |
 
 Verify with:
 
@@ -29,6 +29,7 @@ Verify with:
 python3 --version   # ≥3.11
 node --version      # ≥20
 podman --version    # or: docker --version
+cmake --version     # ≥3.28
 ```
 
 ## Quick Reference
@@ -36,7 +37,7 @@ podman --version    # or: docker --version
 ```
 http://127.0.0.1:5173           # Frontend (Vite dev server)
 http://127.0.0.1:8000           # Backend API (FastAPI)
-http://127.0.0.1:1234           # LM Studio (LLM inference)
+http://127.0.0.1:1234           # llama-server / LM Studio (LLM inference)
 http://127.0.0.1:5432           # PostgreSQL + pgvector (checkpoints, LTM, semantic cache)
 http://127.0.0.1:8090           # StirlingPDF (PDF text + OCR intake)
 http://127.0.0.1:8888           # SearXNG (optional — not started by ./start.sh)
@@ -307,7 +308,7 @@ The output will be placed in `frontend-v2/dist/`.
 - [`start.sh`](../../start.sh) — the single launcher script
 - [`.env.example`](../../.env.example) — general environment variables
 - [`.env.local.example`](../../.env.local.example) — gitignored secrets template (`DEEPSEEK_API_KEY`)
-- [`docs/guides/deepseek-v4-testing.md`](deepseek-v4-testing.md) — live DeepSeek V4 test matrix (flash/pro, thinking, brief regression)
+- [`docs/guides/deepseek-v4-testing.md`](../archive/guides/deepseek-v4-testing.md) — live DeepSeek V4 test matrix (flash/pro, thinking, brief regression)
 - [`docs/guides/lm_studio.md`](lm_studio.md) — LM Studio model setup
 - [`docs/guides/quickstart.md`](quickstart.md) — chat UX features (highlighting, tool cards, mobile)
 - [`AGENTS.md`](../../AGENTS.md) — agent onboarding for Cursor

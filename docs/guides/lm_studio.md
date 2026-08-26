@@ -38,6 +38,28 @@ Owlynn is standardized on the **Unified Local Architecture**:
 
 - `DeepSeek V4` (`deepseek-v4-flash` default, `deepseek-v4-pro` optional) for heavy complex multi-step reasoning via cloud API.
 
+## In-Project High-Throughput Alternative: llama-server (b9553 + MTP Draft)
+
+For maximum local generation speed (~88 → **~180 tok/s**), Owlynn includes direct `llama.cpp` integration pinned to verified working build `b9553` (`9e3b928fd`):
+
+1. **Build llama.cpp once**:
+   ```bash
+   ./scripts/setup_llama_cpp.sh
+   ```
+2. **Launch llama-server with MTP draft speculative decoding**:
+   ```bash
+   ./scripts/run_llama_server.sh
+   ```
+   This automatically binds to `http://127.0.0.1:1234/v1` as a drop-in high-throughput replacement for LM Studio, passing author-tuned presets (`--top-p 0.95 --top-k 64 --repeat-penalty 1.1 -fa -ngl 99 --jinja`).
+
+## Author Recommended Sampling Parameters (Yuxin Lu)
+
+- **Temperature:** `0.1`–`0.2` (deterministic routing and tool accuracy)
+- **Top-P:** `0.95`
+- **Top-K:** `64`
+- **Repetition Penalty:** `1.1`
+- **Flash Attention:** `true`
+
 ## Jinja Template Issues — `No user query found in messages`
 
 LM Studio applies the model's **Jinja chat template** to the `/v1/chat/completions` payload. Owlynn handles template compatibility via:
@@ -51,14 +73,15 @@ LM Studio applies the model's **Jinja chat template** to the `/v1/chat/completio
 
 ## If errors persist
 
-- Update **LM Studio** to the latest build.
-- Prefer **`lmstudio-community`** GGUF variants when available.
+- Update **LM Studio** to the latest build or use `./scripts/run_llama_server.sh`.
+- Prefer **`lmstudio-community`** or author GGUF variants when available.
 - In **My Models → model settings → Prompt Template**, try a fixed template or one from community presets.
 
 ## Related
 
 - [`docs/README.md`](../README.md) — project documentation map
+- [`docs/technical/model-quirks-and-routing.md`](../technical/model-quirks-and-routing.md) — quirks and routing architecture
 
 ## Last updated
 
-2026-08-22 — Standardized on 4-model taxonomy (Gemma 4 26B main, baidu.unlimited-ocr vision, MXBAI 1024-dim embedding, Gemma 4 12B Coder pentest).
+2026-08-26 — Added in-tree llama.cpp b9553 MTP draft speculative decoding (~180 tok/s) and author sampling tuning.

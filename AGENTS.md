@@ -43,6 +43,7 @@
 | Change Eco-Mode / battery throttling | — | `src/api/power_monitor.py`, `src/agent/routing/router.py`, `src/api/ws/handler.py` |
 | Change idle resource management | — | `src/api/idle_manager.py`, `src/api/server.py`, `src/pdf/intake.py` |
 | Run or configure the app | [`docs/guides/dev-startup.md`](docs/guides/dev-startup.md) | `start.sh`, `setup.sh`, `.env` |
+| Change local LLM server / speculative decoding | [`docs/guides/lm_studio.md`](docs/guides/lm_studio.md), [`docs/technical/model-quirks-and-routing.md`](docs/technical/model-quirks-and-routing.md) | `scripts/run_llama_server.sh`, `scripts/setup_llama_cpp.sh`, `src/config/defaults.yaml` |
 | Run CI / tests / evaluation | [`docs/standards/EVALUATION.md`](docs/standards/EVALUATION.md) | `scripts/ci.sh`, `scripts/run_*_eval.py` |
 | Change mode system (Normal/Study/Pentest) | [`docs/features/MODES.md`](docs/features/MODES.md) | `frontend-v2/src/components/ModeSwitcher.tsx`, `src/api/ws/handler.py` |
 | Change study tools / courses | [`docs/features/STUDY.md`](docs/features/STUDY.md) | `src/tools/study_tools.py`, `src/api/routes/study.py`, `skills/` |
@@ -93,6 +94,7 @@
 
 ## Recent Milestones
 
+- **2026-08-26:** In-Project llama.cpp b9553 with lossless MTP draft speculative decoding (~88 → ~180 tok/s), author sampling tuning (top_p 0.95, top_k 64, repeat_penalty 1.1), automated background startup in start.sh.
 - **2026-08-26:** E2E Topic Drift latency optimizations: fast in-memory exact cache (<1ms), clean pronoun expansion for tool-first web, multi-turn history trimming (150 chars), simple route temperature & token budget tuning.
 - **2026-08-26:** Usable multi-turn chat: tool-first sticky phase cleanup, list/read short-circuit, Postgres memory lifecycle docs, Podman 4GB.
 - **2026-08-24:** v0.3.1 Desktop release: local tool bind cap, Mindmap UX enhancements, packaged `Owlynn-0.3.1-arm64.dmg`.

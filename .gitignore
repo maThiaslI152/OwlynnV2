@@ -68,6 +68,7 @@ BLOCKED.md
 
 # Model artifacts (Docling, etc.)
 .models/
+llama.cpp/
 
 # Kiro
 .kiro/
