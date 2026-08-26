@@ -6,6 +6,7 @@
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
+    "dev:browser": "OWLYNN_BROWSER=1 vite",
     "build": "tsc -b && vite build && bash ../scripts/build_backend_bundle.sh && electron-builder",
     "test": "vitest run",
     "lint": "eslint .",

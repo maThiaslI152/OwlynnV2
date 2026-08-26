@@ -1,7 +1,7 @@
 ---
 status: active
 category: guide
-last_updated: 2026-08-26
+last_updated: 2026-08-27
 audience: agent
 owner: ai-agent
 ---
@@ -20,7 +20,7 @@ Install these before anything else. All commands are for **macOS** (the primary 
 |-----------|----------------|-----------------|-----|
 | Python | ≥3.11 | `brew install python@3.12` | Backend runtime |
 | Node.js | ≥20 | `brew install node` | Frontend build/dev |
-| Podman or Docker | Podman 5+ or Docker 25+ | `brew install podman` (or Docker Desktop) | Postgres (pgvector) + optional StirlingPDF |
+| Podman or Docker | Podman 5+ or Docker 25+ | `brew install podman` (or Docker Desktop) | Postgres (pgvector) container |
 | CMake | ≥3.28 | `brew install cmake` | In-tree `llama.cpp` compilation (MTP draft speculative decoding) |
 
 Verify with:
@@ -39,7 +39,6 @@ http://127.0.0.1:5173           # Frontend (Vite dev server)
 http://127.0.0.1:8000           # Backend API (FastAPI)
 http://127.0.0.1:1234           # llama-server / LM Studio (LLM inference)
 http://127.0.0.1:5432           # PostgreSQL + pgvector (checkpoints, LTM, semantic cache)
-http://127.0.0.1:8090           # StirlingPDF (PDF text + OCR intake)
 http://127.0.0.1:8888           # SearXNG (optional — not started by ./start.sh)
 http://127.0.0.1:8000/vendor/chart.umd.min.js  # Offline Chart.js (workspace HTML charts)
 ```
@@ -224,22 +223,26 @@ What `start.sh` does, in order:
 
 1. **Env** — sources `.env` then `.env.local` if present
 2. **Containers** — brings up Postgres (pgvector) via `docker-compose.mvp.yml` (skips if already running)
-3. **LM Studio** — checks port `1234`, prompts you to start it if not responding
-4. **Backend** — `uvicorn src.api.server:app --port 8000` with auto-reload
-5. **Frontend** — `cd frontend-v2 && npx vite --port 5173`
+3. **Local LLM** — starts in-project `llama-server` on `:1234` (Gemma 4 + MTP draft when available; prefers Owlynn over LM Studio). Set `DISABLE_MTP=1` on memory-constrained hosts. Starts mxbai embeddings on `:1235` with `-ngl 0` (CPU) so chat keeps Metal VRAM.
+4. **Backend** — `uvicorn src.api.server:app --port 8000`
+5. **Frontend** — `cd frontend-v2 && npm run dev:browser` (Vite on `:5173`). Set `OWLYNN_ELECTRON=1` for Electron+Vite instead.
 
-The script opens `http://127.0.0.1:5173` in your browser. Press `Ctrl+C` to stop everything — the cleanup trap kills all background processes.
+Open `http://127.0.0.1:5173` in your browser. Press `Ctrl+C` to stop everything — the cleanup trap kills Owlynn listeners on `8000`/`5173`/`1234`/`1235` (Brave is left alone).
 
 ### Running components individually
 
 If you prefer to start components separately:
 
 ```bash
+# Local chat + embed servers
+./scripts/run_llama_server.sh   # :1234 (optional: DISABLE_MTP=1)
+# embeddings: started automatically by ./start.sh on :1235
+
 # Backend only
 uv run uvicorn src.api.server:app --host 127.0.0.1 --port 8000 --reload
 
-# Frontend only
-cd frontend-v2 && npx vite --host 127.0.0.1 --port 5173
+# Frontend only (browser — avoids Electron crash under plain Node)
+cd frontend-v2 && npm run dev:browser
 
 # CLI query (requires backend running)
 uv run python src/cli.py status
@@ -250,15 +253,18 @@ uv run python src/cli.py stream "Hello, what can you do?"
 
 | Mode | Backend | Frontend | Electron | Best For |
 |------|---------|----------|----------|----------|
-| `./start.sh` | Yes | Vite HMR | No | Daily browser use |
-| Browser (manual) | Yes | Vite HMR | No | Dev, hot reload |
+| `./start.sh` | Yes | Vite HMR (`dev:browser`) | Optional (`OWLYNN_ELECTRON=1`) | Daily browser use |
+| Browser (manual) | Yes | `npm run dev:browser` | No | Dev, hot reload |
 | CLI | Yes | No | No | Scripting, API testing |
 
 | Symptom | Most Likely Cause | Fix |
 |---------|------------------|-----|
 | `start.sh`: "ERROR: .venv not found" | Python venv not created | Run `uv venv && uv sync` |
 | `start.sh`: "ERROR: Could not start containers" | No Podman/Docker installed | Install Podman (`brew install podman`) or Docker Desktop |
-| LM Studio "Not responding on port 1234" | LM Studio server not started | Open LM Studio, click "Start Server" in the top bar, then press Enter in terminal |
+| LM Studio / llama "Not responding on port 1234" | Chat server not started or LMS stole the port | `./start.sh` prefers Owlynn `llama-server`; or run `./scripts/run_llama_server.sh`. Unload LMS if it grabbed `:1234`. |
+| Frontend: Electron `BrowserWindow` import error | `npm run dev` loads Electron under plain Node | Use `npm run dev:browser` or `./start.sh` (default browser mode) |
+| Backend starts but embeddings/memory fail | No embed server on `:1235` | Ensure `./start.sh` started mxbai on `:1235`; set `EMBEDDING_LLM_BASE_URL=http://127.0.0.1:1235/v1` |
+| llama-server exits / OOM on 24GB | MTP F16 + GPU embed contention | `DISABLE_MTP=1 ./scripts/run_llama_server.sh`; embed uses `-ngl 0` by default in `start.sh` |
 | Backend crashes with "No module named 'src'" | PYTHONPATH not set | `start.sh` sets it automatically. If running manually: `export PYTHONPATH="$(pwd):$PYTHONPATH"` |
 | Frontend: "command not found: vite" | `npm install` not run | `cd frontend-v2 && npm install` |
 | Backend starts but LLM calls fail | Model name mismatch | Check `.env` model names match exactly what LM Studio reports at `http://127.0.0.1:1234/v1/models` |

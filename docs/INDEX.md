@@ -205,7 +205,7 @@ manifest:
     status: active
     category: guide
     audience: agent
-    last_updated: '2026-08-26'
+    last_updated: '2026-08-27'
   - path: docs/guides/file_formats.md
     status: active
     category: guide

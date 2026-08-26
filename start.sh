@@ -30,6 +30,10 @@ _cleanup() {
             kill "$pid" 2>/dev/null || true
         fi
     done
+    # Free Owlynn ports (embed may outlive PID list if started earlier)
+    for _port in 8000 5173 1234 1235; do
+        lsof -tiTCP:"$_port" -sTCP:LISTEN 2>/dev/null | xargs kill 2>/dev/null || true
+    done
     # Stop Lima Kali VM if running (saves ~2GB RAM)
     if command -v limactl &>/dev/null && limactl list 2>/dev/null | grep -q "owlynn-kali.*Running"; then
         echo "      Stopping Kali VM..."
@@ -66,9 +70,29 @@ echo "      Ready."
 # [2/3] Local LLM Engine (llama-server with MTP Speculative Decoding)
 # ═══════════════════════════════════════════════════════════════════
 echo "[2/3] Local LLM Engine (Port 1234)..."
+_LLAMA_OK=0
 if curl -sf http://127.0.0.1:1234/v1/models >/dev/null 2>&1; then
-    echo "      LLM Server already active on port 1234."
-else
+    # Prefer in-project llama-server (MTP). LM Studio on :1234 is much slower.
+    if pgrep -f "$(pwd)/llama.cpp/.*/llama-server" >/dev/null 2>&1 \
+       || pgrep -f "llama-server.*--alias gemma-4-12b-agentic" >/dev/null 2>&1; then
+        if curl -sf http://127.0.0.1:1234/v1/models 2>/dev/null | grep -q 'gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m'; then
+            _LLAMA_OK=1
+            echo "      Owlynn llama-server already active on port 1234."
+        fi
+    fi
+    if [ "$_LLAMA_OK" -eq 0 ]; then
+        echo "      Port 1234 is occupied by another server (often LM Studio) — switching to Owlynn llama.cpp…"
+        if command -v lms >/dev/null 2>&1 || [ -x "${HOME}/.lmstudio/bin/lms" ]; then
+            _LMS="${HOME}/.lmstudio/bin/lms"
+            command -v lms >/dev/null 2>&1 && _LMS="lms"
+            "$_LMS" unload --all >/dev/null 2>&1 || true
+            "$_LMS" server stop >/dev/null 2>&1 || true
+        fi
+        lsof -tiTCP:1234 -sTCP:LISTEN 2>/dev/null | xargs kill 2>/dev/null || true
+        sleep 1
+    fi
+fi
+if [ "$_LLAMA_OK" -eq 0 ]; then
     mkdir -p "${HOME}/.owlynn/logs"
     if [ -f "./scripts/run_llama_server.sh" ]; then
         echo "      Starting in-project llama-server with MTP draft speculative decoding (~180 tok/s)..."
@@ -78,7 +102,7 @@ else
         
         echo "      Waiting for llama-server to load models..."
         _READY=0
-        for i in $(seq 1 60); do
+        for i in $(seq 1 90); do
             if curl -sf http://127.0.0.1:1234/v1/models >/dev/null 2>&1; then
                 _READY=1
                 echo "      llama-server ready (PID $_LLAMA_PID). Log: ~/.owlynn/logs/llama_server.log"
@@ -104,6 +128,34 @@ else
             exit 1
         }
     fi
+fi
+
+# Embedding server (mxbai) on 1235 — chat llama-server does not serve embeddings
+if ! curl -sf http://127.0.0.1:1235/v1/models >/dev/null 2>&1; then
+    _EMBED_GGUF=""
+    for _e in \
+        "${HOME}/Documents/LM Studio/mixedbread-ai/mxbai-embed-large-v1/mxbai-embed-large-v1-f16.gguf" \
+        "${HOME}/.lmstudio/models/mixedbread-ai/mxbai-embed-large-v1/mxbai-embed-large-v1-f16.gguf" \
+        "$(pwd)/.models/mxbai-embed-large-v1-f16.gguf"
+    do
+        if [ -f "$_e" ]; then _EMBED_GGUF="$_e"; break; fi
+    done
+    _LLAMA_BIN="$(pwd)/llama.cpp/build/bin/llama-server"
+    [ -f "$_LLAMA_BIN" ] || _LLAMA_BIN="$(pwd)/llama.cpp/build/llama-server"
+    if [ -n "$_EMBED_GGUF" ] && [ -f "$_LLAMA_BIN" ]; then
+        echo "      Starting embedding llama-server on :1235 (CPU -ngl 0; frees GPU for chat)..."
+        # Keep embeddings on CPU so chat MTP + main model keep Metal VRAM on 24GB hosts.
+        "$_LLAMA_BIN" -m "$_EMBED_GGUF" --embedding --host 127.0.0.1 --port 1235 \
+            -ngl 0 -c 512 --alias text-embedding-mxbai-embed-large-v1 \
+            > "${HOME}/.owlynn/logs/llama_embed.log" 2>&1 &
+        _PIDS+=("$!")
+        export EMBEDDING_LLM_BASE_URL="${EMBEDDING_LLM_BASE_URL:-http://127.0.0.1:1235/v1}"
+    else
+        echo "      WARNING: Embedding GGUF or llama-server binary missing — memory/embeddings may fail."
+    fi
+else
+    echo "      Embedding server already active on port 1235."
+    export EMBEDDING_LLM_BASE_URL="${EMBEDDING_LLM_BASE_URL:-http://127.0.0.1:1235/v1}"
 fi
 
 # ═══════════════════════════════════════════════════════════════════
@@ -175,11 +227,18 @@ for i in $(seq 1 180); do
     sleep 1
 done
 
-# Start frontend (Electron App)
+# Start frontend — browser Vite by default (Electron needs electron binary runtime)
 if [ -d "frontend-v2" ]; then
-    (cd frontend-v2 && npm run dev > "${HOME}/.owlynn/logs/frontend.log" 2>&1) &
-    _PIDS+=("$!")
-    echo "      Electron app launching (PID $!)."
+    if [ "${OWLYNN_ELECTRON:-0}" = "1" ]; then
+        (cd frontend-v2 && npm run dev > "${HOME}/.owlynn/logs/frontend.log" 2>&1) &
+        _PIDS+=("$!")
+        echo "      Electron+Vite launching (PID $!)."
+    else
+        (cd frontend-v2 && npm run dev:browser > "${HOME}/.owlynn/logs/frontend-browser.log" 2>&1) &
+        _PIDS+=("$!")
+        echo "      Browser UI (Vite) on http://127.0.0.1:5173 (PID $!)."
+        echo "      Tip: set OWLYNN_ELECTRON=1 for Electron window; reload Brave extension if bridge disconnects."
+    fi
 
     # Launch Brave only if not already running — never track/kill Brave on stop
     # (killing Chromium causes "quit unexpectedly"; --load-extension also fails

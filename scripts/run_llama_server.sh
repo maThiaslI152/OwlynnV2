@@ -37,7 +37,6 @@ MAIN_MODEL="${MODEL_PATH:-}"
 if [ -z "${MAIN_MODEL}" ] || [ ! -f "${MAIN_MODEL}" ]; then
     CANDIDATES=(
         "${HOME}/Documents/LM Studio/yuxinlu1/gemma-4-12B-agentic-fable5-composer2.5-v2-3.5x-tau2-GGUF/gemma4-v2-Q4_K_M.gguf"
-        "/Volumes/KNV3_1TB/LM Studio Model/yuxinlu1/gemma-4-12B-agentic-fable5-composer2.5-v2-3.5x-tau2-GGUF/gemma4-v2-Q4_K_M.gguf"
         "${ROOT_DIR}/.models/gemma4-v2-Q4_K_M.gguf"
         "${HOME}/.lmstudio/models/yuxinlu1/gemma-4-12B-agentic-fable5-composer2.5-v2-3.5x-tau2-GGUF/gemma4-v2-Q4_K_M.gguf"
     )
@@ -55,15 +54,16 @@ if [ -z "${MAIN_MODEL}" ] || [ ! -f "${MAIN_MODEL}" ]; then
     exit 1
 fi
 
-# Locate Draft Model (MTP)
+# Locate Draft Model (MTP) — prefer Q8_0 on memory-constrained hosts (M4 Air 24GB)
+# Set DISABLE_MTP=1 to skip speculative decoding (saves ~0.8–2GB unified memory).
 DRAFT_MODEL="${DRAFT_PATH:-}"
-if [ -z "${DRAFT_MODEL}" ] || [ ! -f "${DRAFT_MODEL}" ]; then
+if [ "${DISABLE_MTP:-0}" = "1" ]; then
+    DRAFT_MODEL=""
+elif [ -z "${DRAFT_MODEL}" ] || [ ! -f "${DRAFT_MODEL}" ]; then
     DRAFT_CANDIDATES=(
         "${HOME}/Documents/LM Studio/yuxinlu1/gemma-4-12B-agentic-fable5-composer2.5-v2-3.5x-tau2-GGUF/gemma-4-12B-it-MTP-Q8_0.gguf"
-        "${HOME}/Documents/LM Studio/yuxinlu1/gemma-4-12B-agentic-fable5-composer2.5-v2-3.5x-tau2-GGUF/gemma-4-12B-it-MTP-F16.gguf"
-        "/Volumes/KNV3_1TB/LM Studio Model/yuxinlu1/gemma-4-12B-agentic-fable5-composer2.5-v2-3.5x-tau2-GGUF/gemma-4-12B-it-MTP-Q8_0.gguf"
-        "/Volumes/KNV3_1TB/LM Studio Model/yuxinlu1/gemma-4-12B-agentic-fable5-composer2.5-v2-3.5x-tau2-GGUF/gemma-4-12B-it-MTP-F16.gguf"
         "${ROOT_DIR}/.models/gemma-4-12B-it-MTP-Q8_0.gguf"
+        "${HOME}/Documents/LM Studio/yuxinlu1/gemma-4-12B-agentic-fable5-composer2.5-v2-3.5x-tau2-GGUF/gemma-4-12B-it-MTP-F16.gguf"
         "${ROOT_DIR}/.models/gemma-4-12B-it-MTP-F16.gguf"
     )
     for d in "${DRAFT_CANDIDATES[@]}"; do
@@ -76,8 +76,9 @@ fi
 
 HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-1234}"
-CTX_SIZE="${CTX_SIZE:-16384}"
+CTX_SIZE="${CTX_SIZE:-8192}"
 N_GPU_LAYERS="${N_GPU_LAYERS:-99}"
+N_PARALLEL="${N_PARALLEL:-1}"
 MODEL_ALIAS="gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m"
 
 echo "══════════════════════════════════════════════════════════════"
@@ -92,8 +93,9 @@ else
 fi
 echo "  • Endpoint      : http://${HOST}:${PORT}/v1"
 echo "  • Context Window: ${CTX_SIZE} tokens"
+echo "  • Parallel Slots: ${N_PARALLEL}"
 echo "  • Metal Layers  : ${N_GPU_LAYERS} (All GPU)"
-echo "  • Tuning Presets: Top-P=0.95 | Top-K=64 | Repeat-Penalty=1.1 | Jinja=ON"
+echo "  • Tuning Presets: Top-P=0.95 | Top-K=64 | Repeat-Penalty=1.1 | Jinja=ON | Reasoning=OFF"
 echo "══════════════════════════════════════════════════════════════"
 
 # Assemble CLI arguments
@@ -101,12 +103,14 @@ ARGS=(
     "-m" "${MAIN_MODEL}"
     "-c" "${CTX_SIZE}"
     "-ngl" "${N_GPU_LAYERS}"
+    "--parallel" "${N_PARALLEL}"
     "-fa" "on"
     "-fit" "off"
     "--top-p" "0.95"
     "--top-k" "64"
     "--repeat-penalty" "1.1"
     "--jinja"
+    "--reasoning" "off"
     "--reasoning-format" "deepseek"
     "--alias" "${MODEL_ALIAS}"
     "--host" "${HOST}"
