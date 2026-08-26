@@ -19,6 +19,7 @@ audience: agent
 | Benchmarks | `./scripts/ci.sh --benchmarks` | Router/complex/memory latency → `tests/benchmarks/benchmark_report.json` |
 | **Frontier eval** | `python scripts/run_local_frontier_eval.py` | ~19-turn scored routing + tools + memory + vision + formats |
 | **GDP follow-up E2E** | `python scripts/manual/e2e_gdp_followup_ws.py` | WS-only: capital → GDP follow-up; cache-bust; requires live `web_search`; records `ttft_ms` |
+| **Usable 3-turn E2E** | `python scripts/manual/e2e_topic_drift_ws.py --profile usable` | simple → web → `write_workspace_file`; functional gate for daily Normal chat |
 | **Educator eval** | `python scripts/run_educator_eval.py` | 8-turn UID10667 study session (EDU1–EDU8); optional, needs fixtures |
 | **Frontier comparison** | `python scripts/run_frontier_comparison_eval.py` | Quality A/B: Owlynn vs raw DeepSeek V4 + blind pro judge |
 | **Conversation eval** | `python scripts/run_browser_eval.py` | 12-prompt multi-topic run (qualitative) |

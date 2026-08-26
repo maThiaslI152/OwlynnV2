@@ -15,7 +15,8 @@ ROUTE_MAP = {
     "/api/advanced-settings": "src/api/routes/settings.py",
     "/api/unified-settings": "src/api/routes/settings.py",
     "/api/memories": "src/api/routes/memory.py",
-    "/api/mem0": "src/api/routes/memory.py",
+    "/api/memory": "src/api/routes/memory.py",
+    "/api/mem0": "src/api/routes/memory.py",  # legacy alias
     "/api/topics": "src/api/routes/project.py",
     "/api/interests": "src/api/routes/project.py",
     "/api/conversations": "src/api/routes/project.py",

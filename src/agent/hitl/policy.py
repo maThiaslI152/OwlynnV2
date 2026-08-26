@@ -62,6 +62,9 @@ SENSITIVE_TOOLS = {
     "censys_search",
     # Moved from SAFE_TOOLS — reads live terminal state that may contain credentials
     "capture_kali_terminal",
+    # Browser bridge — screenshots / cookie-backed downloads can leak secrets
+    "get_active_browser_screenshot",
+    "download_to_workspace",
 }
 
 SENSITIVE_PATTERN_RE = re.compile(
@@ -119,6 +122,17 @@ def is_sensitive_call(tool_name: str, args) -> bool:
         return True
     if tool_name in SENSITIVE_TOOLS:
         return True
+
+    # get_html returns raw DOM (may include PII / form values) — require HITL
+    if tool_name == "active_browser_action":
+        action = ""
+        if isinstance(args, dict):
+            action = str(args.get("action") or "")
+        elif isinstance(args, str):
+            action = args
+        if action.strip().lower() == "get_html":
+            return True
+
     args_text = (
         json.dumps(args, ensure_ascii=True) if not isinstance(args, str) else args
     )

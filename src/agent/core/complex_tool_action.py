@@ -10,6 +10,7 @@ import logging
 import re
 
 from langchain_core.messages import ToolMessage
+from langgraph.errors import GraphInterrupt
 from langgraph.prebuilt import ToolNode
 
 from src.agent.core.complex_prompt import (
@@ -118,6 +119,9 @@ async def complex_tool_action_node(state: AgentState) -> AgentState:
         )
         tool_msgs = []
         for tc, res in zip(tool_calls, results):
+            # HITL / ask_user must bubble out of the graph — never become ToolMessages.
+            if isinstance(res, GraphInterrupt):
+                raise res
             if isinstance(res, Exception):
                 tool_msgs.append(
                     ToolMessage(
@@ -133,6 +137,9 @@ async def complex_tool_action_node(state: AgentState) -> AgentState:
     last_tool_calls = getattr(last_message, "tool_calls", None) or []
     try:
         tool_payload = await _parallel_tool_dispatch(last_tool_calls, current_messages)
+    except GraphInterrupt:
+        # ask_user / security HITL — must reach the WS interrupt handler.
+        raise
     except Exception as e:
         logger.exception("Tool execution crashed: %s", type(e).__name__)
         last_msg = current_messages[-1]
@@ -155,20 +162,32 @@ async def complex_tool_action_node(state: AgentState) -> AgentState:
 
     # Truncate large tool outputs to stay within context window
     _MAX_TOOL_OUTPUT_CHARS = int(config.get("tool_output.max_tool_output_chars", 20000))
+    read_also_in_delta = any(
+        isinstance(m, ToolMessage)
+        and (getattr(m, "name", "") or "") == "read_workspace_file"
+        for m in delta
+    )
     processed_delta = []
     for msg in delta:
         if isinstance(msg, ToolMessage):
             content = (
                 msg.content if isinstance(msg.content, str) else str(msg.content or "")
             )
-            if len(content) > _MAX_TOOL_OUTPUT_CHARS:
-                content = (
-                    content[:_MAX_TOOL_OUTPUT_CHARS]
-                    + "\n\n[... output truncated for context window. Use read_workspace_file for full content.]"
-                )
-
             # In-place hint enrichment (KV-cache friendly: preserves message roles)
             tool_name = getattr(msg, "name", "") or ""
+            if len(content) > _MAX_TOOL_OUTPUT_CHARS:
+                if tool_name == "read_workspace_file":
+                    content = (
+                        content[:_MAX_TOOL_OUTPUT_CHARS]
+                        + "\n\n[... output truncated for context window. "
+                        "Answer from this excerpt; do NOT call read_workspace_file again.]"
+                    )
+                else:
+                    content = (
+                        content[:_MAX_TOOL_OUTPUT_CHARS]
+                        + "\n\n[... output truncated for context window. Use read_workspace_file for full content.]"
+                    )
+
             if "Error" in content and (
                 "Field required" in content or "No code provided" in content
             ):
@@ -188,6 +207,37 @@ async def complex_tool_action_node(state: AgentState) -> AgentState:
                 mod_name = mod_match.group(1) if mod_match else "unknown"
                 content += (
                     f"\n\n[Tool Guidance]: {notebook_module_missing_nudge(mod_name)}"
+                )
+            elif tool_name == "write_workspace_file" and (
+                "✅" in content or "Written to" in content
+            ):
+                content += (
+                    "\n\n[Tool Guidance]: File saved successfully. "
+                    "Confirm the filename to the user in one short sentence. "
+                    "Do NOT call write_workspace_file, read_workspace_file, or any other tool again."
+                )
+            elif tool_name == "read_workspace_file" and content.strip() and not (
+                content.strip().startswith("Error:")
+                or content.strip().startswith("Error ")
+            ):
+                content += (
+                    "\n\n[Tool Guidance]: File content retrieved successfully. "
+                    "Answer the user now with this content. "
+                    "Do NOT call list_workspace_files or read_workspace_file again."
+                )
+            elif (
+                tool_name == "list_workspace_files"
+                and content.strip()
+                and not (
+                    content.strip().startswith("Error:")
+                    or content.strip().startswith("Error ")
+                )
+                and not read_also_in_delta
+            ):
+                content += (
+                    "\n\n[Tool Guidance]: Directory listing retrieved. "
+                    "If the user also asked to read a file, call read_workspace_file once, "
+                    "then answer. Do NOT list again."
                 )
             elif (
                 "Error" in content

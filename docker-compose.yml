@@ -1,15 +1,6 @@
 version: '3.8'
 
 services:
-  qdrant:
-    image: qdrant/qdrant:latest
-    container_name: owlynn_qdrant
-    ports:
-      - "127.0.0.1:6333:6333"
-    volumes:
-      - qdrant_data:/qdrant/storage
-    restart: unless-stopped
-
   searxng:
     image: searxng/searxng:latest
     container_name: owlynn_searxng
@@ -22,16 +13,6 @@ services:
     environment:
       - SEARXNG_BASE_URL=http://localhost:8888
     restart: unless-stopped
-
-  redis:
-    image: redis/redis-stack-server:latest
-    container_name: owlynn_redis
-    ports:
-      - "127.0.0.1:6379:6379"
-    volumes:
-      - redis_data:/data
-    restart: unless-stopped
-    mem_limit: 512m
 
   stirling-pdf:
     image: stirlingtools/stirling-pdf:latest
@@ -69,9 +50,6 @@ services:
     ports:
       - "127.0.0.1:8000:8000"
     environment:
-      - QDRANT_HOST=owlynn_qdrant
-      - QDRANT_PORT=6333
-      - REDIS_URL=redis://owlynn_redis:6379
       - SEARXNG_URL=http://owlynn_searxng:8080
       - STIRLING_PDF_URL=http://owlynn_stirling_pdf:8080
       - DATABASE_URL=postgresql+asyncpg://owlynn:owlynn_password@owlynn_postgres:5432/owlynn
@@ -88,15 +66,11 @@ services:
       - ~/.owlynn/logs:/root/.owlynn/logs
       - ~/.owlynn/traces:/root/.owlynn/traces
     depends_on:
-      - qdrant
-      - redis
       - postgres
     restart: unless-stopped
 
 volumes:
-  qdrant_data:
   searxng_data:
-  redis_data:
   stirling_tessdata:
   stirling_configs:
   stirling_logs:

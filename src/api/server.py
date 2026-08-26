@@ -433,10 +433,14 @@ class LocalAuthMiddleware(BaseHTTPMiddleware):
     Exemptions:
     - /api/health (used by frontend to check readiness)
     - /api/local-run-token (used by frontend to fetch the token)
-    - /api/browser_extension/* (has its own WS token auth)
+    - /api/browser_extension/status (read-only connection poll)
+    - /api/browser_extension/token (Origin-gated; extension bootstrap)
     - /api/study/* (read-only dashboard, no sensitive data)
     - /api/usage (read-only stats)
     - /api/cloud-status (read-only)
+
+    Privileged browser_extension REST (/search|/fetch|/screenshot|/reload)
+    accepts the local run token OR the extension WS token.
     """
 
     _EXEMPT_PATHS = {
@@ -444,11 +448,11 @@ class LocalAuthMiddleware(BaseHTTPMiddleware):
         "/api/local-run-token",
         "/api/cloud-status",
         "/api/usage",
+        "/api/browser_extension/status",
+        "/api/browser_extension/token",
     }
-    _EXEMPT_PREFIXES = (
-        "/api/browser_extension",
-        "/api/study",
-    )
+    _EXEMPT_PREFIXES = ("/api/study",)
+    _EXTENSION_REST_PREFIX = "/api/browser_extension/"
 
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
@@ -485,7 +489,16 @@ class LocalAuthMiddleware(BaseHTTPMiddleware):
             "token"
         )
         expected = get_local_run_token(request.app)
-        if not token or not secrets.compare_digest(token, expected):
+        token_ok = bool(token) and secrets.compare_digest(token, expected)
+
+        # Browser extension control-plane REST: also accept extension WS token
+        if not token_ok and path.startswith(self._EXTENSION_REST_PREFIX) and token:
+            from src.api.routes.browser_extension import get_extension_auth_token
+
+            ext_token = get_extension_auth_token()
+            token_ok = bool(ext_token) and secrets.compare_digest(token, ext_token)
+
+        if not token_ok:
             return JSONResponse(
                 status_code=401,
                 content={"detail": "Missing or invalid local run token"},
@@ -623,7 +636,14 @@ async def api_cloud_verify_key(body: dict):
 
 @app.get("/api/health")
 async def api_health():
-    """Check if the agent graph and LLMs are fully initialized."""
+    """Agent readiness + honest Postgres / checkpointer fields.
+
+    Consumers that mean "can I talk to the API?" MUST use ``agent === "ready"``
+    (or accept HTTP 200 while waiting). Do **not** require ``status === "ok"`` —
+    ``status`` is ``degraded`` when the Postgres soft-path circuit is open while
+    chat can still limp. Nested ``postgres`` / ``checkpointer`` stay authoritative
+    for memory durability.
+    """
     agent_ready = False
     try:
         agent_ready = (
@@ -634,15 +654,26 @@ async def api_health():
     except Exception as e:
         logger.warning("Error suppressed: %s", e)
 
-    return {"status": "ok", "agent": "ready" if agent_ready else "initializing"}
+    from src.memory.postgres_health import get_checkpointer_backend, postgres_status
+
+    pg = postgres_status()
+    checkpointer = get_checkpointer_backend()
+    # Top-level status = memory durability, not agent readiness.
+    overall = "degraded" if pg != "ok" else "ok"
+
+    return {
+        "status": overall,
+        "agent": "ready" if agent_ready else "initializing",
+        "postgres": pg,
+        "checkpointer": checkpointer,
+    }
 
 
 @app.get("/api/system-info")
 async def api_system_info():
     """Return live infrastructure status: Postgres, LM Studio, optional Stirling.
 
-    Redis/Qdrant are reported when present but are not required for a healthy
-    local-first session (Postgres + LM Studio are the core dependencies).
+    Postgres + LM Studio are the core dependencies for a healthy local-first session.
     """
     import asyncio
     import os
@@ -661,8 +692,6 @@ async def api_system_info():
         "stirling": "off",
         "podman": "unavailable",
         "podman_containers": 0,
-        "redis": "off",
-        "qdrant": "off",
         "features": {
             "pentest_enabled": bool(cfg.get("features.pentest_enabled", False)),
         },
@@ -705,6 +734,22 @@ async def api_system_info():
         None, _check_postgres
     )
 
+    # Prefer circuit-breaker view when soft-path has opened (honest degraded).
+    try:
+        from src.memory.postgres_health import (
+            get_checkpointer_backend,
+            postgres_status,
+        )
+
+        cb_status = postgres_status()
+        if cb_status != "ok":
+            result["postgres"] = cb_status
+        elif result["postgres"] == "error":
+            result["postgres"] = "error"
+        result["checkpointer"] = get_checkpointer_backend()
+    except Exception:
+        result["checkpointer"] = "memory"
+
     # Optional StirlingPDF
     stirling_url = cfg.get(
         "external_services.stirling_pdf.url", "http://127.0.0.1:8090"
@@ -743,27 +788,6 @@ async def api_system_info():
     )
     result["podman"] = podman_status
     result["podman_containers"] = podman_count
-
-    # Redis / Qdrant — optional (not required for health)
-    try:
-        import redis.asyncio as aioredis
-
-        redis_url = cfg.get("external_services.redis.url", "redis://localhost:6379")
-        r_client = aioredis.from_url(redis_url, socket_connect_timeout=2)
-        await r_client.ping()
-        await r_client.aclose()
-        result["redis"] = "ok"
-    except Exception:
-        result["redis"] = "off"
-
-    try:
-        qdrant_host = cfg.get("external_services.qdrant.host", "localhost")
-        qdrant_port = cfg.get("external_services.qdrant.port", 6333)
-        async with httpx.AsyncClient(timeout=2.0) as client:
-            r = await client.get(f"http://{qdrant_host}:{qdrant_port}/healthz")
-            result["qdrant"] = "ok" if r.status_code == 200 else "off"
-    except (httpx.HTTPError, OSError):
-        result["qdrant"] = "off"
 
     return result
 

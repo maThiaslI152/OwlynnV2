@@ -1149,22 +1149,45 @@ async def browser_background_fetch(urls: list[str]) -> str:
             dispatch_extension_fetch_urls,
             is_extension_connected,
         )
+        from src.tools.url_policy import url_fetch_blocked_reason
 
         if not is_extension_connected():
             return "Error: Browser extension is not connected."
 
-        results = await dispatch_extension_fetch_urls(urls)
-        if not results:
+        # Pre-filter SSRF targets (dispatch also filters; fail fast here for UX)
+        safe_urls: list[str] = []
+        blocked_msgs: list[str] = []
+        for raw in urls or []:
+            u = str(raw or "").strip()
+            if not u:
+                continue
+            reason = url_fetch_blocked_reason(u)
+            if reason:
+                blocked_msgs.append(f"=== URL: {u} ===\nError: Blocked: {reason}\n")
+            else:
+                safe_urls.append(u)
+
+        if not safe_urls:
+            return (
+                "\n".join(blocked_msgs).strip()
+                if blocked_msgs
+                else "Error: No valid URLs provided."
+            )
+
+        results = await dispatch_extension_fetch_urls(safe_urls)
+        if not results and not blocked_msgs:
             return "No results returned."
 
-        out = []
-        for r in results:
+        out = list(blocked_msgs)
+        for r in results or []:
             url = r.get("url", "")
             title = r.get("title", "")
             text = r.get("text", "")
             err = r.get("error")
             if err:
-                out.append(f"=== URL: {url} ===\nError: {text}\n")
+                out.append(
+                    f"=== URL: {url} ===\nError: {err if isinstance(err, str) else text}\n"
+                )
             else:
                 out.append(f"=== URL: {url} | Title: {title} ===\n{text}\n")
         return "\n".join(out)

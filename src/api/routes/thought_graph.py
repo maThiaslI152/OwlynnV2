@@ -82,6 +82,11 @@ async def api_create_node(body: dict[str, Any]) -> dict[str, Any]:
             course_id=course_id,
             tags=tags,
         )
+        if node is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Postgres unavailable — thought node not persisted",
+            )
 
         # If branched from a parent node, automatically establish a branches_to edge
         if parent_id and parent_id != node_id:

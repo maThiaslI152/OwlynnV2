@@ -103,7 +103,7 @@ export function MemoryPanel() {
       const params = new URLSearchParams()
       if (query) params.set('query', query)
       params.set('limit', '50')
-      const res = await fetchWithAuth(`/api/mem0/search?${params.toString()}`, { signal: controller.signal })
+      const res = await fetchWithAuth(`/api/memory/search?${params.toString()}`, { signal: controller.signal })
       if (res.ok) {
         const data = await res.json()
         if (data.status === 'ok') {
@@ -134,7 +134,7 @@ export function MemoryPanel() {
   const handleDeleteMemory = async (e: React.MouseEvent, memoryId: string) => {
     e.stopPropagation()
     try {
-      const res = await fetchWithAuth('/api/mem0/delete', {
+      const res = await fetchWithAuth('/api/memory/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ memory_id: memoryId }),
@@ -154,7 +154,7 @@ export function MemoryPanel() {
     if (!newMemory.trim()) return
     setAddingMemory(true)
     try {
-      const res = await fetchWithAuth('/api/mem0/add', {
+      const res = await fetchWithAuth('/api/memory/add', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ memory: newMemory }),
@@ -177,7 +177,7 @@ export function MemoryPanel() {
   const handleClearAll = async () => {
     if (!window.confirm('Are you sure you want to clear ALL long-term memories? This cannot be undone.')) return
     try {
-      const res = await fetchWithAuth('/api/mem0/clear', {
+      const res = await fetchWithAuth('/api/memory/clear', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: 'owner' }),

@@ -39,11 +39,6 @@ def get_project_workspace(project_id: str | None = None) -> str:
 HOST = config.get("server.host", "127.0.0.1")
 PORT = int(config.get("server.port", 8000))
 
-# ── External Services ────────────────────────────────────────────────────────
-
-QDRANT_HOST = config.get("external_services.qdrant.host", "localhost")
-QDRANT_PORT = int(config.get("external_services.qdrant.port", 6333))
-
 # ── MCP Settings ─────────────────────────────────────────────────────────────
 
 MCP_CONFIG_PATH = PROJECT_ROOT / "mcp_config.json"
@@ -87,9 +82,8 @@ STIRLING_PDF_MIN_TEXT_CHARS = int(
     config.get("external_services.stirling_pdf.min_text_chars", 50)
 )
 
-# ── Redis & DeepSeek ─────────────────────────────────────────────────────────
+# ── DeepSeek ─────────────────────────────────────────────────────────────────
 
-REDIS_URL = config.get("external_services.redis.url", "redis://localhost:6379")
 DEEPSEEK_API_KEY = (os.getenv("DEEPSEEK_API_KEY", "") or "").strip()
 VOICE_WAKE_WORD = (os.getenv("VOICE_WAKE_WORD", "Athena") or "Athena").strip()
 VOICE_AUTO_TTS = os.getenv("VOICE_AUTO_TTS", "true").strip().lower() in {

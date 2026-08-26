@@ -232,31 +232,30 @@ async def test_retrieve_loads_scenario_without_vector_when_gate_false(pentest_st
     assert "Scenario playbook (pentest)" in out.get("memory_context", "")
 
 
-async def _redis_ping() -> bool:
+async def _postgres_reachable() -> bool:
+    """True when the async SQLAlchemy session can connect."""
     try:
-        import redis.asyncio as aioredis
+        from sqlalchemy import text
 
-        from src.config.settings import REDIS_URL
+        from src.models.db import AsyncSessionLocal
 
-        client = aioredis.from_url(REDIS_URL, decode_responses=True)
-        try:
-            await client.ping()
-            return True
-        finally:
-            await client.aclose()
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("SELECT 1"))
+        return True
     except Exception:
         return False
 
 
 @pytest.mark.anyio
-async def test_redis_enqueue_when_available():
-    """Live Redis stream write (skipped when Redis is down)."""
-    if not await _redis_ping():
-        pytest.skip("Redis not available")
+async def test_postgres_enqueue_when_available():
+    """Live Postgres extraction enqueue (skipped when DB is down)."""
+    from src.memory.postgres_health import is_postgres_available, reset_postgres_breaker
 
-    import redis.asyncio as aioredis
-
-    from src.config.settings import REDIS_URL
+    reset_postgres_breaker()
+    if not await _postgres_reachable():
+        pytest.skip("Postgres not available")
+    if not is_postgres_available():
+        pytest.skip("Postgres circuit open")
 
     job_id = "smoke-job-automated"
     payload = {

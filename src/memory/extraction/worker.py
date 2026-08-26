@@ -57,56 +57,87 @@ async def stop_extraction_worker() -> None:
 
 
 async def _consumer_loop() -> None:
-    """Main consume loop: LISTEN for notifications, poll as fallback."""
+    """Main consume loop: LISTEN for notifications, poll as fallback.
+
+    On LISTEN/connect failure, exponential backoff reconnect instead of
+    permanent exit. Respects the Postgres circuit breaker while open.
+    """
     try:
         import asyncpg  # type: ignore[import-untyped]
     except ImportError:
         logger.warning("[memory.extract] asyncpg not available — worker not started")
         return
 
+    from src.memory.postgres_health import (
+        is_postgres_available,
+        record_postgres_failure,
+        record_postgres_success,
+    )
     from src.models.db import DATABASE_URL
 
     # Build a raw asyncpg DSN from the SQLAlchemy URL
     raw_dsn = DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
 
-    conn: asyncpg.Connection | None = None
-    try:
-        conn = await asyncpg.connect(raw_dsn)
-        await conn.add_listener(_NOTIFY_CHANNEL, _on_notify)
-        logger.info(
-            "[memory.extract] PostgreSQL LISTEN started on channel '%s'",
-            _NOTIFY_CHANNEL,
-        )
+    backoff_s = 1.0
+    max_backoff_s = 60.0
 
-        while True:
-            try:
-                from src.api.power_monitor import (
-                    ECO_MODE,  # type: ignore[import-untyped]
-                )
+    while True:
+        conn: asyncpg.Connection | None = None
+        try:
+            if not is_postgres_available():
+                await asyncio.sleep(min(backoff_s, max_backoff_s))
+                backoff_s = min(backoff_s * 2, max_backoff_s)
+                continue
 
-                if ECO_MODE:
-                    await asyncio.sleep(60)
-                    continue
-            except ImportError:
-                pass
+            conn = await asyncpg.connect(raw_dsn)
+            await conn.add_listener(_NOTIFY_CHANNEL, _on_notify)
+            record_postgres_success()
+            backoff_s = 1.0
+            logger.info(
+                "[memory.extract] PostgreSQL LISTEN started on channel '%s'",
+                _NOTIFY_CHANNEL,
+            )
 
-            # Poll for any missed pending jobs (handles crash recovery & fallback)
-            await _drain_pending_jobs()
+            while True:
+                try:
+                    from src.api.power_monitor import (
+                        ECO_MODE,  # type: ignore[import-untyped]
+                    )
 
-            # Wait up to _POLL_INTERVAL_S for a NOTIFY or timeout
-            await asyncio.sleep(_POLL_INTERVAL_S)
+                    if ECO_MODE:
+                        await asyncio.sleep(60)
+                        continue
+                except ImportError:
+                    pass
 
-    except asyncio.CancelledError:
-        raise
-    except Exception as exc:
-        logger.warning("[memory.extract] worker stopped: %s", exc)
-    finally:
-        if conn:
-            try:
-                await conn.remove_listener(_NOTIFY_CHANNEL, _on_notify)
-                await conn.close()
-            except Exception:
-                pass
+                if not is_postgres_available():
+                    logger.debug("[memory.extract] Circuit open — pausing LISTEN drain")
+                    break
+
+                # Poll for any missed pending jobs (handles crash recovery & fallback)
+                await _drain_pending_jobs()
+
+                # Wait up to _POLL_INTERVAL_S for a NOTIFY or timeout
+                await asyncio.sleep(_POLL_INTERVAL_S)
+
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            record_postgres_failure()
+            logger.warning(
+                "[memory.extract] LISTEN disconnected (%s) — reconnect in %.0fs",
+                exc,
+                backoff_s,
+            )
+            await asyncio.sleep(backoff_s)
+            backoff_s = min(backoff_s * 2, max_backoff_s)
+        finally:
+            if conn:
+                try:
+                    await conn.remove_listener(_NOTIFY_CHANNEL, _on_notify)
+                    await conn.close()
+                except Exception:
+                    pass
 
 
 def _on_notify(connection: Any, pid: int, channel: str, payload: str) -> None:

@@ -17,19 +17,35 @@ _NOTIFY_CHANNEL = "extraction_channel"
 _DEDUP: dict[str, Any] = {}
 
 
-async def enqueue_extraction(payload: dict[str, Any]) -> bool:
+async def enqueue_extraction(payload: dict[str, Any]) -> bool | None:
     """Enqueue a memory extraction job.
 
     Uses INSERT ... ON CONFLICT DO NOTHING so duplicate turn_ids are
     silently dropped (replaces the in-process _DEDUP dict).
-    Returns True if the job was newly enqueued, False if already exists.
+
+    Returns:
+        True — job newly enqueued
+        False — already existed (dedup)
+        None — Postgres circuit open (explicit skip, not success)
     """
     from sqlalchemy import text
 
     from src.memory.db_models import ExtractionJob
+    from src.memory.postgres_health import (
+        is_postgres_available,
+        record_postgres_failure,
+        record_postgres_success,
+    )
     from src.models.db import AsyncSessionLocal
 
     turn_id: str = str(payload.get("turn_id") or payload.get("job_id") or uuid.uuid4())
+
+    if not is_postgres_available():
+        logger.warning(
+            "[memory.extract] Skipping enqueue — Postgres circuit open (turn_id=%s)",
+            turn_id,
+        )
+        return None
 
     try:
         async with AsyncSessionLocal() as session:
@@ -63,6 +79,7 @@ async def enqueue_extraction(payload: dict[str, Any]) -> bool:
 
             if row is None:
                 # Already existed — dedup hit
+                record_postgres_success()
                 return False
 
             job_id = row[0]
@@ -72,9 +89,11 @@ async def enqueue_extraction(payload: dict[str, Any]) -> bool:
                 {"job_id": str(job_id)},
             )
             await session.commit()
+            record_postgres_success()
             return True
 
     except Exception as exc:
+        record_postgres_failure()
         logger.warning(
             "[memory.extract] DB enqueue failed: %s — using in-process fallback", exc
         )

@@ -118,6 +118,10 @@ _FILE_WORK_HINTS = (
     "attached file",
     "[attached",
     "read_workspace",
+    "write_workspace",
+    "list_workspace",
+    "save a note",
+    "save a short note",
     "local file",
     "in my project",
     "in the repo",
@@ -659,7 +663,7 @@ async def check_deterministic_bypasses(
         )
     ):
         route = "simple"
-        budget = 512
+        budget = 128
         metadata = _build_router_metadata(
             route,
             confidence=0.92,
@@ -867,13 +871,17 @@ async def check_deterministic_bypasses(
 
     # ── 7. Tool history in conversation ──────────────────────────────────
     if _has_tool_history(state):
-        # Check for data viz or file work intent in follow-up
+        # Prefer narrow toolboxes over lean "all" — otherwise mid-thread web
+        # digressions bind 8+ tools and skip tool-first web synthesis.
         if _user_wants_data_viz(user_text):
             toolbox_seed = ["data_viz"]
             task_category = "data_viz"
         elif _user_wants_file_work(user_text):
             toolbox_seed = ["file_ops"]
             task_category = "file_ops"
+        elif web_on and any(hint in user_lower for hint in _WEBISH_HINTS):
+            toolbox_seed = ["web_search"]
+            task_category = "web_search"
         else:
             toolbox_seed = ["all"]
             task_category = "continuation"

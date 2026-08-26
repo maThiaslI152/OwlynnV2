@@ -50,5 +50,25 @@
     });
   }
 
-  setTimeout(scrapePage, 800);
+  const READY_BUDGET_MS = 12000;
+  function waitThenScrape() {
+    if (document.querySelector("li.b_algo")) {
+      scrapePage();
+      return;
+    }
+    const started = Date.now();
+    const observer = new MutationObserver(() => {
+      if (document.querySelector("li.b_algo") || Date.now() - started > READY_BUDGET_MS) {
+        observer.disconnect();
+        scrapePage();
+      }
+    });
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+    setTimeout(() => {
+      observer.disconnect();
+      scrapePage();
+    }, READY_BUDGET_MS);
+  }
+
+  setTimeout(waitThenScrape, 200);
 })();

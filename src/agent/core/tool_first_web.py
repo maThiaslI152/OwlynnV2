@@ -29,16 +29,62 @@ def is_web_search_only_toolbox(state: dict[str, Any]) -> bool:
     return list(toolboxes) == ["web_search"]
 
 
+def build_tool_first_extractive_answer(turn_messages: list) -> str | None:
+    """Build a short answer from web_search ToolMessage without an LLM round.
+
+    Used when local synth would burn tens of seconds of prefill for a factual
+    follow-up. Prefer this over empty/slow ``ainvoke`` for tool-first web.
+    """
+    from src.agent.core.complex_utils.formatter import (
+        _synthetic_answer_from_web_search_tool,
+    )
+
+    for msg in reversed(turn_messages or []):
+        name = getattr(msg, "name", None) or ""
+        if name != "web_search":
+            continue
+        content = getattr(msg, "content", "") or ""
+        if isinstance(content, list):
+            content = " ".join(
+                str(b.get("text", b) if isinstance(b, dict) else b) for b in content
+            )
+        text = str(content).strip()
+        if not text or not _web_search_tool_output_has_results(text):
+            return None
+        body = _synthetic_answer_from_web_search_tool(text)
+        return body.replace(
+            "The model returned an empty message after **web_search**, so here is the "
+            "search payload directly (you can use the links below):\n\n",
+            "Here’s what web search found:\n\n",
+        )
+    return None
+
+
 def should_inject_tool_first_search(state: dict[str, Any], turn_messages: list) -> bool:
-    """True when we should emit a synthetic web_search tool call (no LLM)."""
+    """True when we should emit a synthetic web_search tool call (no LLM).
+
+    ``phase == "search"`` blocks re-inject within the same turn. Checkpointed
+    ``phase == "done"`` does *not* block a later user turn that has no
+    ``web_search`` ToolMessage yet (topic-drift T3/T6).
+    """
     if not is_web_search_only_toolbox(state):
         return False
     phase = state.get("_tool_first_web_phase")
-    if phase in (TOOL_FIRST_PHASE_SEARCH, TOOL_FIRST_PHASE_DONE):
+    # Mid-search only: keep blocking re-inject until synth/escalate clears it.
+    if phase == TOOL_FIRST_PHASE_SEARCH:
         return False
+    return not _turn_has_web_search_tool(turn_messages)
+
+
+def maybe_clear_stale_tool_first_web_phase(
+    state: dict[str, Any], turn_messages: list
+) -> dict[str, Any]:
+    """Clear sticky ``done`` when the current turn has not searched yet."""
+    if state.get("_tool_first_web_phase") != TOOL_FIRST_PHASE_DONE:
+        return state
     if _turn_has_web_search_tool(turn_messages):
-        return False
-    return True
+        return state
+    return {**state, "_tool_first_web_phase": None}
 
 
 def should_synthesize_tool_first(state: dict[str, Any], turn_messages: list) -> bool:

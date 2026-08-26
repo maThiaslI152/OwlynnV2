@@ -32,7 +32,6 @@ _ADVANCED_SETTINGS_DEFAULTS = {
     "execution_policy": "auto_approve",
     "safe_mode": "normal",
     "custom_sensitive_terms": [],
-    "redis_url": "redis://localhost:6379",
     "lm_studio_fold_system": True,
 }
 

@@ -361,27 +361,87 @@ def _strip_web_tools(tools: list) -> list:
     return [t for t in tools if getattr(t, "name", "") not in _WEB_TOOL_NAMES]
 
 
-def _trim_tool_history(messages: list, max_tool_cycles: int = 6) -> list:
-    """Compress older tool messages in long tool-use conversations while preserving message sequence."""
-    tool_indices = [i for i, m in enumerate(messages) if isinstance(m, ToolMessage)]
-    if len(tool_indices) <= max_tool_cycles:
-        return list(messages)
+def _last_human_index(messages: list) -> int:
+    """Index of the latest human/user message, or -1 if none."""
+    for i in range(len(messages) - 1, -1, -1):
+        m = messages[i]
+        role = getattr(m, "type", None) or getattr(m, "role", None)
+        if role in ("human", "user") or isinstance(m, HumanMessage):
+            return i
+    return -1
 
-    cutoff_idx = tool_indices[-max_tool_cycles]
-    trimmed = []
+
+def _compress_tool_message(
+    msg: ToolMessage,
+    *,
+    max_chars: int,
+) -> ToolMessage:
+    """Shrink a tool payload for prompt prefills while keeping tool_call_id/name."""
+    tool_name = getattr(msg, "name", None) or "Tool"
+    content = msg.content if isinstance(msg.content, str) else str(msg.content or "")
+    if len(content) <= max_chars:
+        return msg
+    if max_chars <= 0:
+        summary = f"[{tool_name} output: completed]"
+    else:
+        head = content[:max_chars].rstrip()
+        summary = (
+            f"{head}\n\n[{tool_name} output truncated for context; "
+            f"original length {len(content)} chars]"
+        )
+    return ToolMessage(
+        content=summary,
+        tool_call_id=getattr(msg, "tool_call_id", ""),
+        name=tool_name,
+    )
+
+
+def _trim_tool_history(
+    messages: list,
+    max_tool_cycles: int = 6,
+    *,
+    prior_turn_max_chars: int | None = None,
+    current_turn_max_chars: int | None = None,
+) -> list:
+    """Compress tool payloads to keep multi-turn prefills lean.
+
+    - ToolMessages older than the latest human turn are always collapsed
+      (or soft-capped) — prior web_search blobs dominate TTFT on digressions.
+    - Within the current turn, keep the last ``max_tool_cycles`` full (capped);
+      older ones in-turn become short stubs.
+    """
+    if prior_turn_max_chars is None:
+        prior_turn_max_chars = int(
+            config.get("tool_output.prior_turn_max_chars", 400) or 400
+        )
+    if current_turn_max_chars is None:
+        current_turn_max_chars = int(
+            config.get("tool_output.current_turn_max_chars", 6000) or 6000
+        )
+
+    human_idx = _last_human_index(messages)
+    tool_indices = [i for i, m in enumerate(messages) if isinstance(m, ToolMessage)]
+    current_tool_indices = [i for i in tool_indices if i > human_idx]
+    keep_full_from = (
+        current_tool_indices[-max_tool_cycles]
+        if len(current_tool_indices) > max_tool_cycles
+        else (current_tool_indices[0] if current_tool_indices else len(messages))
+    )
+
+    trimmed: list = []
     for i, m in enumerate(messages):
-        if i < cutoff_idx and isinstance(m, ToolMessage):
-            tool_name = getattr(m, "name", None) or "Tool"
-            summary = f"[{tool_name} output: completed]"
-            trimmed.append(
-                ToolMessage(
-                    content=summary,
-                    tool_call_id=getattr(m, "tool_call_id", ""),
-                    name=tool_name,
-                )
-            )
-        else:
+        if not isinstance(m, ToolMessage):
             trimmed.append(m)
+            continue
+        # Prior turns: always shrink (default ~400 chars / stub).
+        if human_idx >= 0 and i < human_idx:
+            trimmed.append(_compress_tool_message(m, max_chars=prior_turn_max_chars))
+            continue
+        # Older in-turn tools beyond max_tool_cycles: stub only.
+        if i < keep_full_from:
+            trimmed.append(_compress_tool_message(m, max_chars=0))
+            continue
+        trimmed.append(_compress_tool_message(m, max_chars=current_turn_max_chars))
     return trimmed
 
 
@@ -601,16 +661,14 @@ def _resolve_complex_tools(
         if tool_registry.is_tool_available(getattr(t, "name", "") or "")
     ]
 
-    # Code-review with no code/attachment: never bind ask_user (prevents HITL loops).
+    # Never bind ask_user when it would create a useless / harmful HITL loop.
     from src.agent.core.ask_user_guards import (
-        is_code_review_missing_code,
+        should_strip_ask_user,
         strip_ask_user_tools,
     )
 
     meta = state.get("router_metadata") or {}
-    if meta.get("code_review_missing_code") or is_code_review_missing_code(
-        thread_messages
-    ):
+    if meta.get("code_review_missing_code") or should_strip_ask_user(thread_messages):
         tools = strip_ask_user_tools(tools) or []
 
     # Sort deterministically by tool name to preserve byte-stable prompt caching

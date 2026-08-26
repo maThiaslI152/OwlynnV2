@@ -1,7 +1,7 @@
 ---
 status: active
 category: architecture
-last_updated: 2026-08-24
+last_updated: 2026-08-26
 owner: ai-agent
 audience: agent
 ---
@@ -12,7 +12,7 @@ audience: agent
 
 ## Overview
 
-Owlynn uses layered memory (STM, LTM, personal context, scenarios) with a **split inject path** so the router stays under ~300ms.
+Owlynn uses layered memory (STM, LTM, personal context, scenarios) with a **split inject path** so the router stays under ~300ms. **Postgres + pgvector is the durable hub** for checkpoints, LTM, semantic cache, extraction jobs, and thought-graph data. Redis/Qdrant are not used.
 
 | Tier | Storage | What It Stores | Retrieval |
 |------|---------|---------------|-----------|
@@ -21,8 +21,10 @@ Owlynn uses layered memory (STM, LTM, personal context, scenarios) with a **spli
 | **Thought Graph** | PostgreSQL (`thought_nodes`, `thought_edges` tables) | Interconnected mindmap thoughts, attack chains, and knowledge relations | Graph traversal, semantic topic clusters (no thread-ID merge), dormancy fade/drift signals, REST API (`/api/graph/data`) |
 | **Personal** | `data/topics.json`, `data/interests.json`, `data/conversations.json` | User topics, interests, conversation history | Time-decay-weighted relevance |
 | **L2/L3 scenarios** | `scenarios/*/playbook.md`, `constraints.md` | Pentest / research workflows | Router `scenario_id` + markdown loader |
-| **Semantic Cache** | Redis (`redisvl`) / pgvector | Previous AI answers keyed by prompt embedding | Vector similarity (`>= 0.92`) — bypasses graph entirely |
-| **Extraction Queue** | PostgreSQL (`extraction_jobs` table) | Async memory & procedural skill synthesis queue | Dual-channel extraction worker (`worker.py`) |
+| **Semantic Cache** | PostgreSQL pgvector (`semantic_cache` table) | Previous AI answers keyed by prompt embedding | Vector similarity (`>= 0.92`) — bypasses graph entirely |
+| **Extraction Queue** | PostgreSQL (`extraction_jobs` table) + LISTEN/NOTIFY | Async memory & procedural skill synthesis queue | Dual-channel extraction worker (`worker.py`) |
+
+**HTTP:** Canonical LTM paths are `/api/memory/*` (legacy `/api/mem0/*` aliases). The `mem0_uid` DB column remains — not the Mem0 library.
 
 ## Memory Injection Flow (Phase 1)
 
@@ -32,7 +34,7 @@ memory_inject_lite → router → memory_retrieve → …
 
 1. **`memory_inject_lite`** — profile, persona, topics (no vector search)
 2. **Router** — sets `needs_memory_retrieval`, optional `scenario_id`
-3. **`memory_retrieve`** — Qdrant/Mem0 only when gated; loads scenario markdown; compresses for cloud brief
+3. **`memory_retrieve`** — pgvector LTM only when gated; loads scenario markdown; compresses for cloud brief
 
 Caches the lite bundle for 5 minutes (TTL configurable).
 
@@ -43,7 +45,7 @@ See [memory-vision-screen-roadmap.md](guides/memory-vision-screen-roadmap.md) fo
 After the agent responds, `memory_write_node`:
 1. PII-scrubs content before persistence
 2. Neutralizes prompt injection patterns (e.g., "ignore previous instructions") via `pii_scrubber.scrub_for_memory_write()`
-3. Enqueues custom extraction (Redis stream → worker → L1 atoms in Qdrant)
+3. Enqueues custom extraction (Postgres `extraction_jobs` → worker → L1 atoms in `memory_vectors`)
 4. Extracts topics and updates topic/interests tracking
 5. Records the conversation in `conversations.json`
 6. Invalidates the memory cache for the next turn
@@ -53,7 +55,7 @@ After the agent responds, `memory_write_node`:
 LTM atom extraction uses the unified local model (`models.main`, `gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m`) in a background worker. It has been upgraded to an Observer/Reflector 2-phase LLM pipeline for deduplication. To avoid GPU/CPU contention with active chat or local fallback:
 
 ```text
-memory_write → Redis queue → worker waits for idle window → invoke_medium_background() → Mem0
+memory_write → Postgres extraction_jobs → worker waits for idle window → invoke_main_background() → memory_vectors
 ```
 
 **Defer conditions** (configurable in `defaults.yaml`):
@@ -69,7 +71,7 @@ LM Studio does **not** expose per-request GPU throttling via the OpenAI API; def
 ### Dual-Channel Autonomous Learning Loop (Hermes-Style)
 
 The PostgreSQL extraction worker operates a dual-channel learning pass:
-1. **Declarative Fact Channel:** Extracts structured memory atoms (L1) with semantic deduplication and stores them in Mem0/Qdrant.
+1. **Declarative Fact Channel:** Extracts structured memory atoms (L1) with semantic deduplication and stores them in `memory_vectors`.
 2. **Procedural Skill Channel:** Analyzes user corrections, workflow sequences, and tool execution recipes using `SkillLearnerEngine` (`src/memory/skills_learner.py`). It applies a 4-tier cascade:
    - *Patch Active Skill:* Appends learned pitfalls/workarounds to loaded skill packages.
    - *Update Umbrella:* Extends domain umbrella skills.
@@ -113,19 +115,31 @@ The summarization system compresses older conversation turns when token usage ex
 
 ## Vector Lifecycle Management
 
-The `VectorLifecycleManager` orchestrates insertion and deletion of vector data in Mem0 and Qdrant. **Normal/Study are chat-only** (no file watcher / durable project folders); uploads are inlined into the turn. Pentest evidence remains under engagement-scoped paths.
+The `VectorLifecycleManager` orchestrates insertion and deletion of vector data in Postgres `memory_vectors`. **Normal/Study are chat-only** (no file watcher / durable project folders); uploads are inlined into the turn. Pentest evidence remains under engagement-scoped paths.
 - **Conversation identity**: `ThoughtNode.id` = LangGraph `thread_id`. `MemoryContextCache` keys by `thread_id`.
 - **Organic map shaping**: `/api/graph/data` ranks nodes by recency + dormancy (pinned resist fade). Related threads share `topic_cluster_id` / `topic_label` via semantic edges; IDs are never merged (`merges_with` is an edge label only). Manual `canvas_x`/`canvas_y` suppress `allow_radial_drift`. Selecting or `get_or_create` immediately revives `last_active_at`. Title (+ tags) is the embedding fallback when summary is empty. The Mindmap Canvas applies `fade_alpha` / reduced link particles, optional radial drift for unplaced nodes, cluster cohesion, backend `search=` (override fade + beyond the 300-node cap), and a **Focus recent** control (`show_dormant=false`). Pentest stays off the shared graph.
-- **Mem0 user id**: profile name (or `"owner"`) — not `project:{id}` silos.
+- **User id for memory rows**: profile name (or `"owner"`) via `mem0_uid` — not `project:{id}` silos.
 - **Deduplication** (when vectors are written): updates replace old chunks before embedding new ones.
 - **`recall_all_memories`**: binds search to the active thread via `ContextVar` where applicable.
 
+## When Postgres is degraded
+
+Postgres is core (single local container — not HA). Soft-fail behavior:
+
+| Subsystem | Degraded behavior |
+|-----------|-------------------|
+| Chat / tools | Continues |
+| LTM search/add, semantic cache, extraction enqueue, thought-graph writes | Skip / empty / soft-miss |
+| Checkpoints | Startup may fall back to `MemorySaver`; durability lost until Postgres returns |
+| Profile / persona JSON | Unaffected |
+
+See [`docs/architecture/POSTGRES_MEMORY_LIFECYCLE.md`](../architecture/POSTGRES_MEMORY_LIFECYCLE.md).
+
 ## Known Issues
 
-1. **Mem0 requires `mem0ai[nlp]`** — install with `pip install mem0ai[nlp]` for spaCy/fastembed support
-2. **Memory context cap may cut important facts** — injected memory text is capped at **24000 characters** in `format_memory_context` (see `memory.py`); enhanced blocks use a separate 6000-char budget
-3. **No STM→LTM promotion** — frequently recalled facts aren't auto-promoted to LTM with higher priority
-4. **Legacy chats without checkpoints** — chats created before the Redis checkpointer was enabled show "History unavailable" in the UI. The sidebar displays a ⚠️ icon on affected chats. These conversations cannot be recovered.
+1. **Memory context cap may cut important facts** — injected memory text is capped at **24000 characters** in `format_memory_context` (see `memory.py`); enhanced blocks use a separate 6000-char budget
+2. **No STM→LTM promotion** — frequently recalled facts aren't auto-promoted to LTM with higher priority
+3. **Legacy chats without checkpoints** — chats created before the Postgres checkpointer was enabled show "History unavailable" in the UI. The sidebar displays a ⚠️ icon on affected chats. These conversations cannot be recovered.
 
 ## Checkpoint Persistence
 
@@ -176,13 +190,13 @@ The frontend handles both the new structured format and the legacy array format 
 - `src/memory/scenarios.py` — L2/L3 scenario markdown
 - `src/memory/compression.py` — Cloud brief memory block
 - `src/agent/pii_scrubber.py` — PII scrub before LTM writes
-- `src/memory/memory_manager.py` — STM (memories.json)
-- `src/memory/long_term.py` — LTM (Mem0 + Qdrant)
-- `src/memory/semantic_cache.py` — Semantic response cache (redisvl)
+- `src/memory/memory_manager.py` — STM
+- `src/memory/long_term.py` — LTM (Postgres pgvector)
+- `src/memory/semantic_cache.py` — Semantic response cache (pgvector)
 - `src/memory/personal_assistant.py` — Topic/interest tracking
 - `src/agent/nodes/summarize.py` — Auto-summarization
 - `src/config/engagement_crypto.py` — Fernet master key storage (macOS Keychain)
 - `src/config/defaults.yaml` — Memory configuration
 - `src/agent/core/checkpointer.py` — `AsyncPostgresSaver` LangGraph checkpointer initialization
 - `docs/features/SEMANTIC_CACHE.md` — Semantic cache feature documentation
-- `docs/architecture/REDIS_LIFECYCLE.md` — Redis semantic cache and extraction memory management
+- `docs/architecture/POSTGRES_MEMORY_LIFECYCLE.md` — Postgres extraction + semantic-cache lifecycle

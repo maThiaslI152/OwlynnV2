@@ -92,10 +92,24 @@ async def _async_add(
     if not content or len(content.strip()) < 3:
         return None
 
+    from src.memory.postgres_health import (
+        is_postgres_available,
+        record_postgres_failure,
+        record_postgres_success,
+    )
+
+    if not is_postgres_available():
+        return None
+
     meta = metadata or {}
 
     try:
         embedding = await get_embedding(content)
+    except Exception as exc:
+        logger.warning("[ltm] embed for add() failed: %s", exc, exc_info=True)
+        return None
+
+    try:
         vec_id = _content_id(content, user_id)
         vec_literal = str(embedding)  # "[0.1, 0.2, ...]" accepted by pgvector
 
@@ -121,6 +135,7 @@ async def _async_add(
                     user_id,
                     existing[0],
                 )
+                record_postgres_success()
                 return existing[0]
 
             row = MemoryVector(
@@ -140,6 +155,7 @@ async def _async_add(
             session.add(row)
             await session.commit()
 
+        record_postgres_success()
         audit_info(
             "memory.ltm",
             "add",
@@ -150,6 +166,7 @@ async def _async_add(
         return vec_id
 
     except Exception as exc:
+        record_postgres_failure()
         logger.warning("[ltm] add() failed: %s", exc, exc_info=True)
         audit_warn("memory.ltm", "add_failed", reason=str(exc)[:120], user_id=user_id)
         return None
@@ -165,6 +182,15 @@ async def _async_search(
     Returns:
         ``{"results": [{"id": ..., "memory": ..., "metadata": {...}}, ...]}``
     """
+    from src.memory.postgres_health import (
+        is_postgres_available,
+        record_postgres_failure,
+        record_postgres_success,
+    )
+
+    if not is_postgres_available():
+        return {"results": []}
+
     if not query or not query.strip():
         query = " "  # fallback: return nearest to zero-like vector (all memories)
 
@@ -172,6 +198,11 @@ async def _async_search(
 
     try:
         embedding = await get_embedding(query)
+    except Exception as exc:
+        logger.warning("[ltm] embed for search() failed: %s", exc, exc_info=True)
+        return {"results": []}
+
+    try:
         vec_literal = str(embedding)
 
         where_clauses = ["1=1"]
@@ -214,6 +245,7 @@ async def _async_search(
             result = await session.execute(sql, params)
             rows = result.fetchall()
 
+        record_postgres_success()
         return {
             "results": [
                 {
@@ -243,6 +275,7 @@ async def _async_search(
         }
 
     except Exception as exc:
+        record_postgres_failure()
         logger.warning("[ltm] search() failed: %s", exc, exc_info=True)
         return {"results": []}
 
@@ -253,6 +286,15 @@ async def _async_delete(
     metadata: dict[str, Any] | None = None,
 ) -> bool:
     """Delete memories by id, or by user_id and metadata filters."""
+    from src.memory.postgres_health import (
+        is_postgres_available,
+        record_postgres_failure,
+        record_postgres_success,
+    )
+
+    if not is_postgres_available():
+        return False
+
     try:
         async with AsyncSessionLocal() as session, session.begin():
             if memory_id:
@@ -269,11 +311,13 @@ async def _async_delete(
                             == (f'"{v}"' if isinstance(v, str) else str(v))
                         )
             await session.execute(stmt)
+        record_postgres_success()
         audit_info(
             "memory.ltm", "delete", id=memory_id, user_id=user_id, metadata=metadata
         )
         return True
     except Exception as exc:
+        record_postgres_failure()
         logger.warning("[ltm] delete() failed: %s", exc, exc_info=True)
         return False
 
@@ -285,14 +329,25 @@ async def _async_delete_all(user_id: str) -> bool:
 
 async def _async_reset() -> bool:
     """Delete ALL memories from the memory_vectors table."""
+    from src.memory.postgres_health import (
+        is_postgres_available,
+        record_postgres_failure,
+        record_postgres_success,
+    )
+
+    if not is_postgres_available():
+        return False
+
     try:
         async with AsyncSessionLocal() as session:
             stmt = sa_delete(MemoryVector)
             await session.execute(stmt)
             await session.commit()
+        record_postgres_success()
         audit_info("memory.ltm", "reset")
         return True
     except Exception as exc:
+        record_postgres_failure()
         logger.warning("[ltm] reset() failed: %s", exc, exc_info=True)
         return False
 

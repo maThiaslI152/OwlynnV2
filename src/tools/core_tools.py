@@ -56,14 +56,16 @@ def get_safe_workspace_path(filename: str) -> tuple[str, str | None]:
     if filename.startswith("projects/"):
         workspace_root = BASE_WORKSPACE_DIR
     else:
+        # Normal/Study use ephemeral scratch under tool_workspace_root();
+        # Pentest may still use durable project trees.
         workspace_root = tool_workspace_root()
 
     filepath = os.path.realpath(os.path.join(workspace_root, filename))
     root_abs = os.path.realpath(workspace_root)
-    base_abs = os.path.realpath(BASE_WORKSPACE_DIR)
 
-    # Symlink protection: ensure the resolved path is strictly within the allowed root
-    if not filepath.startswith(root_abs) or not filepath.startswith(base_abs):
+    # Symlink / traversal protection: must stay under the active root only.
+    # Do NOT also require BASE_WORKSPACE_DIR — scratch lives outside that tree.
+    if filepath != root_abs and not filepath.startswith(root_abs + os.sep):
         return "", "Error: Access denied. Path is outside workspace."
     return filepath, None
 
@@ -165,16 +167,25 @@ def read_workspace_file(filename: str) -> str:
 
 
 @tool
-def write_workspace_file(filename: str, content: str) -> str:
-    """Writes content to a file in the workspace. Overwrites if it exists."""
-    filepath, err = get_safe_workspace_path(filename)
+def write_workspace_file(filename: str = "", content: str = "", path: str = "") -> str:
+    """Writes content to a file in the workspace. Overwrites if it exists.
+
+    Args:
+        filename: Relative path inside the workspace (preferred).
+        content: File contents to write.
+        path: Optional alias for filename (some models emit ``path`` instead).
+    """
+    name = (filename or path or "").strip()
+    if not name:
+        return "Error: filename is required."
+    filepath, err = get_safe_workspace_path(name)
     if err:
         return err
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    os.makedirs(os.path.dirname(filepath) or tool_workspace_root(), exist_ok=True)
     try:
         with open(filepath, "w", encoding="utf-8") as f:
             f.write(content)
-        return f"✅ Written to {filename}"
+        return f"✅ Written to {name}"
     except Exception as e:
         logger.warning("Error suppressed: %s", e)
         return f"Error writing file: {e}"

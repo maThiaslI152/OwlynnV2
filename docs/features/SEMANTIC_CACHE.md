@@ -1,14 +1,14 @@
 ---
 status: active
 category: performance
-last_updated: 2026-08-25
+last_updated: 2026-08-26
 owner: ai-agent
 audience: agent
 ---
 
 # Semantic Cache
 
-> **Purpose:** Near-instant responses for repetitive questions by bypassing LangGraph entirely with a vector-similarity cache stored in Redis.
+> **Purpose:** Near-instant responses for repetitive questions by bypassing LangGraph entirely with a vector-similarity cache stored in PostgreSQL pgvector.
 
 ## Overview
 
@@ -37,14 +37,12 @@ The cache is **project-scoped**: a question answered in Project A will not be se
 
 | Function | Description |
 |----------|-------------|
-| `init_semantic_cache()` | Initialises the `redisvl` `SemanticCache` index. Called once at agent startup from `init_agent()`. |
-| `check_semantic_cache(prompt, project_id)` | Embeds the prompt and performs a vector similarity search against Redis. Returns the cached response string or `None`. |
-| `store_semantic_cache(prompt, response, project_id)` | Stores the prompt embedding + response text in Redis. Called asynchronously after the `idle` event fires. **Refuses** responses that look like tool-call / DSML leaks (`<\|tool_call\|>`, etc.) so poison cannot be replayed. |
+| `init_semantic_cache()` | Ensures the `semantic_cache` table / index path is ready. Called once at agent startup from `init_agent()`. |
+| `check_semantic_cache(prompt, project_id)` | Embeds the prompt and performs a pgvector similarity search. Returns the cached response string or `None`. |
+| `store_semantic_cache(prompt, response, project_id)` | Stores the prompt embedding + response text in Postgres. Called asynchronously after the `idle` event fires. **Refuses** responses that look like tool-call / DSML leaks (`<\|tool_call\|>`, etc.) so poison cannot be replayed. |
 | `purge` / poison helpers | Detect and drop poisoned cache entries that would re-emit raw tool syntax to the UI. |
 
-### CustomOpenAIVectorizer
-
-A lightweight Pydantic-compatible vectorizer that calls the **LM Studio embedding endpoint** (`text-embedding-mxbai-embed-large-v1`, 1024 dims) via the OpenAI async client. This reuses the same embedding model already running for LTM/pgvector, adding zero additional memory overhead.
+Embeddings use the **LM Studio embedding endpoint** (`text-embedding-mxbai-embed-large-v1`, 1024 dims) via the shared helper in `long_term.py` — the same model as LTM.
 
 ## Integration Points
 
@@ -74,16 +72,16 @@ A `_pending_cache` dict shared between the message receive loop and the `forward
 _asyncio.ensure_future(init_semantic_cache())
 ```
 
-If Redis is unavailable or redisvl initialisation fails, the cache silently degrades to disabled — the system continues normally without caching.
+If Postgres is unavailable or init fails, the cache silently degrades to disabled — the system continues normally without caching.
 
 ## Configuration
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| Similarity threshold | `0.92` (distance `0.08`) | Minimum similarity required for a cache hit. Uses Redis COSINE distance where `0.0 = identical, 2.0 = opposite`. |
-| Cache TTL | `None` (no expiry) | Entries persist indefinitely. Redis eviction policy (`maxmemory-policy`) governs when entries are dropped. |
-| Redis index name | `owlynn_semantic_cache` | RedisVL search index name. |
-| Embedding model | `models.embedding.model_name` from `defaults.yaml` | Same MXBAI embed model used for LTM/pgvector. |
+| Similarity threshold | `0.92` (distance `0.08`) | Minimum similarity required for a cache hit (cosine distance). |
+| Cache TTL | configurable / purge helpers | Rows live in `semantic_cache`; poisoned entries are purged. |
+| Table | `semantic_cache` | Postgres + pgvector. |
+| Embedding model | `models.embedding.model_name` from `defaults.yaml` | Same MXBAI embed model used for LTM. |
 | Embedding URL | `models.embedding.base_url` from `defaults.yaml` | LM Studio embedding endpoint. |
 
 ## Bypass Conditions
@@ -113,9 +111,7 @@ The semantic cache is **skipped** when:
 ## Observability
 
 - **Cache HIT**: `INFO [semantic-cache] Cache HIT for thread=<thread_id>` in application logs
-- **Init success**: `INFO Semantic cache initialized (name=owlynn_semantic_cache)` on startup
-- **Init failure**: `WARNING Failed to initialize Semantic Cache: ...` (degraded gracefully)
-- **Store failure**: `WARNING Semantic Cache store failed: ...` (non-fatal, answer still delivered)
+- **Init / store failure**: `WARNING` logs (degraded gracefully; answer still delivered)
 - **WS event on hit**: `model: "cache"` appears in `stream` and `message` events sent to frontend
 
 ## Performance Impact
@@ -132,10 +128,10 @@ The semantic cache is **skipped** when:
 - `src/memory/semantic_cache.py` — Module implementation
 - `src/api/ws/handler.py` — Cache check + store hooks
 - `src/agent/core/graph.py` — Startup init
-- `src/memory/long_term.py` — Mem0 + nomic embed (same vectorizer)
-- `docs/architecture/REDIS_LIFECYCLE.md` — Redis memory management (checkpoint eviction)
+- `src/memory/long_term.py` — Shared embedding helper + LTM
+- `docs/architecture/POSTGRES_MEMORY_LIFECYCLE.md` — Postgres memory lifecycle
 - `docs/features/MEMORY.md` — Full memory system overview
 
 ## Last updated
 
-2026-07-08 — Fixed `aindex()` bug: `redisvl` v0.20+ changed `aindex` from async method to property. Removed vestigial call; index is auto-created on init, async index is lazy-initialized on first use.
+2026-08-26 — Documented pgvector backend (Redis/redisvl retired).

@@ -19,6 +19,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 10s
+    mem_limit: 768m
 
   stirling-pdf:
     image: stirlingtools/stirling-pdf:latest

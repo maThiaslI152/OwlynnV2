@@ -1,7 +1,7 @@
 ---
 status: active
 category: reference
-last_updated: 2026-08-25
+last_updated: 2026-08-26
 owner: ai-agent
 audience: agent
 ---
@@ -12,14 +12,14 @@ audience: agent
 
 ```yaml
 manifest:
-  version: 31
-  generated: "2026-08-25T13:00:00Z"
+  version: 33
+  generated: "2026-08-26T12:30:00Z"
   files:
     - path: AGENTS.md
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-08-25
+      last_updated: 2026-08-26
     - path: docs/ADR.md
       status: active
       category: architecture
@@ -29,12 +29,12 @@ manifest:
       status: active
       category: architecture
       audience: agent
-      last_updated: 2026-08-25
-    - path: docs/architecture/REDIS_LIFECYCLE.md
+      last_updated: 2026-08-26
+    - path: docs/architecture/POSTGRES_MEMORY_LIFECYCLE.md
       status: active
       category: architecture
       audience: agent
-      last_updated: 2026-07-10
+      last_updated: 2026-08-26
     - path: docs/development/API_REFERENCE.md
       status: active
       category: reference
@@ -99,18 +99,18 @@ manifest:
       status: active
       category: architecture
       audience: agent
-      last_updated: 2026-08-24
+      last_updated: 2026-08-26
     - path: docs/features/SEMANTIC_CACHE.md
       status: active
       category: performance
       audience: agent
-      last_updated: 2026-08-25
+      last_updated: 2026-08-26
 
     - path: docs/PERFORMANCE_SLOS.md
       status: active
       category: standards
       audience: agent
-      last_updated: 2026-08-25
+      last_updated: 2026-08-26
     - path: docs/development/PROJECT_GUIDE.md
       status: active
       category: reference
@@ -130,7 +130,7 @@ manifest:
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-06-10
+      last_updated: 2026-08-26
     - path: docs/SOTA_FEATURES_GUIDE.md
       status: active
       category: guide
@@ -140,7 +140,7 @@ manifest:
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-06-19
+      last_updated: 2026-08-26
     - path: docs/STATUS.md
       status: active
       category: standards
@@ -150,7 +150,17 @@ manifest:
       status: active
       category: reference
       audience: agent
-      last_updated: 2026-08-24
+      last_updated: 2026-08-26
+    - path: docs/changes/usable-multiturn-chat/CHANGELOG.md
+      status: active
+      category: changelog
+      audience: agent
+      last_updated: 2026-08-26
+    - path: docs/changes/postgres-memory-cleanup/CHANGELOG.md
+      status: active
+      category: changelog
+      audience: agent
+      last_updated: 2026-08-26
     - path: docs/changes/local-tool-bind-cap/CHANGELOG.md
       status: active
       category: changelog
@@ -185,7 +195,7 @@ manifest:
       status: active
       category: architecture
       audience: agent
-      last_updated: 2026-06-11
+      last_updated: 2026-08-26
     - path: docs/features/MODES.md
       status: active
       category: reference
@@ -820,7 +830,7 @@ manifest:
       status: active
       category: guide
       audience: agent
-      last_updated: 2026-07-10
+      last_updated: 2026-08-26
     - path: docs/guides/file_formats.md
       status: active
       category: guide

@@ -211,8 +211,14 @@ _PENTEST_TOOLBOX: list = [
 TOOLBOX_REGISTRY: dict[str, list] = {
     "web_search": [web_search, fetch_webpage, deep_research, browser_background_fetch],
     "file_ops": [
-        # Workspace file CRUD is pentest-only (see TOOLBOX_REGISTRY["pentest"]).
-        # Normal/Study are chat-only — attachments are inlined into the turn.
+        read_workspace_file,
+        write_workspace_file,
+        edit_workspace_file,
+        list_workspace_files,
+        delete_workspace_file,
+        download_to_workspace,
+    ],
+    "data_connectors": [
         ingest_github_repo,
         ingest_youtube_transcript,
         ingest_obsidian_vault,

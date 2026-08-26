@@ -83,9 +83,9 @@ def estimate_token_budget(user_text: str, route: str) -> int:
     budget_max_cfg = config.get("routing.budget_max", {})
 
     if route == "simple":
-        budget = 256
+        budget = 128
         if len(user_text) > 100:
-            budget = 512
+            budget = 256
         simple_reserve = int(reserves_cfg.get("simple", 1500))
         return min(budget, _MAIN_MODEL_CONTEXT - simple_reserve)
 

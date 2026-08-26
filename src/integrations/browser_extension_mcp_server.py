@@ -1,11 +1,26 @@
 import json
 import os
 import time
+from pathlib import Path
 
 import httpx
 
 OWLYNN_API_URL = os.environ.get("OWLYNN_API_URL", "http://127.0.0.1:8000")
 BASE = f"{OWLYNN_API_URL}/api/browser_extension"
+_TOKEN_PATH = Path.home() / ".owlynn" / "browser_extension_token"
+
+
+def _auth_headers() -> dict[str, str]:
+    """Local run token or extension WS token for privileged REST endpoints."""
+    token = os.environ.get("OWLYNN_LOCAL_RUN_TOKEN", "").strip()
+    if not token and _TOKEN_PATH.is_file():
+        try:
+            token = _TOKEN_PATH.read_text(encoding="utf-8").strip()
+        except OSError:
+            token = ""
+    if not token:
+        return {}
+    return {"X-Owlynn-Run-Token": token}
 
 
 def _wait_for_backend(timeout: int = 60) -> bool:
@@ -63,7 +78,9 @@ try:
             return err
         async with httpx.AsyncClient(timeout=60) as client:
             resp = await client.post(
-                f"{BASE}/search", json={"query": query, "engine": engine}
+                f"{BASE}/search",
+                json={"query": query, "engine": engine},
+                headers=_auth_headers(),
             )
             data = resp.json()
             if data.get("error"):
@@ -87,7 +104,11 @@ try:
         if err:
             return err
         async with httpx.AsyncClient(timeout=60) as client:
-            resp = await client.post(f"{BASE}/fetch", json={"urls": [url]})
+            resp = await client.post(
+                f"{BASE}/fetch",
+                json={"urls": [url]},
+                headers=_auth_headers(),
+            )
             data = resp.json()
             if data.get("error"):
                 return f"Fetch error: {data['error']}"
@@ -112,7 +133,7 @@ try:
         if err:
             return err
         async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.get(f"{BASE}/screenshot")
+            resp = await client.get(f"{BASE}/screenshot", headers=_auth_headers())
             data = resp.json()
             if data.get("error"):
                 return f"Screenshot error: {data['error']}"

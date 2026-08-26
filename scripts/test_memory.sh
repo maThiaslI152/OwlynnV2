@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Memory orchestration test runner (unit + smoke + optional Redis live check)
+# Memory orchestration test runner (unit + smoke + optional Postgres live check)
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 export PYTHONPATH="${PWD}${PYTHONPATH:+:$PYTHONPATH}"
 
-REDIS_LIVE=false
+POSTGRES_LIVE=false
 for arg in "$@"; do
   case "$arg" in
-    --redis) REDIS_LIVE=true ;;
+    --postgres|--redis) POSTGRES_LIVE=true ;;
   esac
 done
 
@@ -17,7 +17,7 @@ python -m pytest -q \
   tests/test_phase1_memory_orchestration.py \
   tests/test_memory_retrieve_gate.py \
   tests/test_memory_nodes.py \
-  tests/test_qdrant_memory_config.py \
+  tests/test_pgvector_memory_config.py \
   -m "not network" \
   --tb=short
 
@@ -27,13 +27,13 @@ python -m pytest -q \
   -m "not network" \
   --tb=short
 
-if $REDIS_LIVE; then
-  echo "→ Redis live enqueue (requires running Redis)"
+if $POSTGRES_LIVE; then
+  echo "→ Postgres live enqueue (requires running Postgres)"
   python -m pytest -q \
-    tests/test_memory_orchestration_smoke.py::test_redis_enqueue_when_available \
+    tests/test_memory_orchestration_smoke.py::test_postgres_enqueue_when_available \
     --tb=short
 else
-  echo "→ Skipping Redis live test (pass --redis to enable)"
+  echo "→ Skipping Postgres live test (pass --postgres to enable)"
 fi
 
 echo "✓ Memory test suite complete"

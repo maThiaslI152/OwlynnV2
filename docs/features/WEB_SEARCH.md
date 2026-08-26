@@ -1,7 +1,7 @@
 ---
 status: active
 category: architecture
-last_updated: 2026-05-31
+last_updated: 2026-08-26
 owner: human
 ---
 
@@ -12,6 +12,8 @@ owner: human
 ## Overview
 
 `web_search` is the agent's single entry point for internet search. Uses a multi-tier fallback pipeline with progressively more resilient (but slower) strategies. No API keys required.
+
+**Tool-first path (router):** When `selected_toolboxes=["web_search"]`, `complex_llm` injects a synthetic `web_search` call without `bind_tools` planning (`src/agent/core/tool_first_web.py`). After results, extractive synthesis is preferred (`complex.tool_first_extractive_synth`). Checkpointed `_tool_first_web_phase=done` is cleared on a new user turn that has not searched yet so mid-thread digressions (T3/T6) still inject search.
 
 ## Entry Points
 
@@ -57,11 +59,13 @@ User query
 
 - Trigger (search): An active extension client is connected to `ws://localhost:8000/api/browser_extension/ws`
 - Trigger (active tab): User context menu / popup push, or agent tool `get_active_browser_context` when `screen_assist` toolbox is bound
-- Search behavior: Opens a background tab on Google/Bing/DDG, scrapes DOM (AI Overviews, Merlin, Copilot, DuckAssist)
-- Active tab behavior: Reads the user's focused tab via `chrome.scripting` (`content_extract.js`); user push broadcasts `browser.page_context` to chat WebSocket clients
-- Requirements: Unpacked extension (`browser-extension/`) loaded in Brave/Chrome; `./start.sh` auto-loads on macOS when Brave is installed
+- Search behavior: Opens a background tab on allowlisted Google/Bing/DDG hosts, scrapes DOM (AI Overviews, Merlin, Copilot, DuckAssist) with MutationObserver readiness (budget &lt; 15s backend timeout)
+- CAPTCHA / bot walls: Treated as **hard failure** (empty hits) so the pipeline falls through to curl_cffi / later tiers — never a synthetic “success” hit
+- Active tab behavior: Reads the user's focused tab via `chrome.scripting` (`content_extract.js`); user push broadcasts `browser.page_context` to chat WebSocket clients. Sensitive (bank/SSO) hostnames are blocked for agent read/act paths
+- Requirements: Unpacked extension (`browser-extension/` v1.4.0+) loaded in Brave/Chrome; `./start.sh` auto-loads on macOS when Brave is installed
+- Auth: Extension fetches Origin-gated `/api/browser_extension/token`; privileged REST (`/search` `/fetch` `/screenshot`) requires run token or extension token
 - Tier tag: `tier0.2 / browser_extension` (search); active tab is separate from search pipeline
-- See [`changes/browser-extension-active-tab/CHANGELOG.md`](changes/browser-extension-active-tab/CHANGELOG.md)
+- See [`features/BROWSER_EXTENSION.md`](BROWSER_EXTENSION.md)
 
 ### Tier 1.5: SearXNG (opt-in)
 
@@ -208,8 +212,10 @@ If web search runs but the UI never gets a written answer (tool loop, DSML marku
 ## Related
 
 - [`docs/architecture/overview.md`](architecture/overview.md) — system architecture
+- [`docs/architecture/AGENT_FLOW.md`](../architecture/AGENT_FLOW.md) — tool-first web inject / sticky phase
 - [`docs/README.md`](README.md) — project documentation map
 
 ## Last updated
 
+2026-08-26 — tool-first sticky `done` clear + extractive synth note
 2026-06-11 — added Tier 0.2 Chrome Search Bridge extension details

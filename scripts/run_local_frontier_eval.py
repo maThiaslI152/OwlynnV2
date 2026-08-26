@@ -656,7 +656,7 @@ async def mem0_available() -> bool:
         headers={"X-Owlynn-Run-Token": os.environ.get("OWLYNN_LOCAL_RUN_TOKEN", "")},
     ) as client:
         try:
-            resp = await client.get(f"{API_URL}/api/mem0/count")
+            resp = await client.get(f"{API_URL}/api/memory/count")
             if resp.status_code == 200:
                 data = resp.json()
                 return data.get("status") != "error" and "error" not in data
@@ -1781,7 +1781,8 @@ async def main() -> None:
         try:
             async with httpx.AsyncClient(timeout=1.0) as client:
                 resp = await client.get(f"{API_URL}/api/health")
-                if resp.status_code == 200:
+                # agent===ready means chat can run; status may be "degraded" if Postgres soft-path is open
+                if resp.status_code == 200 and resp.json().get("agent") == "ready":
                     backend_ready = True
                     break
         except Exception:

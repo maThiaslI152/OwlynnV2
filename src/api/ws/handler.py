@@ -128,6 +128,8 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
     # Mutable container shared between the message-receive loop and forward_events
     # closure so that the forwarder can populate the semantic cache on 'idle'.
     _pending_cache: dict = {"prompt": None, "project_id": "default"}
+    # Defer chat-title LLM until after idle so it does not contend with T1 generate.
+    _pending_title: dict = {"chat_id": None, "prompt": None, "files": None}
     # Per-turn timing: t0 at user-message accept → first chunk (ttft) → idle.
     _turn_timing: dict = {"t0": None, "ttft_ms": None, "logged_complete": False}
 
@@ -908,6 +910,41 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                             )
                             _last_ai_text_for_cache = None
                             _pending_cache["prompt"] = None
+                        # Refine ThoughtNode title after the turn (avoids GPU contention)
+                        if (
+                            isinstance(event, dict)
+                            and event.get("type") == "status"
+                            and event.get("content") == "idle"
+                            and _pending_title.get("chat_id")
+                        ):
+                            _title_job = dict(_pending_title)
+                            _pending_title["chat_id"] = None
+                            _pending_title["prompt"] = None
+                            _pending_title["files"] = None
+
+                            async def _refine_title_idle(
+                                job: dict = _title_job,
+                            ) -> None:
+                                try:
+                                    from src.memory.thought_graph import (
+                                        thought_graph_manager,
+                                    )
+
+                                    refined = await generate_chat_title_router_llm(
+                                        job.get("prompt") or "",
+                                        file_names=job.get("files") or [],
+                                    )
+                                    if refined and str(refined).strip():
+                                        await thought_graph_manager.update_node(
+                                            job["chat_id"], title=str(refined).strip()
+                                        )
+                                except Exception as exc:
+                                    logger.debug(
+                                        "[ws_handler] idle title refine failed: %s",
+                                        exc,
+                                    )
+
+                            asyncio.create_task(_refine_title_idle())
                         await _send_ws(event)
                 except Exception as e:
                     logger.error(
@@ -1067,18 +1104,16 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
 
             # On first user message, register the ThoughtNode (not a project chat).
             # Pentest stays engagement-scoped and skips the shared graph.
+            # Title LLM is deferred off the critical path (was blocking T1 TTFT ~10–30s).
             if scenario_id != "pentest" and (
                 thread_id not in sessions or not sessions[thread_id].event_buffer
             ):
                 chat_id = thread_id
                 file_names = [f.get("name", "") for f in files if f.get("name")]
-                try:
-                    title = await generate_chat_title_router_llm(
-                        user_input[:1000], file_names=file_names
-                    )
-                except Exception as e:
-                    logger.warning("Error suppressed: %s", e)
-                    title = ""
+                heuristic = " ".join((user_input or "").strip().split())[:56]
+                if file_names and not heuristic:
+                    heuristic = f"Files: {', '.join(file_names[:2])}"[:56]
+                title = heuristic or "New Thought"
 
                 try:
                     from src.memory.thought_graph import thought_graph_manager
@@ -1086,12 +1121,10 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                     node_mode = "study" if scenario_id == "study" else "normal"
                     await thought_graph_manager.get_or_create_node(
                         node_id=chat_id,
-                        title=title or "New Thought",
+                        title=title,
                         mode=node_mode,
                         scenario_id=scenario_id,
                     )
-                    if title:
-                        await thought_graph_manager.update_node(chat_id, title=title)
 
                     parent_node = payload.get("parent_thread_id") or payload.get(
                         "branch_from"
@@ -1104,6 +1137,12 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                             weight=1.0,
                             auto_generated=False,
                         )
+
+                    # Schedule LLM title refine for after this turn's idle
+                    # (running it concurrently starved simple-route TTFT on 12B).
+                    _pending_title["chat_id"] = chat_id
+                    _pending_title["prompt"] = user_input[:1000]
+                    _pending_title["files"] = file_names
                 except Exception as e:
                     logger.debug(
                         "[ws_handler] Failed to sync thought node or branch: %s", e
@@ -1112,7 +1151,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                 logger.info(
                     "Registered thought node %s (title=%s)",
                     chat_id,
-                    title or "New Chat",
+                    title,
                 )
 
             # Chat-only: extract attachments in memory (no disk write)
@@ -1121,6 +1160,13 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
             )
             if not message_content:
                 continue
+
+            # First user turn on this WS session: skip semantic-cache *lookup*
+            # (embedding can unload the warm main LLM and spike simple TTFT 15–25s).
+            # Still store after idle so the next identical turn can HIT.
+            _first_thread_turn = thread_id not in sessions or not (
+                sessions[thread_id].event_buffer
+            )
 
             _begin_turn_timing(_turn_timing)
 
@@ -1132,47 +1178,53 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                 or bool(files)
                 or not isinstance(message_content, str)
             )
-            if not _skip_cache:
+            cached_answer = None
+            if not _skip_cache and not _first_thread_turn:
                 cached_answer = await check_semantic_cache(
                     user_input, project_id=project_id
                 )
-                if cached_answer:
-                    logger.info("[semantic-cache] Cache HIT for thread=%s", thread_id)
-                    corr_id = payload.get("correlation_id")
+            elif not _skip_cache and _first_thread_turn:
+                logger.info(
+                    "[semantic-cache] skip lookup on first thread turn "
+                    "(avoid embedding↔main swap before TTFT)"
+                )
+            if not _skip_cache and cached_answer:
+                logger.info("[semantic-cache] Cache HIT for thread=%s", thread_id)
+                corr_id = payload.get("correlation_id")
 
-                    def _cache_payload(p: dict) -> dict:
-                        return {**p, "correlation_id": corr_id} if corr_id else p
+                def _cache_payload(p: dict) -> dict:
+                    return {**p, "correlation_id": corr_id} if corr_id else p
 
-                    await websocket.send_json(
-                        _cache_payload({"type": "status", "content": "working"})
-                    )
-                    # Stream cached text in one shot so UI shows it as a normal reply
-                    cache_chunk = _cache_payload(
+                await websocket.send_json(
+                    _cache_payload({"type": "status", "content": "working"})
+                )
+                # Stream cached text in one shot so UI shows it as a normal reply
+                cache_chunk = _cache_payload(
+                    {
+                        "type": "chunk",
+                        "content": cached_answer,
+                        "model": "cache",
+                    }
+                )
+                await websocket.send_json(cache_chunk)
+                _stamp_ttft_if_needed(
+                    _turn_timing, cache_chunk, thread_id=thread_id
+                )
+                await websocket.send_json(
+                    _cache_payload(
                         {
-                            "type": "chunk",
+                            "type": "assistant.message",
+                            "role": "assistant",
                             "content": cached_answer,
                             "model": "cache",
                         }
                     )
-                    await websocket.send_json(cache_chunk)
-                    _stamp_ttft_if_needed(
-                        _turn_timing, cache_chunk, thread_id=thread_id
-                    )
-                    await websocket.send_json(
-                        _cache_payload(
-                            {
-                                "type": "assistant.message",
-                                "role": "assistant",
-                                "content": cached_answer,
-                                "model": "cache",
-                            }
-                        )
-                    )
-                    await websocket.send_json(
-                        _cache_payload({"type": "status", "content": "idle"})
-                    )
-                    _finalize_turn_timing(_turn_timing, thread_id=thread_id)
-                    continue
+                )
+                await websocket.send_json(
+                    _cache_payload({"type": "status", "content": "idle"})
+                )
+                _finalize_turn_timing(_turn_timing, thread_id=thread_id)
+                continue
 
             # Write user message to trace (before graph run starts)
             if cfg_trace_enabled:

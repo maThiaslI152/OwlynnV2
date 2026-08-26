@@ -28,7 +28,8 @@ async def wait_for_backend(url="http://127.0.0.1:8000/api/health", timeout=30):
         for _ in range(timeout):
             try:
                 resp = await client.get(url)
-                if resp.status_code == 200:
+                # Prefer agent readiness; status may be "degraded" while chat works
+                if resp.status_code == 200 and resp.json().get("agent") == "ready":
                     return True
             except httpx.RequestError:
                 pass

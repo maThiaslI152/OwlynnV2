@@ -91,11 +91,11 @@ If any prior turn used tools (web search, fetch, shell, etc.):
 
 ### 3. History trimming
 
-[`_trim_tool_history()`](../../src/agent/nodes/complex.py) (default **6** tool cycles):
+[`_trim_tool_history()`](../../src/agent/core/complex_prompt.py) (default **6** in-turn tool cycles):
 
-- Keeps the **last 6** full tool cycles (AI `tool_calls` + `ToolMessage` pairs).
-- Older tool outputs become one-line summaries: `[web_search: completed, 4521 chars output]`.
-- Short threads (≤6 messages or ≤6 tool cycles) pass through unchanged.
+- ToolMessages **before the latest human turn** are always soft-capped (`tool_output.prior_turn_max_chars`, default **400**) so prior `web_search` blobs do not dominate TTFT on digressions.
+- Within the current turn, keep the **last 6** tool cycles (capped to `tool_output.current_turn_max_chars`, default **6000**); older in-turn outputs become stubs: `[web_search output: completed]`.
+- Message roles / `tool_call_id` pairing are preserved.
 
 ### 4. Auto-summarize (long threads)
 

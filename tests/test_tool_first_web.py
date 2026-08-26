@@ -3,8 +3,11 @@
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from src.agent.core.tool_first_web import (
+    TOOL_FIRST_PHASE_DONE,
     TOOL_FIRST_PHASE_SEARCH,
+    build_tool_first_extractive_answer,
     build_tool_first_web_search_message,
+    maybe_clear_stale_tool_first_web_phase,
     should_escalate_tool_first,
     should_inject_tool_first_search,
     should_synthesize_tool_first,
@@ -84,12 +87,48 @@ def test_escalate_on_failed_search():
     assert should_escalate_tool_first(state, turn) is True
 
 
-def test_no_reinject_after_done_phase():
-    """After one synthesis, tool-first must not inject another search round."""
+def test_search_phase_blocks_reinject_same_turn():
+    """While phase==search, do not inject another web_search this turn."""
     state = {
         "selected_toolboxes": ["web_search"],
-        "_tool_first_web_phase": "done",
+        "_tool_first_web_phase": TOOL_FIRST_PHASE_SEARCH,
     }
     turn = [HumanMessage(content="latest news on AI")]
     assert should_inject_tool_first_search(state, turn) is False
-    assert should_synthesize_tool_first(state, turn) is False
+
+
+def test_done_phase_allows_inject_on_new_turn_without_search():
+    """Checkpointed done must not stick across turns (T3/T6)."""
+    state = {
+        "selected_toolboxes": ["web_search"],
+        "_tool_first_web_phase": TOOL_FIRST_PHASE_DONE,
+    }
+    turn = [HumanMessage(content="what is the weather in Bangkok now?")]
+    assert should_inject_tool_first_search(state, turn) is True
+    cleared = maybe_clear_stale_tool_first_web_phase(state, turn)
+    assert cleared.get("_tool_first_web_phase") is None
+
+
+def test_done_phase_keeps_block_when_turn_already_searched():
+    state = {
+        "selected_toolboxes": ["web_search"],
+        "_tool_first_web_phase": TOOL_FIRST_PHASE_DONE,
+    }
+    turn = [
+        HumanMessage(content="latest X"),
+        ToolMessage(content=_OK_SEARCH, name="web_search", tool_call_id="1"),
+    ]
+    assert should_inject_tool_first_search(state, turn) is False
+    assert maybe_clear_stale_tool_first_web_phase(state, turn) is state
+
+
+def test_extractive_answer_from_search_tool():
+    turn = [
+        HumanMessage(content="what is it's GDP"),
+        AIMessage(content="", tool_calls=[{"name": "web_search", "id": "1", "args": {}}]),
+        ToolMessage(content=_OK_SEARCH, tool_call_id="1", name="web_search"),
+    ]
+    text = build_tool_first_extractive_answer(turn)
+    assert text is not None
+    assert "web search found" in text.lower() or "example.com" in text.lower()
+    assert "Example" in text or "Snippet" in text

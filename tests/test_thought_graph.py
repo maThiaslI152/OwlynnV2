@@ -8,8 +8,16 @@ from src.memory.thought_graph import ThoughtGraphManager
 
 @pytest_asyncio.fixture
 async def graph_mgr():
+    from src.memory.postgres_health import is_postgres_available, reset_postgres_breaker
+
+    reset_postgres_breaker()
+    if not is_postgres_available():
+        pytest.skip("Postgres circuit open")
     mgr = ThoughtGraphManager()
-    await mgr.ensure_tables()
+    try:
+        await mgr.ensure_tables()
+    except Exception as exc:
+        pytest.skip(f"Postgres unavailable: {exc}")
     return mgr
 
 
@@ -22,6 +30,7 @@ async def test_create_and_get_node(graph_mgr):
         mode="normal",
         tags=["arch", "mindmap"],
     )
+    assert node is not None
     assert node["id"] == node_id
     assert node["title"] == "Test Architectural Discussion"
     assert node["mode"] == "normal"
@@ -36,6 +45,7 @@ async def test_create_and_get_node(graph_mgr):
 async def test_create_edges_and_get_graph_data(graph_mgr):
     n1 = await graph_mgr.get_or_create_node("node-a", title="Node A", mode="normal")
     n2 = await graph_mgr.get_or_create_node("node-b", title="Node B", mode="normal")
+    assert n1 is not None and n2 is not None
 
     edge = await graph_mgr.create_edge(
         source_id="node-a",
@@ -59,11 +69,13 @@ async def test_create_edges_and_get_graph_data(graph_mgr):
 @pytest.mark.asyncio
 async def test_update_and_delete_node(graph_mgr):
     node_id = "node-delete-test"
-    await graph_mgr.get_or_create_node(node_id, title="Temporary Node")
+    created = await graph_mgr.get_or_create_node(node_id, title="Temporary Node")
+    assert created is not None
 
     updated = await graph_mgr.update_node(
         node_id, title="Updated Title", canvas_x=150.0, canvas_y=200.0
     )
+    assert updated is not None
     assert updated["title"] == "Updated Title"
     assert updated["canvas_x"] == 150.0
 

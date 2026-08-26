@@ -1,7 +1,7 @@
 ---
 status: active
 category: architecture
-last_updated: 2026-08-24
+last_updated: 2026-08-26
 owner: ai-agent
 audience: agent
 ---
@@ -12,7 +12,7 @@ audience: agent
 
 ## System Context
 
-Owlynn is a **privacy-first hybrid** coworker for Apple Silicon (Mac M4 Air 24GB). **Local:** workspace files, PostgreSQL/pgvector and Redis memory, routing, embeddings, and unified model routing, embedding, and memory extraction stay on-device. **Cloud (opt-in):** complex reasoning uses **DeepSeek V4** when a key is configured; prompts are **best-effort anonymized** before send (see `src/agent/anonymization.py`). Startup preloads **Gemma 4 12B Agentic (`gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m`) unified local model + MXBAI embedding (`text-embedding-mxbai-embed-large-v1`)**.
+Owlynn is a **privacy-first hybrid** coworker for Apple Silicon (Mac M4 Air 24GB). **Local:** workspace files, PostgreSQL/pgvector (checkpoints, LTM, semantic cache, extraction), routing, embeddings, and unified model routing, embedding, and memory extraction stay on-device. **Cloud (opt-in):** complex reasoning uses **DeepSeek V4** when a key is configured; prompts are **best-effort anonymized** before send (see `src/agent/anonymization.py`). Startup preloads **Gemma 4 12B Agentic (`gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m`) unified local model + MXBAI embedding (`text-embedding-mxbai-embed-large-v1`)**.
 
 ```
 Browser (http://127.0.0.1:5173)
@@ -31,12 +31,11 @@ Browser (http://127.0.0.1:5173)
   │     ├─► Embedding Model: text-embedding-mxbai-embed-large-v1 (1024 dims)
   │     └─► Pentest Model: gemma-4-12b-agentic-fable5-composer2.5-v2-3.5x-tau2@q4_k_m (90% Tool Accuracy, Zero-Latency Mode Switching)
   │
-  ├─► PostgreSQL (port 5432)
-  │     ├─► LangGraph checkpointing / session persistence
-  │     └─► pgvector Long-Term Memory (memory_vectors @ 1024 dims)
-  │
-  └─► Redis (port 6379)
-        └─► Semantic Cache / Memory extraction queue
+  └─► PostgreSQL (port 5432)
+        ├─► LangGraph checkpointing / session persistence
+        ├─► pgvector Long-Term Memory (memory_vectors @ 1024 dims)
+        ├─► Semantic Cache (semantic_cache)
+        └─► Extraction jobs (extraction_jobs + LISTEN/NOTIFY)
 ```
 
 ## Key Modules
@@ -84,7 +83,7 @@ memory_inject_lite ──► Profile, persona, topics (no vector search)
 router ──► Classify: simple | complex-cloud; memory gate + scenario
   │
   ▼
-memory_retrieve ──► Gated Qdrant/Mem0 + scenario markdown (when needed)
+memory_retrieve ──► Gated pgvector LTM + scenario markdown (when needed)
   │
   ▼
 after_memory_retrieve ──► If tokens >85% context: auto_summarize → compress history
@@ -130,12 +129,15 @@ Validation runs at startup via `ConfigValidator` — 60+ required paths checked.
 
 ## Memory Architecture
 
-Three-tier system:
-- **STM** (`data/memories.json`) — recent facts, keyword search
-- **LTM** (`Mem0 + Qdrant`) — embedding-indexed semantic search
+Postgres-backed tiers (see [`docs/features/MEMORY.md`](../features/MEMORY.md)):
+- **STM** — recent facts (Postgres `memories`)
+- **LTM** — embedding-indexed semantic search (`memory_vectors` pgvector)
 - **Personal** (`topics.json`, `interests.json`) — time-decay-weighted relevance
+- **Semantic cache / extraction** — `semantic_cache` + `extraction_jobs` in the same Postgres
 
-Context budget: memory capped at 6000 chars (~1500 tokens) to stay within model context window.
+Context budget: memory capped at 24000 chars in `format_memory_context` (enhanced blocks use a separate budget).
+
+When Postgres is degraded, chat continues with soft-miss memory and possible `MemorySaver` checkpoint fallback — see [`docs/architecture/POSTGRES_MEMORY_LIFECYCLE.md`](POSTGRES_MEMORY_LIFECYCLE.md).
 
 ## Related
 

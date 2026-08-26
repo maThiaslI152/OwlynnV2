@@ -64,6 +64,7 @@ from src.agent.core.complex_utils.fallback import _fallback_for_blank_response
 from src.agent.core.complex_utils.formatter import (
     _strip_dsml_blocks,
     _strip_thinking_tags,
+    latest_user_text,
     needs_web_synthesis_retry,
 )
 from src.agent.core.complex_utils.web_budget import (
@@ -73,13 +74,23 @@ from src.agent.core.complex_utils.web_budget import (
     resolve_task_category,
 )
 from src.agent.core.state import AgentState
+from src.agent.core.tool_first_list_read import (
+    build_tool_first_list_read_message,
+    should_inject_tool_first_list_read,
+)
 from src.agent.core.tool_first_web import (
     TOOL_FIRST_PHASE_DONE,
     TOOL_FIRST_PHASE_SEARCH,
+    build_tool_first_extractive_answer,
     build_tool_first_web_search_message,
+    maybe_clear_stale_tool_first_web_phase,
     should_escalate_tool_first,
     should_inject_tool_first_search,
     should_synthesize_tool_first,
+)
+from src.agent.core.tool_first_write import (
+    build_tool_first_write_message,
+    should_inject_tool_first_write,
 )
 from src.agent.llm import CloudUnavailableError, get_cloud_llm
 from src.agent.response_styles import style_instruction_for_prompt
@@ -402,6 +413,102 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     web_on = bool(web_on)
 
     turn_messages = _messages_for_current_user_turn(thread_messages)
+    # Sticky checkpointed "done" from a prior turn must not block a new search.
+    state = maybe_clear_stale_tool_first_web_phase(state, turn_messages)
+
+    # ── Post-write short-circuit: no second LLM round after a successful save ─
+    from src.agent.core.ask_user_guards import (
+        extract_workspace_read_filename,
+        extract_workspace_write_filename,
+        is_clear_workspace_list_read_intent,
+        is_clear_workspace_write_intent,
+        successful_workspace_read_body,
+        turn_has_successful_workspace_read,
+        turn_has_successful_workspace_write,
+    )
+
+    _uw = latest_user_text(thread_messages) or ""
+    if is_clear_workspace_write_intent(_uw) and turn_has_successful_workspace_write(
+        turn_messages
+    ):
+        filename = extract_workspace_write_filename(_uw)
+        logger.info(
+            "[complex] post-write short-circuit — confirming %s without LLM", filename
+        )
+        return {
+            "messages": [
+                AIMessage(content=f"Saved your note to `{filename}` in the workspace.")
+            ],
+            "model_used": "post-write-confirm",
+            "pending_tool_calls": False,
+            "security_decision": None,
+            "security_reason": None,
+            "_cutoff_pending": False,
+            "_tool_first_web_phase": state.get("_tool_first_web_phase"),
+        }
+
+    # ── Post-list/read short-circuit: no second LLM after successful read ─
+    if is_clear_workspace_list_read_intent(_uw) and turn_has_successful_workspace_read(
+        turn_messages
+    ):
+        filename = extract_workspace_read_filename(_uw)
+        body = successful_workspace_read_body(turn_messages) or ""
+        # Keep reply bounded; tool message may already include guidance suffix.
+        snippet = body.strip()
+        if len(snippet) > 2500:
+            snippet = snippet[:2500].rstrip() + "\n…"
+        logger.info(
+            "[complex] post-read short-circuit — confirming %s without LLM", filename
+        )
+        return {
+            "messages": [
+                AIMessage(
+                    content=(
+                        f"Here’s `{filename}` from your workspace:\n\n{snippet}"
+                        if snippet
+                        else f"Read `{filename}` from your workspace."
+                    )
+                )
+            ],
+            "model_used": "post-read-confirm",
+            "pending_tool_calls": False,
+            "security_decision": None,
+            "security_reason": None,
+            "_cutoff_pending": False,
+            "_tool_first_web_phase": state.get("_tool_first_web_phase"),
+        }
+
+    # ── Tool-first write: skip bind_tools planning prefill ───────────────
+    if should_inject_tool_first_write(state, turn_messages):
+        tool_first_write = build_tool_first_write_message(thread_messages)
+        logger.info(
+            "[complex] tool-first write: injecting write_workspace_file without bind_tools"
+        )
+        return {
+            "messages": [tool_first_write],
+            "model_used": "tool-first-write",
+            "pending_tool_calls": True,
+            "security_decision": None,
+            "security_reason": None,
+            "_cutoff_pending": False,
+            "_tool_first_web_phase": state.get("_tool_first_web_phase"),
+        }
+
+    # ── Tool-first list/read: skip bind_tools planning prefill ───────────
+    if should_inject_tool_first_list_read(state, turn_messages):
+        tool_first_lr = build_tool_first_list_read_message(thread_messages)
+        logger.info(
+            "[complex] tool-first list/read: injecting list+read without bind_tools"
+        )
+        return {
+            "messages": [tool_first_lr],
+            "model_used": "tool-first-list-read",
+            "pending_tool_calls": True,
+            "security_decision": None,
+            "security_reason": None,
+            "_cutoff_pending": False,
+            "_tool_first_web_phase": state.get("_tool_first_web_phase"),
+        }
 
     # ── Tool-first web: skip bind_tools planning prefill ─────────────────
     if should_inject_tool_first_search(state, turn_messages):
@@ -425,6 +532,26 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         )
         tool_first_escalated = True
         state = {**state, "_tool_first_web_phase": None}
+
+    # Skip local synth LLM — extractive answer from search (kills ~50s prefill).
+    if tool_first_synth and bool(
+        config.get("complex.tool_first_extractive_synth", True)
+    ):
+        extractive = build_tool_first_extractive_answer(turn_messages)
+        if extractive:
+            logger.info(
+                "[complex] tool-first web: extractive synth (%d chars, no LLM)",
+                len(extractive),
+            )
+            return {
+                "messages": [AIMessage(content=extractive)],
+                "model_used": "tool-first-extractive",
+                "pending_tool_calls": False,
+                "security_decision": None,
+                "security_reason": None,
+                "_tool_first_web_phase": TOOL_FIRST_PHASE_DONE,
+                "_cutoff_pending": False,
+            }
 
     has_images = _message_has_image_content(thread_messages) or bool(
         (state.get("router_metadata") or {}).get("has_images")
@@ -502,6 +629,45 @@ async def complex_llm_node(state: AgentState) -> AgentState:
         tools_for_invoke = []
         tools_bound = False
 
+    # After a clear write/list-read intent succeeds once, stop the thrash loop.
+    from src.agent.core.ask_user_guards import (
+        is_clear_workspace_list_read_intent,
+        is_clear_workspace_write_intent,
+        turn_has_successful_workspace_read,
+        turn_has_successful_workspace_write,
+    )
+
+    _user_for_write = latest_user_text(thread_messages) or ""
+    if (
+        tools_bound
+        and is_clear_workspace_write_intent(_user_for_write)
+        and turn_has_successful_workspace_write(turn_messages)
+    ):
+        logger.info(
+            "[complex] write already succeeded this turn — forcing unbound synthesis"
+        )
+        tools_for_invoke = []
+        tools_bound = False
+        volatile_extra += (
+            "\n\n[FILE WRITE DONE] write_workspace_file already succeeded. "
+            "Confirm the saved filename briefly. Do NOT call any more tools."
+        )
+    elif (
+        tools_bound
+        and is_clear_workspace_list_read_intent(_user_for_write)
+        and turn_has_successful_workspace_read(turn_messages)
+    ):
+        logger.info(
+            "[complex] read already succeeded this turn — forcing unbound synthesis"
+        )
+        tools_for_invoke = []
+        tools_bound = False
+        volatile_extra += (
+            "\n\n[FILE READ DONE] read_workspace_file already succeeded. "
+            "Show the file contents to the user briefly. "
+            "Do NOT call list_workspace_files or read_workspace_file again."
+        )
+
     from src.agent.core.complex_utils.vision_proxy import process_vision_messages
 
     async def _local_fallback_with_state(**kwargs):
@@ -550,7 +716,9 @@ async def complex_llm_node(state: AgentState) -> AgentState:
     budget = state.get("token_budget") or _DEFAULT_TOKEN_BUDGET
     if tool_first_synth:
         # One concise synthesis round — avoid 4k+ decode windows after a 1–2s search.
-        synth_cap = int(config.get("complex.tool_first_synth_token_budget", 1024) or 1024)
+        synth_cap = int(
+            config.get("complex.tool_first_synth_token_budget", 1024) or 1024
+        )
         budget = min(int(budget), max(256, synth_cap))
     api_tokens: dict[str, int] | None = None
     response: Any = None
@@ -729,25 +897,118 @@ async def complex_llm_node(state: AgentState) -> AgentState:
 
     from src.agent.core.ask_user_guards import (
         ai_message_asks_user,
+        build_workspace_note_content,
+        extract_workspace_read_filename,
+        extract_workspace_write_filename,
+        is_clear_workspace_list_read_intent,
+        is_clear_workspace_write_intent,
         is_code_review_missing_code,
         missing_code_review_reply,
+        should_strip_ask_user,
+        successful_workspace_read_body,
+        turn_has_successful_workspace_read,
+        turn_has_successful_workspace_write,
     )
 
-    # Hard gate: never enter ask_user HITL when the user asked for a review
-    # but provided no code/attachment (prompt-only guidance is not enough).
+    # Hard gate: never enter ask_user HITL when it cannot help (code-review
+    # without code, or an already-clear workspace write with a concrete target).
     meta = state.get("router_metadata") or {}
-    if (
+    user_text = latest_user_text(thread_messages) or ""
+
+    if isinstance(response, AIMessage) and is_clear_workspace_write_intent(user_text):
+        filename = extract_workspace_write_filename(user_text)
+        if turn_has_successful_workspace_write(thread_messages):
+            # Write already landed — never force another write or keep tool-calling.
+            if (
+                getattr(response, "tool_calls", None)
+                or not str(getattr(response, "content", "") or "").strip()
+            ):
+                logger.info(
+                    "[complex] post-write stop — confirming filename=%s", filename
+                )
+                response = AIMessage(
+                    content=f"Saved your note to `{filename}` in the workspace."
+                )
+        else:
+            calls = getattr(response, "tool_calls", None) or []
+            call_names = {
+                (tc.get("name") if isinstance(tc, dict) else getattr(tc, "name", ""))
+                for tc in calls
+            }
+            # Only hijack when the model is thrashing on clarify/ingest or producing
+            # no tools — never replace a real write or a list/read that already ran.
+            bad_only = call_names.issubset(
+                {
+                    "",
+                    "ask_user",
+                    "ingest_github_repo",
+                    "ingest_youtube_transcript",
+                    "ingest_obsidian_vault",
+                }
+            )
+            if "write_workspace_file" not in call_names and (
+                ai_message_asks_user(response) or not call_names or bad_only
+            ):
+                import uuid
+
+                note = build_workspace_note_content(
+                    thread_messages, user_text=user_text
+                )
+                logger.info(
+                    "[complex] forcing write_workspace_file filename=%s "
+                    "(blocked tools=%s)",
+                    filename,
+                    sorted(n for n in call_names if n),
+                )
+                response = AIMessage(
+                    content="",
+                    tool_calls=[
+                        {
+                            "name": "write_workspace_file",
+                            "args": {"filename": filename, "content": note},
+                            "id": f"force_write_{uuid.uuid4().hex[:10]}",
+                            "type": "tool_call",
+                        }
+                    ],
+                )
+    elif isinstance(response, AIMessage) and is_clear_workspace_list_read_intent(
+        user_text
+    ):
+        filename = extract_workspace_read_filename(user_text)
+        if turn_has_successful_workspace_read(thread_messages) and (
+            getattr(response, "tool_calls", None)
+            or not str(getattr(response, "content", "") or "").strip()
+        ):
+            body = successful_workspace_read_body(thread_messages) or ""
+            snippet = body.strip()
+            if len(snippet) > 2500:
+                snippet = snippet[:2500].rstrip() + "\n…"
+            logger.info(
+                "[complex] post-read stop — confirming filename=%s", filename
+            )
+            response = AIMessage(
+                content=(
+                    f"Here’s `{filename}` from your workspace:\n\n{snippet}"
+                    if snippet
+                    else f"Read `{filename}` from your workspace."
+                )
+            )
+    elif (
         isinstance(response, AIMessage)
+        and ai_message_asks_user(response)
         and (
             meta.get("code_review_missing_code")
-            or is_code_review_missing_code(thread_messages)
+            or should_strip_ask_user(thread_messages, user_text=user_text)
         )
-        and ai_message_asks_user(response)
     ):
-        logger.info(
-            "[complex] blocked ask_user on code-review-without-code; forcing prose reply"
-        )
-        response = AIMessage(content=missing_code_review_reply())
+        if is_code_review_missing_code(thread_messages, user_text=user_text):
+            logger.info(
+                "[complex] blocked ask_user on code-review-without-code; forcing prose reply"
+            )
+            response = AIMessage(content=missing_code_review_reply())
+        else:
+            logger.info("[complex] blocked ask_user via should_strip_ask_user")
+            response = AIMessage(content=str(getattr(response, "content", "") or ""))
 
     # Tool-first synthesis must end the turn — drop any stray tool_calls.
     if (

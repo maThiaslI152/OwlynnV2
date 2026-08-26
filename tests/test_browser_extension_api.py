@@ -36,17 +36,21 @@ def test_token_origin_restrictions():
     assert resp.status_code == 200
     assert "token" in resp.json()
 
-    # 2. Allowed: Empty origin (native clients)
+    # 2. Disallowed: Empty origin
     resp = client.get("/api/browser_extension/token", headers={"origin": ""})
-    assert resp.status_code == 200
+    assert resp.status_code == 403
 
-    # 3. Disallowed: Localhost
+    # 3. Disallowed: null origin
+    resp = client.get("/api/browser_extension/token", headers={"origin": "null"})
+    assert resp.status_code == 403
+
+    # 4. Disallowed: Localhost
     resp = client.get(
         "/api/browser_extension/token", headers={"origin": "http://localhost:5173"}
     )
     assert resp.status_code == 403
 
-    # 4. Disallowed: External website
+    # 5. Disallowed: External website
     resp = client.get(
         "/api/browser_extension/token", headers={"origin": "https://evil.com"}
     )
@@ -69,6 +73,14 @@ def test_ws_origin_restrictions():
         pass
     assert exc_info.value.code == 4003
 
+    # Empty origin rejected
+    with (
+        pytest.raises(WebSocketDisconnect) as empty_exc,
+        client.websocket_connect("/api/browser_extension/ws", headers={"origin": ""}),
+    ):
+        pass
+    assert empty_exc.value.code == 4003
+
     # Allowed origin should connect
     with client.websocket_connect(
         "/api/browser_extension/ws", headers={"origin": "chrome-extension://abcdefg"}
@@ -76,11 +88,9 @@ def test_ws_origin_restrictions():
         # Just connecting and then closing is enough to prove it didn't instantly reject with 4003
         pass
 
-    with client.websocket_connect("/api/browser_extension/ws") as ws:
-        # Default/empty origin also allowed
-        pass
-
-    with client.websocket_connect("/api/browser_extension/ws") as ws:
+    with client.websocket_connect(
+        "/api/browser_extension/ws", headers={"origin": "chrome-extension://abcdefg"}
+    ) as ws:
         # Send auth token as first message
         ws.send_json({"type": "auth", "token": _auth_token})
         # Give the server time to process the auth message

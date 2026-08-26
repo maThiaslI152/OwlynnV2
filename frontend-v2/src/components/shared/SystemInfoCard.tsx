@@ -84,6 +84,7 @@ function serviceDot(status: string): Dot {
   if (status === 'ok') return 'ok'
   if (status === 'loading') return 'off'
   if (status === 'off' || status === 'unavailable') return 'off'
+  if (status === 'degraded') return 'warn'
   return 'error'
 }
 
@@ -103,7 +104,6 @@ export function SystemInfoCard() {
   }
 
   const lmDot = serviceDot(health.lmStudio)
-  const postgresDot = serviceDot(health.postgres)
   const stirlingDot = serviceDot(health.stirling)
   const podmanDot: Dot =
     health.podman === 'running' ? 'ok' :
@@ -121,7 +121,21 @@ export function SystemInfoCard() {
 
   const lmLabel = health.lmStudio === 'loading' ? '…' : health.lmStudio === 'ok' ? 'OK' : 'Offline'
   const postgresLabel =
-    health.postgres === 'loading' ? '…' : health.postgres === 'ok' ? 'OK' : 'Offline'
+    health.postgres === 'loading'
+      ? '…'
+      : health.postgres === 'ok' && health.checkpointer === 'postgres'
+        ? 'OK'
+        : health.postgres === 'ok' && health.checkpointer === 'memory'
+          ? 'In-memory checkpoints — history may not persist'
+          : health.postgres === 'degraded' || health.postgres === 'error'
+            ? 'Degraded — memory/history may not persist'
+            : 'Offline'
+  const postgresDot: Dot =
+    health.postgres === 'loading'
+      ? 'off'
+      : health.postgres === 'ok' && health.checkpointer === 'postgres'
+        ? 'ok'
+        : 'warn'
   const stirlingLabel =
     health.stirling === 'loading'
       ? '…'

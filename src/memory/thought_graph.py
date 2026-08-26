@@ -317,47 +317,74 @@ class ThoughtGraphManager:
         engagement_id: str | None = None,
         course_id: str | None = None,
         tags: list[str] | None = None,
-    ) -> dict[str, Any]:
-        """Get an existing thought node or create a new one."""
+    ) -> dict[str, Any] | None:
+        """Get an existing thought node or create a new one.
+
+        Returns ``None`` when the Postgres circuit is open or the write fails —
+        callers must not treat a skip as a persisted node.
+        """
+        from src.memory.postgres_health import (
+            is_postgres_available,
+            record_postgres_failure,
+            record_postgres_success,
+        )
+
+        if not is_postgres_available():
+            logger.debug(
+                "[thought_graph] Skipping get_or_create_node — Postgres circuit open "
+                "(node_id=%s)",
+                node_id,
+            )
+            return None
+
         await self.ensure_tables()
         now = time.time()
-        async with AsyncSessionLocal() as session:
-            stmt = select(ThoughtNode).filter_by(id=node_id)
-            result = await session.execute(stmt)
-            node = result.scalar_one_or_none()
+        try:
+            async with AsyncSessionLocal() as session:
+                stmt = select(ThoughtNode).filter_by(id=node_id)
+                result = await session.execute(stmt)
+                node = result.scalar_one_or_none()
 
-            if node:
-                _revive_orm_node(node, now)
-                if mode and mode != node.mode:
-                    node.mode = mode
-                if scenario_id:
-                    node.scenario_id = scenario_id
-                if engagement_id:
-                    node.engagement_id = engagement_id
-                if course_id:
-                    node.course_id = course_id
+                if node:
+                    _revive_orm_node(node, now)
+                    if mode and mode != node.mode:
+                        node.mode = mode
+                    if scenario_id:
+                        node.scenario_id = scenario_id
+                    if engagement_id:
+                        node.engagement_id = engagement_id
+                    if course_id:
+                        node.course_id = course_id
+                    await session.commit()
+                    record_postgres_success()
+                    return self._node_to_dict(node, now=now)
+
+                new_node = ThoughtNode(
+                    id=node_id,
+                    title=title,
+                    summary="",
+                    mode=mode,
+                    scenario_id=scenario_id,
+                    engagement_id=engagement_id,
+                    course_id=course_id,
+                    status="active",
+                    tags=tags or [],
+                    pinned=False,
+                    created_at=now,
+                    last_active_at=now,
+                    dormancy_score=0.0,
+                    importance_score=1.0,
+                )
+                session.add(new_node)
                 await session.commit()
-                return self._node_to_dict(node, now=now)
-
-            new_node = ThoughtNode(
-                id=node_id,
-                title=title,
-                summary="",
-                mode=mode,
-                scenario_id=scenario_id,
-                engagement_id=engagement_id,
-                course_id=course_id,
-                status="active",
-                tags=tags or [],
-                pinned=False,
-                created_at=now,
-                last_active_at=now,
-                dormancy_score=0.0,
-                importance_score=1.0,
+                record_postgres_success()
+                return self._node_to_dict(new_node, now=now)
+        except Exception as exc:
+            record_postgres_failure()
+            logger.warning(
+                "[thought_graph] get_or_create_node failed: %s", exc, exc_info=True
             )
-            session.add(new_node)
-            await session.commit()
-            return self._node_to_dict(new_node, now=now)
+            return None
 
     async def get_node(
         self, node_id: str, *, touch_active: bool = True
@@ -567,6 +594,15 @@ class ThoughtGraphManager:
 
     async def update_node(self, node_id: str, **kwargs) -> dict[str, Any] | None:
         """Update node properties (title, summary, position, pinned, etc.)."""
+        from src.memory.postgres_health import (
+            is_postgres_available,
+            record_postgres_failure,
+            record_postgres_success,
+        )
+
+        if not is_postgres_available():
+            return None
+
         await self.ensure_tables()
         allowed = {
             "title",
@@ -587,45 +623,66 @@ class ThoughtGraphManager:
         canvas_only = set(kwargs.keys()) <= {"canvas_x", "canvas_y"}
         explicit_ts = "last_active_at" in kwargs
         touch_active = kwargs.pop("touch_active", None)
-        async with AsyncSessionLocal() as session:
-            stmt = select(ThoughtNode).filter_by(id=node_id)
-            result = await session.execute(stmt)
-            node = result.scalar_one_or_none()
-            if not node:
-                return None
+        try:
+            async with AsyncSessionLocal() as session:
+                stmt = select(ThoughtNode).filter_by(id=node_id)
+                result = await session.execute(stmt)
+                node = result.scalar_one_or_none()
+                if not node:
+                    return None
 
-            for k, v in kwargs.items():
-                if k in allowed and hasattr(node, k):
-                    setattr(node, k, v)
+                for k, v in kwargs.items():
+                    if k in allowed and hasattr(node, k):
+                        setattr(node, k, v)
 
-            should_touch = touch_active is True or (
-                touch_active is not False and not canvas_only and not explicit_ts
-            )
-            now = time.time()
-            if should_touch:
-                _revive_orm_node(node, now)
-            await session.commit()
-            return self._node_to_dict(node, now=now)
+                should_touch = touch_active is True or (
+                    touch_active is not False and not canvas_only and not explicit_ts
+                )
+                now = time.time()
+                if should_touch:
+                    _revive_orm_node(node, now)
+                await session.commit()
+                record_postgres_success()
+                return self._node_to_dict(node, now=now)
+        except Exception as exc:
+            record_postgres_failure()
+            logger.warning("[thought_graph] update_node failed: %s", exc, exc_info=True)
+            return None
 
     async def delete_node(self, node_id: str) -> bool:
         """Delete a thought node and its connected edges."""
-        await self.ensure_tables()
-        async with AsyncSessionLocal() as session:
-            stmt = select(ThoughtNode).filter_by(id=node_id)
-            result = await session.execute(stmt)
-            node = result.scalar_one_or_none()
-            if not node:
-                return False
+        from src.memory.postgres_health import (
+            is_postgres_available,
+            record_postgres_failure,
+            record_postgres_success,
+        )
 
-            await session.execute(
-                delete(ThoughtEdge).where(
-                    (ThoughtEdge.source_id == node_id)
-                    | (ThoughtEdge.target_id == node_id)
+        if not is_postgres_available():
+            return False
+
+        await self.ensure_tables()
+        try:
+            async with AsyncSessionLocal() as session:
+                stmt = select(ThoughtNode).filter_by(id=node_id)
+                result = await session.execute(stmt)
+                node = result.scalar_one_or_none()
+                if not node:
+                    return False
+
+                await session.execute(
+                    delete(ThoughtEdge).where(
+                        (ThoughtEdge.source_id == node_id)
+                        | (ThoughtEdge.target_id == node_id)
+                    )
                 )
-            )
-            await session.delete(node)
-            await session.commit()
-            return True
+                await session.delete(node)
+                await session.commit()
+                record_postgres_success()
+                return True
+        except Exception as exc:
+            record_postgres_failure()
+            logger.warning("[thought_graph] delete_node failed: %s", exc, exc_info=True)
+            return False
 
     async def create_edge(
         self,
@@ -636,29 +693,45 @@ class ThoughtGraphManager:
         auto_generated: bool = False,
     ) -> dict[str, Any] | None:
         """Create a directed semantic edge between two thought nodes."""
+        from src.memory.postgres_health import (
+            is_postgres_available,
+            record_postgres_failure,
+            record_postgres_success,
+        )
+
         if source_id == target_id:
             return None
-        await self.ensure_tables()
-        async with AsyncSessionLocal() as session:
-            # Prevent duplicate edge
-            stmt = select(ThoughtEdge).filter_by(
-                source_id=source_id, target_id=target_id, relation=relation
-            )
-            result = await session.execute(stmt)
-            existing = result.scalar_one_or_none()
-            if existing:
-                return self._edge_to_dict(existing)
+        if not is_postgres_available():
+            return None
 
-            edge = ThoughtEdge(
-                source_id=source_id,
-                target_id=target_id,
-                relation=relation,
-                weight=weight,
-                auto_generated=auto_generated,
-            )
-            session.add(edge)
-            await session.commit()
-            return self._edge_to_dict(edge)
+        await self.ensure_tables()
+        try:
+            async with AsyncSessionLocal() as session:
+                # Prevent duplicate edge
+                stmt = select(ThoughtEdge).filter_by(
+                    source_id=source_id, target_id=target_id, relation=relation
+                )
+                result = await session.execute(stmt)
+                existing = result.scalar_one_or_none()
+                if existing:
+                    record_postgres_success()
+                    return self._edge_to_dict(existing)
+
+                edge = ThoughtEdge(
+                    source_id=source_id,
+                    target_id=target_id,
+                    relation=relation,
+                    weight=weight,
+                    auto_generated=auto_generated,
+                )
+                session.add(edge)
+                await session.commit()
+                record_postgres_success()
+                return self._edge_to_dict(edge)
+        except Exception as exc:
+            record_postgres_failure()
+            logger.warning("[thought_graph] create_edge failed: %s", exc, exc_info=True)
+            return None
 
     async def auto_link_node(
         self,
@@ -670,6 +743,11 @@ class ThoughtGraphManager:
         Autonomous Cartographer: Generates embedding for the node summary and
         links to top semantically related nodes in the graph.
         """
+        from src.memory.postgres_health import is_postgres_available
+
+        if not is_postgres_available():
+            return []
+
         await self.ensure_tables()
         from src.memory.long_term import get_embedding
 

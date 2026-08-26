@@ -10,6 +10,24 @@ import os
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _reset_postgres_circuit_breaker():
+    """Isolate soft-path circuit state between tests (Phase 3 anti-SPOF)."""
+    try:
+        from src.memory.postgres_health import reset_postgres_breaker
+
+        reset_postgres_breaker()
+    except Exception:
+        pass
+    yield
+    try:
+        from src.memory.postgres_health import reset_postgres_breaker
+
+        reset_postgres_breaker()
+    except Exception:
+        pass
+
+
 def pytest_configure(config):
     """Run before test collection — disable audit file logging globabally and sandbox data."""
     os.environ["OWLYNN_AUDIT_LOG_ENABLED"] = "0"

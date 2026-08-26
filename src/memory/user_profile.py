@@ -39,7 +39,7 @@ _DEFAULTS = {
     # Overridable fields (set in profile JSON only to override YAML):
     #   llm_base_url, llm_model_name, small_llm_base_url, small_llm_model_name,
     #   large_llm_base_url, large_llm_model_name, cloud_llm_base_url,
-    #   cloud_llm_model_name, deepseek_api_key, redis_url,
+    #   cloud_llm_model_name, deepseek_api_key,
     #   lm_studio_fold_system, temperature, top_p, max_tokens, top_k,
     #   router_hitl_enabled, route_confidence_threshold,
     #   skill_clarification_threshold, router_clarification_threshold,
@@ -87,7 +87,6 @@ VALID_FIELDS = {
     "large_llm_model_name": str,
     "cloud_llm_base_url": str,
     "cloud_llm_model_name": str,
-    "redis_url": str,
     "lm_studio_fold_system": (bool, type(None)),
     "temperature": (int, float, type(None)),
     "top_p": (int, float, type(None)),

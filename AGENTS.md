@@ -46,7 +46,7 @@
 | Tune semantic cache (threshold, TTL) | [`docs/features/SEMANTIC_CACHE.md`](docs/features/SEMANTIC_CACHE.md) | `src/memory/semantic_cache.py`, `src/api/ws/handler.py` |
 | Change context summarization / compaction | — | `src/agent/nodes/summarize.py` |
 | Change LangGraph checkpoints (PostgreSQL) | — | `src/agent/core/checkpointer.py` |
-| Change Redis memory / extraction queue | [`docs/architecture/REDIS_LIFECYCLE.md`](docs/architecture/REDIS_LIFECYCLE.md) | `src/memory/extraction/worker.py` |
+| Change Postgres memory / extraction queue | [`docs/architecture/POSTGRES_MEMORY_LIFECYCLE.md`](docs/architecture/POSTGRES_MEMORY_LIFECYCLE.md) | `src/memory/extraction/worker.py` |
 | Change HITL / approvals | [`docs/HITL.md`](docs/HITL.md) | `src/agent/hitl/`, `src/agent/nodes/{scope_clarify,plan_review,security_proxy}.py`, `src/agent/core/ask_user_guards.py` |
 | Debug a symptom | [`docs/debugging/README.md`](docs/debugging/README.md) | Follow symptom → file table |
 | Change cloud / complex reasoning / anonymization | [`docs/architecture/CLOUD-LLM-ARCHITECTURE.md`](docs/architecture/CLOUD-LLM-ARCHITECTURE.md) | `src/agent/core/complex.py`, `src/agent/core/complex_prompt.py`, `src/agent/core/complex_executor.py`, `src/agent/core/complex_tool_action.py`, `src/agent/cloud/` |
@@ -227,7 +227,7 @@ Do not allow API fetches or WebSocket unhandled promise rejections to fail silen
 - **Strict Imports:** The TypeScript build strictly enforces `noUnusedLocals`. Always clean up unused imports immediately after refactoring components.
 
 ### Architecture & Containerization
-Owlynn's Python FastAPI backend is strictly designed to run natively on the host OS (macOS) and should **never** be containerized. It requires direct host access for Screen Assist tools (tmux capture, Accessibility APIs). Only supporting services (Qdrant, Redis, StirlingPDF) are containerized via `start.sh`.
+Owlynn's Python FastAPI backend is strictly designed to run natively on the host OS (macOS) and should **never** be containerized. It requires direct host access for Screen Assist tools (tmux capture, Accessibility APIs). Only supporting services (Postgres/pgvector, StirlingPDF) are containerized via `start.sh`.
 
 ### Cache Key Generation for Chat Contexts
 When generating cache keys for chat histories or context gatekeepers (e.g., in `cloud_payload.py`), ensure the key is resilient to follow-up messages. Always include the total message count (`len(messages)`) and a slice of the final message's content to guarantee cache invalidation on new turns.
@@ -261,18 +261,22 @@ When generating cache keys for chat histories or context gatekeepers (e.g., in `
 - **Deterministic Tool Ordering**: Always sort tool definitions alphabetically before binding to LLM clients.
 - **Zero Synthetic Human Injections**: Never inject synthetic `HumanMessage` prompts into conversation history mid-turn. Instead, embed tool recovery guidance directly into the corresponding `ToolMessage` to preserve strict role alternation and prevent KV cache invalidation.
 
-### Local-first latency (2026-08-25)
+### Local-first latency (2026-08-25/26)
 - **Default `cloud_routing_mode=local_only`**; do not dual-load a second chat/router model on 24GB for routing — deterministic bypass + tool-first already make routing ~ms.
-- **Tool-first web**: toolbox `["web_search"]` injects search without `bind_tools` planning prefill; one unbound synth. Heavy cost is synth prefill (system + memory + ToolMessage), not the router.
+- **Tool-first web**: toolbox `["web_search"]` injects search without `bind_tools` planning; prefer extractive synth. Clear sticky `_tool_first_web_phase=done` on new turns (`maybe_clear_stale_tool_first_web_phase`).
+- **Tool-first list/read**: clear list+read intents inject both tools; post-read short-circuit skips a second LLM (T5).
+- **Simple path**: `simple.max_tokens` default **128** (trivia/greetings stay short).
 - **TTFT**: first WS `chunk` → audit `ttft_ms`; idle → `turn_duration_ms`. Evals must cache-bust when asserting routing/tools.
 - **Coherence**: skip LLM check on simple / short / successful-web turns.
 - **ask_user**: do not loop on code-review-without-code (`ask_user_guards`).
+- **Podman**: machine ≥4 GB; Postgres `mem_limit: 768m` in mvp compose.
 
 ## Related
 
 - [`docs/README.md`](docs/README.md) — full documentation map
 - [`docs/INDEX.md`](docs/INDEX.md) — machine-readable manifest (filter by `audience`)
 
+2026-08-26 — Usable multi-turn: sticky tool-first web phase clear, list/read tool-first + post-read short-circuit, `simple.max_tokens` 128, Podman 4 GB + postgres `mem_limit: 768m`. Full T3/T5/T6 E2E functional pass; `usable_gate` still False on T1 simple &gt;8s. Changelog at docs/changes/usable-multiturn-chat/CHANGELOG.md.
 2026-08-24 — v0.3.1 desktop: local tool bind cap (web_search toolbox / lean `"all"` / schema telemetry), mindmap canvas resize + wrapping toolbar + branch auto-hide, composer send-in-pill, WS token wait. Changelog at docs/changes/v0.3.1-release/CHANGELOG.md.
 2026-08-24 — Organic map scaling: Thought Graph cluster/dormancy metadata + Mindmap Canvas fade/drift, cluster cohesion, search override, Focus recent, branch-list grouping; New Thread/Delete lifecycle. Changelog at docs/changes/organic-map-scaling/CHANGELOG.md.
 2026-08-23 — Self-Contained MVP Packaging (v0.3.0): Bundled Python backend (`.venv`, alembic, compose) into `.app` via `scripts/build_backend_bundle.sh`; first-launch extraction to `~/.owlynn/runtime/`; Podman/Docker splash blocking; Brave extension hint toast; version bump to 0.3.0. Changelog at docs/changes/self-contained-mvp/CHANGELOG.md.
@@ -299,5 +303,5 @@ When generating cache keys for chat histories or context gatekeepers (e.g., in `
 2026-07-07 — Electron app packaging: .app with splash screen, backend spawning, tray, close-to-background, version display (v0.1.0). Atomic writes for user_profile.json and secrets.env. Browser extension bundled in .app Resources. Release guide at docs/guides/app-release.md. Task routing table updated with "Package Electron app" row.
 2026-07-07 — Security hardening: execution policy default changed to require_approval; /v1/chat/completions auth enforced; notebook sandbox hardened; SSRF protection on downloads; prompt injection boundaries on web fetches and memory writes; destructive command blocking in scope guard. Task routing table updated with semantic cache and Redis lifecycle rows.
 2026-07-04 — Frontend UI overhaul (glassmorphic dropdowns, accessible memory management) and critical bug fixes for WebSocket chunk streaming overhead / infinite loop in markdown parser. Frontier eval passes at 96.32%.
-2026-07-10 — Phase 6: Migrated LangGraph checkpointer from Redis to PostgreSQL (`AsyncPostgresSaver` in `checkpointer.py`). Removed `_evict_stale_checkpoints` as state persistence is now native to Postgres. Semantic Cache and Extraction queue remain on Redis.
+2026-07-10 — Phase 6: Migrated LangGraph checkpointer from Redis to PostgreSQL (`AsyncPostgresSaver` in `checkpointer.py`). Removed `_evict_stale_checkpoints` as state persistence is now native to Postgres. Semantic Cache and Extraction queue later moved to Postgres/pgvector as well (see `docs/architecture/POSTGRES_MEMORY_LIFECYCLE.md`).
 2026-08-22 — Autonomous Learning Loop, Hierarchical Skills & Advanced MCP: Implemented dual-channel extraction (declarative facts + procedural skill synthesis via `SkillLearnerEngine`), updated `SkillLoader` to support folder-based `agentskills.io` packages (`SKILL.md`, `references/`, `templates/`, `scripts/`) and added `skill_view`/`skill_manage` tools. Enhanced `MCPClientManager` with dynamic Pydantic schema generation, schema caching, and multi-transport support.

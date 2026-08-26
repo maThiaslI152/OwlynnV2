@@ -512,6 +512,11 @@ async def init_agent(checkpointer=None):
     if checkpointer is None:
         try:
             from src.agent.core.checkpointer import get_postgres_saver
+            from src.memory.postgres_health import (
+                record_postgres_failure,
+                record_postgres_success,
+                set_checkpointer_backend,
+            )
 
             checkpointer = await get_postgres_saver()
 
@@ -519,17 +524,37 @@ async def init_agent(checkpointer=None):
             _test_passed = await _verify_checkpointer_write(checkpointer)
             if _test_passed:
                 logger.info("Using Postgres checkpointer")
+                record_postgres_success()
+                set_checkpointer_backend("postgres")
             else:
                 logger.warning(
                     "Postgres checkpointer write-test failed — falling back to MemorySaver. "
                     "Conversations will NOT persist across restarts."
                 )
+                record_postgres_failure()
                 checkpointer = MemorySaver()
+                set_checkpointer_backend("memory")
         except Exception as e:
             logger.warning(
                 "Postgres checkpointer unavailable (%s), falling back to MemorySaver", e
             )
+            try:
+                from src.memory.postgres_health import (
+                    record_postgres_failure,
+                    set_checkpointer_backend,
+                )
+
+                record_postgres_failure()
+                set_checkpointer_backend("memory")
+            except Exception:
+                pass
             checkpointer = MemorySaver()
+    else:
+        from src.memory.postgres_health import set_checkpointer_backend
+
+        set_checkpointer_backend(
+            "memory" if isinstance(checkpointer, MemorySaver) else "postgres"
+        )
 
     # Initialize the semantic cache (non-blocking, degrades gracefully on error)
     try:

@@ -77,7 +77,6 @@ class TestUnifiedSettings:
             "router_hitl_enabled",
             "router_clarification_threshold",
             "custom_sensitive_terms",
-            "redis_url",
             "execution_policy",
         ]:
             assert field in data, f"Missing routing/cloud field: {field}"

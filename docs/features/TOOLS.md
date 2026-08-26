@@ -1,7 +1,7 @@
 ---
 status: active
 category: reference
-last_updated: 2026-08-24
+last_updated: 2026-08-26
 owner: ai-agent
 audience: agent
 ---
@@ -35,6 +35,7 @@ src/api/routes/files.py            # Tool discovery (GET /api/tools)
 3. `complex_llm_node` binds only the resolved tools to the LLM (after web-budget filter + embedding rerank)
 4. Local-first routing picks a **narrow** toolbox (`web_search`, `file_ops`, `data_viz`, `screen_assist`, or lean default `web_search`+`memory`+`productivity`) — never an implicit `["all"]`
 5. `"all"` is reserved for empty-state fallback and explicit HITL “Others”; it is a **lean chat core** (web + memory + notebook/docs/todos/skills + `render_interactive_block` + `ask_user`). Screen-assist and ipynb tools stay on named `screen_assist` / `data_viz` toolboxes only
+6. **Tool-first shortcuts** (no bind_tools planning): web-only → `tool_first_web.py`; clear list+read → `tool_first_list_read.py`; successful write/read → post-write / post-read short-circuit in `complex.py`
 
 ## API
 
@@ -288,6 +289,8 @@ Pentest tools are curated — no study tools, no global memory tools. All tools 
 
 `complex_llm_node` and `complex_tool_action_node` both resolve tools via `_resolve_complex_tools()` in [`complex.py`](../../src/agent/core/complex.py), honoring `selected_toolboxes`, `web_search_enabled`, and vision web-tool stripping. Context telemetry (`bound_tool_count`, Schemas row) uses the **post-rerank** list actually sent to the model. This keeps bound tools aligned with the `ToolNode` executor on multi-turn tool loops.
 
+**Tool-first list/read (T5):** Clear “list workspace and read &lt;file&gt;” intents inject `list_workspace_files` + `read_workspace_file` via `src/agent/core/tool_first_list_read.py`, then post-read short-circuit confirms without a second LLM round.
+
 ## MCP extensions
 
 External MCP servers (stdio) are declared in [`mcp_config.json`](../../mcp_config.json) (see [`mcp_config.json.example`](../../mcp_config.json.example)). At startup, `mcp_manager.initialize()` discovers tools; `merge_mcp_tools()` appends them when toolbox is `all`, `mcp`, or pentest auto-augment.
@@ -342,5 +345,6 @@ All other tools auto-approve. Dangerous shell patterns (`rm -rf`, `sudo`, etc.) 
 
 ## Last updated
 
+2026-08-26 — tool-first list/read + post-read short-circuit
 2026-07-10 — Added data_connectors toolbox (ingest_github_repo, ingest_youtube_transcript, ingest_obsidian_vault)
 2026-07-09 — Router decomposition (deterministic.py, resolver.py, modes.py); pentest tools section added (56+ tools across 11 categories); @scope_validated decorator applied to pentest tools; pentest memory node added; study tools expanded (flashcard_list, course_delete, study_note_update, quiz_session_delete); model name updated to gemma-4-e2b

@@ -290,7 +290,7 @@ async def course_chat_create(course_id: str, chat_name: str) -> str:
         from src.memory.thought_graph import thought_graph_manager
 
         chat_id = f"thread-{uuid.uuid4().hex[:12]}"
-        await thought_graph_manager.get_or_create_node(
+        node = await thought_graph_manager.get_or_create_node(
             node_id=chat_id,
             title=chat_name.strip() or f"{course_id} study",
             mode="study",
@@ -298,6 +298,11 @@ async def course_chat_create(course_id: str, chat_name: str) -> str:
             course_id=course_id.strip(),
             tags=["study", course_id.strip()],
         )
+        if node is None:
+            return (
+                "Postgres unavailable — study branch was not persisted. "
+                "Retry when memory is healthy."
+            )
         return (
             f"✅ Created study branch '{chat_name}' (node {chat_id}) for {course_id}. "
             f"Open it from the mindmap."

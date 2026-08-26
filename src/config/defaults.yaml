@@ -21,13 +21,6 @@ server:
 
 # ── External Services ────────────────────────────────────────────────────────
 external_services:
-  qdrant:
-    host: "localhost"        # QDRANT_HOST env
-    port: 6333               # QDRANT_PORT env
-    collection_name: "owlynn_memory_mxbai"
-    embedding_dims: 1024
-  redis:
-    url: "redis://localhost:6379"  # REDIS_URL env
   searxng:
     url: ""                  # SEARXNG_URL env (e.g. "http://localhost:8888")
   stirling_pdf:
@@ -329,7 +322,7 @@ summarization:
 
 # ── Simple Node (fast local answers) ──────────────────────────────────────────
 simple:
-  max_tokens: 512                         # Cap completion window (do not inherit models.main.max_tokens)
+  max_tokens: 128                         # Cap completion window (trivia/greetings stay short)
 
 # ── Complex Node (LLM invocation) ─────────────────────────────────────────────
 complex:
@@ -338,7 +331,8 @@ complex:
   max_cutoff_retries: 1                   # Auto-continuation rounds (reduced for faster UX)
   max_cloud_retries: 3                    # Cloud LLM retries with backoff
   max_web_tool_rounds: 3                  # After N tool-calling turns, force synthesis (no more web tools)
-  tool_first_synth_token_budget: 1024     # Cap tool-first web synthesis (one round, no retry)
+  tool_first_synth_token_budget: 384      # Cap tool-first web synthesis (one round, no retry)
+  tool_first_extractive_synth: true       # Skip local LLM synth after tool-first web_search
   tool_rerank_enabled: true               # Embedding rerank before bind_tools (local/cloud/pentest)
   tool_rerank_top_k: 12                   # Cloud (and default) bind cap after rerank
   tool_rerank_min_count: 10               # Only rerank when tool count exceeds this
@@ -371,7 +365,7 @@ complex:
       fetch_webpage: 1
       deep_research: 0
   default_token_budget: 4096              # Fallback token budget
-  synthetic_answer_max_chars: 4500        # Max chars for synthetic answers
+  synthetic_answer_max_chars: 1000        # Cap blank-synth fallback so it does not poison next-turn prefill
   recursion_limit: 100                    # LangGraph recursion limit to prevent crashes in loops
 
 # ── Coherence self-correction loop ────────────────────────────────────────────
@@ -413,6 +407,9 @@ cloud:
 # ── Tool Output Truncation ───────────────────────────────────────────────────
 tool_output:
   max_tool_output_chars: 20000
+  # Multi-turn prefills: prior-turn tool blobs dominate TTFT (topic-drift E2E T3 ~137s).
+  prior_turn_max_chars: 400               # Soft-cap ToolMessages before latest human
+  current_turn_max_chars: 2000            # Cap in-turn tool payloads sent to the LLM
   max_api_tool_arg_chars: 2048          # Cap tool-call arg strings in cloud API replay
   max_read_chars: 20000
   max_notebook_chars: 8000

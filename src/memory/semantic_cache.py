@@ -110,6 +110,15 @@ async def check_semantic_cache(prompt: str, project_id: str = "default") -> str 
     Returns:
         The cached response string, or ``None`` if no hit was found.
     """
+    from src.memory.postgres_health import (
+        is_postgres_available,
+        record_postgres_failure,
+        record_postgres_success,
+    )
+
+    if not is_postgres_available():
+        return None
+
     try:
         scoped_prompt = f"[Project: {project_id}] {prompt}"
         embedding = await _get_embedding(scoped_prompt)
@@ -156,13 +165,16 @@ async def check_semantic_cache(prompt: str, project_id: str = "default") -> str 
                         "[semantic_cache] poisoned row delete failed: %s", purge_exc
                     )
                 return None
+            record_postgres_success()
             logger.debug("[semantic_cache] Cache HIT for project=%s", project_id)
             return row.response
 
+        record_postgres_success()
         logger.debug("[semantic_cache] Cache MISS for project=%s", project_id)
         return None
 
     except Exception as exc:
+        record_postgres_failure()
         logger.warning("[semantic_cache] check failed: %s", exc, exc_info=True)
         return None
 
@@ -179,8 +191,16 @@ async def store_semantic_cache(
         response:   The LLM response to store.
         project_id: Project scope for the cache entry.
     """
+    from src.memory.postgres_health import (
+        is_postgres_available,
+        record_postgres_failure,
+        record_postgres_success,
+    )
+
     if _is_poisoned_cache_response(response):
         logger.warning("[semantic_cache] Refusing to store poisoned tool-leak response")
+        return
+    if not is_postgres_available():
         return
     try:
         scoped_prompt = f"[Project: {project_id}] {prompt}"
@@ -197,9 +217,11 @@ async def store_semantic_cache(
             session.add(row)
             await session.commit()
 
+        record_postgres_success()
         logger.debug("[semantic_cache] Stored entry for project=%s", project_id)
 
     except Exception as exc:
+        record_postgres_failure()
         logger.warning("[semantic_cache] store failed: %s", exc, exc_info=True)
 
 

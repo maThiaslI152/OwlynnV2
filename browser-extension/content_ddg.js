@@ -80,5 +80,32 @@
     });
   }
 
-  setTimeout(scrapePage, 800);
+  const READY_BUDGET_MS = 12000;
+  function hasMarkers() {
+    return !!(
+      document.querySelector("article[data-testid='result']") ||
+      document.querySelector("div.result") ||
+      document.querySelector("a.result__a")
+    );
+  }
+  function waitThenScrape() {
+    if (hasMarkers()) {
+      scrapePage();
+      return;
+    }
+    const started = Date.now();
+    const observer = new MutationObserver(() => {
+      if (hasMarkers() || Date.now() - started > READY_BUDGET_MS) {
+        observer.disconnect();
+        scrapePage();
+      }
+    });
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+    setTimeout(() => {
+      observer.disconnect();
+      scrapePage();
+    }, READY_BUDGET_MS);
+  }
+
+  setTimeout(waitThenScrape, 200);
 })();

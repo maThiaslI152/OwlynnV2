@@ -22,13 +22,6 @@ from src.memory.user_profile import _DEFAULTS
 
 # ── Strategies ───────────────────────────────────────────────────────────
 
-# Valid redis_url strings: redis://host:port
-redis_url_st = st.builds(
-    lambda host, port: f"redis://{host}:{port}",
-    host=st.from_regex(r"[a-z][a-z0-9\-]{0,20}", fullmatch=True),
-    port=st.integers(min_value=1, max_value=65535),
-)
-
 lm_studio_fold_st = st.booleans()
 
 
@@ -67,50 +60,13 @@ def client():
 
 class TestBugConditionSettingsDropped:
     """
-    Property 1: For any advanced settings payload containing redis_url
-    and/or lm_studio_fold_system, the POST handler SHALL accept and persist
+    Property 1: For any advanced settings payload containing
+    lm_studio_fold_system, the POST handler SHALL accept and persist
     these fields, and the subsequent GET response SHALL include them with
     the persisted values.
 
     **Validates: Requirements 1.1, 1.4, 1.5**
     """
-
-    @given(redis_url=redis_url_st)
-    @settings(
-        max_examples=50,
-        deadline=None,
-        suppress_health_check=[HealthCheck.function_scoped_fixture],
-    )
-    def test_redis_url_round_trips_through_advanced_settings(
-        self, redis_url, client, isolated_profile
-    ):
-        """
-        Bug 1: POST redis_url to /api/advanced-settings, then GET.
-        Assert redis_url is present in the GET response.
-
-        On unfixed code this FAILS because:
-        - POST handler whitelist does not include redis_url (silently dropped)
-        - GET handler does not return redis_url
-        """
-        # Reset profile to defaults before each hypothesis example
-        isolated_profile.write_text(json.dumps(_DEFAULTS), encoding="utf-8")
-
-        # POST the redis_url
-        resp = client.post("/api/advanced-settings", json={"redis_url": redis_url})
-        assert resp.status_code == 200
-
-        # GET and verify redis_url is present with the value we posted
-        resp = client.get("/api/advanced-settings")
-        assert resp.status_code == 200
-        data = resp.json()
-
-        assert "redis_url" in data, (
-            f"GET /api/advanced-settings response missing 'redis_url'. "
-            f"Keys returned: {list(data.keys())}"
-        )
-        assert data["redis_url"] == redis_url, (
-            f"Expected redis_url='{redis_url}', got '{data.get('redis_url')}'"
-        )
 
     @given(fold=lm_studio_fold_st)
     @settings(
@@ -170,7 +126,6 @@ class TestBugConditionSettingsDropped:
             "router_hitl_enabled",
             "router_clarification_threshold",
             "custom_sensitive_terms",
-            "redis_url",
             "lm_studio_fold_system",
         ]
 

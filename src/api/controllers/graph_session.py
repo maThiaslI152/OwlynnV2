@@ -123,34 +123,55 @@ class GraphSession:
             reset_active_scenario(scenario_token)
             self.is_running = False
 
-            # Verify checkpoint was persisted (non-blocking)
+            # Verify checkpoint was persisted (non-blocking).
+            # Skip when on MemorySaver or when the Postgres circuit is open.
             try:
-                from src.models.db import DATABASE_URL
+                from src.memory.postgres_health import (
+                    get_checkpointer_backend,
+                    is_postgres_available,
+                )
 
-                if DATABASE_URL.startswith(
-                    ("postgres://", "postgresql://", "postgresql+asyncpg://")
-                ):
-                    from src.agent.core.checkpointer import get_postgres_saver
+                if get_checkpointer_backend() == "memory":
+                    pass  # in-memory checkpointer — no Postgres verify
+                elif not is_postgres_available():
+                    logger.debug(
+                        "Skipping checkpoint verify — Postgres circuit open "
+                        "(thread %s)",
+                        self.thread_id,
+                    )
+                else:
+                    from src.models.db import DATABASE_URL
 
-                    async def _check_checkpoint():
-                        try:
-                            saver = await get_postgres_saver()
-                            config = {"configurable": {"thread_id": self.thread_id}}
-                            result = await saver.aget_tuple(config)
-                            if result is None:
+                    if DATABASE_URL.startswith(
+                        ("postgres://", "postgresql://", "postgresql+asyncpg://")
+                    ):
+                        from src.agent.core.checkpointer import get_postgres_saver
+                        from src.memory.postgres_health import (
+                            record_postgres_failure,
+                            record_postgres_success,
+                        )
+
+                        async def _check_checkpoint():
+                            try:
+                                saver = await get_postgres_saver()
+                                config = {"configurable": {"thread_id": self.thread_id}}
+                                result = await saver.aget_tuple(config)
+                                record_postgres_success()
+                                if result is None:
+                                    logger.warning(
+                                        "No checkpoint found for thread %s after graph run — "
+                                        "history may not persist across restarts",
+                                        self.thread_id,
+                                    )
+                            except Exception as e:
+                                record_postgres_failure()
                                 logger.warning(
-                                    "No checkpoint found for thread %s after graph run — "
-                                    "history may not persist across restarts",
-                                    self.thread_id,
+                                    "Failed to verify postgres checkpoint: %s", e
                                 )
-                        except Exception as e:
-                            logger.warning(
-                                "Failed to verify postgres checkpoint: %s", e
-                            )
 
-                    import asyncio as _asyncio
+                        import asyncio as _asyncio
 
-                    _asyncio.ensure_future(_check_checkpoint())
+                        _asyncio.ensure_future(_check_checkpoint())
             except Exception:
                 pass  # best-effort, non-critical
 

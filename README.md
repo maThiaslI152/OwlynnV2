@@ -250,10 +250,10 @@ Full reference: [`docs/features/TOOLS.md`](docs/features/TOOLS.md)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/health` | Health + agent ready |
+| `GET` | `/api/health` | Agent ready + postgres/checkpointer (use `agent`, not only `status`) |
 | `GET`/`POST` | `/api/profile` | User profile |
 | `GET`/`POST`/`DELETE` | `/api/memories` | Short-term JSON memories |
-| `GET` | `/api/mem0/search` | Vector memory search |
+| `GET` | `/api/memory/search` | Vector memory search (`/api/mem0/*` aliases) |
 | `GET`/`POST` | `/api/projects` | Project CRUD |
 | `GET` | `/api/study/dashboard` | Study dashboard |
 | `GET` | `/api/pentest/status` | Kali VM status |

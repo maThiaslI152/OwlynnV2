@@ -1,7 +1,7 @@
 ---
 status: active
 category: guide
-last_updated: 2026-08-23
+last_updated: 2026-08-26
 audience: agent
 owner: ai-agent
 ---
@@ -20,7 +20,7 @@ Install these before anything else. All commands are for **macOS** (the primary 
 |-----------|----------------|-----------------|-----|
 | Python | ≥3.11 | `brew install python@3.12` | Backend runtime |
 | Node.js | ≥20 | `brew install node` | Frontend build/dev |
-| Podman or Docker | Podman 5+ or Docker 25+ | `brew install podman` (or Docker Desktop) | Qdrant + Redis containers |
+| Podman or Docker | Podman 5+ or Docker 25+ | `brew install podman` (or Docker Desktop) | Postgres (pgvector) + optional StirlingPDF |
 | LM Studio | latest | Download from [lmstudio.ai](https://lmstudio.ai) | Local LLM inference |
 
 Verify with:
@@ -37,8 +37,7 @@ podman --version    # or: docker --version
 http://127.0.0.1:5173           # Frontend (Vite dev server)
 http://127.0.0.1:8000           # Backend API (FastAPI)
 http://127.0.0.1:1234           # LM Studio (LLM inference)
-http://127.0.0.1:6333           # Qdrant (vector DB)
-http://127.0.0.1:6379           # Redis (session persistence)
+http://127.0.0.1:5432           # PostgreSQL + pgvector (checkpoints, LTM, semantic cache)
 http://127.0.0.1:8090           # StirlingPDF (PDF text + OCR intake)
 http://127.0.0.1:8888           # SearXNG (optional — not started by ./start.sh)
 http://127.0.0.1:8000/vendor/chart.umd.min.js  # Offline Chart.js (workspace HTML charts)
@@ -104,7 +103,6 @@ python3 -c "from src.config.config_loader import validate_config; print(validate
 | `CLOUD_LLM_MODEL_NAME` | `models.cloud.model_name` | `deepseek-v4-flash` |
 | `DEEPSEEK_API_KEY` | env (or `.env.local`) | — |
 | `POSTGRES_HOST` / `POSTGRES_PORT` | `database.host` / `database.port` | `localhost:5432` |
-| `REDIS_URL` | `external_services.redis.url` | `redis://localhost:6379` |
 | `SEARXNG_URL` | `external_services.searxng.url` | `""` |
 | `VOICE_WAKE_WORD` | `server.voice.wake_word` | `Athena` |
 | `VOICE_AUTO_TTS` | `server.voice.auto_tts` | `true` |
@@ -130,23 +128,28 @@ python3 -c "from src.config.config_loader import validate_config; print(validate
 | `SEARXNG_URL` | Self-hosted search (optional — set only if you run `podman compose --profile searxng up -d searxng`) |
 | `STIRLING_PDF_URL` | StirlingPDF service for PDF text extraction (default `http://localhost:8090`) |
 | `STIRLING_PDF_API_KEY` | API key matching `SECURITY_CUSTOMGLOBALAPIKEY` in compose (default `owlynn-local-dev`) |
-| `REDIS_URL` | Default `redis://localhost:6379` — no change needed |
+| `DATABASE_URL` | Postgres DSN (default matches `docker-compose.mvp.yml`) |
 | `DOCLING_ARTIFACTS_PATH` | `.models/docling/` — auto-set, no change needed |
 
-## Step 2: Containers (Qdrant, Redis, PostgreSQL)
+## Step 2: Containers (PostgreSQL + optional StirlingPDF)
 
-The launcher script (`start.sh`) starts **core services only** (`qdrant`, `redis`, `postgres`) via podman/docker compose. StirlingPDF and SearXNG are **not** started at boot by default.
+The launcher script (`start.sh`) uses **`docker-compose.mvp.yml`**: **Postgres (pgvector)** is the core service. StirlingPDF and SearXNG are **not** started at boot by default. Redis and Qdrant are not required.
 
-> **New as of 2026-07-02:** The backend requires a **PostgreSQL** container for project/chat persistence. Start the core services:
+**Podman machine (recommended):** Give the VM **4 GB RAM** (not 2 GB). Under-provisioned machines caused Postgres OOM / health flapping during multi-turn E2E. Postgres itself is capped at `mem_limit: 768m` in `docker-compose.mvp.yml`.
 
 ```bash
-# Start all core containers (choose one)
-podman compose up -d qdrant redis postgres     # preferred (Podman users)
-docker compose up -d qdrant redis postgres     # Docker users
+# One-time / when upgrading from a 2 GB machine
+podman machine stop
+podman machine set --memory 4096
+podman machine start
+
+# Start core containers (choose one; start.sh does this via mvp compose)
+podman compose -f docker-compose.mvp.yml up -d postgres     # preferred (Podman users)
+docker compose -f docker-compose.mvp.yml up -d postgres     # Docker users
 
 # Verify they're running
 podman ps --format '{{.Names}}' | grep owlynn
-# Expected: owlynn_qdrant, owlynn_redis, owlynn_postgres
+# Expected: owlynn_postgres
 ```
 
 PostgreSQL runs strictly on `127.0.0.1:5432`. Chat and project history are persisted here via SQLAlchemy. Alembic migrations run automatically on backend startup.
@@ -219,7 +222,7 @@ The frontend is a React 19 + Vite app. Running `npm run dev` uses Vite's dev ser
 What `start.sh` does, in order:
 
 1. **Env** — sources `.env` then `.env.local` if present
-2. **Containers** — brings up Qdrant + Redis via podman/docker compose (skips if already running)
+2. **Containers** — brings up Postgres (pgvector) via `docker-compose.mvp.yml` (skips if already running)
 3. **LM Studio** — checks port `1234`, prompts you to start it if not responding
 4. **Backend** — `uvicorn src.api.server:app --port 8000` with auto-reload
 5. **Frontend** — `cd frontend-v2 && npx vite --port 5173`
@@ -259,7 +262,7 @@ uv run python src/cli.py stream "Hello, what can you do?"
 | Frontend: "command not found: vite" | `npm install` not run | `cd frontend-v2 && npm install` |
 | Backend starts but LLM calls fail | Model name mismatch | Check `.env` model names match exactly what LM Studio reports at `http://127.0.0.1:1234/v1/models` |
 | Port 8000/5173 already in use | Stale process from previous run | `lsof -ti:8000 | xargs kill -9` and `lsof -ti:5173 | xargs kill -9`, then retry |
-| Redis unavailable warning | Redis container not running | `podman compose up -d` or ignore — falls back to in-memory `MemorySaver` automatically |
+| Postgres unavailable / MemorySaver fallback | Postgres container not running or Podman VM OOM | Ensure Podman machine ≥4 GB (`podman machine set --memory 4096`); `podman compose -f docker-compose.mvp.yml up -d postgres` — checkpointer falls back to in-memory `MemorySaver` (no cross-restart history) |
 | Frontend builds but blank page | Vite dev server not proxying API | Ensure backend is running on port 8000; Vite proxies `/api` and `/v1` to it |
 | `npm run build` fails | TypeScript errors | Run `cd frontend-v2 && npx tsc --noEmit` to see errors |
 
@@ -279,14 +282,11 @@ Browser (http://127.0.0.1:5173)
   ├─► LM Studio (port 1234)
   │     └─► Local LLM inference (router + extraction models)
   │
-  ├─► PostgreSQL (port 5432)
-  │     └─► Project/chat persistence (SQLAlchemy + Alembic)
-  │
-  ├─► Qdrant (port 6333)
-  │     └─► Long-term memory (mem0 embeddings)
-  │
-  └─► Redis (port 6379)
-        └─► LangGraph checkpointing / session persistence
+  └─► PostgreSQL (port 5432)
+        ├─► Project/chat persistence (SQLAlchemy + Alembic)
+        ├─► LangGraph checkpoints
+        ├─► LTM + semantic cache (pgvector)
+        └─► Extraction jobs (LISTEN/NOTIFY)
 ```
 
 ## Electron Desktop App

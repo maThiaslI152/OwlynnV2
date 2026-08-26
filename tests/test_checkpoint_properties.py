@@ -1,10 +1,10 @@
 """
-Property-based tests for Redis checkpoint round-trip and thread isolation.
+Property-based tests for checkpoint round-trip and thread isolation.
 
-# Feature: deepseek-hybrid-integration, Property 11: Redis Checkpoint Round-Trip
+# Feature: deepseek-hybrid-integration, Property 11: Checkpoint Round-Trip
 # Validates: Requirements 25.7, 25.8, 25.9
 
-Since we cannot use a live Redis instance in unit tests, we simulate the
+Since we cannot use a live Postgres checkpointer in unit tests, we simulate the
 checkpoint store/retrieve cycle using a dict-based mock that mimics the
 checkpointer's put/get behavior.  The key insight is testing that the data
 structure survives serialization/deserialization (json.dumps / json.loads)
@@ -13,19 +13,11 @@ and that thread isolation is maintained.
 
 import copy
 import json
-import sys
-import uuid
-from unittest.mock import MagicMock
 
-sys.modules["mem0"] = MagicMock()
-
-import pytest
 from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 from langchain_core.messages import AIMessage, HumanMessage
-from langgraph.graph.message import add_messages
 
-from src.agent.core.state import AgentState
 
 # ── Constants ────────────────────────────────────────────────────────────
 
@@ -86,10 +78,10 @@ messages_st = st.lists(
 
 class MockCheckpointStore:
     """
-    Dict-based mock that mimics Redis checkpointer put/get behavior.
+    Dict-based mock that mimics checkpointer put/get behavior.
     Data passes through json.dumps / json.loads to simulate serialization
     round-trip, ensuring the data structure survives the same kind of
-    transformation that Redis would apply.
+    transformation a durable checkpointer would apply.
     """
 
     def __init__(self):
@@ -164,11 +156,11 @@ def _build_checkpoint_state(
 
 
 # ═════════════════════════════════════════════════════════════════════════
-# Property 11: Redis Checkpoint Round-Trip
+# Property 11: Checkpoint Round-Trip
 # ═════════════════════════════════════════════════════════════════════════
 
 
-class TestRedisCheckpointRoundTrip:
+class TestCheckpointRoundTrip:
     """
     Property 11: For any valid AgentState and Thread_ID, storing the state
     via the checkpointer and then retrieving it for the same Thread_ID SHALL

@@ -31,7 +31,7 @@ Group changed files by area:
 | `.agents/skills/*/SKILL.md` | `AGENTS.md` skills section |
 | `src/agent/hitl/*.py` | `docs/HITL.md` |
 | `src/memory/semantic_cache.py` | `docs/features/SEMANTIC_CACHE.md` |
-| `src/agent/core/graph.py` | `docs/architecture/REDIS_LIFECYCLE.md` |
+| `src/agent/core/graph.py` | `docs/architecture/POSTGRES_MEMORY_LIFECYCLE.md` |
 
 ### Step 2: Find Referencing Docs
 

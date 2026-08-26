@@ -1,7 +1,7 @@
 ---
 status: active
 category: standards
-last_updated: 2026-08-25
+last_updated: 2026-08-26
 owner: human
 ---
 
@@ -15,7 +15,9 @@ Target hardware: **Mac Air M4 (24 GB unified memory)**. These SLOs define the ex
 
 Measured periodically and checked before major releases. SLOs cover response latency, memory budget, storage, CPU/thermal, throughput, and availability.
 
-**Local-first envelope (2026-08-25):** Default `cloud_routing_mode=local_only`. Preload **main + embedding only** (vision/Stirling on-demand). Core health = Postgres + LM Studio (+ optional Stirling). Redis/Qdrant are optional. Pentest/Kali stays off until `features.pentest_enabled`.
+**Local-first envelope (2026-08-25/26):** Default `cloud_routing_mode=local_only`. Preload **main + embedding only** (vision/Stirling on-demand). Core health = Postgres + LM Studio (+ optional Stirling). Redis/Qdrant are not on the live path. Pentest/Kali stays off until `features.pentest_enabled`. Podman machine **4 GB** recommended; Postgres container `mem_limit: 768m` (`docker-compose.mvp.yml`).
+
+**Usable multi-turn gate:** Run `scripts/manual/e2e_topic_drift_ws.py --profile usable|full` after latency/tool changes. Functional pass (idle + correct tools) is required. UI `usable_gate` is still `False` while any turn is SLO `unacceptable` (warm T1 simple often &gt;8s on 12B). See `docs/changes/usable-multiturn-chat/CHANGELOG.md`.
 
 ## Entry Points
 
@@ -55,9 +57,9 @@ Measured from: user sends message → assistant first token received (streaming)
 
 **Instrumentation:** Audit `api.ws` / `ttft` (`ttft_ms`) and `turn_complete` (`ttft_ms` + `turn_duration_ms`). E2E/frontier JSON include `ttft_ms`.
 
-**12B call budget (warm, local_only):** simple ≈ 1 generate (`simple.max_tokens` default 512); web tool-first ≈ inject search + 1 unbound synthesis (`complex.tool_first_synth_token_budget` 1024, no synth retry); avoid always-on coherence.
+**12B call budget (warm, local_only):** simple ≈ 1 generate (`simple.max_tokens` default **128**); web tool-first ≈ inject search + extractive answer when `complex.tool_first_extractive_synth=true` (else unbound synth capped at `complex.tool_first_synth_token_budget` **384**, no synth retry); list/read tool-first + post-read short-circuit skip a second LLM; avoid always-on coherence.
 
-**Heavy prefill (web synth):** Not routing — system prompt + memory volatile suffix + thread + `web_search` ToolMessage. Tool schemas are unbound on tool-first synth. Truncating search ToolMessages is the main remaining prefill lever.
+**Heavy prefill (web synth):** Not routing — system prompt + memory volatile suffix + thread + `web_search` ToolMessage. Prefer extractive synth after tool-first search; trim prior-turn tool blobs (`tool_output.prior_turn_max_chars`).
 
 ### Memory Budget
 
@@ -67,7 +69,7 @@ Measured from: user sends message → assistant first token received (streaming)
 | Local Main LLM (`gemma-4-12b-agentic-…@q4_k_m`, LM Studio) | ~7.5 GB | Unified engine: simple, complex-default, extraction |
 | MXBAI embedding (`text-embedding-mxbai-embed-large-v1`) | 670 MB | Preloaded with main |
 | Vision OCR (`baidu.unlimited-ocr`) | 1.5 GB | On-demand only (not in startup.preload) |
-| PostgreSQL + pgvector | 512 MB | State checkpoints + vector memory |
+| PostgreSQL + pgvector | 768 MB | Container `mem_limit` in mvp compose; needs Podman VM ≥4 GB |
 | StirlingPDF | ~250 MB | On-demand; idle_shutdown default true |
 | Frontend (Electron + React) | 256 MB | Desktop shell + rendered UI |
 | **Total sustained (lite)** | **~11 GB** | main + embed + Postgres + UI |
@@ -107,7 +109,7 @@ Measured from: user sends message → assistant first token received (streaming)
 |--------|--------|
 | Core services (Postgres, LM Studio) | Required for healthy session |
 | StirlingPDF | Optional / on-demand |
-| Redis / Qdrant | Optional (not required in System health UI) |
+| Redis / Qdrant | Not used (Postgres/pgvector only) |
 | Graph execution error rate | < 0.5% of queries |
 | WS disconnect rate | < 1 per 100 queries |
 

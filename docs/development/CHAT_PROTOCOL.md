@@ -535,7 +535,6 @@ Returns all user-facing settings merged from `GET /api/profile` and `GET /api/ad
   "router_hitl_enabled": true,
   "router_clarification_threshold": 0.6,
   "custom_sensitive_terms": [],
-  "redis_url": "redis://localhost:6379",
   "cloud_daily_token_limit": 500000,
   "cloud_budget_warning_thresholds": [0.5, 0.8, 0.95]
 }
@@ -574,7 +573,6 @@ cd frontend-v2 && npx vitest run
 | `router_clarification_threshold` | float | `0.6` |
 | `router_hitl_enabled` | boolean | `true` |
 | `cloud_anonymization_enabled` | boolean | `true` |
-| `redis_url` | string | `redis://localhost:6379` |
 | `deepseek_api_key` | string | `""` |
 
 ## Related

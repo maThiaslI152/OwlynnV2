@@ -862,7 +862,7 @@ async def main():
         try:
             async with httpx.AsyncClient(timeout=1.0) as client:
                 resp = await client.get(f"{API_URL}/api/health")
-                if resp.status_code == 200:
+                if resp.status_code == 200 and resp.json().get("agent") == "ready":
                     backend_ready = True
                     break
         except Exception:

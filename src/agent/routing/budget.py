@@ -71,9 +71,9 @@ def estimate_token_budget(user_text: str, route: str) -> int:
       for estimated input tokens.
     """
     if route == "simple":
-        budget = 256
+        budget = 128
         if len(user_text) > 100:
-            budget = 512
+            budget = 256
         budget = min(budget, _MAIN_MODEL_CONTEXT - 1500)
         return max(1, int(budget))
 

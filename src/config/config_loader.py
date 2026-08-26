@@ -46,9 +46,6 @@ _ENV_OVERRIDE_MAP: dict[str, str] = {
     "HOST": "server.host",
     "PORT": "server.port",
     # External services
-    "QDRANT_HOST": "external_services.qdrant.host",
-    "QDRANT_PORT": "external_services.qdrant.port",
-    "REDIS_URL": "external_services.redis.url",
     "SEARXNG_URL": "external_services.searxng.url",
     "STIRLING_PDF_URL": "external_services.stirling_pdf.url",
     "STIRLING_PDF_API_KEY": "external_services.stirling_pdf.api_key",
@@ -110,8 +107,6 @@ _PROFILE_OVERRIDE_MAP: dict[str, str] = {
     # Cloud
     "cloud_llm_base_url": "models.cloud.base_url",
     "cloud_llm_model_name": "models.cloud.model_name",
-    # Redis
-    "redis_url": "external_services.redis.url",
     # Routing thresholds
     "route_confidence_threshold": "routing.confidence_threshold",
     "skill_clarification_threshold": "routing.skill_clarification_threshold",
@@ -352,7 +347,7 @@ class ConfigLoader:
         return int(
             cls.get("models.embedding.dims")
             or cls.get("models.embedding.dimensions")
-            or cls.get("qdrant.vector_size", 1024)
+            or 1024
         )
 
     @classmethod
@@ -499,9 +494,6 @@ _REQUIRED_PATHS: list[str] = [
     "server.host",
     "server.port",
     # External services
-    "external_services.qdrant.host",
-    "external_services.qdrant.port",
-    "external_services.redis.url",
     "external_services.lm_studio.base_url",
     "external_services.lm_studio.management_url",
     # Models — main (unified local model)

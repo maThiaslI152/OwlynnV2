@@ -21,10 +21,14 @@ _TOKEN_PATH = Path.home() / ".owlynn" / "browser_extension_token"
 
 
 def _generate_auth_token() -> str:
-    """Generate a new auth token and write to disk."""
+    """Generate a new auth token and write to disk with owner-only permissions."""
     token = secrets.token_urlsafe(32)
     _TOKEN_PATH.parent.mkdir(parents=True, exist_ok=True)
     _TOKEN_PATH.write_text(token, encoding="utf-8")
+    try:
+        _TOKEN_PATH.chmod(0o600)
+    except OSError as exc:
+        logger.warning("Could not chmod browser extension token file: %s", exc)
     logger.info("Generated new browser extension auth token at %s", _TOKEN_PATH)
     return token
 
@@ -32,6 +36,10 @@ def _generate_auth_token() -> str:
 def _get_auth_token() -> str:
     """Read or generate the auth token."""
     if _TOKEN_PATH.is_file():
+        try:
+            _TOKEN_PATH.chmod(0o600)
+        except OSError:
+            pass
         return _TOKEN_PATH.read_text(encoding="utf-8").strip()
     return _generate_auth_token()
 
@@ -40,14 +48,16 @@ def _get_auth_token() -> str:
 _auth_token = _get_auth_token()
 
 
+def get_extension_auth_token() -> str:
+    """Public accessor for the browser-extension WebSocket token."""
+    return _auth_token
+
+
 def _is_allowed_extension_origin(origin: str) -> bool:
-    """Check if the origin is a valid browser extension or native client."""
-    return (
-        origin.startswith("chrome-extension://")
-        or origin.startswith("moz-extension://")
-        or origin == ""  # Non-browser clients (CLI, etc.)
-        or origin == "null"  # Sandboxed extension service worker
-    )
+    """Allow only real browser-extension origins (reject empty / null)."""
+    if not origin or origin == "null":
+        return False
+    return origin.startswith(("chrome-extension://", "moz-extension://"))
 
 
 @router.get("/token")
@@ -239,14 +249,37 @@ async def dispatch_extension_browser_action(
 
 
 async def dispatch_extension_fetch_urls(urls: list[str]) -> list[dict]:
-    """Fetch multiple URLs in the background via the extension."""
+    """Fetch multiple URLs in the background via the extension.
+
+    Applies the same SSRF policy as ``fetch_webpage`` before dispatching.
+    """
+    from src.tools.url_policy import url_fetch_blocked_reason
+
+    allowed: list[str] = []
+    blocked_results: list[dict] = []
+    for raw in urls or []:
+        u = str(raw or "").strip()
+        if not u:
+            continue
+        reason = url_fetch_blocked_reason(u)
+        if reason:
+            blocked_results.append(
+                {"url": u, "text": "", "error": f"Blocked: {reason}"}
+            )
+        else:
+            allowed.append(u)
+
+    if not allowed:
+        return blocked_results
+
     # We must allow a longer timeout since multiple tabs are loaded.
     original_timeout = config.get("web_search.timeouts.extension")
-    config["web_search.timeouts.extension"] = 30.0 + (len(urls) * 5.0)
+    config["web_search.timeouts.extension"] = 30.0 + (len(allowed) * 5.0)
     try:
-        data = await dispatch_extension_request("fetch_urls", {"urls": urls})
+        data = await dispatch_extension_request("fetch_urls", {"urls": allowed})
         results = data.get("results", [])
-        return results if isinstance(results, list) else []
+        fetched = results if isinstance(results, list) else []
+        return blocked_results + fetched
     finally:
         config["web_search.timeouts.extension"] = original_timeout
 
@@ -397,9 +430,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
             # Validate message type — allowlist of known types
             msg_type = data.get("type")
-            action = data.get("action")
             allowed_types = {"page_context_push", "ping", "auth"}
-            allowed_actions = set()  # Responses use "id" field, not "action"
             if msg_type not in allowed_types and not (
                 data.get("id") and isinstance(data.get("id"), str)
             ):
@@ -409,62 +440,10 @@ async def websocket_endpoint(websocket: WebSocket):
                 continue
 
             if data.get("type") == "page_context_push":
-                if data.get("is_live_tracking"):
-                    from src.memory.long_term import memory as mem0_memory
-
-                    if mem0_memory:
-                        text = str(data.get("text") or "")
-                        url = str(data.get("url") or "")
-                        title = str(data.get("title") or "")
-
-                        allowed_domains = config.get(
-                            "browser_extension.allowed_live_tracking_domains", []
-                        )
-                        if not allowed_domains or not any(
-                            domain in url for domain in allowed_domains
-                        ):
-                            logger.debug(
-                                f"Rejected live tracking context for unauthorized URL: {url}"
-                            )
-                            continue
-
-                        if len(text) > 200:
-                            # Compress text to avoid overwhelming memory
-                            content = f"Page: {title} ({url})\n\n{text[:4000]}"
-                            try:
-                                mem0_memory.add(
-                                    content,
-                                    user_id="owner",
-                                    metadata={"url": url, "source": "live_tracking"},
-                                    infer=False,
-                                )
-                                logger.info(f"Saved live tracking context for {url}")
-                            except Exception as e:
-                                logger.warning(
-                                    f"Failed to save live tracking to memory: {e}"
-                                )
-                else:
-                    _broadcast_page_context(data)
-
-                    # Return the active thread_id back to the extension
-                    from src.api.shared import connected_websockets
-
-                    active_thread_id = None
-                    for ws in list(connected_websockets):
-                        tid = ws.scope.get("thread_id")
-                        if tid:
-                            active_thread_id = tid
-
-                    if active_thread_id:
-                        try:
-                            await websocket.send_json(
-                                {
-                                    "type": "page_context_response",
-                                    "thread_id": active_thread_id,
-                                }
-                            )
-                        except Exception as e:
-                            logger.warning(f"Failed to send page_context_response: {e}")
+                # Live-tracking Mem0 path and iframe sidebar response removed
+                # (broken X-Frame-Options + dead allowlist config). User push
+                # still broadcasts to chat clients.
+                _broadcast_page_context(data)
                 continue
 
             request_id = data.get("id")

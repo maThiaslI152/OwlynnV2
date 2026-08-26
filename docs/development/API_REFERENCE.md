@@ -36,7 +36,8 @@ Base URL: `http://<host>:8000`
 ### Health
 
 `GET /api/health`
-- Response: `{ "status": "ok", "agent": "ready" | "initializing" }`
+- Response: `{ "status": "ok" | "degraded", "agent": "ready" | "initializing", "postgres": "ok" | "degraded" | "error", "checkpointer": "postgres" | "memory" }`
+- **Readiness:** use `agent === "ready"` (chat can limp when `status` is `degraded`). Do not require `status === "ok"` alone — that field reflects Postgres soft-path health, not whether the API answers.
 
 ### Usage
 
@@ -131,13 +132,12 @@ Base URL: `http://<host>:8000`
   "router_hitl_enabled": true,
   "router_clarification_threshold": 0.6,
   "custom_sensitive_terms": [],
-  "redis_url": "redis://localhost:6379",
   "lm_studio_fold_system": true
 }
 ```
 
 `POST /api/advanced-settings`
-- Body keys: `temperature`, `top_p`, `max_tokens`, `top_k`, `streaming_enabled`, `show_thinking`, `show_tool_execution`, `cloud_escalation_enabled`, `cloud_anonymization_enabled`, `router_hitl_enabled`, `router_clarification_threshold`, `custom_sensitive_terms`, `redis_url`, `lm_studio_fold_system`
+- Body keys: `temperature`, `top_p`, `max_tokens`, `top_k`, `streaming_enabled`, `show_thinking`, `show_tool_execution`, `cloud_escalation_enabled`, `cloud_anonymization_enabled`, `router_hitl_enabled`, `router_clarification_threshold`, `custom_sensitive_terms`, `lm_studio_fold_system`
 - Response: `{ "status": "ok" | "error", "message": "..." }`
 
 ### Unified Settings
@@ -161,24 +161,31 @@ Base URL: `http://<host>:8000`
 `DELETE /api/memories`
 - Body: `{ "fact": "..." }`
 
-### Long-Term Memory (Mem0 + Qdrant)
+### Long-Term Memory (pgvector)
 
-`GET /api/mem0/search?query=<string>&limit=<int>&project_id=<string>`
-- Searches Mem0/Qdrant vector store. If `project_id` provided, scopes to that project's memory space
+Canonical paths are `/api/memory/*`. Legacy `/api/mem0/*` aliases remain for backward compatibility.
+
+`GET /api/memory/search?query=<string>&limit=<int>&project_id=<string>`
+- Searches pgvector long-term memory. If `project_id` provided, scopes to that project's memory space
 - Response: `{ "status": "ok", "memories": [...], "count": <int> }`
 
-`GET /api/mem0/count?project_id=<string>`
+`GET /api/memory/count?project_id=<string>`
 - Response: `{ "status": "ok", "count": <int>, "user_id": "..." }`
 
-`POST /api/mem0/delete`
+`POST /api/memory/add`
+- Body: `{ "memory": "fact text", "user_id": "owner" }`
+
+`POST /api/memory/delete`
 - Body: `{ "memory_id": "..." }`
 
-`POST /api/mem0/clear`
+`POST /api/memory/clear`
 - Body: `{ "user_id": "owner" }` (default `"owner"`)
 - Clears all memories for a user_id
 
-`POST /api/mem0/reset`
-- Resets ALL Mem0 memories (global)
+`POST /api/memory/reset`
+- Resets ALL long-term memories (global)
+
+Aliases: the same handlers are also mounted under `/api/mem0/*`.
 
 ### Personal Assistant Data
 
@@ -356,7 +363,6 @@ WebSocket request payload keys parsed in `websocket_endpoint()` and passed into 
 | `custom_sensitive_terms` | list | `[]` | Additional terms to anonymize |
 | `router_hitl_enabled` | boolean | `true` | Allow router to ask clarifying questions |
 | `router_clarification_threshold` | float | `0.6` | Confidence threshold for clarification |
-| `redis_url` | string | `"redis://localhost:6379"` | Redis URL for checkpointing |
 
 ## Related
 

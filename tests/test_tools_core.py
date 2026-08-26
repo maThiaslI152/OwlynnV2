@@ -41,6 +41,31 @@ def test_write_and_read(workspace):
     assert content == "hello world"
 
 
+def test_write_accepts_path_alias(workspace):
+    result = write_workspace_file.invoke({"path": "via_path.txt", "content": "ok"})
+    assert "Written" in result
+    assert (workspace / "via_path.txt").read_text() == "ok"
+
+
+def test_scratch_root_outside_base_is_allowed(tmp_path, monkeypatch):
+    """Ephemeral Normal/Study scratch is not under BASE_WORKSPACE_DIR."""
+    base = tmp_path / "projects"
+    scratch = tmp_path / "scratch"
+    base.mkdir()
+    scratch.mkdir()
+    monkeypatch.setattr("src.tools.core_tools.BASE_WORKSPACE_DIR", str(base))
+    monkeypatch.setattr(
+        "src.tools.core_tools.tool_workspace_root", lambda: str(scratch)
+    )
+    fp, err = get_safe_workspace_path("note.txt")
+    assert err is None
+    assert fp.endswith("note.txt")
+    assert "scratch" in fp
+    out = write_workspace_file.invoke({"filename": "note.txt", "content": "hi"})
+    assert "Written" in out
+    assert (scratch / "note.txt").read_text() == "hi"
+
+
 def test_edit_file(workspace):
     (workspace / "doc.txt").write_text("foo bar baz")
     result = edit_workspace_file.invoke(

@@ -65,6 +65,11 @@ function App() {
     queryFn: async () => {
       const resp = await fetch('/api/health')
       if (!resp.ok) throw new Error('Backend health check failed')
+      // Prefer agent readiness — status may be "degraded" while chat can limp
+      const health = (await resp.json()) as { agent?: string }
+      if (health.agent && health.agent !== 'ready') {
+        throw new Error('Backend still initializing')
+      }
       const tokenResp = await fetch('/api/local-run-token')
       if (!tokenResp.ok) throw new Error('Failed to fetch local run token')
       return await tokenResp.json()

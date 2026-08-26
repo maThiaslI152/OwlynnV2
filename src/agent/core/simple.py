@@ -115,21 +115,34 @@ def _simple_output_max_tokens(budget: int | None) -> int:
     """Cap simple-path completion; never inherit models.main.max_tokens (often 8k).
 
     A huge max_tokens window slows local decode and invites verbose greetings.
-    Router ``token_budget`` (typically 256–512) is honored within ``simple.max_tokens``.
+    Router ``token_budget`` (typically 128–256 for trivia) is honored within
+    ``simple.max_tokens``.
     """
     from src.config.config_loader import config
 
     requested = max(64, int(budget or 256))
-    cap = max(128, int(config.get("simple.max_tokens", 512) or 512))
-    # Small floor so tiny budgets still finish short answers; never exceed cap.
-    floor = min(256, cap)
+    cap = max(64, int(config.get("simple.max_tokens", 256) or 256))
+    # Honor small trivia budgets (e.g. 128) instead of forcing a 256 floor.
+    floor = min(64, cap)
     return max(floor, min(requested, cap))
+
+
+def _runnable_config_for_stream():
+    """Inherit LangGraph callbacks so astream emits on_chat_model_stream to WS."""
+    try:
+        from langgraph.config import get_config
+
+        return get_config()
+    except RuntimeError:
+        return None
 
 
 async def _get_llm_response(runnable, prompt) -> str:
     """Safely stream or invoke the runnable.
 
     Handles MagicMock/Mock/AsyncMock objects which may not support real async iteration.
+    Passes LangGraph config into astream so token chunks reach the WS handler early
+    (otherwise TTFT ≈ full generate because only on_chain_end flushed text).
     """
     is_mock = False
     astream_attr = getattr(runnable, "astream", None)
@@ -150,7 +163,12 @@ async def _get_llm_response(runnable, prompt) -> str:
 
     try:
         response_content = ""
-        async for chunk in runnable.astream(prompt):
+        stream_cfg = _runnable_config_for_stream()
+        if stream_cfg is not None:
+            stream_iter = runnable.astream(prompt, config=stream_cfg)
+        else:
+            stream_iter = runnable.astream(prompt)
+        async for chunk in stream_iter:
             part = _extract_llm_text(chunk)
             if part:
                 response_content += part

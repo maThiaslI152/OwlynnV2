@@ -12,7 +12,14 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export const SystemAPI = {
-  health: () => fetchJson<{ status: string }>('/api/health'),
+  /** Prefer `agent === 'ready'` for readiness; `status` may be `degraded` while chat works. */
+  health: () =>
+    fetchJson<{
+      status: 'ok' | 'degraded'
+      agent: 'ready' | 'initializing'
+      postgres?: string
+      checkpointer?: string
+    }>('/api/health'),
   getLocalRunToken: () => fetchJson<{ token: string }>('/api/local-run-token'),
 }
 
