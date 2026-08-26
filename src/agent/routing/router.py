@@ -25,6 +25,7 @@ from src.agent.routing.classifier import (
     parse_classification,
 )
 from src.agent.routing.deterministic import (
+    _TIME_SENSITIVE_WEB_HINTS,
     _WEBISH_HINTS,
     _has_image_content,
     _is_simple_informational_query,
@@ -339,6 +340,16 @@ async def router_node(state: AgentState) -> AgentState:
     execution_plan: str | None = None
     classification_source = "hardcoded_local_first"
 
+    # Static knowledge Q&A (capital, who/what without live/web cues) → simple.
+    # Live/web-sensitive facts (GDP, weather, "latest", …) stay complex+tools.
+    _wants_live_or_web = any(hint in user_lower for hint in _WEBISH_HINTS) or any(
+        hint in user_lower for hint in _TIME_SENSITIVE_WEB_HINTS
+    )
+    if _is_simple_informational_query(user_text) and not _wants_live_or_web:
+        decision = "simple"
+        toolbox = []
+        classification_source = "hardcoded_local_first_simple"
+
     # ── HITL clarification and proactive skill matching ────────────────
     profile = get_profile()
     router_hitl_enabled = profile.get("router_hitl_enabled", True)
@@ -452,13 +463,9 @@ async def router_node(state: AgentState) -> AgentState:
             except ImportError:
                 pass
 
-        # Simple factual questions — no toolbox picker.
-        if (
-            hitl_needed
-            and confidence < routing_confidence_threshold
-            and not match_result.is_ambiguous
-            and _is_simple_informational_query(user_text)
-        ):
+        # Simple factual questions — no toolbox picker / skill-ambiguity HITL.
+        # Local-first hardcodes confidence=1.0, so do not require low confidence.
+        if hitl_needed and _is_simple_informational_query(user_text):
             hitl_needed = False
             logger.info(
                 "[router] Skipping HITL — simple informational query: %r",
