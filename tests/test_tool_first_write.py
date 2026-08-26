@@ -17,9 +17,7 @@ def test_should_inject_clear_write_file_ops():
             )
         )
     ]
-    assert should_inject_tool_first_write(
-        {"selected_toolboxes": ["file_ops"]}, msgs
-    )
+    assert should_inject_tool_first_write({"selected_toolboxes": ["file_ops"]}, msgs)
 
 
 def test_should_not_inject_after_successful_write():
@@ -70,4 +68,6 @@ def test_build_tool_first_write_message_args():
     tc = ai.tool_calls[0]
     assert tc["name"] == "write_workspace_file"
     assert tc["args"]["filename"] == "bangkok_notes_abc.txt"
-    assert "Bangkok" in tc["args"]["content"] or "Workspace note" in tc["args"]["content"]
+    assert (
+        "Bangkok" in tc["args"]["content"] or "Workspace note" in tc["args"]["content"]
+    )

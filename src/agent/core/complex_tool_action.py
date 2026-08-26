@@ -216,9 +216,13 @@ async def complex_tool_action_node(state: AgentState) -> AgentState:
                     "Confirm the filename to the user in one short sentence. "
                     "Do NOT call write_workspace_file, read_workspace_file, or any other tool again."
                 )
-            elif tool_name == "read_workspace_file" and content.strip() and not (
-                content.strip().startswith("Error:")
-                or content.strip().startswith("Error ")
+            elif (
+                tool_name == "read_workspace_file"
+                and content.strip()
+                and not (
+                    content.strip().startswith("Error:")
+                    or content.strip().startswith("Error ")
+                )
             ):
                 content += (
                     "\n\n[Tool Guidance]: File content retrieved successfully. "

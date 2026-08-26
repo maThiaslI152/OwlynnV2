@@ -34,9 +34,7 @@ def _turn_has_list_or_read_tool(messages: list) -> bool:
         if isinstance(msg, AIMessage):
             for tc in getattr(msg, "tool_calls", None) or []:
                 tc_name = (
-                    tc.get("name")
-                    if isinstance(tc, dict)
-                    else getattr(tc, "name", "")
+                    tc.get("name") if isinstance(tc, dict) else getattr(tc, "name", "")
                 )
                 if tc_name in ("list_workspace_files", "read_workspace_file"):
                     return True

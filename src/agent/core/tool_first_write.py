@@ -29,14 +29,15 @@ def _turn_has_write_tool(messages: list) -> bool:
         ):
             return True
         role = getattr(msg, "type", None) or getattr(msg, "role", None)
-        if role == "tool" and (getattr(msg, "name", None) or "") == "write_workspace_file":
+        if (
+            role == "tool"
+            and (getattr(msg, "name", None) or "") == "write_workspace_file"
+        ):
             return True
         if isinstance(msg, AIMessage):
             for tc in getattr(msg, "tool_calls", None) or []:
                 name = (
-                    tc.get("name")
-                    if isinstance(tc, dict)
-                    else getattr(tc, "name", "")
+                    tc.get("name") if isinstance(tc, dict) else getattr(tc, "name", "")
                 )
                 if name == "write_workspace_file":
                     return True

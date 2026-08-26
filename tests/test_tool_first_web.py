@@ -125,7 +125,9 @@ def test_done_phase_keeps_block_when_turn_already_searched():
 def test_extractive_answer_from_search_tool():
     turn = [
         HumanMessage(content="what is it's GDP"),
-        AIMessage(content="", tool_calls=[{"name": "web_search", "id": "1", "args": {}}]),
+        AIMessage(
+            content="", tool_calls=[{"name": "web_search", "id": "1", "args": {}}]
+        ),
         ToolMessage(content=_OK_SEARCH, tool_call_id="1", name="web_search"),
     ]
     text = build_tool_first_extractive_answer(turn)

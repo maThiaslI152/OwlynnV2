@@ -69,4 +69,3 @@ def test_runnable_config_for_stream_tolerates_missing_context():
 
     # May return None or a dict depending on ambient context; must not raise.
     _ = _runnable_config_for_stream()
-

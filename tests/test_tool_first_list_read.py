@@ -44,11 +44,7 @@ def test_should_not_inject_after_successful_read():
 
 
 def test_should_not_inject_wrong_toolbox():
-    msgs = [
-        HumanMessage(
-            content="List workspace files and read note.txt back to me."
-        )
-    ]
+    msgs = [HumanMessage(content="List workspace files and read note.txt back to me.")]
     assert not should_inject_tool_first_list_read(
         {"selected_toolboxes": ["web_search"]}, msgs
     )

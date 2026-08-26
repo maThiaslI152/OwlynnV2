@@ -1207,9 +1207,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                     }
                 )
                 await websocket.send_json(cache_chunk)
-                _stamp_ttft_if_needed(
-                    _turn_timing, cache_chunk, thread_id=thread_id
-                )
+                _stamp_ttft_if_needed(_turn_timing, cache_chunk, thread_id=thread_id)
                 await websocket.send_json(
                     _cache_payload(
                         {

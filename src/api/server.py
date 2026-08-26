@@ -489,14 +489,18 @@ class LocalAuthMiddleware(BaseHTTPMiddleware):
             "token"
         )
         expected = get_local_run_token(request.app)
-        token_ok = bool(token) and secrets.compare_digest(token, expected)
+        token_ok = isinstance(token, str) and secrets.compare_digest(token, expected)
 
         # Browser extension control-plane REST: also accept extension WS token
-        if not token_ok and path.startswith(self._EXTENSION_REST_PREFIX) and token:
+        if not token_ok and path.startswith(self._EXTENSION_REST_PREFIX) and isinstance(
+            token, str
+        ):
             from src.api.routes.browser_extension import get_extension_auth_token
 
             ext_token = get_extension_auth_token()
-            token_ok = bool(ext_token) and secrets.compare_digest(token, ext_token)
+            token_ok = isinstance(ext_token, str) and secrets.compare_digest(
+                token, ext_token
+            )
 
         if not token_ok:
             return JSONResponse(

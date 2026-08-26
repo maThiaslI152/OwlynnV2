@@ -113,9 +113,7 @@ def test_should_strip_ask_user_on_write():
 
 
 def test_should_strip_ask_user_on_list_read():
-    msgs = [
-        HumanMessage(content="List workspace files and read note.txt back to me.")
-    ]
+    msgs = [HumanMessage(content="List workspace files and read note.txt back to me.")]
     assert should_strip_ask_user(msgs) is True
 
 

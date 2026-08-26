@@ -983,9 +983,7 @@ async def complex_llm_node(state: AgentState) -> AgentState:
             snippet = body.strip()
             if len(snippet) > 2500:
                 snippet = snippet[:2500].rstrip() + "\n…"
-            logger.info(
-                "[complex] post-read stop — confirming filename=%s", filename
-            )
+            logger.info("[complex] post-read stop — confirming filename=%s", filename)
             response = AIMessage(
                 content=(
                     f"Here’s `{filename}` from your workspace:\n\n{snippet}"
