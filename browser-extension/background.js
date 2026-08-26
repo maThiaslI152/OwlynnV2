@@ -1,5 +1,5 @@
 let socket = null;
-let authToken = null; // Memory-only auth token (not persisted to storage)
+let authToken = null; // In-memory; also cached to chrome.storage.local as owlynnAuthToken
 const activeSearches = new Map();
 const RESTRICTED_PREFIXES = ["chrome://", "chrome-extension://", "brave://", "edge://", "about:"];
 
@@ -83,6 +83,28 @@ const RECONNECT_MAX_MS = 30000;
 const RECONNECT_MAX_RETRIES = 20;
 let reconnectAttempts = 0;
 let reconnectTimer = null;
+let connectInFlight = false;
+
+function scheduleReconnect(reason) {
+  if (reconnectAttempts >= RECONNECT_MAX_RETRIES) {
+    console.warn(
+      `[Owlynn Bridge] Max reconnect retries (${RECONNECT_MAX_RETRIES}) reached. Stopping until keepalive reset. (${reason})`
+    );
+    return;
+  }
+  reconnectAttempts++;
+  const delay = Math.min(
+    RECONNECT_BASE_MS * Math.pow(2, reconnectAttempts - 1),
+    RECONNECT_MAX_MS
+  );
+  console.log(
+    `[Owlynn Bridge] ${reason}. Reconnecting in ${Math.round(delay / 1000)}s (attempt ${reconnectAttempts}/${RECONNECT_MAX_RETRIES})...`
+  );
+  if (reconnectTimer) clearTimeout(reconnectTimer);
+  reconnectTimer = setTimeout(() => {
+    connect().catch(() => {});
+  }, delay);
+}
 
 // ── Service Worker Keepalive ───────────────────────────────────────────
 chrome.alarms.create("owlynn-keepalive", { periodInMinutes: 0.5 });
@@ -97,7 +119,10 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
   if (socket && socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify({ type: "ping" }));
-  } else if (!socket || socket.readyState === WebSocket.CLOSED) {
+  } else if (
+    !connectInFlight &&
+    (!socket || socket.readyState === WebSocket.CLOSED)
+  ) {
     // Recover from hard-stop after max retries via periodic alarm reset
     if (reconnectAttempts >= RECONNECT_MAX_RETRIES) {
       console.log("[Owlynn Bridge] Keepalive resetting reconnect counter after max retries.");
@@ -109,21 +134,39 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 // ── Auth token management ──────────────────────────────────────────────
+function cacheAuthToken(token) {
+  authToken = token;
+  if (token) {
+    chrome.storage.local.set({ owlynnAuthToken: token });
+  }
+}
+
 async function fetchAuthToken() {
   try {
     const resp = await fetch(`${backendHttpUrl}/api/browser_extension/token`);
     if (resp.ok) {
       const data = await resp.json();
-      authToken = data.token;
-      return authToken;
+      if (typeof data.token === "string" && data.token.length > 0) {
+        cacheAuthToken(data.token);
+        return authToken;
+      }
+      console.error("[Owlynn Bridge] Token endpoint returned empty token");
+    } else {
+      console.error(
+        `[Owlynn Bridge] Token fetch failed: HTTP ${resp.status} from ${backendHttpUrl}/api/browser_extension/token`
+      );
     }
   } catch (err) {
     console.error("[Owlynn Bridge] Failed to fetch auth token:", err.message || err);
   }
-  // Fallback: try from storage (cached from previous successful fetch)
+  // Fallback: cached token from a previous successful fetch (survives SW restarts)
   return new Promise((resolve) => {
     chrome.storage.local.get(["owlynnAuthToken"], (result) => {
-      authToken = result.owlynnAuthToken || null;
+      const cached = result.owlynnAuthToken || null;
+      if (cached) {
+        authToken = cached;
+        console.log("[Owlynn Bridge] Using cached auth token from storage");
+      }
       resolve(authToken);
     });
   });
@@ -194,6 +237,10 @@ function urlFetchBlockedReason(url) {
 }
 
 async function connect() {
+  if (connectInFlight) return;
+  if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
+    return;
+  }
   if (reconnectAttempts >= RECONNECT_MAX_RETRIES) {
     console.warn(
       `[Owlynn Bridge] Max reconnect retries (${RECONNECT_MAX_RETRIES}) reached. Stopping until keepalive reset.`
@@ -201,111 +248,110 @@ async function connect() {
     return;
   }
 
-  console.log("[Owlynn Bridge] Connecting to backend WebSocket...");
+  connectInFlight = true;
+  try {
+    console.log("[Owlynn Bridge] Connecting to backend WebSocket...");
 
-  if (!authToken) {
+    // Always refresh token before opening WS — never open then close (causes 1005 spam).
     await fetchAuthToken();
-  }
-
-  socket = new WebSocket(`${backendWsUrl}/api/browser_extension/ws`);
-
-  socket.onopen = () => {
-    console.log("[Owlynn Bridge] WebSocket connected. Sending auth...");
-    reconnectAttempts = 0;
-
-    if (authToken) {
-      socket.send(JSON.stringify({ type: "auth", token: authToken }));
-    } else {
-      console.error("[Owlynn Bridge] No auth token available!");
-      socket.close();
+    if (!authToken) {
+      scheduleReconnect("No auth token available (is Owlynn backend running on 8000?)");
       return;
     }
 
-    chrome.runtime.sendMessage({ type: "CONNECTION_STATUS", connected: true }).catch(() => {});
-  };
+    socket = new WebSocket(`${backendWsUrl}/api/browser_extension/ws`);
 
-  socket.onmessage = async (event) => {
-    try {
-      if (event.data && event.data.length > 1048576) {
-        console.warn("[Owlynn Bridge] Rejected oversized message");
+    socket.onopen = () => {
+      console.log("[Owlynn Bridge] WebSocket connected. Sending auth...");
+      if (!authToken) {
+        console.error("[Owlynn Bridge] Auth token disappeared before send");
+        socket.close(4000, "Missing auth token");
         return;
       }
-      const message = JSON.parse(event.data);
-      const msgType = message.action || message.type || "unknown";
-      console.debug(`[Owlynn Bridge] Message received: ${msgType}`);
-      const knownActions = new Set([
-        "search",
-        "get_active_tab",
-        "capture_screenshot",
-        "browser_action",
-        "fetch_urls",
-        "get_cookies",
-        "ui_status",
-      ]);
-      const knownTypes = new Set(["RELOAD"]);
-      if (!knownActions.has(message.action) && !knownTypes.has(message.type)) {
-        console.debug(`[Owlynn Bridge] Ignoring unknown message type: ${msgType}`);
-        return;
-      }
+      socket.send(JSON.stringify({ type: "auth", token: authToken }));
+      reconnectAttempts = 0;
+      chrome.runtime.sendMessage({ type: "CONNECTION_STATUS", connected: true }).catch(() => {});
+    };
 
-      if (message.action === "search") {
-        await handleSearchRequest(message.id, message.url);
-      } else if (message.action === "get_active_tab") {
-        await handleGetActiveTabRequest(message.id);
-      } else if (message.action === "capture_screenshot") {
-        await handleCaptureScreenshotRequest(message.id);
-      } else if (message.action === "browser_action") {
-        await enqueueBrowserAction(() =>
-          handleBrowserActionRequest(message.id, message.payload)
-        );
-      } else if (message.action === "fetch_urls") {
-        await handleFetchUrlsRequest(message.id, message.urls);
-      } else if (message.action === "get_cookies") {
-        await handleGetCookiesRequest(message.id, message.url);
-      } else if (message.action === "ui_status") {
-        const tab = await getActiveTab();
-        if (tab && message.payload) {
-          chrome.tabs
-            .sendMessage(tab.id, {
-              type: "OWLYNN_STATUS_UPDATE",
-              data: {
-                action: message.payload.action,
-                value: message.payload.value,
-                duration: 15000,
-              },
-            })
-            .catch(() => {});
+    socket.onmessage = async (event) => {
+      try {
+        if (event.data && event.data.length > 1048576) {
+          console.warn("[Owlynn Bridge] Rejected oversized message");
+          return;
         }
-      } else if (message.type === "RELOAD") {
-        console.log("[Owlynn Bridge] Received RELOAD command. Reloading extension...");
-        chrome.runtime.reload();
+        const message = JSON.parse(event.data);
+        const msgType = message.action || message.type || "unknown";
+        console.debug(`[Owlynn Bridge] Message received: ${msgType}`);
+        const knownActions = new Set([
+          "search",
+          "get_active_tab",
+          "capture_screenshot",
+          "browser_action",
+          "fetch_urls",
+          "get_cookies",
+          "ui_status",
+        ]);
+        const knownTypes = new Set(["RELOAD"]);
+        if (!knownActions.has(message.action) && !knownTypes.has(message.type)) {
+          console.debug(`[Owlynn Bridge] Ignoring unknown message type: ${msgType}`);
+          return;
+        }
+
+        if (message.action === "search") {
+          await handleSearchRequest(message.id, message.url);
+        } else if (message.action === "get_active_tab") {
+          await handleGetActiveTabRequest(message.id);
+        } else if (message.action === "capture_screenshot") {
+          await handleCaptureScreenshotRequest(message.id);
+        } else if (message.action === "browser_action") {
+          await enqueueBrowserAction(() =>
+            handleBrowserActionRequest(message.id, message.payload)
+          );
+        } else if (message.action === "fetch_urls") {
+          await handleFetchUrlsRequest(message.id, message.urls);
+        } else if (message.action === "get_cookies") {
+          await handleGetCookiesRequest(message.id, message.url);
+        } else if (message.action === "ui_status") {
+          const tab = await getActiveTab();
+          if (tab && message.payload) {
+            chrome.tabs
+              .sendMessage(tab.id, {
+                type: "OWLYNN_STATUS_UPDATE",
+                data: {
+                  action: message.payload.action,
+                  value: message.payload.value,
+                  duration: 15000,
+                },
+              })
+              .catch(() => {});
+          }
+        } else if (message.type === "RELOAD") {
+          console.log("[Owlynn Bridge] Received RELOAD command. Reloading extension...");
+          chrome.runtime.reload();
+        }
+      } catch (err) {
+        console.error("[Owlynn Bridge] Error handling WebSocket message:", err);
       }
-    } catch (err) {
-      console.error("[Owlynn Bridge] Error handling WebSocket message:", err);
-    }
-  };
+    };
 
-  socket.onclose = () => {
-    socket = null;
-    authToken = null;
-    chrome.runtime.sendMessage({ type: "CONNECTION_STATUS", connected: false }).catch(() => {});
+    socket.onclose = (event) => {
+      socket = null;
+      // Drop cached token only on explicit auth rejection (stale after backend restart).
+      if (event.code === 4001) {
+        authToken = null;
+        chrome.storage.local.remove(["owlynnAuthToken"]);
+      }
+      chrome.runtime.sendMessage({ type: "CONNECTION_STATUS", connected: false }).catch(() => {});
+      scheduleReconnect(`Disconnected (code=${event.code})`);
+    };
 
-    reconnectAttempts++;
-    const delay = Math.min(
-      RECONNECT_BASE_MS * Math.pow(2, reconnectAttempts - 1),
-      RECONNECT_MAX_MS
-    );
-    console.log(
-      `[Owlynn Bridge] Disconnected. Reconnecting in ${Math.round(delay / 1000)}s (attempt ${reconnectAttempts}/${RECONNECT_MAX_RETRIES})...`
-    );
-    if (reconnectTimer) clearTimeout(reconnectTimer);
-    reconnectTimer = setTimeout(connect, delay);
-  };
-
-  socket.onerror = () => {
-    console.error("[Owlynn Bridge] WebSocket error occurred");
-    socket.close();
-  };
+    socket.onerror = () => {
+      console.error("[Owlynn Bridge] WebSocket error occurred");
+      // onclose will schedule reconnect
+    };
+  } finally {
+    connectInFlight = false;
+  }
 }
 
 function isRestrictedUrl(url) {

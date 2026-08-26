@@ -1,7 +1,7 @@
 ---
 status: active
 category: debugging
-last_updated: 2026-06-15
+last_updated: 2026-08-26
 owner: human
 ---
 
@@ -38,6 +38,8 @@ owner: human
 | Web search returns no results | All tiers exhausted, extension offline, or network issue | Check extension WS: browser connected; optional SearXNG if configured | Ensure Brave extension loaded; set SEARXNG_URL only if container running |
 | Active tab not in composer | Extension push while chat WS disconnected | Check `browser.page_context` in DevTools WS tab | Reload Owlynn UI; verify extension shows “Connected” |
 | `get_active_browser_context` empty on Brave | Extension offline; falls back to AppleScript (no Brave) | Check `/api/browser_extension/ws` connection | Load extension; see [`changes/browser-extension-active-tab/CHANGELOG.md`](../changes/browser-extension-active-tab/CHANGELOG.md) |
+| Backend log spam: `auth error: (1005…)` every ~3s | Extension opened WS without token (stale install / pre-1.4.1) | Reload from `browser-extension/` (v1.4.1+); see [`BROWSER_EXTENSION.md`](../features/BROWSER_EXTENSION.md) Troubleshooting |
+| Extension console: `Token fetch failed: HTTP 403` | Brave MV3 omitted Origin; old backend rejected empty Origin | Upgrade backend with loopback-empty-Origin allow; reload extension |
 | Workspace file operations fail | Wrong workspace path or permission denied | Check active workspace: `GET /api/projects` | Verify workspace path exists and is writable |
 | `read_workspace_file` shows ERROR at 0.0s but content is valid | False positive: PDF body contains substring `error:` | Inspect `tool_execution.output` — starts with prose, not `Error:` | Fixed: prefix-only status in `handler.py`. See [`changes/tool-preamble-read-file-fix/CHANGELOG.md`](../changes/tool-preamble-read-file-fix/CHANGELOG.md) |
 | `read_workspace_file` not found on first call | LLM passed `[Attached: filename.pdf]` as arg | Check `tool_execution.input` for wrapper text | Filename normalization in `core_tools.py`; prefetch pattern in `complex.py` |
@@ -278,9 +280,9 @@ The `scope_clarify` node runs between `router` and `complex_llm` for vague build
 ## Known Fixes
 
 - **Tool awareness assertions**: Fixed in Phase 5 — updated to match current `COMPLEX_TOOL_GUIDANCE_WEB` content. See [STATUS.md](../STATUS.md).
-- **Audit & verify sub-panel not expanding (BUG-8)**: Known issue in `ToolExecutionPanel.tsx`. See [BUG-ANALYSIS.md](../BUG-ANALYSIS.md).
+- **Audit & verify sub-panel not expanding (BUG-8)**: Known issue in `ToolExecutionPanel.tsx`. See [BUG-ANALYSIS.md](README.md).
 - **Mock data in tool execution panel (BUG-6)**: Known issue — mock entries persist regardless of actual tool activity. See [frontend.md](frontend.md).
-- See also: [AGENT_FLOW.md](../AGENT_FLOW.md) sections on Tool Binding and Security Proxy.
+- See also: [AGENT_FLOW.md](../architecture/AGENT_FLOW.md) sections on Tool Binding and Security Proxy.
 
 ## Related
 

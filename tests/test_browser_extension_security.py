@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from src.api.routes.browser_extension import (
     _auth_token,
     _is_allowed_extension_origin,
+    _token_request_allowed,
     active_connections,
     dispatch_extension_fetch_urls,
     pending_requests,
@@ -20,14 +21,14 @@ from src.tools.web_tools import browser_background_fetch, web_search
 
 
 def test_token_rejects_empty_and_null_origin():
-    """C2: empty / null Origin must not receive the WS token."""
+    """C2: empty / null Origin must not receive the WS token (TestClient is not loopback)."""
     client = TestClient(app)
 
     for origin in ("", "null"):
         resp = client.get("/api/browser_extension/token", headers={"origin": origin})
         assert resp.status_code == 403, origin
 
-    # Missing Origin header → treated as empty → reject
+    # Missing Origin header → treated as empty → reject for non-loopback test client
     resp = client.get("/api/browser_extension/token")
     assert resp.status_code == 403
 
@@ -38,6 +39,28 @@ def test_token_rejects_empty_and_null_origin():
     )
     assert resp.status_code == 200
     assert resp.json().get("token") == _auth_token
+
+
+def test_token_allows_loopback_without_origin():
+    """Brave MV3 SW often omits Origin on 127.0.0.1 fetches — allow when client is loopback."""
+    from unittest.mock import MagicMock
+
+    req = MagicMock()
+    req.headers.get.return_value = ""
+    req.client.host = "127.0.0.1"
+    assert _token_request_allowed(req) is True
+
+    req.client.host = "::1"
+    assert _token_request_allowed(req) is True
+
+    req.headers.get.return_value = "null"
+    assert _token_request_allowed(req) is False
+
+    req.headers.get.return_value = "https://evil.com"
+    assert _token_request_allowed(req) is False
+
+    req.headers.get.return_value = "chrome-extension://abc"
+    assert _token_request_allowed(req) is True
 
 
 def test_is_allowed_extension_origin_helper():

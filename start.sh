@@ -20,14 +20,15 @@ for arg in "$@"; do
         export OWLYNN_AUDIT_LOG_ENABLED=1
     fi
 done
-# Track background PIDs for Ctrl+C cleanup
+# Track background PIDs for cleanup
 _PIDS=()
 _cleanup() {
     echo ""
     echo "── Stopping Owlynn ──"
     for pid in "${_PIDS[@]}"; do
-        kill "$pid" 2>/dev/null
-        wait "$pid" 2>/dev/null
+        if kill -0 "$pid" 2>/dev/null; then
+            kill "$pid" 2>/dev/null || true
+        fi
     done
     # Stop Lima Kali VM if running (saves ~2GB RAM)
     if command -v limactl &>/dev/null && limactl list 2>/dev/null | grep -q "owlynn-kali.*Running"; then
@@ -35,6 +36,7 @@ _cleanup() {
         limactl stop owlynn-kali 2>/dev/null || true
     fi
     echo "Done."
+    exit 0
 }
 trap _cleanup INT TERM
 
@@ -45,12 +47,11 @@ echo "════════════════════════�
 echo ""
 
 # ═══════════════════════════════════════════════════════════════════
-# [1/3] MVP containers — Postgres (pgvector) + StirlingPDF
+# [1/3] PostgreSQL container (pgvector)
 # ═══════════════════════════════════════════════════════════════════
 _MVP_COMPOSE="docker-compose.mvp.yml"
-# Lite default: Postgres only. StirlingPDF starts on-demand when PDF intake needs it.
 _CORE_SERVICES="postgres"
-echo "[1/3] PostgreSQL (StirlingPDF on-demand)..."
+echo "[1/3] PostgreSQL (pgvector)..."
 
 podman machine start 2>/dev/null || true
 podman compose -f "$_MVP_COMPOSE" up -d $_CORE_SERVICES 2>/dev/null || \
@@ -129,8 +130,6 @@ fi
 # Docling model path (default to project-local cache)
 export DOCLING_ARTIFACTS_PATH="${DOCLING_ARTIFACTS_PATH:-$(pwd)/.models/docling/}"
 export PYTHONPATH="$(pwd):$PYTHONPATH"
-export STIRLING_PDF_URL="${STIRLING_PDF_URL:-http://localhost:8090}"
-export STIRLING_PDF_API_KEY="${STIRLING_PDF_API_KEY:-owlynn-local-dev}"
 export DATABASE_URL="${DATABASE_URL:-postgresql+asyncpg://owlynn:owlynn_password@127.0.0.1:5432/owlynn}"
 
 if ! command -v uv &>/dev/null; then
@@ -145,17 +144,22 @@ if ! uv run python -m alembic upgrade head; then
 fi
 
 # Kill stale ports
-lsof -ti:8000 2>/dev/null | xargs kill -9 2>/dev/null
-lsof -ti:5173 2>/dev/null | xargs kill -9 2>/dev/null
+lsof -ti:8000 2>/dev/null | xargs kill -9 2>/dev/null || true
+lsof -ti:5173 2>/dev/null | xargs kill -9 2>/dev/null || true
 sleep 1
 
 # Start backend
+_PYTHON_BIN=".venv/bin/python"
+if [ ! -f "$_PYTHON_BIN" ]; then
+    _PYTHON_BIN="python3"
+fi
+
 if [ "$DEBUG_MODE" == "1" ]; then
-    uv run python -m uvicorn src.api.server:app \
+    "$_PYTHON_BIN" -m uvicorn src.api.server:app \
         --host 127.0.0.1 --port 8000 \
         --ws-max-size 16777216 &
 else
-    uv run python -m uvicorn src.api.server:app \
+    "$_PYTHON_BIN" -m uvicorn src.api.server:app \
         --host 127.0.0.1 --port 8000 \
         --ws-max-size 16777216 \
         --no-access-log &
@@ -173,13 +177,14 @@ done
 
 # Start frontend (Electron App)
 if [ -d "frontend-v2" ]; then
-    (cd frontend-v2 && npm run dev >/dev/null 2>&1) &
+    (cd frontend-v2 && npm run dev > "${HOME}/.owlynn/logs/frontend.log" 2>&1) &
     _PIDS+=("$!")
     echo "      Electron app launching (PID $!)."
 
-    # Launch Brave Browser with Owlynn Extension loaded
+    # Launch Brave only if not already running — never track/kill Brave on stop
+    # (killing Chromium causes "quit unexpectedly"; --load-extension also fails
+    # when an existing Brave profile is already open).
     _BRAVE_CANDIDATES=(
-        "/Volumes/KNV3_1TB/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"
         "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"
         "${HOME}/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"
     )
@@ -193,10 +198,12 @@ if [ -d "frontend-v2" ]; then
     done
 
     _EXT_DIR="$(pwd)/browser-extension"
-    if [ -n "$_BRAVE_BIN" ] && [ -d "$_EXT_DIR" ]; then
+    if pgrep -x "Brave Browser" >/dev/null 2>&1; then
+        echo "      Brave already running — leave it open (reload Owlynn Bridge from brave://extensions if needed)."
+    elif [ -n "$_BRAVE_BIN" ] && [ -d "$_EXT_DIR" ]; then
         echo "      Launching Brave Browser with Owlynn extension..."
+        # Do NOT add to _PIDS — Owlynn stop must not SIGTERM Brave.
         "$_BRAVE_BIN" --load-extension="$_EXT_DIR" >/dev/null 2>&1 &
-        _PIDS+=("$!")
     elif command -v open &>/dev/null && [ -d "/Applications/Brave Browser.app" ]; then
         echo "      Launching Brave Browser..."
         open -a "Brave Browser" 2>/dev/null || true
@@ -226,6 +233,4 @@ else
     echo ""
 fi
 
-while kill -0 "$_BACKEND_PID" 2>/dev/null; do
-    sleep 2
-done
+wait "$_BACKEND_PID" 2>/dev/null

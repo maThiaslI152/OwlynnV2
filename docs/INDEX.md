@@ -8,13 +8,13 @@ audience: agent
 
 # docs/INDEX.md — Machine Manifest
 
-> **Purpose:** Machine-readable index of documentation paths with audience tags for agent filtering. Version 34.
+> **Purpose:** Machine-readable index of documentation paths with audience tags for agent filtering. Version 36.
 
 ```yaml
 manifest:
-  version: 35
-  generated: '2026-08-26T22:32:00Z'
-  total_files: 189
+  version: 36
+  generated: '2026-08-26T23:08:00Z'
+  total_files: 190
   files:
   - path: docs/architecture/ADR.md
     status: active
@@ -97,6 +97,11 @@ manifest:
     audience: agent
     last_updated: '2026-08-24'
   - path: docs/changes/llama-cpp-b9553-mtp-speculative-decoding/CHANGELOG.md
+    status: active
+    category: changelog
+    audience: agent
+    last_updated: '2026-08-26'
+  - path: docs/changes/remove-stirling-pdf-native-docling/CHANGELOG.md
     status: active
     category: changelog
     audience: agent
@@ -185,7 +190,7 @@ manifest:
     status: active
     category: debugging
     audience: agent
-    last_updated: '2026-06-15'
+    last_updated: '2026-08-26'
   - path: docs/development/EXTENDING_AGENT.md
     status: active
     category: guide

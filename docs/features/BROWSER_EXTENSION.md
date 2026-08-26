@@ -11,12 +11,12 @@ audience: agent
 > **Purpose:** Describes the architecture and features of the Owlynn Browser Bridge extension.
 
 ## Overview
-Owlynn ships with a local browser extension (`browser-extension/`, v1.4.0) compatible with Chromium-based browsers (Brave, Chrome). The extension acts as a client bridge that allows the local Owlynn backend to seamlessly extract context and interact with the user's live browser state.
+Owlynn ships with a local browser extension (`browser-extension/`, v1.4.1) compatible with Chromium-based browsers (Brave, Chrome). The extension acts as a client bridge that allows the local Owlynn backend to seamlessly extract context and interact with the user's live browser state.
 
 ## Architecture
 
 - **Backend:** `src/api/routes/browser_extension.py` hosts a FastAPI WebSocket endpoint at `ws://127.0.0.1:8000/api/browser_extension/ws`.
-- **Extension Background:** `background.js` establishes and maintains a persistent WebSocket connection to the backend, with exponential backoff and alarm-based keepalive/reconnect recovery.
+- **Extension Background:** `background.js` establishes and maintains a persistent WebSocket connection to the backend, with exponential backoff and alarm-based keepalive/reconnect recovery. Auth token is fetched from `/api/browser_extension/token` **before** opening the WS (never open-then-close), cached in `chrome.storage.local` (`owlynnAuthToken`), and only cleared on auth rejection (`4001`).
 - **Tools:** The LangGraph agent has access to specific tools (`src/tools/web_tools.py` and `src/tools/screen_assist/tools.py`) that dispatch commands over this WebSocket.
 
 ## Features
@@ -62,15 +62,24 @@ When extracting context from Moodle LMS URLs, the extension detects Moodle-speci
 | Control | Behavior |
 |---------|----------|
 | REST auth | `/search`, `/fetch`, `/screenshot`, `/reload` require `X-Owlynn-Run-Token` (local run token **or** extension WS token). `/status` is read-only public; `/token` is Origin-gated only. |
-| Token Origin | Empty / `null` Origin rejected on `/token` and WS. Only `chrome-extension://` / `moz-extension://`. |
+| Token Origin | Empty / `null` Origin rejected for web pages. `chrome-extension://` / `moz-extension://` allowed. Brave MV3 may omit Origin on loopback fetches — those are allowed only when the TCP client is `127.0.0.1` / `::1`. |
 | Token file | `~/.owlynn/browser_extension_token` written/chmod'd `0o600`. |
+| Token cache | Extension caches successful `/token` responses in `chrome.storage.local` (`owlynnAuthToken`) for SW restarts. |
 | Backend URL | Loopback default (`127.0.0.1` / `localhost`); remote requires explicit popup confirmation; `wss://` used for `https`. |
 | Search hosts | Allowlisted Google / Bing / DuckDuckGo hosts only. |
 | CAPTCHA | Google scraper reports hard failure (empty hits) so Tier 0.2 does not poison fallbacks. |
 
+## Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---------|--------------|-----|
+| Backend spam: `Browser extension auth error: (1005…)` every ~3s | Extension opened WS without a token then closed (pre-1.4.1), or stale install after repo path move | Reload extension from `Documents/OwlynnV2/browser-extension` at `brave://extensions`; confirm v1.4.1+; check SW console for token fetch errors |
+| `/api/browser_extension/status` → `connected: false` | Backend down, wrong popup URL, or token fetch 403 | Ensure API on `:8000`; popup URL `http://127.0.0.1:8000`; reload SW |
+| Auth works then fails after backend restart | Token file rotated / process restarted with new token | Extension clears cache on WS close `4001` and re-fetches automatically |
+
 ## Evaluation
 
-The extension has a dedicated scored evaluation suite. See [`docs/standards/EVALUATION.md`](standards/EVALUATION.md) for the full standard.
+The extension has a dedicated scored evaluation suite. See [`docs/standards/EVALUATION.md`](../standards/EVALUATION.md) for the full standard.
 
 ```bash
 # Run with Python mock extension (no real Brave needed)

@@ -60,11 +60,28 @@ def _is_allowed_extension_origin(origin: str) -> bool:
     return origin.startswith(("chrome-extension://", "moz-extension://"))
 
 
+def _is_loopback_client(request: Request) -> bool:
+    host = (request.client.host if request.client else "") or ""
+    return host in {"127.0.0.1", "::1", "localhost"}
+
+
+def _token_request_allowed(request: Request) -> bool:
+    """Gate /token: extension Origin, or loopback with no Origin (Brave MV3 quirk)."""
+    origin = request.headers.get("origin", "")
+    if _is_allowed_extension_origin(origin):
+        return True
+    # Opaque / page origins must never receive the token.
+    if origin:
+        return False
+    # Brave/Chromium MV3 service workers often omit Origin on fetches to
+    # 127.0.0.1. Same-user local processes can already read ~/.owlynn token.
+    return _is_loopback_client(request)
+
+
 @router.get("/token")
 async def get_token(request: Request):
-    """Return the auth token. Only accessible from browser extension origin."""
-    origin = request.headers.get("origin", "")
-    if not _is_allowed_extension_origin(origin):
+    """Return the auth token. Extension Origin or loopback-without-Origin only."""
+    if not _token_request_allowed(request):
         from fastapi.responses import JSONResponse
 
         return JSONResponse(
@@ -413,6 +430,11 @@ async def websocket_endpoint(websocket: WebSocket):
             await websocket.close(code=4001, reason="Authentication timeout")
         except Exception:
             pass
+        return
+    except WebSocketDisconnect as e:
+        # Client closed before auth (often missing token). Not a server fault —
+        # log at debug to avoid drowning logs during extension reconnect loops.
+        logger.debug("Browser extension disconnected before auth: %s", e)
         return
     except Exception as e:
         logger.warning("Browser extension auth error: %s", e)
