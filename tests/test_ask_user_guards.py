@@ -79,9 +79,8 @@ def test_clear_workspace_list_read_intent():
     assert is_clear_workspace_list_read_intent(
         "Please use read_workspace_file on note.txt"
     )
-    assert is_clear_workspace_list_read_intent(
-        "list_workspace_files then show me the note"
-    )
+    # Bare tool-name alone must not match (Hypothesis property-test noise).
+    assert not is_clear_workspace_list_read_intent("list_workspace_files")
     assert not is_clear_workspace_list_read_intent("what is the weather in Bangkok?")
 
 
